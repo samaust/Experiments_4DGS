@@ -4,6 +4,12 @@ Date: 2026-09-05. Ubuntu 24.04, RTX 4090 (24,564 MiB), driver 595.84.
 Standard Python 3.14.6, Torch 2.13.0+cu130, torchvision 0.28.0+cu130,
 CUDA toolkit 13.0 and GCC 13.3. No Conda or training was used.
 
+Follow-up: all five experiments were freshly executed for section 6, including
+hardware WebGL2 browser inspection and full NoPo4D reconstruction. See the
+[per-experiment evidence and decisions](section6-evidence.md). The checks below
+describe the earlier setup pass; its browser and NoPo4D limitations were resolved
+by that follow-up. Remaining limitations are stated in the individual reports.
+
 ## Executed checks
 
 - Authorized host GPU access works. The Mango environment passes synchronized
@@ -35,10 +41,18 @@ CUDA toolkit 13.0 and GCC 13.3. No Conda or training was used.
   `.local/runs/mango/n3v/sear_steak_mango_node/test/video_release/renders/cam00/test_cam00.mp4`.
   ffprobe confirms 300 frames at 30 FPS; upstream pads the 1352×1014 PNGs to
   1360×1024 for encoding. The first preview and sequence midpoint were inspected.
-- The full NoPo4D/backbone installation fails under the requested stack: the
-  backbone's Python upper bound, NumPy `<2` requirements, and lack of a checked
-  Open3D CPython 3.14 wheel remain porting gates. Candidate installation alone
-  is not model installation. No inference or model-weight download is claimed.
+- The patched NoPo4D/backbone editable installation now resolves on Python
+  3.14.6 with Torch 2.13.0+cu130, xFormers 0.0.35, gsplat 1.5.3 and NumPy 2.5.2.
+  The patches update Python/NumPy metadata, declare the missing runtime
+  dependency `addict`, and move Open3D to the backbone's optional `benchmark`
+  extra because only benchmark modules import it. `uv pip check`, the package
+  imports and `src/inference.py --help` pass. The smoke check
+  `scripts/verify-nopo4d.py` passes image preprocessing, affine inversion, and
+  attention forward/backward. These checks do not establish full pretrained
+  reconstruction or GPU rendering compatibility; no model-weight download or
+  full inference is claimed. Open3D benchmarks remain unavailable on Python 3.14.
+  Reproduce with `bash scripts/setup-nopo4d.sh`; successful installation logs
+  and package inventory are in `.local/runs/nopo4d-install-pPSccZ92/`.
 
 The native STG preview does not require COLMAP. The full dataset evaluation
 route remains unexecuted because the native COLMAP CLI is absent. The checkpoint

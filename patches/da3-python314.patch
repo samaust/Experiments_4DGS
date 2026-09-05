@@ -1,0 +1,42 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index 6a11c7a..e06a49c 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -7,11 +7,12 @@ name = "depth-anything-3"
+ version = "0.0.0"
+ description = "Depth Anything 3"
+ readme = "README.md"
+-requires-python = ">=3.9, <=3.13"
++requires-python = ">=3.10, <3.15"
+ license = { text = "Apache-2.0" }
+ authors = [{ name = "Your Name" }]
+ 
+ dependencies = [
++    "addict",
+     "pre-commit",
+     "trimesh",
+     "torch>=2",
+@@ -19,10 +20,9 @@ dependencies = [
+     "einops",
+     "huggingface_hub",
+     "imageio",
+-    "numpy<2",
++    "numpy>=2,<3",
+     "opencv-python",
+     "xformers",
+-    "open3d",
+     "fastapi",
+     "uvicorn",
+     "requests",
+@@ -42,9 +42,10 @@ dependencies = [
+ ]
+ 
+ [project.optional-dependencies]
++benchmark = ["open3d"]
+ app = ["gradio>=5", "pillow>=9.0"] # requires that python3>=3.10
+ gs = ["gsplat @ git+https://github.com/nerfstudio-project/gsplat.git@0b4dddf04cb687367602c01196913cde6a743d70"]
+-all = ["depth-anything-3[app,gs]"]
++all = ["depth-anything-3[app,gs,benchmark]"]
+ 
+ 
+ [project.scripts]

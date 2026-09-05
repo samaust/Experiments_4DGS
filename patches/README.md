@@ -9,6 +9,16 @@ Native compatibility patches (apply once using `git apply --check`, then
   training-only MMCV KNN. It does not port MMCV training operations.
 - [mango-cu130.patch](mango-cu130.patch), Mango revision
   `2a7a9238c1518c5770dc2952464bc71a4d3dba75`: explicit CUDA integer header.
+- [nopo4d-python314.patch](nopo4d-python314.patch), NoPo4D revision
+  `cb54c9349792d474aa541274842e0fadf1d807c7`: NumPy 2 requirement.
+- [da3-python314.patch](da3-python314.patch), Depth Anything 3 revision
+  `41736238f5bced4debf3f2a12375d2466874866d`: Python 3.14 and NumPy 2
+  metadata; the missing runtime dependency `addict` is declared and Open3D
+  is in a `benchmark` extra. Open3D is imported only by `depth_anything_3/bench/` modules,
+  outside the NoPo4D inference import path. The `all` extra still includes
+  benchmarks and therefore cannot resolve on this Python version.
+  Run `bash scripts/setup-nopo4d.sh` to apply these two patches to their
+  respective checkouts and install with full dependency resolution.
 
 Build and execution status is recorded in the
 [pretrained experiment report](../docs/experiments/pretrained-validation.md).

@@ -411,20 +411,27 @@ This stage predicts a dynamic representation from example images using reusable 
 
 ### Install the model and backbone
 
-**Execution stop on the selected stack:** the full installation was attempted and does not resolve. At NoPo4D revision `cb54c9349792d474aa541274842e0fadf1d807c7`, the pinned backbone restricts Python to `>=3.9, <=3.13`, both projects require NumPy `<2`, and mandatory Open3D has no CPython 3.14 wheel in the checked release. Installing the candidate xFormers/gsplat packages succeeded but does not install NoPo4D. Do not run the inference blocks below until a separately audited port resolves these conflicts; do not downgrade or use `--no-deps`. No model inference is claimed.
+The unpatched sources do not resolve on Python 3.14: the backbone has an older
+Python upper bound, both projects require NumPy `<2`, and Open3D lacks a matching
+wheel. The local compatibility patches enable NumPy 2 and Python 3.14 and move
+Open3D into the backbone's `benchmark` extra, matching its use exclusively in
+benchmark modules. Those Open3D benchmarks remain unavailable on this stack.
 
-Clone and record the model and backbone sources:
+Run the setup helper from this repository. It derives workspace paths from its
+own location, reuses an existing checkout, initializes recursive submodules,
+checks the pinned revisions, applies the patches once, installs both projects
+with dependency resolution enabled, and checks the inference entry point.
 
 ```bash
-git clone --recurse-submodules https://github.com/bralani/NoPo4D.git "$GS_WORK/NoPo4D"
-git -C "$GS_WORK/NoPo4D" checkout --detach
-git -C "$GS_WORK/NoPo4D" rev-parse HEAD
-git -C "$GS_WORK/NoPo4D" submodule status --recursive
+bash scripts/setup-nopo4d.sh
 ```
 
-Use the shared guide with `GS_ENV=nopo4d`. The [candidate specification](../environments/nopo4d.in) probes xFormers and gsplat under fixed Torch/cu130 constraints; it does not contain the entire model/backbone dependency graph. **Adaptation pending:** audit upstream NumPy restrictions and compiled dependencies for Python 3.14. Resolve the full metadata, recording necessary source/metadata patches; never bypass conflicts with overrides or dependency suppression. [Model dependencies](https://github.com/bralani/NoPo4D/blob/main/pyproject.toml), [backbone dependencies](https://github.com/ByteDance-Seed/Depth-Anything-3/blob/main/pyproject.toml)
+Logs and the installed package inventory are saved beneath
+`.local/runs/nopo4d-install-*/`. The [candidate specification](../environments/nopo4d.in)
+alone does not install the model/backbone. See [patch details](../patches/README.md).
 
-After that audit, install both projects together under the fixed constraint:
+For subsequent manual reinstalls of the patched sources, initialize `GS_ROOT`
+and `GS_WORK` with section 0 from this repository root, then use:
 
 ```bash
 cd "$GS_WORK/NoPo4D"
@@ -468,6 +475,10 @@ done
 **Pass:** the encoder and renderer complete, all four camera sequences show temporal states, and their geometry/motion can be inspected against the input. Custom novel-view paths through `model.render(...)` and persistent external-viewer exports are later integrations; the stock command does not save a portable splaTV model. Record the downloaded model/backbone revisions from the local Hugging Face cache metadata before reproducing the run offline.
 
 ## 6. Record the evidence and choose the next experiment
+
+Completed five-experiment execution, measurements, visual evidence and decisions:
+[2026-09-05 evidence summary](experiments/section6-evidence.md). This includes
+the full NoPo4D reconstruction and its successful cached offline rerun.
 
 Create a separate report per method/scene from the [experiment template](experiments/template.md). Keep large evidence in `.local/runs/` and reference its relative paths in the report:
 
