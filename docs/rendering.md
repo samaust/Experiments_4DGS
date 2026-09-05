@@ -4,6 +4,8 @@
 
 Reviewed on 2026-09-05. All GPU and browser procedures here remain **runtime-unverified on the target workstation**. Source inspection establishes the documented entry points and limitations, not achieved performance.
 
+Use the [shared environment policy and compatibility gates](environments.md) before native rendering. Python 3.14, Torch 2.13.0+cu130 and CUDA 13.0 are the target; HUST/STG examples remain conditional on porting their legacy APIs and extensions. If replacing MMCV during that port, update the API example below to the same configuration adapter.
+
 ## Representation and viewer compatibility
 
 | Saved representation | Matching local route | Conversion limits |
@@ -26,13 +28,13 @@ PLY is a container: inspect its properties, not just its extension. Renaming a s
 Use the environment, checkout, `GS_WORK` variable, dataset, and completed run from the [creation guide](local-creation.md#experiment-1-hust-synthetic-scene):
 
 ```bash
-conda activate "$GS_WORK/envs/gs-hust-reference"
+export TORCH_EXTENSIONS_DIR="$GS_WORK/cache/torch_extensions/hust-py314-torch213-cu130"
 cd "$GS_WORK/4DGaussians"
-python render.py \
+"$GS_WORK/envs/hust/bin/python" render.py \
   --model_path "$GS_WORK/runs/hust-bouncingballs" \
   --configs arguments/dnerf/bouncingballs.py \
   --iteration 20000 --skip_train
-python metrics.py --model_path "$GS_WORK/runs/hust-bouncingballs"
+"$GS_WORK/envs/hust/bin/python" metrics.py --model_path "$GS_WORK/runs/hust-bouncingballs"
 ```
 
 The reviewed renderer writes numbered PNGs and `video_rgb.mp4` into split directories such as `test/ours_20000` and `video/ours_20000`. Test outputs have ground-truth counterparts; generated camera-path outputs do not. `--skip_test` and `--skip_video` select which splits to omit. MP4 output is encoded at 30 FPS by this script; that is playback timing, not measured rendering speed. [Renderer source](https://github.com/hustvl/4DGaussians/blob/843d5ac636c37e4b611242287754f3d4ed150144/render.py)
@@ -53,7 +55,7 @@ HUST's CLI does not expose a general camera-path file or timestamp flag. Its ren
 Run inside the HUST checkout after training. Change `--mode` to `fixed`, `freeze`, or `animated`, and choose a new output directory for each invocation:
 
 ```bash
-python - \
+"$GS_WORK/envs/hust/bin/python" - \
   --model_path "$GS_WORK/runs/hust-bouncingballs" \
   --configs arguments/dnerf/bouncingballs.py \
   --mode fixed --output "$GS_WORK/runs/hust-fixed-preview" <<'PY'
@@ -101,7 +103,7 @@ This samples the built-in synthetic orbit; it does not invent unseen geometry or
 ### Export sampled 3D Gaussians
 
 ```bash
-python export_perframe_3DGS.py \
+"$GS_WORK/envs/hust/bin/python" export_perframe_3DGS.py \
   --model_path "$GS_WORK/runs/hust-bouncingballs" \
   --configs arguments/dnerf/bouncingballs.py --iteration 20000
 ```
@@ -113,9 +115,9 @@ The implementation writes `gaussian_pertimestamp/time_00000.ply` and subsequent 
 Reload the 12-frame smoke run with its matching duration, resolution, and iteration:
 
 ```bash
-conda activate "$GS_WORK/envs/feature_splatting"
+export TORCH_EXTENSIONS_DIR="$GS_WORK/cache/torch_extensions/stg-render-py314-torch213-cu130"
 cd "$GS_WORK/SpacetimeGaussians"
-python test.py \
+"$GS_WORK/envs/stg-render/bin/python" test.py \
   --source_path "$GS_WORK/data/n3v/cook_spinach/colmap_0" \
   --model_path "$GS_WORK/runs/stg-spinach-smoke" \
   --configpath configs/n3d_lite/cook_spinach.json \
@@ -141,7 +143,7 @@ Custom camera paths are implementation-specific. SpacetimeGaussians exposes a no
 
 ## Local browser playback with splaTV
 
-This route does not need a Python training environment. It needs Python 3 for a local file server and a browser with working WebGL2. Initialize `GS_WORK` using the [repository workspace setup](pretrained-experiments.md#0-prepare-the-repository-workspace). Clone into `.local/` and use the included scene first; skip cloning if the pretrained guide already created this checkout:
+This route does not need a Python training environment. It uses Python 3.14 for a local file server and a browser with working WebGL2. Initialize `GS_WORK` using the [repository workspace setup](pretrained-experiments.md#0-prepare-the-repository-workspace). Clone into `.local/` and use the included scene first; skip cloning if the pretrained guide already created this checkout:
 
 ```bash
 cd "$GS_WORK"
@@ -150,7 +152,7 @@ cd splaTV
 git checkout --detach 8b313fe
 git rev-parse HEAD
 test -s model.splatv
-python3 -m http.server 8000 --bind 127.0.0.1
+/usr/bin/python3.14 -m http.server 8000 --bind 127.0.0.1
 ```
 
 Open [the local viewer](http://127.0.0.1:8000/). Its default asset is local `model.splatv`. For another file under the served directory, use an absolute local URL, for example `http://127.0.0.1:8000/?url=http://127.0.0.1:8000/my-scene.splatv`; a relative `url` parameter is resolved against an upstream Hugging Face base. Mouse dragging orbits; arrow keys translate. Sources: [viewer code](https://github.com/antimatter15/splaTV/blob/main/hybrid.js), [HTML entry point](https://github.com/antimatter15/splaTV/blob/main/index.html).

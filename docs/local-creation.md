@@ -8,52 +8,24 @@ Target: Ubuntu 24.04 LTS, RTX 4090. Reviewed on 2026-09-05. The commands below a
 
 First complete the [pretrained rendering experiments](pretrained-experiments.md). This guide is the later training phase; its training commands are not prerequisites for viewing downloaded models.
 
-Use one environment per implementation, with separate dataset and output directories. Install Git, a Conda-compatible environment manager, a working NVIDIA driver, and the development tools required by the selected CUDA toolkit. A PyTorch CUDA runtime does not necessarily include `nvcc`, which these custom extensions need.
+Use the [shared uv/Python 3.14/cu130 environment guide](environments.md) first. It selects Torch 2.13.0+cu130, torchvision 0.28.0+cu130 and the existing CUDA 13.0 toolkit, with one environment and extension cache per implementation. No older-toolkit or interpreter fallback is part of this workflow.
 
-Run these checks before dependency installation:
+### Historical provenance and modern compatibility
 
-```bash
-nvidia-smi
-nvcc --version
-gcc --version
-g++ --version
-```
-
-After installing PyTorch in each environment:
-
-```bash
-python -c 'import torch; print(torch.__version__, torch.version.cuda); assert torch.cuda.is_available(); print(torch.cuda.get_device_name(0)); print(torch.cuda.get_device_capability(0)); print(torch.ones(1, device="cuda").sum().item())'
-```
-
-The CUDA version displayed by `nvidia-smi` describes driver capability, not the installed compiler. Compare it with `nvcc --version` and `torch.version.cuda`. Keep the compiler/runtime combination compatible and rebuild extensions after changing PyTorch or CUDA. [NVIDIA compatibility reference](https://docs.nvidia.com/datacenter/tesla/drivers/cuda-toolkit-driver-and-architecture-matrix.html)
-
-### Ubuntu 24.04 and Ada compatibility
-
-| Route | Reference stack | Status and adaptation |
+| Route | Historical upstream stack (not installation instructions) | Current target status |
 | --- | --- | --- |
-| HUST historical baseline | Python 3.7, PyTorch 1.13.1+cu116 | From upstream; not an Ubuntu 24.04 validation. Use an isolated environment and a CUDA 11.6-compatible host compiler. |
-| SpacetimeGaussians historical baseline | Python 3.7.13, PyTorch 1.12.1, CUDA runtime 11.6; preprocessing Python 3.8 | Authors tested Ubuntu 20.04. Old MMCV/CUDA extensions are a particular build risk on a newer host. |
-| Newer comparison | Mango-GS reports PyTorch 2.4.1+cu121; NoPo4D requires Python ≥3.10 | Independent implementations with newer dependency stacks; not drop-in dependency upgrades for the baselines. |
+| HUST | Python 3.7, PyTorch 1.13.1+cu116 | Adaptation pending: MMCV/config APIs and CUDA extensions |
+| STG | Python 3.7.13, PyTorch 1.12.1/cu116; preprocessing Python 3.8 | Adaptation pending: bundled MMCV, science APIs, CUDA extensions and COLMAP CLI |
+| Mango-GS | Python 3.8, PyTorch 2.4.1+cu121 | Adaptation pending: PyTorch3D and rasterizers |
+| NoPo4D | Python ≥3.10 | Adaptation pending: complete backbone/model metadata, xFormers and gsplat |
 
-Sources: [HUST requirements](https://github.com/hustvl/4DGaussians/blob/843d5ac636c37e4b611242287754f3d4ed150144/requirements.txt), [SpacetimeGaussians setup](https://github.com/oppo-us-research/SpacetimeGaussians/blob/427abfc/script/setup.sh), [Mango-GS setup](https://github.com/htx0601/Mango-GS#installation), [NoPo4D setup](https://github.com/bralani/NoPo4D#installation).
+Sources: [HUST requirements](https://github.com/hustvl/4DGaussians/blob/843d5ac636c37e4b611242287754f3d4ed150144/requirements.txt), [STG setup](https://github.com/oppo-us-research/SpacetimeGaussians/blob/427abfc/script/setup.sh), [Mango setup](https://github.com/htx0601/Mango-GS#installation), [NoPo4D setup](https://github.com/bralani/NoPo4D#installation).
 
-Ada supports compatible Ampere binaries/PTX; native compute-8.9 compilation starts with CUDA 11.8. For a CUDA 11.6 baseline, a proposed extension-build setting is `TORCH_CUDA_ARCH_LIST="8.6+PTX"`. Verify the compiled extension with a real render; an import alone does not test its kernels. Do not ask an older compiler to compile `sm_89`. [NVIDIA Ada guide](https://docs.nvidia.com/cuda/ada-compatibility-guide/index.html)
-
-On Ubuntu 24.04, do not assume the system-default GCC is supported by an old toolkit. Select a supported compiler explicitly for that environment, or use a local GPU development container with the older Ubuntu/CUDA userspace. That still runs on the workstation and uses the host GPU driver. This guide does not supply a tested container image or a certified modernized dependency lockfile. Any such adaptation belongs in the experiment record. Compare supported combinations in the [CUDA 11.6 Linux installation guide](https://docs.nvidia.com/cuda/archive/11.6.0/cuda-installation-guide-linux/index.html).
-
-Run the [workspace and local environment-manager setup](pretrained-experiments.md#0-prepare-the-repository-workspace) first. From this repository root:
-
-```bash
-GS_ROOT="$(git rev-parse --show-toplevel)"
-export GS_WORK="$GS_ROOT/.local"
-mkdir -p "$GS_WORK/data" "$GS_WORK/runs"
-```
-
-The following commands assume these variables and the workspace cache settings remain set. Use a fresh output directory for each experiment. Environments and upstream checkouts stay inside `.local/`; our source, configurations, and result notes remain tracked.
+The commands below depend on completing the selected method's compatibility gate; they are not validated ports. Keep the shared guide's `GS_ROOT`, `GS_WORK`, cache and compiler exports in each terminal. Use fresh output directories, keep originals separate from preprocessing, and retain reusable patches outside ignored upstream checkouts. Skip cloning an existing checkout after inspecting its revision and local changes.
 
 ## Experiment 1: HUST synthetic scene
 
-### Install the reference environment
+### Prepare the modern environment
 
 In a new checkout:
 
@@ -65,18 +37,21 @@ git checkout --detach 843d5ac636c37e4b611242287754f3d4ed150144
 git submodule update --init --recursive
 git rev-parse HEAD
 git submodule status --recursive
-conda create -p "$GS_WORK/envs/gs-hust-reference" python=3.7
-conda activate "$GS_WORK/envs/gs-hust-reference"
-python -m pip install torch==1.13.1+cu116 torchvision==0.14.1+cu116 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu116
-python -m pip install -r requirements.txt
-TORCH_CUDA_ARCH_LIST="8.6+PTX" python -m pip install -e submodules/depth-diff-gaussian-rasterization
-TORCH_CUDA_ARCH_LIST="8.6+PTX" python -m pip install -e submodules/simple-knn
-python -m pip check
-python train.py --help
-python render.py --help
 ```
 
-The explicit wheel versions reproduce the upstream CUDA-runtime choice using [PyTorch's historical installation commands](https://pytorch.org/get-started/previous-versions/). The architecture setting is the proposed Ada adaptation described above. Use the matching `nvcc` and supported compiler before installing extensions. Package availability and unpinned transitive dependencies may still require resolution; record the resulting package versions rather than claiming a locked environment.
+Use `GS_ENV=hust` in the shared guide to install the [candidate dependencies](../environments/hust.in). Audit upstream requirements and port MMCV/config and Torch/CUDA APIs before the following conditional builds. Do not run upstream legacy setup commands.
+
+```bash
+cd "$GS_WORK/4DGaussians"
+uv pip install --python "$GS_WORK/envs/hust/bin/python" --torch-backend cu130 \
+  --constraint "$GS_ROOT/environments/constraints-cu130.txt" --no-build-isolation \
+  -e submodules/depth-diff-gaussian-rasterization -e submodules/simple-knn
+uv pip check --python "$GS_WORK/envs/hust/bin/python"
+"$GS_WORK/envs/hust/bin/python" train.py --help
+"$GS_WORK/envs/hust/bin/python" render.py --help
+```
+
+Resolve the chosen configuration implementation as part of the port, then complete the shared base/import/build/rasterization checks. Successful help output alone does not establish training compatibility.
 
 ### Prepare and train
 
@@ -86,7 +61,7 @@ Download the D-NeRF dataset from the links in the [official D-NeRF repository](h
 cd "$GS_WORK/4DGaussians"
 test -f "$GS_WORK/data/dnerf/bouncingballs/transforms_train.json"
 test -f "$GS_WORK/data/dnerf/bouncingballs/transforms_test.json"
-python train.py \
+"$GS_WORK/envs/hust/bin/python" train.py \
   -s "$GS_WORK/data/dnerf/bouncingballs" \
   --model_path "$GS_WORK/runs/hust-bouncingballs" \
   --expname dnerf/bouncingballs \
@@ -118,33 +93,7 @@ git rev-parse HEAD
 git submodule status --recursive
 ```
 
-Read `script/setup.sh` in this checkout. It contains legacy environment commands and a global Conda configuration change; the commands below select the relevant setup steps without applying that global setting. Environments use local prefixes. If an upstream script activates an environment by name internally, use a tracked local patch to point it at the corresponding prefix before execution.
-
-```bash
-conda create -p "$GS_WORK/envs/feature_splatting" python=3.7.13
-conda activate "$GS_WORK/envs/feature_splatting"
-conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.6 -c pytorch -c conda-forge
-TORCH_CUDA_ARCH_LIST="8.6+PTX" python -m pip install \
-  thirdparty/gaussian_splatting/submodules/gaussian_rasterization_ch9 \
-  thirdparty/gaussian_splatting/submodules/gaussian_rasterization_ch3 \
-  thirdparty/gaussian_splatting/submodules/forward_full \
-  thirdparty/gaussian_splatting/submodules/forward_lite \
-  thirdparty/gaussian_splatting/submodules/simple-knn
-TORCH_CUDA_ARCH_LIST="8.6+PTX" python -m pip install -e thirdparty/mmcv -v
-python -m pip install opencv-python natsort scipy kornia scikit-image plyfile tqdm Pillow
-python -m pip check
-python train.py --help
-python test.py --help
-
-conda create -p "$GS_WORK/envs/colmapenv" python=3.8
-conda activate "$GS_WORK/envs/colmapenv"
-python -m pip install opencv-python-headless tqdm natsort Pillow
-conda install pytorch==1.12.1 -c pytorch -c conda-forge
-conda install colmap -c conda-forge
-colmap -h
-```
-
-Sources: [setup script](https://github.com/oppo-us-research/SpacetimeGaussians/blob/427abfc/script/setup.sh), [test imports](https://github.com/oppo-us-research/SpacetimeGaussians/blob/427abfc/test.py). `scikit-image` is included because the test entry point imports it. Check all imports and the GPU preflight before processing a dataset; this is not a complete transitive lockfile.
+Reuse `stg-render` and `stg-colmap` from the [pretrained STG setup](pretrained-experiments.md#prepare-the-modern-environment-and-port-the-renderer), or create them using the shared guide. Do not run `script/setup.sh`: it describes the historical stack. Port and validate the renderer and preprocessing dependencies before training; native COLMAP is supplied separately from Python packages.
 
 ### Prepare Neural 3D data
 
@@ -153,8 +102,7 @@ Obtain `cook_spinach` and its calibration from the [official Neural 3D Video dat
 From the SpacetimeGaussians checkout:
 
 ```bash
-conda activate "$GS_WORK/envs/colmapenv"
-python script/pre_n3d.py --videopath "$GS_WORK/data/n3v/cook_spinach"
+"$GS_WORK/envs/stg-colmap/bin/python" script/pre_n3d.py --videopath "$GS_WORK/data/n3v/cook_spinach"
 ```
 
 This is the upstream benchmark-preprocessing entry point. It can process more frames than the short training window below. Inspect its frame loop before attempting a custom preprocessing subset. Expect per-frame `colmap_<index>` directories with images and sparse calibration/points. Training reads point data from each frame in its window, not only from `colmap_0`. [Preprocessing instructions](https://github.com/oppo-us-research/SpacetimeGaussians#processing-datasets), [point aggregation](https://github.com/oppo-us-research/SpacetimeGaussians/blob/427abfc/thirdparty/gaussian_splatting/scene/dataset_readers.py).
@@ -162,8 +110,8 @@ This is the upstream benchmark-preprocessing entry point. It can process more fr
 ### Start with a reduced smoke run
 
 ```bash
-conda activate "$GS_WORK/envs/feature_splatting"
-python train.py \
+export TORCH_EXTENSIONS_DIR="$GS_WORK/cache/torch_extensions/stg-render-py314-torch213-cu130"
+"$GS_WORK/envs/stg-render/bin/python" train.py \
   --source_path "$GS_WORK/data/n3v/cook_spinach/colmap_0" \
   --model_path "$GS_WORK/runs/stg-spinach-smoke" \
   --configpath configs/n3d_lite/cook_spinach.json \
@@ -178,7 +126,7 @@ The parser uses equality with defaults to decide whether to apply JSON settings.
 After reloading and rendering the smoke run, start a separate longer run using the released 50-frame profile:
 
 ```bash
-python train.py \
+"$GS_WORK/envs/stg-render/bin/python" train.py \
   --source_path "$GS_WORK/data/n3v/cook_spinach/colmap_0" \
   --model_path "$GS_WORK/runs/stg-spinach-lite" \
   --configpath configs/n3d_lite/cook_spinach.json \
@@ -228,7 +176,9 @@ Experiment ID / date:
 Method / repository URL / full commit / submodule commits:
 Local patches / configuration / seed:
 OS / GPU / driver / nvcc / host compiler:
-Python / PyTorch / CUDA runtime / package inventory:
+uv / Python executable and GIL build / PyTorch / CUDA runtime:
+Candidate spec / constraints / resolved lock / package inventory:
+Resolution / imports / extension build / real render validation stages:
 Dataset source / license / checksum or version:
 Camera IDs / time range / frame count / image dimensions:
 Training views / held-out views / temporal holdout:
@@ -246,14 +196,14 @@ Viewer controls / export losses / local asset paths:
 Failures and changes needed:
 ```
 
-Useful inventory commands, executed in the upstream checkout and its environment:
+Useful inventory commands, executed in the upstream checkout and with `GS_ENV` set to its shared-guide environment name:
 
 ```bash
 git rev-parse HEAD
 git submodule status --recursive
 git diff --stat
-python -m pip freeze
-conda list
+uv --version
+uv pip freeze --python "$GS_WORK/envs/$GS_ENV/bin/python"
 nvidia-smi --query-gpu=name,memory.total,memory.used,driver_version --format=csv
 ```
 

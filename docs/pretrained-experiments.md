@@ -26,11 +26,10 @@ export GS_WORK="$GS_ROOT/.local"
 mkdir -p "$GS_WORK"/{envs,tools,cache,downloads,data,weights,runs}
 export HF_HOME="$GS_WORK/cache/huggingface"
 export TORCH_HOME="$GS_WORK/cache/torch"
-export TORCH_EXTENSIONS_DIR="$GS_WORK/cache/torch_extensions"
 export PIP_CACHE_DIR="$GS_WORK/cache/pip"
-export CONDA_PKGS_DIRS="$GS_WORK/cache/conda/pkgs"
+export UV_CACHE_DIR="$GS_WORK/cache/uv"
 export XDG_CACHE_HOME="$GS_WORK/cache/xdg"
-mkdir -p "$HF_HOME" "$TORCH_HOME" "$TORCH_EXTENSIONS_DIR" "$PIP_CACHE_DIR" "$CONDA_PKGS_DIRS" "$XDG_CACHE_HOME"
+mkdir -p "$HF_HOME" "$TORCH_HOME" "$PIP_CACHE_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
 git check-ignore .local/weights/example.ply .local/envs/example .local/runs/example.mp4
 df -h "$GS_ROOT"
 ```
@@ -52,7 +51,7 @@ About 591 GB was available at planning time. Check `df -h` again before download
 ### Host and GPU checks
 
 ```bash
-python3 --version
+/usr/bin/python3.14 --version
 git --version
 curl --version
 unzip -v
@@ -69,19 +68,7 @@ A sandbox can block NVIDIA devices even when the host works. Run these checks fr
 
 ### Local environment manager — needed starting at step 3
 
-Skip this installation until reaching the CUDA experiments. Miniforge supports a noninteractive prefix installation. These commands install beneath `.local/tools` and activate only the current shell. [Miniforge installation](https://github.com/conda-forge/miniforge#install)
-
-```bash
-curl -fL --retry 3 \
-  https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh \
-  -o "$GS_WORK/downloads/Miniforge3-Linux-x86_64.sh"
-sha256sum "$GS_WORK/downloads/Miniforge3-Linux-x86_64.sh"
-bash "$GS_WORK/downloads/Miniforge3-Linux-x86_64.sh" -b -p "$GS_WORK/tools/miniforge"
-source "$GS_WORK/tools/miniforge/etc/profile.d/conda.sh"
-conda --version
-```
-
-Record the installer hash and release used. If that prefix already exists, source its `conda.sh` instead of reinstalling. Do not run `conda init` or alter global channels. The guide uses `--override-channels` to keep channel choices explicit. Each new shell needs the workspace exports and `source` command again.
+Use the [shared environment guide](environments.md): existing uv and standard Python 3.14, Torch 2.13.0+cu130 / torchvision 0.28.0+cu130, and the system CUDA 13.0 toolkit. No environment installation is needed for steps 1–2. Follow that guide's workspace exports, per-method setup, compatibility gates, and GPU checks before native rendering. Do not run upstream setup scripts or silently downgrade dependencies.
 
 ## 1. View the bundled scene
 
@@ -104,7 +91,7 @@ The bundled `.splatv` is an existing scene, not reconstruction weights. If a che
 ### Start the local server
 
 ```bash
-python3 -m http.server 8000 --bind 127.0.0.1 --directory "$GS_WORK/splaTV"
+/usr/bin/python3.14 -m http.server 8000 --bind 127.0.0.1 --directory "$GS_WORK/splaTV"
 ```
 
 Open [the local viewer](http://127.0.0.1:8000/) in a desktop browser. Keep the terminal running; Ctrl-C stops the server. If the port is occupied, use 8001 and adjust all URLs. Check the browser's graphics diagnostic page (`about:support` in Firefox, `chrome://gpu` in Chromium) for hardware-accelerated WebGL2.
@@ -161,7 +148,7 @@ git -C "$GS_WORK/SpacetimeGaussians" checkout --detach 427abfc
 git -C "$GS_WORK/SpacetimeGaussians" submodule update --init --recursive
 git -C "$GS_WORK/SpacetimeGaussians" rev-parse HEAD
 git -C "$GS_WORK/SpacetimeGaussians" submodule status --recursive
-python3 "$GS_ROOT/scripts/resolve-stg-checkpoint.py" "$GS_WORK/weights/stg-sear-steak" \
+/usr/bin/python3.14 "$GS_ROOT/scripts/resolve-stg-checkpoint.py" "$GS_WORK/weights/stg-sear-steak" \
   --profile "$GS_WORK/SpacetimeGaussians/configs/n3d_lite/sear_steak.json" \
   > "$GS_WORK/runs/stg-selection.sh"
 ```
@@ -174,51 +161,28 @@ printf '%s\n' "$STG_MODEL" "$STG_PLY" "$STG_CAMERAS" \
   "iteration=$STG_ITERATION start=$STG_START end=$STG_END duration=$STG_DURATION resolution=$STG_RESOLUTION"
 ```
 
-### Install the legacy environment and compiler
+### Prepare the modern environment and port the renderer
 
-Run the local Miniforge setup from step 0 if needed. The baseline follows upstream Python 3.7.13 / PyTorch 1.12.1 / CUDA 11.6. Its original tested host was Ubuntu 20.04. The prefix compiler installation below is a proposed Ubuntu 24.04 adaptation, not an already validated environment. [STG setup](https://github.com/oppo-us-research/SpacetimeGaussians/blob/427abfc/script/setup.sh)
+Complete sections 1–3 of the [environment guide](environments.md) with `GS_ENV=stg-render`. The [STG candidate specification](../environments/stg-render.in) does not yet port bundled MMCV or its CUDA extensions. This stage is **adaptation pending**, not a working legacy environment reproduced with new version numbers. Audit configuration, SSIM/science APIs, checkpoint loading, and Torch/CUDA extension APIs before the conditional builds below. [Upstream setup provenance](https://github.com/oppo-us-research/SpacetimeGaussians/blob/427abfc/script/setup.sh)
+
+After recording and applying the necessary source patches:
 
 ```bash
-conda create -y -p "$GS_WORK/envs/stg-render" --override-channels -c conda-forge \
-  python=3.7.13 pip gcc_linux-64=10 gxx_linux-64=10 ninja
-conda create -y -p "$GS_WORK/tools/cuda-11.6" --override-channels \
-  -c nvidia/label/cuda-11.6.2 -c conda-forge cuda-toolkit
-conda activate "$GS_WORK/envs/stg-render"
-export CUDA_HOME="$GS_WORK/tools/cuda-11.6"
-export PATH="$CUDA_HOME/bin:$PATH"
-export CC="$CONDA_PREFIX/bin/x86_64-conda-linux-gnu-cc"
-export CXX="$CONDA_PREFIX/bin/x86_64-conda-linux-gnu-c++"
-export CUDAHOSTCXX="$CXX"
-export TORCH_CUDA_ARCH_LIST="8.6+PTX"
-export TORCH_EXTENSIONS_DIR="$GS_WORK/cache/torch_extensions/stg"
-nvcc --version
-"$CXX" --version
-python -m pip install torch==1.12.1+cu116 torchvision==0.13.1+cu116 torchaudio==0.12.1 \
-  --extra-index-url https://download.pytorch.org/whl/cu116
-python -m pip install 'numpy==1.21.6' 'scipy==1.7.3' 'scikit-image==0.19.3' \
-  'opencv-python==4.8.1.78' 'Pillow==9.5.0' 'plyfile==0.7.4' \
-  'kornia==0.6.12' natsort tqdm 'yapf==0.40.1'
 cd "$GS_WORK/SpacetimeGaussians"
-python -m pip install --no-build-isolation \
+uv pip install --python "$GS_WORK/envs/stg-render/bin/python" --torch-backend cu130 \
+  --constraint "$GS_ROOT/environments/constraints-cu130.txt" --no-build-isolation \
   thirdparty/gaussian_splatting/submodules/gaussian_rasterization_ch9 \
   thirdparty/gaussian_splatting/submodules/gaussian_rasterization_ch3 \
   thirdparty/gaussian_splatting/submodules/forward_full \
   thirdparty/gaussian_splatting/submodules/forward_lite \
   thirdparty/gaussian_splatting/submodules/simple-knn
-python -m pip install --no-build-isolation -e thirdparty/mmcv
-python -m pip check
-python test.py --help
+uv pip install --python "$GS_WORK/envs/stg-render/bin/python" --torch-backend cu130 \
+  --constraint "$GS_ROOT/environments/constraints-cu130.txt" --no-build-isolation -e thirdparty/mmcv
+uv pip check --python "$GS_WORK/envs/stg-render/bin/python"
+"$GS_WORK/envs/stg-render/bin/python" test.py --help
 ```
 
-The Python-library pins are compatibility starting points for the old interpreter and SSIM API. Record solver/build failures and the resolved package inventory. CUDA 11.6 cannot compile `sm_89`; `8.6+PTX` is the proposed Ada compatibility setting. Keep this environment separate from newer experiments. [PyTorch historical wheels](https://pytorch.org/get-started/previous-versions/), [Ada compiler compatibility](https://docs.nvidia.com/cuda/ada-compatibility-guide/), [CUDA Conda installation](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/#conda-installation)
-
-Before rendering in **each** environment:
-
-```bash
-python -c 'import torch; print(torch.__version__, torch.version.cuda); assert torch.cuda.is_available(); print(torch.cuda.get_device_name(0)); print(torch.ones(1, device="cuda").sum().item())'
-```
-
-If the compiler/runtime versions are wrong, reselect the explicit toolkit and compiler before rebuilding. If GPU access fails in the host terminal, stop CUDA steps. Browser inspection remains independently useful.
+The MMCV command assumes the bundled implementation has been ported; if choosing a replacement config adapter, update the dependency spec and callers instead. Complete the shared GPU preflight and an actual extension rasterization before dataset preprocessing or checkpoint rendering. Stop on failures; the browser route remains useful.
 
 ### Obtain and prepare the matching capture
 
@@ -242,17 +206,14 @@ cp -a -n "$GS_WORK/data/n3v-original/sear_steak" "$GS_WORK/data/stg/"
 
 If the archive layout differs, inspect it and put its scene directory at the stated path before proceeding. Do not treat camera-number gaps as missing observations: the release excludes invalid cameras, and poses follow sorted retained video order. [Dataset conventions](https://github.com/facebookresearch/Neural_3D_Video)
 
-Create a separate preprocessing environment; this uses existing calibration rather than estimating new camera poses:
+Create `GS_ENV=stg-colmap` using the shared guide and its [candidate dependencies](../environments/stg-colmap.in). Validate the system COLMAP CLI against this checkout first. This uses existing calibration rather than estimating new camera poses:
 
 ```bash
-conda create -y -p "$GS_WORK/envs/stg-colmap" --override-channels -c conda-forge \
-  python=3.8 pip colmap=3.8
-conda activate "$GS_WORK/envs/stg-colmap"
-python -m pip install torch==1.12.1+cpu --extra-index-url https://download.pytorch.org/whl/cpu
-python -m pip install 'numpy<1.25' opencv-python-headless tqdm natsort Pillow
+command -v colmap
+colmap -h
 cd "$GS_WORK/SpacetimeGaussians"
-python script/pre_n3d.py --help
-python script/pre_n3d.py --videopath "$GS_WORK/data/stg/sear_steak" \
+"$GS_WORK/envs/stg-colmap/bin/python" script/pre_n3d.py --help
+"$GS_WORK/envs/stg-colmap/bin/python" script/pre_n3d.py --videopath "$GS_WORK/data/stg/sear_steak" \
   --startframe "$STG_START" --endframe "$STG_END"
 ```
 
@@ -264,7 +225,7 @@ Copy the model run so upstream render outputs do not modify the original downloa
 
 ```bash
 cp -a -n "$STG_MODEL" "$GS_WORK/runs/stg-sear-steak-reference"
-python3 - "$GS_WORK/SpacetimeGaussians/configs/n3d_lite/sear_steak.json" \
+/usr/bin/python3.14 - "$GS_WORK/SpacetimeGaussians/configs/n3d_lite/sear_steak.json" \
   "$GS_WORK/runs/stg-sear-steak-render.json" <<'PY'
 import json, os, sys
 from pathlib import Path
@@ -275,12 +236,11 @@ config.update(duration=int(os.environ['STG_DURATION']),
 with open(sys.argv[2], 'x') as output:
     json.dump(config, output, indent=2)
 PY
-conda activate "$GS_WORK/envs/stg-render"
-export CUDA_HOME="$GS_WORK/tools/cuda-11.6"
+export CUDA_HOME=/usr/local/cuda-13.0
 export PATH="$CUDA_HOME/bin:$PATH"
-export TORCH_EXTENSIONS_DIR="$GS_WORK/cache/torch_extensions/stg"
+export TORCH_EXTENSIONS_DIR="$GS_WORK/cache/torch_extensions/stg-render-py314-torch213-cu130"
 cd "$GS_WORK/SpacetimeGaussians"
-python test.py \
+"$GS_WORK/envs/stg-render/bin/python" test.py \
   --source_path "$GS_WORK/data/stg/sear_steak/colmap_$STG_START" \
   --model_path "$GS_WORK/runs/stg-sear-steak-reference" \
   --configpath "$GS_WORK/runs/stg-sear-steak-render.json" \
@@ -307,47 +267,36 @@ ffmpeg -n -framerate 30 \
 
 ### Install a separate environment
 
-The released setup reports Python 3.8 and PyTorch 2.4.1+cu121. Use a separate CUDA 12.1 compiler prefix. The following dependency selection needs runtime validation; it is not a tested upgrade of the STG stack. [Mango-GS setup](https://github.com/htx0601/Mango-GS#installation), [requirements](https://github.com/htx0601/Mango-GS/blob/main/requirements.txt)
+The upstream setup is historical provenance, not the target stack. Clone and record the source, then use the shared guide with `GS_ENV=mango-render`. [Mango-GS setup](https://github.com/htx0601/Mango-GS#installation), [requirements](https://github.com/htx0601/Mango-GS/blob/main/requirements.txt)
 
 ```bash
 git clone --recursive https://github.com/htx0601/Mango-GS.git "$GS_WORK/Mango-GS"
 git -C "$GS_WORK/Mango-GS" checkout --detach
 git -C "$GS_WORK/Mango-GS" rev-parse HEAD
 git -C "$GS_WORK/Mango-GS" submodule status --recursive
-conda create -y -p "$GS_WORK/envs/mango-render" --override-channels -c conda-forge \
-  python=3.8 pip gcc_linux-64=11 gxx_linux-64=11 ninja
-conda create -y -p "$GS_WORK/tools/cuda-12.1" --override-channels \
-  -c nvidia/label/cuda-12.1.1 -c conda-forge cuda-toolkit
-conda activate "$GS_WORK/envs/mango-render"
-export CUDA_HOME="$GS_WORK/tools/cuda-12.1"
-export PATH="$CUDA_HOME/bin:$PATH"
-export CC="$CONDA_PREFIX/bin/x86_64-conda-linux-gnu-cc"
-export CXX="$CONDA_PREFIX/bin/x86_64-conda-linux-gnu-c++"
-export CUDAHOSTCXX="$CXX"
-export TORCH_CUDA_ARCH_LIST="8.9"
-export TORCH_EXTENSIONS_DIR="$GS_WORK/cache/torch_extensions/mango"
-nvcc --version
-"$CXX" --version
-python -m pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 \
-  --index-url https://download.pytorch.org/whl/cu121
-cd "$GS_WORK/Mango-GS"
-python -m pip install -r requirements.txt
-python -m pip install --no-build-isolation -e submodules/diff-gaussian-rasterization
-python -m pip install --no-build-isolation -e submodules/simple-knn
-python -m pip check
-python render.py --help
 ```
 
-Record the full checkout revision before proceeding; the original release documentation does not pin this newer comparison. For repeat runs, check out that recorded commit and update its submodules. `requirements.txt` includes a PyTorch3D source dependency. If its current revision fails on Python 3.8/PyTorch 2.4.1, record the failure and resolve a matching PyTorch3D build before proceeding; do not silently change the whole environment. Capture the successful dependency revision and package inventory for reuse.
+**Adaptation pending:** resolve the [candidate dependencies](../environments/mango-render.in), audit all upstream imports, and select a full PyTorch3D revision compatible with the fixed stack. Clone that dependency under `.local/`, record its revision, and build it with the same interpreter, constraint and toolkit. Do not install upstream's moving Git URL as a reproducible pin. Keep successful patches and build logs before the conditional local builds:
+
+```bash
+cd "$GS_WORK/Mango-GS"
+uv pip install --python "$GS_WORK/envs/mango-render/bin/python" --torch-backend cu130 \
+  --constraint "$GS_ROOT/environments/constraints-cu130.txt" --no-build-isolation \
+  -e submodules/diff-gaussian-rasterization -e submodules/simple-knn
+uv pip check --python "$GS_WORK/envs/mango-render/bin/python"
+"$GS_WORK/envs/mango-render/bin/python" render.py --help
+```
+
+Complete the shared base/extension checks before rendering. For repeat runs, check out recorded full commits and update submodules; record the PyTorch3D commit independently.
 
 ### Download the scene and prepare input frames
 
-Use an independent download environment so the current Hugging Face CLI is not constrained by research Python 3.8:
+Use an independent Python 3.14 download environment without Torch:
 
 ```bash
-conda create -y -p "$GS_WORK/envs/downloads" --override-channels -c conda-forge python=3.11 pip
-conda run -p "$GS_WORK/envs/downloads" python -m pip install huggingface_hub
-conda run -p "$GS_WORK/envs/downloads" hf download htx0601/Mango-GS \
+uv venv --python /usr/bin/python3.14 "$GS_WORK/envs/downloads"
+uv pip install --python "$GS_WORK/envs/downloads/bin/python" -r "$GS_ROOT/environments/downloads.in"
+"$GS_WORK/envs/downloads/bin/hf" download htx0601/Mango-GS \
   --include 'n3v/sear_steak_mango_node/*' --local-dir "$GS_WORK/weights/mango"
 test -s "$GS_WORK/weights/mango/n3v/sear_steak_mango_node/cfg_args"
 test -s "$GS_WORK/weights/mango/n3v/sear_steak_mango_node/point_cloud.ply"
@@ -377,15 +326,14 @@ Do not crop, rescale, or renumber the cameras before checking the loader. The ex
 ```bash
 mkdir -p "$GS_WORK/runs/mango/n3v" "$GS_WORK/runs/mango/previews"
 cp -a -n "$GS_WORK/weights/mango/n3v/sear_steak_mango_node" "$GS_WORK/runs/mango/n3v/"
-conda activate "$GS_WORK/envs/mango-render"
-export CUDA_HOME="$GS_WORK/tools/cuda-12.1"
+export CUDA_HOME=/usr/local/cuda-13.0
 export PATH="$CUDA_HOME/bin:$PATH"
-export TORCH_EXTENSIONS_DIR="$GS_WORK/cache/torch_extensions/mango"
+export TORCH_EXTENSIONS_DIR="$GS_WORK/cache/torch_extensions/mango-render-py314-torch213-cu130"
 cd "$GS_WORK/Mango-GS"
-bash scripts/render_one_frame.sh n3v sear_steak \
+PATH="$GS_WORK/envs/mango-render/bin:$PATH" PYTHON="$GS_WORK/envs/mango-render/bin/python" bash scripts/render_one_frame.sh n3v sear_steak \
   "$GS_WORK/data/mango/sear_steak" "$GS_WORK/runs/mango/n3v/sear_steak" \
   0 "$GS_WORK/runs/mango/previews/sear-steak.png"
-bash scripts/render_scene.sh n3v sear_steak \
+PATH="$GS_WORK/envs/mango-render/bin:$PATH" PYTHON="$GS_WORK/envs/mango-render/bin/python" bash scripts/render_scene.sh n3v sear_steak \
   "$GS_WORK/data/mango/sear_steak" "$GS_WORK/runs/mango/n3v/sear_steak" 0 30
 ```
 
@@ -399,35 +347,30 @@ This stage predicts a dynamic representation from example images using reusable 
 
 ### Install the model and backbone
 
-Use another environment. PyTorch 2.4.1/cu121 with xFormers 0.0.28.post1 is a proposed compatible starting pair; the package declares `torch==2.4.1`. Upstream NoPo4D itself only specifies broader minimums. [xFormers package metadata](https://pypi.org/pypi/xformers/0.0.28.post1/json), [NoPo4D dependencies](https://github.com/bralani/NoPo4D/blob/main/pyproject.toml)
+Clone and record the model and backbone sources:
 
 ```bash
 git clone --recurse-submodules https://github.com/bralani/NoPo4D.git "$GS_WORK/NoPo4D"
 git -C "$GS_WORK/NoPo4D" checkout --detach
 git -C "$GS_WORK/NoPo4D" rev-parse HEAD
 git -C "$GS_WORK/NoPo4D" submodule status --recursive
-conda create -y -p "$GS_WORK/envs/nopo4d" --override-channels -c conda-forge \
-  python=3.10 pip gcc_linux-64=11 gxx_linux-64=11 ninja
-conda activate "$GS_WORK/envs/nopo4d"
-export CUDA_HOME="$GS_WORK/tools/cuda-12.1"
-export PATH="$CUDA_HOME/bin:$PATH"
-export CC="$CONDA_PREFIX/bin/x86_64-conda-linux-gnu-cc"
-export CXX="$CONDA_PREFIX/bin/x86_64-conda-linux-gnu-c++"
-export CUDAHOSTCXX="$CXX"
-export TORCH_CUDA_ARCH_LIST="8.9"
-export TORCH_EXTENSIONS_DIR="$GS_WORK/cache/torch_extensions/nopo4d"
-python -m pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 \
-  --index-url https://download.pytorch.org/whl/cu121
-python -m pip install xformers==0.0.28.post1 --index-url https://download.pytorch.org/whl/cu121
-cd "$GS_WORK/NoPo4D"
-python -m pip install -e .
-python -m pip install -e src/model/encoder/backbone/Depth-Anything-3
-python -m pip check
-python -c 'import torch, xformers; print(torch.__version__, torch.version.cuda, xformers.__version__); assert torch.cuda.is_available()'
-python src/inference.py --help
 ```
 
-If a dependency installation changes PyTorch/xFormers, resolve that conflict before inference and record the final stack. Optional `torch-scatter` voxelization is omitted for this first run. Backbone and model downloads use the workspace cache settings; account for their installed size as well as the main checkpoint. [Backbone requirements](https://github.com/ByteDance-Seed/Depth-Anything-3/blob/main/pyproject.toml)
+Use the shared guide with `GS_ENV=nopo4d`. The [candidate specification](../environments/nopo4d.in) probes xFormers and gsplat under fixed Torch/cu130 constraints; it does not contain the entire model/backbone dependency graph. **Adaptation pending:** audit upstream NumPy restrictions and compiled dependencies for Python 3.14. Resolve the full metadata, recording necessary source/metadata patches; never bypass conflicts with overrides or dependency suppression. [Model dependencies](https://github.com/bralani/NoPo4D/blob/main/pyproject.toml), [backbone dependencies](https://github.com/ByteDance-Seed/Depth-Anything-3/blob/main/pyproject.toml)
+
+After that audit, install both projects together under the fixed constraint:
+
+```bash
+cd "$GS_WORK/NoPo4D"
+uv pip install --python "$GS_WORK/envs/nopo4d/bin/python" --torch-backend cu130 \
+  --constraint "$GS_ROOT/environments/constraints-cu130.txt" \
+  -e . -e src/model/encoder/backbone/Depth-Anything-3
+uv pip check --python "$GS_WORK/envs/nopo4d/bin/python"
+"$GS_WORK/envs/nopo4d/bin/python" -c 'import torch, xformers, gsplat; print(torch.__version__, xformers.__version__, gsplat.__version__)'
+"$GS_WORK/envs/nopo4d/bin/python" src/inference.py --help
+```
+
+Repeat the shared base assertions and actual extension/kernel checks after installation. Optional `torch-scatter` voxelization is omitted for this first run. Backbone/model downloads use workspace caches; account for both their weights and the main checkpoint.
 
 ### Run the bundled example
 
@@ -436,7 +379,7 @@ Inspect the 16 example files before inference. Their camera-major ordering is pa
 ```bash
 cd "$GS_WORK/NoPo4D"
 find assets/examples -maxdepth 1 -type f -name '*.png' -print | sort
-python src/inference.py \
+"$GS_WORK/envs/nopo4d/bin/python" src/inference.py \
   --image_dir assets/examples --num_cameras 4 \
   --output_dir "$GS_WORK/runs/nopo4d-example" --render_timestamps 10
 ```
@@ -466,13 +409,13 @@ Create a separate report per method/scene from the [experiment template](experim
 cp -n "$GS_ROOT/docs/experiments/template.md" "$GS_ROOT/docs/experiments/001-splatv.md"
 ```
 
-Record setup effort, model completeness, visual artifacts, viewpoint range, and repeatability before pursuing training. Useful inventories, run in the relevant activated environment and upstream checkout:
+Record setup effort, model completeness, visual artifacts, viewpoint range, and repeatability before pursuing training. Useful inventories, run in the relevant upstream checkout; set `GS_ENV` to the method name from the shared guide:
 
 ```bash
 git rev-parse HEAD
 git submodule status --recursive
-python -m pip freeze
-conda list --explicit
+uv --version
+uv pip freeze --python "$GS_WORK/envs/$GS_ENV/bin/python"
 du -sh "$GS_WORK/data" "$GS_WORK/weights" "$GS_WORK/envs" "$GS_WORK/cache" "$GS_WORK/runs"
 ```
 

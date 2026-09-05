@@ -19,6 +19,10 @@ The first three rows describe different modeling choices; their files and render
 
 There is a second distinction: **per-scene optimization** creates a model for one capture, whereas **pretrained reconstruction** predicts a representation for new input. A downloadable checkpoint of a cooking scene is not a general-purpose world reconstruction model.
 
+## Repository environment target
+
+Use [uv, standard Python 3.14, Torch 2.13.0+cu130 and CUDA 13.0](environments.md). Legacy stacks below describe upstream provenance only. The [compatibility gates](environments.md#3-port-and-build-the-selected-method) distinguish dependency resolution, imports, extension builds and real checkpoint rendering; none of the native methods is certified on the target stack by this survey. Browser inspection does not depend on those ports.
+
 ## Methods worth investigating
 
 The immediate experiment order is [existing scenes and rendering, then pretrained reconstruction](pretrained-experiments.md). Training recommendations below describe later options; they do not require training before evaluating a released checkpoint.

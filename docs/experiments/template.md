@@ -11,7 +11,12 @@ Status: **not run**. Date:
 - Source frame rate/window, normalized-time mapping, image dimensions:
 - Local checkpoint, input, output, and raw-log paths under `.local/`:
 - Exact setup, rendering/inference, and video encoding commands:
-- Environment prefix, package inventory/explicit specification:
+- Environment prefix, uv version, Python executable/version and standard GIL build:
+- Candidate specification, base constraints, resolved lock path/hash and package inventory:
+- Source-built dependencies: full revisions, compiler flags, build logs and patches:
+- CUDA_HOME, nvcc/host compiler, TORCH_CUDA_ARCH_LIST and per-method extension cache:
+- Validation stages (separate evidence): resolution / imports / build / kernel / checkpoint render:
+- Base Torch/torchvision cu130 assertions repeated after final dependency installation:
 - OS, GPU, driver, compiler path/version, Python, PyTorch/CUDA runtime:
 
 ## Measurements

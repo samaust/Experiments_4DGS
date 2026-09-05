@@ -4,6 +4,8 @@
 
 This guide starts after the animated world has been generated. It describes what to retain and how to map it to existing research loaders. It does not implement a capture system or a universal dataset converter.
 
+Before running Python preprocessing, use the [shared Python 3.14/uv environment setup](environments.md). Native COLMAP is a separate system dependency; validate its CLI against the chosen preprocessing source before processing a working copy.
+
 ## Capture information to preserve
 
 For every image, retain its camera identity, scene timestamp, camera intrinsics, camera pose, dimensions, and path. All cameras observing a particular timestamp must see the same animation state. A collection of plausible but geometrically inconsistent videos is not equivalent to synchronized observations of one world.
