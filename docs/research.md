@@ -4,6 +4,11 @@
 
 Research date: **2026-09-05**. This is a bounded survey of publicly accessible papers, official implementations, and downloadable assets. It is not a claim to exhaust the literature. “Code available” means source was found; it does not mean this repository has reproduced the results.
 
+For numerical quality comparisons and alternatives to our native STG renderer,
+see [Native STG: published quality comparisons](stg-comparison.md). It covers
+full versus lite STG, FreeTimeGS, MoE-GS, ATGS, FreeTimeGS++, and 7DGS, with
+benchmark-specific results and implications for minimizing rendering artifacts.
+
 ## What counts as 4DGS?
 
 Static 3D Gaussian Splatting optimizes spatial Gaussian primitives and their appearance from posed images. It provides useful background, but does not itself describe scene motion. Start with the [3DGS paper](https://arxiv.org/abs/2308.04079) and [official implementation](https://github.com/graphdeco-inria/gaussian-splatting).

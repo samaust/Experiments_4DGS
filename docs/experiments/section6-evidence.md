@@ -27,6 +27,10 @@ checkpoint provenance. NoPo4D's example has a different cooking state and open
 lower window blinds; it must not be treated as the same source window merely
 because the room looks familiar.
 
+The separate [STG literature comparison](../stg-comparison.md) records published
+quality results through 2026-09-05, including methods scoring better and worse
+than STG. It distinguishes benchmark evidence from these local observations.
+
 ## Shared environment and provenance
 
 Host: Ubuntu 24.04, RTX 4090, 24,564 MiB, driver 595.84. Native environments use

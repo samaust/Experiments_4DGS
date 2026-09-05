@@ -2,6 +2,10 @@
 
 Status: **completed and reproduced exactly**. Date: 2026-09-05.
 
+For the method's position in published benchmarks and possible quality upgrades,
+see [Native STG: published quality comparisons](../stg-comparison.md). Those
+results mostly concern full STG; this experiment uses a lite all-camera checkpoint.
+
 ## Purpose and reproduction
 
 Question: does the released checkpoint render correctly through its own CUDA
