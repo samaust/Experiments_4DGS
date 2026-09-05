@@ -10,7 +10,7 @@ import re
 import shlex
 
 
-def resolve(root, profile_path):
+def resolve(root, profile_path, start_frame=None):
     configs = sorted(root.rglob("cfg_args"))
     if len(configs) != 1:
         raise ValueError("Expected exactly one cfg_args beneath the extracted archive")
@@ -42,9 +42,16 @@ def resolve(root, profile_path):
         raise ValueError("Missing or invalid saved resolution")
     source = str(saved.get("source_path", "")).replace("\\", "/").rstrip("/")
     offset = re.search(r"(?:^|/)colmap_(\d+)$", source)
-    if not offset:
-        raise ValueError("Cannot establish temporal window from saved source_path")
-    start = int(offset.group(1))
+    if start_frame is not None and (type(start_frame) is not int or start_frame < 0):
+        raise ValueError("Invalid explicit start frame")
+    if offset:
+        start = int(offset.group(1))
+        if start_frame is not None and start_frame != start:
+            raise ValueError("Explicit start frame conflicts with saved source_path")
+    elif start_frame is not None:
+        start = start_frame
+    else:
+        raise ValueError("Cannot establish temporal window from saved source_path; provide --start-frame with documented provenance")
     if start + duration > 300:
         raise ValueError("Saved temporal window exceeds this capture's 300 frames")
     cameras = model / "cameras.json"
@@ -62,9 +69,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", type=Path)
     parser.add_argument("--profile", required=True, type=Path)
+    parser.add_argument("--start-frame", type=int, help="Explicit window assumption when the release omits its source path")
     args = parser.parse_args()
     try:
-        values = resolve(args.root, args.profile)
+        values = resolve(args.root, args.profile, args.start_frame)
     except (ValueError, OSError, SyntaxError, TypeError) as error:
         parser.exit(1, "Checkpoint inspection failed: " + str(error) + "\n")
     for name, value in values.items():

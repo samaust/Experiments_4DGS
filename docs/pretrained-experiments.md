@@ -2,7 +2,7 @@
 
 [Repository overview](../README.md) · [Research](research.md) · [Input data](input-data.md) · [Rendering](rendering.md) · [Later training](local-creation.md)
 
-Target: Ubuntu 24.04, RTX 4090. Procedure review: 2026-09-05. This guide supplies commands to execute locally; it does not report completed GPU experiments or a tested dependency lockfile. The first two experiments need a browser, not a CUDA research environment.
+Target: Ubuntu 24.04, RTX 4090. Execution review: 2026-09-05. See the [execution record](experiments/pretrained-validation.md) for passed checks and remaining gates; these are not tested dependency lockfiles. The first two experiments need a browser, not a CUDA research environment.
 
 The question is whether the quality you can actually see justifies training and integration work. Stop after any stage to record your assessment. No command in this guide trains a model.
 
@@ -129,6 +129,19 @@ Expect a complete run with `cfg_args`, `cameras.json`, and `point_cloud/iteratio
 
 ### Explore and retain the conversion
 
+For a reproducible conversion without the browser's drag/drop state, use Node.js (tested with 24.16.0). This helper runs the pinned viewer's own conversion worker and refuses to overwrite an existing output:
+
+```bash
+node "$GS_ROOT/scripts/convert-stg-to-splatv.cjs" \
+  --viewer "$GS_WORK/splaTV" \
+  --ply "$GS_WORK/weights/stg-sear-steak/n3d_sear_steak_lite_allcam/point_cloud/iteration_25000/point_cloud.ply" \
+  --cameras "$GS_WORK/weights/stg-sear-steak/n3d_sear_steak_lite_allcam/cameras.json" \
+  --output "$GS_WORK/splaTV/sear-steak-lite.splatv"
+sha256sum "$GS_WORK/splaTV/sear-steak-lite.splatv"
+```
+
+Open the explicit scene URL in item 3 below. Alternatively, perform the manual conversion:
+
 1. With the local viewer open, drag the checkpoint's `cameras.json` onto it, then the Gaussian PLY. Import one file at a time.
 2. Save the generated browser download as `.local/splaTV/sear-steak-lite.splatv`. Choose that destination explicitly in the browser so generated assets stay in the repository.
 3. Reload using [the explicit local scene URL](http://127.0.0.1:8000/?url=http://127.0.0.1:8000/sear-steak-lite.splatv). The absolute URL matters: upstream resolves relative scene URL parameters against a remote base.
@@ -150,10 +163,11 @@ git -C "$GS_WORK/SpacetimeGaussians" rev-parse HEAD
 git -C "$GS_WORK/SpacetimeGaussians" submodule status --recursive
 /usr/bin/python3.14 "$GS_ROOT/scripts/resolve-stg-checkpoint.py" "$GS_WORK/weights/stg-sear-steak" \
   --profile "$GS_WORK/SpacetimeGaussians/configs/n3d_lite/sear_steak.json" \
+  --start-frame 0 \
   > "$GS_WORK/runs/stg-selection.sh"
 ```
 
-Proceed only if the resolver exits successfully. It parses literal saved settings without executing `cfg_args`, selects the highest saved PLY iteration, verifies temporal fields, and resolves camera paths, window offset, duration, and resolution. Saved duration/resolution take precedence over profile defaults; `resolution=-1` retains upstream automatic sizing. If duration exists only in the profile, treat that window as a reference-profile assumption and confirm it against the checkpoint's release metadata before making time-matched comparisons. Missing or ambiguous paths/settings produce an explicit error.
+Proceed only if the resolver exits successfully. It parses literal saved settings without executing `cfg_args`, selects the highest saved PLY iteration, and verifies temporal fields. This release redacts `source_path` as `xxx`: `--start-frame 0` is an explicit assumption, not recovered metadata. The profile supplies duration 50; saved resolution is 2. Confirm the assumed physical window before time-matched comparisons. The native preview below uses normalized model time and does not require that assumption. Missing or ambiguous settings otherwise produce an error.
 
 ```bash
 source "$GS_WORK/runs/stg-selection.sh"
@@ -163,11 +177,17 @@ printf '%s\n' "$STG_MODEL" "$STG_PLY" "$STG_CAMERAS" \
 
 ### Prepare the modern environment and port the renderer
 
-Complete sections 1–3 of the [environment guide](environments.md) with `GS_ENV=stg-render`. The [STG candidate specification](../environments/stg-render.in) does not yet port bundled MMCV or its CUDA extensions. This stage is **adaptation pending**, not a working legacy environment reproduced with new version numbers. Audit configuration, SSIM/science APIs, checkpoint loading, and Torch/CUDA extension APIs before the conditional builds below. [Upstream setup provenance](https://github.com/oppo-us-research/SpacetimeGaussians/blob/427abfc/script/setup.sh)
+Complete sections 1–3 of the [environment guide](environments.md) with `GS_ENV=stg-render`. Apply our [source compatibility patch](../patches/stg-python314-cu130.patch) once to the pinned checkout. It fixes CUDA 13 headers, NumPy/SSIM APIs, and defers MMCV's training-only KNN import. All five extensions built on the selected stack; this does not validate training. [Upstream setup provenance](https://github.com/oppo-us-research/SpacetimeGaussians/blob/427abfc/script/setup.sh)
 
-After recording and applying the necessary source patches:
+Run the entire block; failures stop the subshell:
 
 ```bash
+(
+set -euo pipefail
+git -C "$GS_WORK/SpacetimeGaussians" apply --check "$GS_ROOT/patches/stg-python314-cu130.patch"
+git -C "$GS_WORK/SpacetimeGaussians" apply "$GS_ROOT/patches/stg-python314-cu130.patch"
+export CUDA_HOME=/usr/local/cuda-13.0 TORCH_CUDA_ARCH_LIST=8.9 MAX_JOBS=8
+export CC=/usr/bin/gcc CXX=/usr/bin/g++
 cd "$GS_WORK/SpacetimeGaussians"
 uv pip install --python "$GS_WORK/envs/stg-render/bin/python" --torch-backend cu130 \
   --constraint "$GS_ROOT/environments/constraints-cu130.txt" --no-build-isolation \
@@ -176,13 +196,39 @@ uv pip install --python "$GS_WORK/envs/stg-render/bin/python" --torch-backend cu
   thirdparty/gaussian_splatting/submodules/forward_full \
   thirdparty/gaussian_splatting/submodules/forward_lite \
   thirdparty/gaussian_splatting/submodules/simple-knn
-uv pip install --python "$GS_WORK/envs/stg-render/bin/python" --torch-backend cu130 \
-  --constraint "$GS_ROOT/environments/constraints-cu130.txt" --no-build-isolation -e thirdparty/mmcv
 uv pip check --python "$GS_WORK/envs/stg-render/bin/python"
 "$GS_WORK/envs/stg-render/bin/python" test.py --help
+)
 ```
 
-The MMCV command assumes the bundled implementation has been ported; if choosing a replacement config adapter, update the dependency spec and callers instead. Complete the shared GPU preflight and an actual extension rasterization before dataset preprocessing or checkpoint rendering. Stop on failures; the browser route remains useful.
+Do not install bundled MMCV for this checkpoint preview: its compiled KNN is used by training-time interpolation, not rendering. Training still requires a separately validated implementation. If a patch is already applied, verify it with `git apply --reverse --check`; do not apply twice or reset local edits.
+
+### Native preview without dataset preprocessing
+
+The released camera JSON contains enough calibration for a qualitative preview. Our adapter restores that camera transform and invokes upstream `test_ours_lite` and its CUDA rasterizer directly; it does not replace the renderer. Choose a fresh output directory:
+
+```bash
+"$GS_WORK/envs/stg-render/bin/python" "$GS_ROOT/scripts/verify-environment.py" --gpu
+"$GS_WORK/envs/stg-render/bin/python" "$GS_ROOT/scripts/render-stg-preview.py" \
+  --checkout "$GS_WORK/SpacetimeGaussians" --ply "$STG_PLY" --cameras "$STG_CAMERAS" \
+  --output "$GS_WORK/runs/stg-native-preview" --resolution 2 --times 0 0.5 0.98
+```
+
+Inspect `00000.png` through `00002.png` and `preview.json`. These use the first released camera, black background, and normalized model timestamps. No ground-truth metrics, physical-time alignment, or FPS benchmark is claimed. `--camera-index` selects another released camera. The remaining dataset/COLMAP route is optional for evaluation, not a prerequisite for this preview.
+
+For a smooth native inspection clip, sample 50 model timestamps. Thirty FPS below is a chosen playback rate, not verified capture timing or rendering throughput:
+
+```bash
+(
+set -euo pipefail
+mapfile -t stg_times < <(/usr/bin/python3.14 -c 'for i in range(50): print(i / 50)')
+"$GS_WORK/envs/stg-render/bin/python" "$GS_ROOT/scripts/render-stg-preview.py" \
+  --checkout "$GS_WORK/SpacetimeGaussians" --ply "$STG_PLY" --cameras "$STG_CAMERAS" \
+  --output "$GS_WORK/runs/stg-native-sequence" --resolution 2 --times "${stg_times[@]}"
+ffmpeg -v error -n -framerate 30 -i "$GS_WORK/runs/stg-native-sequence/%05d.png" \
+  -frames:v 50 -c:v libx264 -pix_fmt yuv420p "$GS_WORK/runs/stg-native-sequence/preview.mp4"
+)
+```
 
 ### Obtain and prepare the matching capture
 
@@ -276,15 +322,24 @@ git -C "$GS_WORK/Mango-GS" rev-parse HEAD
 git -C "$GS_WORK/Mango-GS" submodule status --recursive
 ```
 
-**Adaptation pending:** resolve the [candidate dependencies](../environments/mango-render.in), audit all upstream imports, and select a full PyTorch3D revision compatible with the fixed stack. Clone that dependency under `.local/`, record its revision, and build it with the same interpreter, constraint and toolkit. Do not install upstream's moving Git URL as a reproducible pin. Keep successful patches and build logs before the conditional local builds:
+Resolve the [candidate dependencies](../environments/mango-render.in) and build the pinned PyTorch3D revision in the shared environment guide. The tested Mango source revision is `2a7a9238c1518c5770dc2952464bc71a4d3dba75`. Apply the CUDA header patch once, then build both extensions as ordinary wheels: an editable `simple-knn` installation produced an unimportable namespace on this stack.
 
 ```bash
+(
+set -euo pipefail
+git -C "$GS_WORK/Mango-GS" checkout --detach 2a7a9238c1518c5770dc2952464bc71a4d3dba75
+git -C "$GS_WORK/Mango-GS" apply --check "$GS_ROOT/patches/mango-cu130.patch"
+git -C "$GS_WORK/Mango-GS" apply "$GS_ROOT/patches/mango-cu130.patch"
+export CUDA_HOME=/usr/local/cuda-13.0 TORCH_CUDA_ARCH_LIST=8.9 MAX_JOBS=8
+export CC=/usr/bin/gcc CXX=/usr/bin/g++
 cd "$GS_WORK/Mango-GS"
 uv pip install --python "$GS_WORK/envs/mango-render/bin/python" --torch-backend cu130 \
   --constraint "$GS_ROOT/environments/constraints-cu130.txt" --no-build-isolation \
-  -e submodules/diff-gaussian-rasterization -e submodules/simple-knn
+  submodules/diff-gaussian-rasterization submodules/simple-knn
 uv pip check --python "$GS_WORK/envs/mango-render/bin/python"
-"$GS_WORK/envs/mango-render/bin/python" render.py --help
+"$GS_WORK/envs/mango-render/bin/python" scripts/tools/render_one_frame.py --help
+"$GS_WORK/envs/mango-render/bin/python" "$GS_ROOT/scripts/verify-environment.py" --gpu --pytorch3d
+)
 ```
 
 Complete the shared base/extension checks before rendering. For repeat runs, check out recorded full commits and update submodules; record the PyTorch3D commit independently.
@@ -294,8 +349,7 @@ Complete the shared base/extension checks before rendering. For repeat runs, che
 Use an independent Python 3.14 download environment without Torch:
 
 ```bash
-uv venv --python /usr/bin/python3.14 "$GS_WORK/envs/downloads"
-uv pip install --python "$GS_WORK/envs/downloads/bin/python" -r "$GS_ROOT/environments/downloads.in"
+bash "$GS_ROOT/scripts/setup-environment.sh" downloads
 "$GS_WORK/envs/downloads/bin/hf" download htx0601/Mango-GS \
   --include 'n3v/sear_steak_mango_node/*' --local-dir "$GS_WORK/weights/mango"
 test -s "$GS_WORK/weights/mango/n3v/sear_steak_mango_node/cfg_args"
@@ -309,17 +363,27 @@ Record the model revision; pass `--revision <recorded full revision>` on subsequ
 Prepare a Mango-specific copy with full-resolution, time-ordered images. Retain gaps in source camera numbering:
 
 ```bash
-mkdir -p "$GS_WORK/data/mango/sear_steak"
-cp -n "$GS_WORK/data/n3v-original/sear_steak/poses_bounds.npy" "$GS_WORK/data/mango/sear_steak/"
+(
+set -euo pipefail
+mkdir -p "$GS_WORK/data/mango/n3v/sear_steak"
+cp --update=none "$GS_WORK/data/n3v-original/sear_steak/poses_bounds.npy" "$GS_WORK/data/mango/n3v/sear_steak/"
 for video in "$GS_WORK/data/n3v-original/sear_steak"/cam*.mp4; do
   camera="$(basename "$video" .mp4)"
-  mkdir -p "$GS_WORK/data/mango/sear_steak/$camera/images"
-  ffmpeg -n -i "$video" -vsync 0 -start_number 0 \
-    "$GS_WORK/data/mango/sear_steak/$camera/images/%05d.png"
+  frame_dir="$GS_WORK/data/mango/n3v/sear_steak/$camera/images"
+  mkdir -p "$frame_dir"
+  count="$(find "$frame_dir" -maxdepth 1 -name '*.png' | wc -l)"
+  if [ "$count" -eq 300 ]; then continue; fi
+  if [ "$count" -ne 0 ]; then
+    printf 'Partial camera: %s; preserve and inspect it before resuming.\n' "$camera" >&2
+    exit 1
+  fi
+  ffmpeg -v error -n -threads 2 -i "$video" -fps_mode passthrough -start_number 0 -threads 2 \
+    "$frame_dir/%05d.png"
 done
+)
 ```
 
-Do not crop, rescale, or renumber the cameras before checking the loader. The expected layout is `poses_bounds.npy` plus `camXX/images/`. Its saved configuration and release profile determine the modeled frame range; do not assume it equals STG's window. [Mango input/profile conventions](https://github.com/htx0601/Mango-GS#data-preparation)
+This archive contains 21 cameras with 300 frames each. Complete every camera folder before previewing; the loader validates their count against calibration. Keep `/n3v/` in the path: upstream's preview helper uses it to select one-frame loading and CPU-backed images. Do not crop, rescale, or renumber cameras. The expected layout is `poses_bounds.npy` plus `camXX/images/`. The model's frame range need not equal STG's window. [Mango input/profile conventions](https://github.com/htx0601/Mango-GS#data-preparation)
 
 ### Render one preview, then a sequence
 
@@ -331,13 +395,13 @@ export PATH="$CUDA_HOME/bin:$PATH"
 export TORCH_EXTENSIONS_DIR="$GS_WORK/cache/torch_extensions/mango-render-py314-torch213-cu130"
 cd "$GS_WORK/Mango-GS"
 PATH="$GS_WORK/envs/mango-render/bin:$PATH" PYTHON="$GS_WORK/envs/mango-render/bin/python" bash scripts/render_one_frame.sh n3v sear_steak \
-  "$GS_WORK/data/mango/sear_steak" "$GS_WORK/runs/mango/n3v/sear_steak" \
+  "$GS_WORK/data/mango/n3v/sear_steak" "$GS_WORK/runs/mango/n3v/sear_steak" \
   0 "$GS_WORK/runs/mango/previews/sear-steak.png"
 PATH="$GS_WORK/envs/mango-render/bin:$PATH" PYTHON="$GS_WORK/envs/mango-render/bin/python" bash scripts/render_scene.sh n3v sear_steak \
-  "$GS_WORK/data/mango/sear_steak" "$GS_WORK/runs/mango/n3v/sear_steak" 0 30
+  "$GS_WORK/data/mango/n3v/sear_steak" "$GS_WORK/runs/mango/n3v/sear_steak" 0 30 block --load2gpu_on_the_fly
 ```
 
-The scripts resolve the base model path to its `_mango_node` directory. The last sequence argument is encoded video FPS, not GPU throughput. Inspect the preview before running the longer sequence. Expected outputs are beneath the resolved model's `test/video_<checkpoint>/`; inspect the command log and resulting tree for the actual checkpoint identifier. [Published render commands](https://github.com/htx0601/Mango-GS#render-and-validate-n3v)
+The scripts resolve the base model path to its `_mango_node` directory. The sequence renderer eagerly initializes LPIPS metrics (even with `--help`), requiring GPU access and additional pretrained metric downloads. Keep `TORCH_HOME` exported to the workspace cache. The last sequence argument is encoded video FPS, not GPU throughput. Inspect the preview before running the longer sequence. Expected outputs are beneath the resolved model's `test/video_<checkpoint>/`; inspect the log for the actual checkpoint identifier. [Published render commands](https://github.com/htx0601/Mango-GS#render-and-validate-n3v)
 
 **Pass:** the original renderer reloads the complete downloaded model and produces a preview plus changing temporal states. Compare PNGs at overlapping physical times and matching camera views with STG. Record unmatched training splits, durations, resolutions, and backgrounds instead of presenting an uncontrolled leaderboard.
 
@@ -346,6 +410,8 @@ The scripts resolve the base model path to its `_mango_node` directory. The last
 This stage predicts a dynamic representation from example images using reusable weights. It is different from loading a scene already optimized for `sear_steak`. The bundled example supplies four fixed cameras and four frames in camera-major filename order. [NoPo4D quick start](https://github.com/bralani/NoPo4D#quick-start)
 
 ### Install the model and backbone
+
+**Execution stop on the selected stack:** the full installation was attempted and does not resolve. At NoPo4D revision `cb54c9349792d474aa541274842e0fadf1d807c7`, the pinned backbone restricts Python to `>=3.9, <=3.13`, both projects require NumPy `<2`, and mandatory Open3D has no CPython 3.14 wheel in the checked release. Installing the candidate xFormers/gsplat packages succeeded but does not install NoPo4D. Do not run the inference blocks below until a separately audited port resolves these conflicts; do not downgrade or use `--no-deps`. No model inference is claimed.
 
 Clone and record the model and backbone sources:
 

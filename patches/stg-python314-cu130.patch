@@ -1,0 +1,159 @@
+diff --git a/helper_model.py b/helper_model.py
+index 04d225d..20f50f0 100644
+--- a/helper_model.py
++++ b/helper_model.py
+@@ -24,9 +24,13 @@ import torch
+ from thirdparty.gaussian_splatting.utils.graphics_utils import BasicPointCloud
+ import numpy as np
+ from simple_knn._C import distCUDA2
+-from mmcv.ops import knn
+ import torch.nn as nn
+ 
++def knn(*args, **kwargs):
++    # Only training-time point interpolation needs MMCV's compiled KNN.
++    from mmcv.ops import knn as mmcv_knn
++    return mmcv_knn(*args, **kwargs)
++
+ 
+ 
+ class Sandwich(nn.Module):
+@@ -364,4 +368,3 @@ def ndc2pix(v, S):
+     return ((v + 1.0) * S - 1.0) * 0.5
+ 
+ 
+-
+diff --git a/script/pre_n3d.py b/script/pre_n3d.py
+index ded806f..cb76d6e 100644
+--- a/script/pre_n3d.py
++++ b/script/pre_n3d.py
+@@ -137,6 +137,8 @@ if __name__ == "__main__" :
+     parser.add_argument("--downscale", default=1, type=int)
+ 
+     args = parser.parse_args()
++    if shutil.which("colmap") is None:
++        parser.error("The native COLMAP executable must be installed and available on PATH before preprocessing")
+     videopath = Path(args.videopath)
+ 
+     startframe = args.startframe
+@@ -177,4 +179,3 @@ if __name__ == "__main__" :
+     # ## step 4 run colmap, per frame, if error, reinstall opencv-headless 
+     for offset in range(startframe, endframe):
+         getcolmapsinglen3d(videopath, offset)
+-
+diff --git a/test.py b/test.py
+index f000737..9eae950 100644
+--- a/test.py
++++ b/test.py
+@@ -139,7 +139,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
+         rendernumpy = rendering.permute(1,2,0).detach().cpu().numpy()
+         gtnumpy = gt.permute(1,2,0).detach().cpu().numpy()
+         
+-        ssimv2 =  sk_ssim(rendernumpy, gtnumpy, multichannel=True)
++        ssimv2 = sk_ssim(rendernumpy, gtnumpy, channel_axis=-1, data_range=1.0)
+         ssimsv2.append(ssimv2)
+ 
+ 
+diff --git a/thirdparty/colmap/pre_colmap.py b/thirdparty/colmap/pre_colmap.py
+index 18d5e82..bf059c5 100644
+--- a/thirdparty/colmap/pre_colmap.py
++++ b/thirdparty/colmap/pre_colmap.py
+@@ -93,7 +93,7 @@ def pair_id_to_image_ids(pair_id):
+ 
+ def array_to_blob(array):
+     if IS_PYTHON3:
+-        return array.tostring()
++        return array.tobytes()
+     else:
+         return np.getbuffer(array)
+ 
+@@ -140,7 +140,7 @@ class COLMAPDatabase(sqlite3.Connection):
+         return cursor.lastrowid
+ 
+     def add_image(self, name, camera_id,
+-                  prior_q=np.full(4, np.NaN), prior_t=np.full(3, np.NaN), image_id=None):
++                  prior_q=np.full(4, np.nan), prior_t=np.full(3, np.nan), image_id=None):
+         cursor = self.execute(
+             "INSERT INTO images VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             (image_id, name, camera_id, prior_q[0], prior_q[1], prior_q[2],
+@@ -197,5 +197,3 @@ class COLMAPDatabase(sqlite3.Connection):
+             (pair_id,) + matches.shape + (array_to_blob(matches), config,
+              array_to_blob(F), array_to_blob(E), array_to_blob(H),
+              array_to_blob(qvec), array_to_blob(tvec)))
+-
+-
+diff --git a/thirdparty/gaussian_splatting/submodules/forward_full/cuda_rasterizer/rasterizer_impl.h b/thirdparty/gaussian_splatting/submodules/forward_full/cuda_rasterizer/rasterizer_impl.h
+index bc3f0ec..b395fa0 100644
+--- a/thirdparty/gaussian_splatting/submodules/forward_full/cuda_rasterizer/rasterizer_impl.h
++++ b/thirdparty/gaussian_splatting/submodules/forward_full/cuda_rasterizer/rasterizer_impl.h
+@@ -11,6 +11,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <iostream>
+ #include <vector>
+ #include "rasterizer.h"
+@@ -71,4 +72,4 @@ namespace CudaRasterizer
+ 		T::fromChunk(size, P);
+ 		return ((size_t)size) + 128;
+ 	}
+-};
+\ No newline at end of file
++};
+diff --git a/thirdparty/gaussian_splatting/submodules/forward_lite/cuda_rasterizer/rasterizer_impl.h b/thirdparty/gaussian_splatting/submodules/forward_lite/cuda_rasterizer/rasterizer_impl.h
+index bc3f0ec..b395fa0 100644
+--- a/thirdparty/gaussian_splatting/submodules/forward_lite/cuda_rasterizer/rasterizer_impl.h
++++ b/thirdparty/gaussian_splatting/submodules/forward_lite/cuda_rasterizer/rasterizer_impl.h
+@@ -11,6 +11,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <iostream>
+ #include <vector>
+ #include "rasterizer.h"
+@@ -71,4 +72,4 @@ namespace CudaRasterizer
+ 		T::fromChunk(size, P);
+ 		return ((size_t)size) + 128;
+ 	}
+-};
+\ No newline at end of file
++};
+diff --git a/thirdparty/gaussian_splatting/submodules/gaussian_rasterization_ch3/cuda_rasterizer/rasterizer_impl.h b/thirdparty/gaussian_splatting/submodules/gaussian_rasterization_ch3/cuda_rasterizer/rasterizer_impl.h
+index bc3f0ec..b395fa0 100644
+--- a/thirdparty/gaussian_splatting/submodules/gaussian_rasterization_ch3/cuda_rasterizer/rasterizer_impl.h
++++ b/thirdparty/gaussian_splatting/submodules/gaussian_rasterization_ch3/cuda_rasterizer/rasterizer_impl.h
+@@ -11,6 +11,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <iostream>
+ #include <vector>
+ #include "rasterizer.h"
+@@ -71,4 +72,4 @@ namespace CudaRasterizer
+ 		T::fromChunk(size, P);
+ 		return ((size_t)size) + 128;
+ 	}
+-};
+\ No newline at end of file
++};
+diff --git a/thirdparty/gaussian_splatting/submodules/gaussian_rasterization_ch9/cuda_rasterizer/rasterizer_impl.h b/thirdparty/gaussian_splatting/submodules/gaussian_rasterization_ch9/cuda_rasterizer/rasterizer_impl.h
+index bc3f0ec..b395fa0 100644
+--- a/thirdparty/gaussian_splatting/submodules/gaussian_rasterization_ch9/cuda_rasterizer/rasterizer_impl.h
++++ b/thirdparty/gaussian_splatting/submodules/gaussian_rasterization_ch9/cuda_rasterizer/rasterizer_impl.h
+@@ -11,6 +11,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <iostream>
+ #include <vector>
+ #include "rasterizer.h"
+@@ -71,4 +72,4 @@ namespace CudaRasterizer
+ 		T::fromChunk(size, P);
+ 		return ((size_t)size) + 128;
+ 	}
+-};
+\ No newline at end of file
++};

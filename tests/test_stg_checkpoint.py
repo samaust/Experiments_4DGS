@@ -74,6 +74,22 @@ class CheckpointTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 checkpoint.resolve(self.root, self.profile)
 
+    def test_redacted_release_path_requires_explicit_start(self):
+        (self.model / "cfg_args").write_text("Namespace(source_path='xxx', resolution=2)")
+        with self.assertRaisesRegex(ValueError, "--start-frame"):
+            checkpoint.resolve(self.root, self.profile)
+        values = checkpoint.resolve(self.root, self.profile, start_frame=0)
+        self.assertEqual(values["STG_START"], 0)
+        self.assertEqual(values["STG_END"], 25)
+        for start in (-1, 299):
+            with self.assertRaises(ValueError):
+                checkpoint.resolve(self.root, self.profile, start_frame=start)
+
+    def test_explicit_start_cannot_override_saved_window(self):
+        with self.assertRaisesRegex(ValueError, "conflicts"):
+            checkpoint.resolve(self.root, self.profile, start_frame=0)
+        self.assertEqual(checkpoint.resolve(self.root, self.profile, start_frame=12)["STG_START"], 12)
+
 
 if __name__ == "__main__":
     unittest.main()

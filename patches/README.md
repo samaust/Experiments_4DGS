@@ -1,5 +1,20 @@
 # Local upstream patches
 
+Native compatibility patches (apply once using `git apply --check`, then
+`git apply`; preserve existing checkout edits):
+
+- [stg-python314-cu130.patch](stg-python314-cu130.patch), STG revision
+  `427abfc58309a4a5213843dd673fb22c4529306c`: CUDA 13 integer headers,
+  NumPy/SSIM API updates, early missing-COLMAP failure, and lazy import of
+  training-only MMCV KNN. It does not port MMCV training operations.
+- [mango-cu130.patch](mango-cu130.patch), Mango revision
+  `2a7a9238c1518c5770dc2952464bc71a4d3dba75`: explicit CUDA integer header.
+
+Build and execution status is recorded in the
+[pretrained experiment report](../docs/experiments/pretrained-validation.md).
+The browser conversion helper verifies the pinned worker's hash before running
+it; neither native patch changes the learned checkpoint or the renderer's math.
+
 The splaTV patch targets upstream revision `8b313fe`. Its bundle consists of
 [splatv-time-controls.patch](splatv-time-controls.patch) and
 [time-controls.js](splatv/time-controls.js). The JavaScript asset is our local
