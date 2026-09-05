@@ -1,6 +1,6 @@
 # 4DGS research and locally runnable implementations
 
-[Repository overview](../README.md) · [Input data](input-data.md) · [Local creation](local-creation.md) · [Rendering](rendering.md)
+[Repository overview](../README.md) · [Pretrained experiments](pretrained-experiments.md) · [Input data](input-data.md) · [Local creation](local-creation.md) · [Rendering](rendering.md)
 
 Research date: **2026-09-05**. This is a bounded survey of publicly accessible papers, official implementations, and downloadable assets. It is not a claim to exhaust the literature. “Code available” means source was found; it does not mean this repository has reproduced the results.
 
@@ -20,6 +20,8 @@ The first three rows describe different modeling choices; their files and render
 There is a second distinction: **per-scene optimization** creates a model for one capture, whereas **pretrained reconstruction** predicts a representation for new input. A downloadable checkpoint of a cooking scene is not a general-purpose world reconstruction model.
 
 ## Methods worth investigating
+
+The immediate experiment order is [existing scenes and rendering, then pretrained reconstruction](pretrained-experiments.md). Training recommendations below describe later options; they do not require training before evaluating a released checkpoint.
 
 The last column is this repository's assessment for the intended workflow. Memory figures are author-reported unless stated otherwise; unknown means no reliable requirement was established in this review.
 

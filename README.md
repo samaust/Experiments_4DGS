@@ -19,18 +19,20 @@ Animated-world generation is supplied independently. This repository focuses on 
 
 ## Start here
 
-1. Read the [research guide](docs/research.md) for methods, papers, GitHub code, Hugging Face assets, and license distinctions.
-2. Check the [input-data guide](docs/input-data.md) before exporting a custom scene.
-3. Follow the [local creation guide](docs/local-creation.md) for environment checks and two baseline experiments.
-4. Use the [rendering guide](docs/rendering.md) for images, videos, local browser playback, and representation compatibility.
+1. Follow the [pretrained experiments guide](docs/pretrained-experiments.md): view existing scenes, compare STG and Mango-GS rendering, then try NoPo4D inference before choosing what to train.
+2. Read the [research guide](docs/research.md) for methods, papers, downloadable assets, and license distinctions.
+3. Use the [rendering guide](docs/rendering.md) for representation compatibility and additional rendering procedures.
+4. When ready to train, check the [input-data guide](docs/input-data.md) and follow the [local creation guide](docs/local-creation.md).
 
-For an initial training experiment, use HUST 4DGaussians with the small D-NeRF `bouncingballs` scene. Then investigate SpacetimeGaussians with a short synchronized multi-view sequence. For a viewing-only first step, the rendering guide describes running splaTV with its included scene. These are starting recommendations based on upstream documentation, not local benchmark results.
+Start with splaTV's bundled scene and its local time-control patch. Next inspect the published `sear_steak` checkpoints, then run the bundled NoPo4D example. Record your visual assessment using the [experiment template](docs/experiments/template.md). The HUST D-NeRF `bouncingballs` walkthrough remains a later synthetic training option. These are experiment choices, not local quality rankings.
 
 ## What this repository contains
 
-At present, this is a documentation and research repository. It contains no training implementation, installed research environment, downloaded weights, generated 4DGS assets, or measured GPU results. Commands in the guides run inside separate upstream checkouts. Keep large datasets and checkpoints outside this repository.
+This repository contains research, experiment guides, and a reproducible viewer patch. It is also the workspace for future training implementations, installed environments, downloaded weights, generated 4DGS assets, and measured GPU results. Run commands here; upstream checkouts and large runtime files live beneath the Git-ignored `.local/` directory.
 
-Research was checked on **2026-09-05**. The guides distinguish source-inspected behavior, author-reported results, and procedures that still need execution on the target workstation. The documentation environment could not communicate with the NVIDIA driver; no GPU training or rendering was performed.
+Track our implementation, scripts, patches, environment specifications, and small experiment reports. Keep datasets, downloaded checkpoints, environments, caches, rendered images/videos, and raw logs under `.local/`. See the [workspace setup](docs/pretrained-experiments.md#0-prepare-the-repository-workspace) for the layout and commands. No training or GPU rendering results are claimed by this documentation change.
+
+Research was checked on **2026-09-05**. The guides distinguish source-inspected behavior, author-reported results, and procedures that still need execution on the target workstation. NVIDIA device access must be checked from an authorized host terminal: a sandbox failure is not evidence of a host driver fault. The installed CUDA compiler is `/usr/local/cuda-13.0/bin/nvcc`; individual research environments may require an older compiler.
 
 “4DGS” describes several representations, not a universal interchange format. Save the full model required by the selected renderer; a PLY file alone may omit motion networks or appearance decoders. See the [compatibility table](docs/rendering.md#representation-and-viewer-compatibility).
 

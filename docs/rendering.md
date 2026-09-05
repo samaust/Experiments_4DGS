@@ -1,6 +1,6 @@
 # Rendering and viewing 4DGS data
 
-[Repository overview](../README.md) · [Research](research.md) · [Input data](input-data.md) · [Local creation](local-creation.md)
+[Repository overview](../README.md) · [Pretrained experiments](pretrained-experiments.md) · [Research](research.md) · [Input data](input-data.md) · [Local creation](local-creation.md)
 
 Reviewed on 2026-09-05. All GPU and browser procedures here remain **runtime-unverified on the target workstation**. Source inspection establishes the documented entry points and limitations, not achieved performance.
 
@@ -26,7 +26,7 @@ PLY is a container: inspect its properties, not just its extension. Renaming a s
 Use the environment, checkout, `GS_WORK` variable, dataset, and completed run from the [creation guide](local-creation.md#experiment-1-hust-synthetic-scene):
 
 ```bash
-conda activate gs-hust-reference
+conda activate "$GS_WORK/envs/gs-hust-reference"
 cd "$GS_WORK/4DGaussians"
 python render.py \
   --model_path "$GS_WORK/runs/hust-bouncingballs" \
@@ -113,7 +113,7 @@ The implementation writes `gaussian_pertimestamp/time_00000.ply` and subsequent 
 Reload the 12-frame smoke run with its matching duration, resolution, and iteration:
 
 ```bash
-conda activate feature_splatting
+conda activate "$GS_WORK/envs/feature_splatting"
 cd "$GS_WORK/SpacetimeGaussians"
 python test.py \
   --source_path "$GS_WORK/data/n3v/cook_spinach/colmap_0" \
@@ -141,7 +141,7 @@ Custom camera paths are implementation-specific. SpacetimeGaussians exposes a no
 
 ## Local browser playback with splaTV
 
-This route does not need a Python training environment. It needs Python 3 for a local file server and a browser with working WebGL2. Clone into the external workspace and use the included scene first:
+This route does not need a Python training environment. It needs Python 3 for a local file server and a browser with working WebGL2. Initialize `GS_WORK` using the [repository workspace setup](pretrained-experiments.md#0-prepare-the-repository-workspace). Clone into `.local/` and use the included scene first; skip cloning if the pretrained guide already created this checkout:
 
 ```bash
 cd "$GS_WORK"
@@ -157,14 +157,14 @@ Open [the local viewer](http://127.0.0.1:8000/). Its default asset is local `mod
 
 ### Import a trained lite scene
 
-1. Render the original lite model with Python first, so there is a reference image.
+1. Follow the [pretrained guide](pretrained-experiments.md#2-inspect-the-released-stg-lite-scene) for a quick browser preview; obtain an original Python reference before judging conversion fidelity.
 2. In the browser, drop a compatible SpacetimeGaussians lite PLY. Optionally load the matching camera JSON before conversion so its cameras are embedded in the exported file.
 3. The importer produces a `model.splatv` download. Store it under a new name in the local viewer directory and reopen using an absolute local URL.
 4. Check beginning/middle/end states and camera alignment. Record any color, opacity, sorting, or quantization differences from the Python renderer.
 
 The importer expects spatial attributes plus `motion_0`–`motion_8`, `omega_0`–`omega_3`, and temporal radial-basis fields. It treats the first three color features as RGB. It does not reproduce a full learned appearance decoder. Default playback oscillates time sinusoidally over 0–1; it is not faithful constant-speed capture playback. The reviewed UI lacks a timeline scrubber. [Importer and time loop](https://github.com/antimatter15/splaTV/blob/main/hybrid.js)
 
-For a simple frozen-time inspection, an optional **untested local edit** is to replace the `gl.uniform1f(u_time, ...)` assignment with `gl.uniform1f(u_time, 0.5)`. A proper pause/scrub/loop control requires a local viewer modification and is not included here. For an existing GUI with time/frame sliders, investigate [4DGT's local viewer](https://github.com/facebookresearch/4DGT#gui--interactive-viewer); it uses a different representation and cannot directly open the HUST/STG checkpoints.
+The [local time-control patch](../patches/README.md) adds pause, scrubbing, restart, and constant-speed looping to the pinned splaTV checkout. Follow the [pretrained experiment](pretrained-experiments.md#1-view-the-bundled-scene) to apply it. Its cycle duration is a viewing setting unless calibrated to source timing. For another GUI with time/frame sliders, investigate [4DGT's local viewer](https://github.com/facebookresearch/4DGT#gui--interactive-viewer); it uses a different representation and cannot directly open the HUST/STG checkpoints.
 
 ### Verify that playback is local
 

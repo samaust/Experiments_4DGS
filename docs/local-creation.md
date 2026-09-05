@@ -1,10 +1,12 @@
 # Creating 4DGS data locally
 
-[Repository overview](../README.md) · [Research](research.md) · [Input data](input-data.md) · [Rendering](rendering.md)
+[Repository overview](../README.md) · [Pretrained experiments](pretrained-experiments.md) · [Research](research.md) · [Input data](input-data.md) · [Rendering](rendering.md)
 
 Target: Ubuntu 24.04 LTS, RTX 4090. Reviewed on 2026-09-05. The commands below are source-checked procedures, **not locally executed GPU results**. Older upstream environments are recorded explicitly; compatibility with this workstation still needs the checks below.
 
 ## Environment and workspace
+
+First complete the [pretrained rendering experiments](pretrained-experiments.md). This guide is the later training phase; its training commands are not prerequisites for viewing downloaded models.
 
 Use one environment per implementation, with separate dataset and output directories. Install Git, a Conda-compatible environment manager, a working NVIDIA driver, and the development tools required by the selected CUDA toolkit. A PyTorch CUDA runtime does not necessarily include `nvcc`, which these custom extensions need.
 
@@ -39,14 +41,15 @@ Ada supports compatible Ampere binaries/PTX; native compute-8.9 compilation star
 
 On Ubuntu 24.04, do not assume the system-default GCC is supported by an old toolkit. Select a supported compiler explicitly for that environment, or use a local GPU development container with the older Ubuntu/CUDA userspace. That still runs on the workstation and uses the host GPU driver. This guide does not supply a tested container image or a certified modernized dependency lockfile. Any such adaptation belongs in the experiment record. Compare supported combinations in the [CUDA 11.6 Linux installation guide](https://docs.nvidia.com/cuda/archive/11.6.0/cuda-installation-guide-linux/index.html).
 
-Choose an existing parent location outside this documentation repository; replace the example path before running:
+Run the [workspace and local environment-manager setup](pretrained-experiments.md#0-prepare-the-repository-workspace) first. From this repository root:
 
 ```bash
-GS_WORK=/path/to/local-4dgs
+GS_ROOT="$(git rev-parse --show-toplevel)"
+export GS_WORK="$GS_ROOT/.local"
 mkdir -p "$GS_WORK/data" "$GS_WORK/runs"
 ```
 
-The following commands assume this variable remains set. Use a fresh output directory for each experiment. No model downloads or environments are bundled here.
+The following commands assume these variables and the workspace cache settings remain set. Use a fresh output directory for each experiment. Environments and upstream checkouts stay inside `.local/`; our source, configurations, and result notes remain tracked.
 
 ## Experiment 1: HUST synthetic scene
 
@@ -62,8 +65,8 @@ git checkout --detach 843d5ac636c37e4b611242287754f3d4ed150144
 git submodule update --init --recursive
 git rev-parse HEAD
 git submodule status --recursive
-conda create -n gs-hust-reference python=3.7
-conda activate gs-hust-reference
+conda create -p "$GS_WORK/envs/gs-hust-reference" python=3.7
+conda activate "$GS_WORK/envs/gs-hust-reference"
 python -m pip install torch==1.13.1+cu116 torchvision==0.14.1+cu116 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu116
 python -m pip install -r requirements.txt
 TORCH_CUDA_ARCH_LIST="8.6+PTX" python -m pip install -e submodules/depth-diff-gaussian-rasterization
@@ -115,11 +118,11 @@ git rev-parse HEAD
 git submodule status --recursive
 ```
 
-Read `script/setup.sh` in this checkout. It contains legacy environment commands and a global Conda configuration change; the commands below select the relevant setup steps without applying that global setting. They retain upstream environment names used by the preprocessing instructions.
+Read `script/setup.sh` in this checkout. It contains legacy environment commands and a global Conda configuration change; the commands below select the relevant setup steps without applying that global setting. Environments use local prefixes. If an upstream script activates an environment by name internally, use a tracked local patch to point it at the corresponding prefix before execution.
 
 ```bash
-conda create -n feature_splatting python=3.7.13
-conda activate feature_splatting
+conda create -p "$GS_WORK/envs/feature_splatting" python=3.7.13
+conda activate "$GS_WORK/envs/feature_splatting"
 conda install pytorch==1.12.1 torchvision==0.13.1 torchaudio==0.12.1 cudatoolkit=11.6 -c pytorch -c conda-forge
 TORCH_CUDA_ARCH_LIST="8.6+PTX" python -m pip install \
   thirdparty/gaussian_splatting/submodules/gaussian_rasterization_ch9 \
@@ -133,8 +136,8 @@ python -m pip check
 python train.py --help
 python test.py --help
 
-conda create -n colmapenv python=3.8
-conda activate colmapenv
+conda create -p "$GS_WORK/envs/colmapenv" python=3.8
+conda activate "$GS_WORK/envs/colmapenv"
 python -m pip install opencv-python-headless tqdm natsort Pillow
 conda install pytorch==1.12.1 -c pytorch -c conda-forge
 conda install colmap -c conda-forge
@@ -150,7 +153,7 @@ Obtain `cook_spinach` and its calibration from the [official Neural 3D Video dat
 From the SpacetimeGaussians checkout:
 
 ```bash
-conda activate colmapenv
+conda activate "$GS_WORK/envs/colmapenv"
 python script/pre_n3d.py --videopath "$GS_WORK/data/n3v/cook_spinach"
 ```
 
@@ -159,7 +162,7 @@ This is the upstream benchmark-preprocessing entry point. It can process more fr
 ### Start with a reduced smoke run
 
 ```bash
-conda activate feature_splatting
+conda activate "$GS_WORK/envs/feature_splatting"
 python train.py \
   --source_path "$GS_WORK/data/n3v/cook_spinach/colmap_0" \
   --model_path "$GS_WORK/runs/stg-spinach-smoke" \
@@ -192,7 +195,7 @@ For 24 GB-class experiments, increase one dimension at a time: frame count, imag
 
 | Failure | Next diagnostic |
 | --- | --- |
-| `nvidia-smi` fails | Establish GPU/driver access before investigating Python packages. This was the documentation environment's limitation. |
+| `nvidia-smi` fails | Retry in an authorized host terminal to distinguish sandbox restrictions from a driver fault before investigating Python packages. |
 | PyTorch works but rasterization fails | Check extension compiler, CUDA runtime, supported architecture, and rebuild logs |
 | Missing `mmcv.Config` | HUST uses MMCV 1.x APIs; installing an unrelated current major release does not preserve them |
 | Missing or incompatible COLMAP option | Compare the installed version with the preprocessing script; keep calibration/point outputs for inspection |

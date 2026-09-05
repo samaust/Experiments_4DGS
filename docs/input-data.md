@@ -1,6 +1,6 @@
 # Preparing input for dynamic Gaussian reconstruction
 
-[Repository overview](../README.md) · [Research](research.md) · [Local creation](local-creation.md) · [Rendering](rendering.md)
+[Repository overview](../README.md) · [Pretrained experiments](pretrained-experiments.md) · [Research](research.md) · [Local creation](local-creation.md) · [Rendering](rendering.md)
 
 This guide starts after the animated world has been generated. It describes what to retain and how to map it to existing research loaders. It does not implement a capture system or a universal dataset converter.
 
@@ -19,7 +19,7 @@ For every image, retain its camera identity, scene timestamp, camera intrinsics,
 | Optional geometry | Depth definition, valid-depth mask, and points in the same coordinates | Provides a potential initialization route without estimating already-known cameras |
 | Optional masks | Identify alpha, foreground segmentation, and invalid pixels separately | These have different meanings; a loader must explicitly support their intended use |
 
-These are recommended capture records, not a new required file format. Archive originals separately from resized images, COLMAP work directories, and other preprocessing outputs.
+These are recommended capture records, not a new required file format. Archive originals separately from resized images, COLMAP work directories, and other preprocessing outputs, under this repository's ignored `.local/data/` and `.local/downloads/` directories. Track small provenance/configuration records in `docs/experiments/`.
 
 ### Camera and time checks
 

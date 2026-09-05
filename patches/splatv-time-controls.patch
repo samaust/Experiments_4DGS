@@ -1,0 +1,34 @@
+diff --git a/index.html b/index.html
+--- a/index.html
++++ b/index.html
+@@ -197,6 +197,7 @@
+       <span id="camid"></span>
+     </div>
+ 
++    <script src="time-controls.js"></script>
+     <script src="hybrid.js"></script>
+   </body>
+ </html>
+diff --git a/hybrid.js b/hybrid.js
+--- a/hybrid.js
++++ b/hybrid.js
+@@ -515,6 +515,10 @@
+   });
+   window.addEventListener("blur", () => {
+     activeKeys = [];
+   });
++  document.getElementById("splatv-time-controls").addEventListener("focusin", () => {
++    activeKeys = [];
++    carousel = false;
++  });
+   window.addEventListener(
+     "wheel",
+@@ -827,7 +831,7 @@
+     if (vertexCount > 0) {
+       document.getElementById("spinner").style.display = "none";
+       gl.uniformMatrix4fv(u_view, false, actualViewMatrix);
+-      gl.uniform1f(u_time, Math.sin(Date.now() / 1000) / 2 + 1 / 2);
++      gl.uniform1f(u_time, window.splatvTimeline.sample(now));
+       gl.clear(gl.COLOR_BUFFER_BIT);
+       gl.drawArraysInstanced(gl.TRIANGLE_FAN, 0, 4, vertexCount);
+     } else {
