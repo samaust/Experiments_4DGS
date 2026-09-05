@@ -13,7 +13,7 @@ The question is whether the quality you can actually see justifies training and 
 | 3 | The same STG checkpoint in its original renderer | Original appearance versus browser conversion |
 | 4 | Mango-GS `sear_steak` checkpoint | A second method on similar scene content |
 | 5 | NoPo4D on bundled multi-view images | Pretrained reconstruction followed by rendering |
-| 6 | Written comparison | Which training or rendering experiment is worth doing next |
+| 6 | Written comparison and stronger STG contenders | Which released scene or rendering experiment is worth investigating next |
 
 ## 0. Prepare the repository workspace
 
@@ -479,6 +479,72 @@ done
 Completed five-experiment execution, measurements, visual evidence and decisions:
 [2026-09-05 evidence summary](experiments/section6-evidence.md). This includes
 the full NoPo4D reconstruction and its successful cached offline rerun.
+
+### 6.1. Strong contenders against Native STG
+
+The local native STG run uses a lite, all-camera checkpoint. For published
+comparisons, use the full STG baseline where the paper reports it and read the
+[Native STG quality comparison](stg-comparison.md) for protocol details. The
+shortlist below prioritizes fewer visible artifacts. Research and project links
+were reviewed on **2026-09-05**; these contenders have not been rendered locally
+in this repository. Compare numbers within each cited paper: training windows,
+metric implementations, and baseline reproductions differ between papers.
+
+| Method | Published evidence against full STG | Why investigate it | Main cost or qualification |
+| --- | --- | --- | --- |
+| [FreeTimeGS, Table 1](https://arxiv.org/html/2506.05348v2#S4.T1) (CVPR 2025) | Neural 3D Video: 33.19 dB PSNR / 0.036 LPIPS versus STG's 32.05 / 0.044 | Clear reported improvement on both metrics; inspect fast-moving details first | Published baselines are not a controlled local rerun; scene/checkpoint provenance still needs checking |
+| [MoE-GS, Table 1](https://arxiv.org/html/2510.19210v2) (ICLR 2026) | N3V: 33.27 dB PSNR with four experts versus STG's 31.92 | Candidate when extra model capacity is acceptable; inspect whether moving details improve | Combines several experts, including STG, with extra memory and inference cost; STG uses 150-frame training segments; PSNR alone does not establish fewer artifacts |
+| [ATGS, Table 2](https://arxiv.org/html/2608.30184v1) (arXiv record identifies ACM ToG/SIGGRAPH 2026) | N3DV: 32.56 dB PSNR / 0.043 LPIPS versus STG's 32.05 / 0.044 | Candidate for long sequences and complex motion | LPIPS improves by only 0.001; reported 70 FPS versus STG's 140 FPS requires hardware/timing verification |
+
+Also consider **STG Full** as the nearest upgrade to the existing lite preview.
+The [original paper, Table 6](https://arxiv.org/html/2312.16812v2) reports
+32.05 dB / 0.044 LPIPS-Alex for full versus 31.59 / 0.047 for lite on Neural 3D
+Video. A full checkpoint needs its matching appearance decoder and full renderer;
+the lite preview helper does not establish full-model compatibility.
+
+Keep **FreeTimeGS++** on the research watchlist for this artifact-focused task.
+Its fixed B variant reports 33.45 dB but LPIPS-Alex 0.062, compared with the STG
+reference's 32.05 dB / 0.044. The headline 33.51 dB uses scene-wise configuration
+selection. Its higher PSNR therefore does not establish better perceptual quality.
+See [FreeTimeGS++, Tables S2 and S4](https://arxiv.org/html/2605.03337v1).
+
+### 6.2. Inspect a contender before committing to training
+
+Start with the authors' visual evidence and release documentation:
+
+| Candidate | Inspection entry point | Next check for a local pretrained preview |
+| --- | --- | --- |
+| STG Full | [Official implementation and model links](https://github.com/oppo-us-research/SpacetimeGaussians) | Identify a full scene checkpoint, decoder, configuration, and matching render entry point |
+| FreeTimeGS | [Project demos and STGS comparison videos](https://zju3dv.github.io/freetimegs/) | The project links a rasterizer and EasyVolcap framework; establish a complete scene bundle and matching configuration before treating those links as a runnable FreeTimeGS release |
+| MoE-GS | [Authors' project and video demonstrations](https://cvsp-lab.github.io/MoE-GS) | Establish downloadable expert checkpoints, router state, configurations, and a renderer for that exact combination |
+| ATGS | [Author-linked repository](https://github.com/WuJH2001/ATGS) | Establish a released scene checkpoint, temporal configuration, and documented rendering command |
+
+These links establish inspection starting points. Downloadable checkpoints and
+compatibility with the target environment are not yet verified for these routes.
+For each candidate:
+
+1. Record the demo scene, camera path, moving-region defects, and whether original
+   resolution frames are available. Treat hosted demos as preliminary evidence.
+2. Identify a complete released scene and pin its source and asset revisions.
+   If the release requires training or lacks necessary model state, record the
+   missing asset and defer the local pretrained preview.
+3. For an available bundle, use a separate environment following the
+   [environment guide](environments.md), then render a small temporal preview into
+   a new directory under `.local/runs/`. Record the exact command and checkpoint;
+   do not reuse the STG-lite helper for an incompatible representation.
+4. Reload the bundle in a fresh process and compare matching PNGs. Add a report
+   from the [experiment template](experiments/template.md), with artifact crops,
+   playback video, timings, and the verified viewpoint/time coverage.
+
+PSNR measures pixel accuracy (higher is better); LPIPS measures perceptual
+difference (lower is better). Neither counts ghosting, floaters, or flicker.
+Compare matched held-out cameras, frames, resolution, background, and LPIPS
+implementation. Inspect continuous video and
+moving-region crops before choosing a method. Keep LPIPS-Alex and LPIPS-VGG
+separate. Published FPS values should not be treated as RTX 4090 estimates until
+the renderer, resolution, and timing boundary are reproduced locally.
+
+### 6.3. Record results and choose the next experiment
 
 Create a separate report per method/scene from the [experiment template](experiments/template.md). Keep large evidence in `.local/runs/` and reference its relative paths in the report:
 
