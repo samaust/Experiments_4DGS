@@ -9,6 +9,11 @@ establish quality at the agreed training budget. Basketball is still blocked
 on calibration. See the [training integration record](contender-training-20260906.md)
 for commands, budget charges, limitations and remaining gates.
 
+Full subsequently resumed to iteration 5000, ending at 211,618 Gaussians after
+the default opacity reset/pruning. The [5,000-step record](contender-full-5000-20260906.md)
+contains the longer run, offline evaluation, checked Lite comparison and current
+budget charges. It remains incomplete against the 30,000-step schedule.
+
 Release audit, 2026-09-06: downloaded `techni_Birthday_allcam_allpoints.zip`
 from `stack93/spacetimegaussians` revision `9534842`. Despite its unsuffixed
 filename, saved `cfg_args` explicitly identifies `model='ours_lite'`; the

@@ -5,15 +5,19 @@ Evaluation only: does not train or alter the training budget. Any subprocess
 failure stops the pipeline with its exact command and log; no network fallback.
 """
 import argparse
+import datetime
 import hashlib
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 
 def main():
+    started = time.monotonic()
+    started_utc = datetime.datetime.now(datetime.timezone.utc).isoformat()
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--checkout', type=Path, required=True)
     p.add_argument('--manifest', type=Path, required=True)
@@ -43,11 +47,27 @@ def main():
     def run(label, arguments):
         command = [sys.executable, *map(str, arguments)]
         log = a.output/(label+'.log')
-        commands.append(dict(label=label, command=command, log=str(log)))
-        (a.output/'commands.json').write_text(json.dumps(commands, indent=2)+'\n')
+        stage = dict(label=label, command=command, log=str(log), status='running',
+                     started_utc=datetime.datetime.now(datetime.timezone.utc).isoformat())
+        commands.append(stage)
+        def record():
+            (a.output/'commands.json').write_text(json.dumps(commands, indent=2)+'\n')
+        record()
         print('Running '+label, flush=True)
-        with log.open('x') as stream:
-            result = subprocess.run(command, env=env, stdout=stream, stderr=subprocess.STDOUT)
+        tick = time.monotonic()
+        try:
+            with log.open('x') as stream:
+                result = subprocess.run(command, env=env, stdout=stream, stderr=subprocess.STDOUT)
+            stage.update(exit_code=result.returncode,
+                         status='completed' if result.returncode == 0 else 'failed')
+        except OSError as error:
+            stage.update(status='launch-error', error=str(error))
+            print('Failed command: '+repr(command)+'\n'+str(error), file=sys.stderr)
+            raise
+        finally:
+            stage.update(wall_seconds=time.monotonic()-tick,
+                         ended_utc=datetime.datetime.now(datetime.timezone.utc).isoformat())
+            record()
         if result.returncode:
             print('Failed command: '+repr(command)+'\n'+log.read_text(), file=sys.stderr)
             raise SystemExit(result.returncode)
@@ -77,6 +97,8 @@ def main():
     run('package', [helpers/'package-stg-evidence.py', '--render-directory', a.output/'reload-a',
         '--manifest', a.manifest, '--crops', a.crops, '--output', a.output/'evidence'])
     report = dict(status='completed', iteration=render['iteration'], model=render['model'],
+        started_utc=started_utc, ended_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        wall_seconds=time.monotonic()-started, stages=commands,
         incomplete_training=render['incomplete_training'], benchmark=render['benchmark'],
         reload_comparisons=comparisons, checkpoint_bytes=render['checkpoint_bytes'],
         metrics=json.loads((a.output/'metrics.json').read_text())['aggregate'],

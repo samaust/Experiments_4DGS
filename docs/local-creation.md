@@ -396,3 +396,24 @@ stage retains a separate log. Metrics/encoding use two CPU threads. This
 adapter currently accepts only the SelfCap dance1 held-out profile. Evaluation
 is outside the training ledger. PNG equality does not establish floating-point
 model-state or next-training-step equality.
+
+The pipeline now records each stage's UTC start/end, monotonic wall seconds,
+exit code and status in `commands.json`, including failed launches. Successful
+`evaluation.json` reports also include total evaluation wall time. Older Lite
+evaluation reports predate these timing fields; do not infer their missing times.
+
+After both evaluations finish, generate checked metric deltas:
+
+```bash
+.local/envs/stg-render/bin/python scripts/compare-stg-evaluations.py \
+  --first .local/runs/stg-lite-selfcap-5000-evaluation-20260906 \
+  --second .local/runs/stg-full-selfcap-5000-evaluation-20260906 \
+  --output .local/runs/stg-selfcap-5000-comparison-20260906.json
+```
+
+This checks manifest hashes, metric definitions, rendered camera/time samples,
+sweep identity, frame completeness and internal report consistency. Output
+deltas are **second minus first**, including per-frame differences. It retains
+both iteration counts and incomplete-training flags. Different iteration counts
+are labeled, not silently equated; equal iterations do not establish equal
+training time. Infinite-PSNR differences are recorded as JSON null.

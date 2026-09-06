@@ -20,7 +20,26 @@ offline evaluation workflow. The equal-step table below remains the historical
 iteration-2000 comparison; it must not be relabeled as final-budget results.
 At iteration 5000, Lite measures 22.082603 dB PSNR, 0.827138 SSIM and
 0.270207 LPIPS-Alex, with 449.311 FPS warm rendering. All 80 reload PNGs
-remain byte-exact. Full has not yet been extended to this training boundary.
+remain byte-exact. The [Full continuation](contender-full-5000-20260906.md)
+now reaches the same iteration and adds timed evaluation plus checked per-frame
+and aggregate deltas.
+
+## SelfCap dance1 — provisional 5,000-step checkpoints
+
+Same 60 held-out camera-0015 frames, shared metric protocol and 1890×1061
+resolution. Both remain incomplete; equal steps do not mean equal budget usage.
+
+| Method | PSNR dB | SSIM | LPIPS-Alex | Δ vs Lite (PSNR / SSIM / LPIPS) | Δ vs Full (PSNR / SSIM / LPIPS) | Warm FPS |
+| --- | ---: | ---: | ---: | --- | --- | ---: |
+| STG Lite | 22.082603 | 0.827138 | 0.270207 | 0 / 0 / 0 | −1.370350 / −0.005722 / −0.008946 | 449.311 |
+| STG Full | 23.452953 | 0.832861 | 0.279153 | +1.370350 / +0.005722 / +0.008946 | 0 / 0 / 0 | 275.750 |
+
+The checked comparison is `.local/runs/stg-selfcap-5000-comparison-20260906.json`.
+Full has higher PSNR/SSIM, while Lite has lower LPIPS and higher measured warm
+throughput. Both retain strong blur/ghosting around the moving person; no final
+artifact-quality winner is established. Both have byte-exact offline reloads
+for all 80 PNGs. Total charged training time is 709.725114 seconds for Lite and
+816.799333 seconds for Full, including earlier attempts.
 
 ## SelfCap dance1 — provisional 2,000-step checkpoints
 

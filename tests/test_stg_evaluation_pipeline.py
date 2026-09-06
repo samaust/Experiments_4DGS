@@ -39,8 +39,24 @@ class EvaluationPipelineTests(unittest.TestCase):
         self.assertEqual(run.call_count, 1)
         commands = json.loads((self.output/'commands.json').read_text())
         self.assertEqual(len(commands), 1)
+        self.assertEqual(commands[0]['status'], 'failed')
+        self.assertEqual(commands[0]['exit_code'], 7)
+        self.assertGreaterEqual(commands[0]['wall_seconds'], 0)
+        self.assertIn('ended_utc', commands[0])
         self.assertIn('offline-python.py', commands[0]['command'][1])
         self.assertEqual(run.call_args.kwargs['env']['OMP_NUM_THREADS'], '2')
+        self.assertFalse((self.output/'evaluation.json').exists())
+
+    def test_launch_error_is_recorded_without_retry(self):
+        with patch.object(self.module.sys, 'argv', self.argv), \
+             patch.object(self.module.subprocess, 'run', side_effect=OSError('synthetic launch error')) as run:
+            with self.assertRaisesRegex(OSError, 'synthetic launch error'):
+                self.module.main()
+        self.assertEqual(run.call_count, 1)
+        commands = json.loads((self.output/'commands.json').read_text())
+        self.assertEqual(commands[0]['status'], 'launch-error')
+        self.assertEqual(commands[0]['error'], 'synthetic launch error')
+        self.assertGreaterEqual(commands[0]['wall_seconds'], 0)
         self.assertFalse((self.output/'evaluation.json').exists())
 
     def test_missing_cache_rejected_before_output_or_subprocess(self):
