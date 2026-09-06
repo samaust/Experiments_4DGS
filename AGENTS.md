@@ -4,6 +4,10 @@
 
 `docs` contains documentation.
 
+## Local commits
+
+Stage and create local commits for completed, validated implementation milestones. Include only task-related changes. Add a commit title and description. Do not push, amend commits, or rewrite history unless explicitly requested.
+
 ## Never actions
 
 Never read `prompts` directory content.
