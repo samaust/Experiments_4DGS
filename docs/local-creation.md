@@ -285,6 +285,16 @@ Use a new output directory for reruns. The result records sparse geometry,
 nearest-neighbor motion-estimation and fractional synchronization limitations;
 it must not be described as the reproduction's dense ROMA initialization.
 
+Inspect the untrained initialization before training (GPU inference only):
+
+```bash
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/freetimegs/bin/python \
+  scripts/preview-freetimegs-initialization.py \
+  --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+  --initialization .local/data/selfcap/dance1-freetimegs-sparse-initialization-20260906 \
+  --output .local/runs/freetimegs-initialization-preview-20260906
+```
+
 Validate checkpoint groundwork separately from experiment training:
 
 ```bash

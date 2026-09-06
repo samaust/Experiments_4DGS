@@ -171,3 +171,22 @@ initialization claim; KNN displacement is not a tracked motion correspondence.
 The four assembler tests cover displacement validity, normalized units/durations,
 missing successors, wrong source frames and held-out provenance rejection.
 Initial model coverage inspection and training-state integration remain pending.
+
+### Untrained initialization coverage inspection
+
+`preview-freetimegs-initialization.py` rendered held-out frames 4120, 4150 and
+4179 at 1890x1061 on the RTX 4090 into
+`.local/runs/freetimegs-initialization-preview-20260906`. All three PNGs were
+visually inspected: mostly black with sparse specks outlining scene structure
+and several isolated blurred blobs; the moving person is not reconstructed as
+a coherent surface. Mean alpha is respectively 0.0100876, 0.0173847 and
+0.00806307 (not a thresholded pixel-coverage statistic). Peak allocated GPU
+memory was 124,926,976 bytes. No optimization steps were taken.
+
+This is a significant initialization limitation with the keyframe preset's
+scale 0.03 and the sparse cloud, not evidence that trained FreeTimeGS would fail.
+The default relocation-only preset assumes a much denser starting representation.
+Before committing scene training budget, choose whether to explicitly accept a
+sparse-initialization pilot or prioritize a released dense training-only
+initializer. Increasing splat scale or enabling densification has not been
+silently substituted. Native training-state integration is still unfinished.
