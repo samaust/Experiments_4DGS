@@ -436,3 +436,28 @@ identity: `2548f4210b39a9465b82f7c79fcf3c9277ae5360ccd5aabcee83859eb787a689`.
 This sampler must be consumed synchronously without worker prefetch; checkpoint
 the cursor together with model/accumulation state after the corresponding
 microstep completes. It is not yet wired into the ATGS training adapter.
+
+### Combined loop-state component
+
+`scripts/atgs_loop_state.py` now captures sampler state, Python/NumPy/Torch RNG,
+unaveraged pending gradients, per-encoder visit counts, completed iteration,
+optimizer-update count/iteration and EMA loss in one weights-only-loadable
+supplement. Gradients are labelled by optimizer/group/parameter and retain
+`None` for unused parameters. Restore validates parameter topology and gradient
+shape/dtype/finiteness, prepares a validated sampler copy, restores RNG, then
+attaches gradients to the already restored model/optimizer parameters.
+
+Checkpoint calls must occur after a complete microstep, before averaging or
+stepping; an update-boundary snapshot instead requires cleared gradients and
+zero pending visits. Restore must run after native and auxiliary model state
+and both optimizer states are loaded, since upstream training setup clears
+gradients. No standalone model checkpoint or file-commit transaction is supplied
+by this component.
+
+CPU tests serialize a checkpoint halfway through a two-microstep toy update,
+restore into new parameters/optimizers, and reproduce the next sampled key,
+Python/NumPy/Torch-generated target and final parameter values exactly. Tests
+also reject inconsistent visit counts, changed topology and uncleared boundary
+gradients. All 68 tests pass. This demonstrates the combined component on a
+CPU fixture, not actual ATGS partial-accumulation resume; training-loop wiring,
+GPU validation and model/loop bundle provenance remain pending.

@@ -591,3 +591,16 @@ Its dedicated generator and saved cursor support mid-batch and cross-epoch
 continuation. Do not attach a prefetched DataLoader: the cursor records keys
 already handed to the synchronous loop, not completed background loads.
 Full accumulation/model checkpoint integration remains pending.
+
+`atgs_loop_state.capture_loop_state(model, sampler, loop)` captures the
+supplemental gradient/RNG/sampler state after a completed microstep. The loop
+dictionary contains `iteration`, `micro_steps`, `encoder_visits`, `update_count`,
+`last_update_iteration` and `ema_loss`. Gradients must still be unaveraged;
+at a completed optimizer-update boundary they must be cleared with zero visits.
+Serialize this supplement together with the corresponding model checkpoint.
+
+Call `restore_loop_state` only after restoring the model and both optimizers;
+use its returned loop dictionary to resume bookkeeping. CUDA state is required
+by default; `include_cuda=False` is solely for explicit CPU fixtures. This API
+is a tested component, not an executable ATGS training adapter or an atomic
+checkpoint bundle writer.
