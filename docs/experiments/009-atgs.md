@@ -575,3 +575,11 @@ budgets and checkpoint overrun. This component is not yet connected to native
 scene losses, densification or special-boundary update flushing. Checkpoint and
 step reserves require measurement before production use; no ATGS scene training
 or training-budget charge was performed for these CPU tests.
+
+The controller now also implements full-schedule-end flushing and explicit
+native special-update boundaries, with balanced-sampler restart after a forced
+partial update. A post-microstep callback runs after optimizer stepping and
+restart, before any checkpoint, to support densification/buffer cleanup in native
+order. Extra deadline/periodic bundle saves still preserve partial accumulation.
+Three additional CPU tests cover final partial flushing, callback/restart order
+and post-update callback failure. Native scene callbacks remain the next gate.

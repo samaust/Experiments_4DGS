@@ -84,3 +84,27 @@ class TrainingControlTests(unittest.TestCase):
             self.time = 0.
         with self.assertRaisesRegex(RuntimeError, 'during checkpoint'):
             self.run_segment(checkpoint=slow)
+
+    def test_schedule_end_flushes_partial_update(self):
+        self.assertEqual(self.run_segment(max_iterations=1), 'completed')
+        self.assertEqual(self.loop['update_count'], 1)
+        self.assertEqual(self.loop['micro_steps'], 0)
+        self.assertTrue(self.saved[-1][2])
+
+    def test_special_boundary_restarts_before_post_update_callback(self):
+        events = []
+        def after(model, iteration, updated):
+            events.append((iteration, updated, self.sampler.epoch, self.sampler.cursor))
+        self.run_segment(max_iterations=3, force_update_due=lambda i: i == 1,
+                         after_microstep=after)
+        self.assertEqual(events[0], (1, True, 2, 0))
+        self.assertEqual(events[1], (2, False, 2, 1))
+        self.assertEqual(events[2], (3, True, 2, 2))
+        self.assertEqual(self.loop['update_count'], 2)
+
+    def test_failed_post_update_callback_never_checkpoints(self):
+        def fail(*args):
+            raise RuntimeError('synthetic densification failure')
+        with self.assertRaisesRegex(RuntimeError, 'densification failure'):
+            self.run_segment(after_microstep=fail)
+        self.assertEqual(self.saved, [])

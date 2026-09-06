@@ -11,7 +11,7 @@ from atgs_loop_state import validate_loop
 def run_training_segment(*, model, sampler, loop, max_iterations,
                          remaining_seconds, microstep, update, checkpoint,
                          checkpoint_interval=1000, checkpoint_reserve=60.,
-                         step_reserve=5.):
+                         step_reserve=5., force_update_due=None, after_microstep=None):
     """Run complete microsteps, preserving pending gradients at a deadline.
 
     microstep(model, key, iteration) performs forward/loss/backward and any
@@ -19,6 +19,10 @@ def run_training_segment(*, model, sampler, loop, max_iterations,
     micro_steps, encoder_visits, counter) is the upstream accumulation step
     bound to resolved options. checkpoint(model, sampler, loop, reason) writes
     a new bundle synchronously. No DataLoader prefetch or implicit CUDA fallback.
+    force_update_due(iteration) identifies upstream save/test/densification
+    boundaries (not extra deadline snapshots). after_microstep(model, iteration,
+    updated) runs after any update and sampler restart, for densification and
+    buffer cleanup. The full schedule end always flushes pending accumulation.
 
     Reserves are caller-selected conservative estimates, not timing guarantees.
     A supervisor must enforce the actual hard limit, including checkpoint I/O.
@@ -60,13 +64,20 @@ def run_training_segment(*, model, sampler, loop, max_iterations,
         loop['micro_steps'] += 1
         loop['encoder_visits'][encoder] = loop['encoder_visits'].get(encoder, 0) + 1
         loop['ema_loss'] = .4 * loss + .6 * loop['ema_loss']
-        if len(loop['encoder_visits']) == encoders:
+        balanced = len(loop['encoder_visits']) == encoders
+        special = iteration == max_iterations or (force_update_due is not None and force_update_due(iteration))
+        updated = balanced or special
+        if updated:
             counter = dict(count=loop['update_count'], iteration=iteration)
             update(model, loop['micro_steps'], dict(loop['encoder_visits']), counter)
             if counter['count'] != loop['update_count'] + 1:
                 raise ValueError('optimizer update counter did not advance once')
             loop.update(micro_steps=0, encoder_visits={}, update_count=counter['count'],
                         last_update_iteration=iteration)
+            if special and not balanced and iteration < max_iterations:
+                sampler.restart_epoch()
+        if after_microstep is not None:
+            after_microstep(model, iteration, updated)
         # A final/deadline snapshot supersedes a coincident periodic snapshot.
         if iteration == max_iterations:
             break

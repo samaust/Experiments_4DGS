@@ -705,9 +705,11 @@ before scene training; defaults are not validated for this model's I/O costs.
 
 The controller saves only after completed microsteps (or before starting any),
 and does not flush incomplete encoder accumulation merely because the deadline
-or checkpoint interval was reached. A schedule-end snapshot likewise retains
-any pending gradients; native special-boundary flushing/densification still
-requires explicit integration. Failed callbacks propagate without checkpointing
+or checkpoint interval was reached. The full schedule end does flush pending
+gradients. Supply `force_update_due(iteration)` for native save/test/densification
+boundaries. A forced partial update restarts the balanced sampler before the
+optional `after_microstep(model, iteration, updated)` callback, which can perform
+post-update densification and scheduled buffer cleanup. Failed callbacks propagate without checkpointing
 partially executed work: discard the live state and reload a previously committed
 bundle. Budget accounting must charge failures. Periodic saves and final/deadline
 saves do not duplicate the same boundary. CPU tests cover balanced updates,

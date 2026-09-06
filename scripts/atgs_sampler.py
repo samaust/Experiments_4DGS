@@ -50,6 +50,10 @@ class ManifestBalancedSampler:
     def __iter__(self):
         return self
 
+    def restart_epoch(self):
+        """Restart balanced sampling after an upstream forced partial update."""
+        self._start_epoch()
+
     def __next__(self):
         if self.cursor == len(self.order):
             self._start_epoch()
