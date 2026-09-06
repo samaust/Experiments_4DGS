@@ -258,6 +258,33 @@ frame in `[4120,4180)`) and use a separate output directory. This preserves fixe
 calibration, held-out exclusion and image-hash evidence for that frame; it does
 not estimate temporal correspondences by itself.
 
+For the FreeTimeGS sparse reproduction initialization, prepare frame pairs at
+keyframes 4120, 4125, ..., 4175 and their next frames using the command above.
+Keep each cloud in `dance1-initialization-frameFRAME-20260906`; the existing
+midpoint directory can be reused for frame 4150. Assemble the audited clouds:
+
+```bash
+FTGS_CLOUD_ARGS=()
+for FTGS_KEYFRAME in {4120..4175..5}; do
+  for FTGS_FRAME in "$FTGS_KEYFRAME" "$((FTGS_KEYFRAME + 1))"; do
+    FTGS_CLOUD=".local/data/selfcap/dance1-initialization-frame${FTGS_FRAME}-20260906"
+    if [ "$FTGS_FRAME" = 4150 ]; then
+      FTGS_CLOUD=.local/data/selfcap/dance1-initialization-20260906
+    fi
+    FTGS_CLOUD_ARGS+=(--cloud "$FTGS_FRAME" "$FTGS_CLOUD")
+  done
+done
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/freetimegs/bin/python \
+  scripts/prepare-freetimegs-initialization.py \
+  --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+  --output .local/data/selfcap/dance1-freetimegs-sparse-initialization-20260906 \
+  "${FTGS_CLOUD_ARGS[@]}"
+```
+
+Use a new output directory for reruns. The result records sparse geometry,
+nearest-neighbor motion-estimation and fractional synchronization limitations;
+it must not be described as the reproduction's dense ROMA initialization.
+
 Validate checkpoint groundwork separately from experiment training:
 
 ```bash

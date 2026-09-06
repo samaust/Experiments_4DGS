@@ -151,3 +151,23 @@ all 23 training cameras, mean reprojection error 0.5564470705 pixels, in 8.04s:
 checks passed. Three added frame-selection tests reject invalid windows,
 duplicate training camera IDs and missing/duplicate frames. This is preprocessing,
 not charged training time. Temporal pair generation is not yet complete.
+
+Temporal pair generation subsequently completed for keyframes 4120, 4125, ...,
+4175 and each next frame. All 24 clouds use the 23 training cameras and fixed
+calibration; the existing frame-4150 cloud was reused with validated provenance.
+`prepare-freetimegs-initialization.py` assembled
+`.local/data/selfcap/dance1-freetimegs-sparse-initialization-20260906`:
+61,905 keyframe points, 61,486 valid KNN displacement estimates, archive SHA-256
+`f3315b4d1b5066f9deeb34493ed85c27ded3d13e613e15474f7c00474c5b0914`.
+
+The assembler reuses the native KNN helper (distance threshold 0.5, k=1), uses
+all available keyframe points, and preserves the combiner's three-gap duration.
+Velocities are converted from displacement per source frame to displacement per
+manifest-normalized unit. Canonical cloud time is the mean corrected time of its
+training images; each input time range and each PLY/evidence hash are recorded.
+This cannot eliminate fractional-camera-offset geometry errors. Sparse COLMAP
+instead of dense ROMA geometry is an explicit adaptation, not an equivalent
+initialization claim; KNN displacement is not a tracked motion correspondence.
+The four assembler tests cover displacement validity, normalized units/durations,
+missing successors, wrong source frames and held-out provenance rejection.
+Initial model coverage inspection and training-state integration remain pending.
