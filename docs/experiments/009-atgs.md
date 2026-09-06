@@ -507,3 +507,25 @@ not a native GPU bundle-resume result or production training adapter. The caller
 must pause training throughout capture and restore model/auxiliary state before
 optimizers, followed by the loop supplement. GPU round-trip, fresh-process
 training resumption and deadline integration remain pending.
+
+### Native GPU on-disk bundle round trip
+
+The accumulation verifier now accepts `--bundle` to save after the first
+microstep and load all native model, optimizer and supplemental files from that
+new bundle. Without the flag, the earlier in-memory supplement mode remains
+available. Bundle provenance hashes the synthetic camera/time fixture and
+resolved argparse configuration; it is not SelfCap provenance.
+
+The RTX 4090 run passed:
+`.local/runs/atgs-bundle-cuda-20260906.json`, with checkpoint directory
+`.local/runs/atgs-accumulation-bundle-20260906`. Its eleven components include
+a 791,606,203-byte loop supplement containing pending gradients. The checkpoint
+captures iteration 4 / update count 3; both continuations finish at iteration 6
+/ update count 4. Sample keys, random targets, losses, gradient norms, warmup
+and final loop state matched exactly. Maximum parameter difference was
+`6.332993507385254e-08` in the covariance MLP; dynamic parameters matched
+exactly. The report explicitly records non-exact parameter equality.
+
+All 73 unit tests pass, syntax compilation and diff checks pass. This establishes
+a native same-process bundle round trip, not fresh-process or offline training
+resumption. Production scene training and deadline integration remain pending.

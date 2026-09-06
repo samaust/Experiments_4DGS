@@ -654,3 +654,18 @@ not maliciously replaced data, and native model restoration remains the
 caller's responsibility. CPU fixture tests cover publication, interruption,
 overwrite refusal, corruption, counter mismatch and provenance checks; native
 GPU bundle round-trip and production training integration remain pending.
+
+To exercise the bundle with the native GPU accumulation probe, use a new
+report and bundle directory (allow several GB of additional disk space):
+
+```bash
+.local/envs/atgs/bin/python scripts/verify-atgs-accumulation.py --checkpoint .local/runs/atgs-backward-control-checkpoint-20260906 --evidence .local/runs/atgs-backward-control-cuda-20260906.json --output .local/runs/atgs-bundle-cuda-20260906.json --bundle .local/runs/atgs-accumulation-bundle-20260906
+```
+
+With `--bundle`, the restored native model and both optimizers are loaded from
+the newly written bundle, not the original fixture. The report includes the
+verified bundle record and storage mode. Its manifest digest represents the
+synthetic cameras/timestamps, not the SelfCap manifest; the configuration hash
+covers resolved argparse settings, and the source revision and helper AST hash
+are also recorded. This remains a same-process synthetic test. Omitting the
+flag retains the earlier in-memory supplement check.
