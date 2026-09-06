@@ -350,3 +350,35 @@ still not claimed; the report preserves both control and reload differences.
 Runtime was 13.966 seconds and peak allocated memory 13,409,336,832 bytes.
 All 59 unit tests pass. Fresh-process offline reload and complete training-loop
 state remain next implementation gates.
+
+### Offline inference gate preparation
+
+`verify-atgs-offline.py` now supports independent process reload from the saved
+synthetic checkpoint. It validates all model/optimizer/auxiliary component
+hashes against the recorded evidence, installs the existing seccomp guard
+before Torch import, and obtains lifetime data from the auxiliary file rather
+than external initialization geometry. Three float-image hashes are recorded;
+a second independent invocation can require identical hashes and matching
+checkpoint/source metadata. CPU tests reject changed or incomplete inventories.
+GPU/offline execution is pending; this does not implement training-loop resume.
+
+Both approved offline invocations subsequently passed on the RTX 4090:
+`.local/runs/atgs-offline-a-20260906.json` (PID 376034) and
+`.local/runs/atgs-offline-b-20260906.json` (PID 376215). All three float32
+64×64 image hashes matched exactly; the second report has `reference_exact=true`.
+The network guard's IPv4/IPv6 denial self-tests and Unix IPC check passed.
+Neither process needed the original initialization cloud: lifetimes came from
+the hash-verified auxiliary checkpoint file. This establishes independent
+offline inference repeatability, not equality to an image saved by the original
+training process, nor optimizer/sampler continuation.
+
+### RNG state preparation
+
+`scripts/training_rng.py` adds weights-only-loadable Python, NumPy and Torch
+RNG snapshots. NumPy keys are encoded as integer tensors, preserving its cached
+Gaussian value. CUDA capture/restore is explicit and fails if GPU access or
+the saved device count does not match; CPU-only restore rejects saved CUDA
+state rather than silently dropping it. State validation precedes global RNG
+restoration. CPU regression tests reproduce all three CPU streams after a
+Torch serialization round trip and reject malformed state. CUDA RNG behavior
+and integration into ATGS sampler/accumulation checkpoints remain pending.

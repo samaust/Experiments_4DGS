@@ -557,3 +557,17 @@ optimizer updates and restored Torch RNG state. It records per-parameter
 gradient differences and per-group post-update parameter differences, helping
 distinguish backward variability from checkpoint-specific effects. CPU copies
 of gradients add host memory overhead; the diagnostic is not a throughput test.
+
+### ATGS fresh-process offline inference
+
+```bash
+.local/envs/atgs/bin/python scripts/verify-atgs-offline.py --checkpoint .local/runs/atgs-backward-control-checkpoint-20260906 --evidence .local/runs/atgs-backward-control-cuda-20260906.json --output .local/runs/atgs-offline-a-NEW.json
+.local/envs/atgs/bin/python scripts/verify-atgs-offline.py --checkpoint .local/runs/atgs-backward-control-checkpoint-20260906 --evidence .local/runs/atgs-backward-control-cuda-20260906.json --reference .local/runs/atgs-offline-a-NEW.json --output .local/runs/atgs-offline-b-NEW.json
+```
+
+Both runs require GPU access. The verifier installs the existing seccomp network
+guard before Torch import; its socket-denial self-tests are intentional. It
+requires checkpoint hashes to match the successful evidence and reconstructs
+lifetimes from the supplemental file, without the original cloud. The second
+process checks exact float-image hashes against the first, at all three
+synthetic timestamps. This is inference-only, not sampler/optimizer resumption.
