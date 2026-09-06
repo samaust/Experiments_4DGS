@@ -558,3 +558,20 @@ Two regression tests cover JSON key normalization, numerical loss reporting,
 and rejection of changed sample sequences/counters. All 75 tests pass; syntax
 and diff checks pass. Production scene training, full source/patch provenance
 coverage and deadline integration remain pending.
+
+### Deadline-aware loop control component
+
+`scripts/atgs_train_control.py` adds synchronous callback-based control for
+microsteps, encoder-balanced updates and periodic/final/deadline bundle saves.
+It preserves pending unaveraged gradients when stopping for checkpoint time,
+checks remaining time before starting another microstep, and reports exhausted
+budgets before or during checkpoint I/O. Failed microsteps/updates propagate
+without saving partially executed work. The caller remains responsible for a
+durable budget reservation and external hard-deadline enforcement.
+
+Five CPU fixture tests exercise balanced updates, periodic partial snapshots,
+deadline continuation without an extra update, callback failure, exhausted
+budgets and checkpoint overrun. This component is not yet connected to native
+scene losses, densification or special-boundary update flushing. Checkpoint and
+step reserves require measurement before production use; no ATGS scene training
+or training-budget charge was performed for these CPU tests.

@@ -687,3 +687,29 @@ post-update parameter hashes are recorded separately. A reference without
 parameter hashes yields `reference_parameters_exact: null`, not an equality
 claim; subsequent runs can compare parameter hashes but do not quantify their
 numerical differences. This is a synthetic resume test, not scene training.
+
+### ATGS deadline-aware loop controller
+
+`atgs_train_control.run_training_segment` provides synchronous microstep,
+balanced-update and checkpoint control. Bind `microstep` to the scene's native
+forward/loss/backward operation, `update` to the extracted upstream accumulation
+helper with resolved options, and `checkpoint` to a new bundle destination for
+each save. Pass the full upstream iteration limit, not a shortened schedule.
+
+The caller must hold an active `TrainingBudget` reservation, pass its
+`remaining_seconds`, and run under the external hard-deadline supervisor.
+Positive `checkpoint_reserve` and `step_reserve` estimates reserve time for
+checkpoint I/O and a complete microstep plus possible update. They are estimates,
+not enforced execution timeouts. Measured conservative values are required
+before scene training; defaults are not validated for this model's I/O costs.
+
+The controller saves only after completed microsteps (or before starting any),
+and does not flush incomplete encoder accumulation merely because the deadline
+or checkpoint interval was reached. A schedule-end snapshot likewise retains
+any pending gradients; native special-boundary flushing/densification still
+requires explicit integration. Failed callbacks propagate without checkpointing
+partially executed work: discard the live state and reload a previously committed
+bundle. Budget accounting must charge failures. Periodic saves and final/deadline
+saves do not duplicate the same boundary. CPU tests cover balanced updates,
+partial snapshots, continuation counters, callback failure and deadline overrun.
+This controller is not yet wired to production ATGS scene loss/densification.
