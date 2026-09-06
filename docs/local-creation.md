@@ -6,6 +6,29 @@ Target: Ubuntu 24.04 LTS, RTX 4090. Reviewed on 2026-09-05. The commands below a
 
 ## Environment and workspace
 
+For plan 004, prepare the shared SelfCap input with:
+
+```bash
+.local/envs/stg-colmap/bin/python scripts/prepare-selfcap.py \
+  --videos .local/data/selfcap/hair-release/videos \
+  --calibration .local/data/selfcap/hair-calib/optimized \
+  --output .local/data/selfcap/dance1-processed-NEW
+```
+
+Install the tracked `stg-colmap.in` dependencies first. This route uses
+pycolmap 4.2.0's native COLMAP undistortion with `blank_pixels=0`, followed by
+OpenCV area resizing. The output manifest contains explicit camera transforms,
+per-image hashes and corrected times. It retains all 60 source frame IDs per
+camera, with a common normalized interval covering their corrected timestamps;
+do not replace these times with the nominal frame index divided by 60.
+The 20-pose sweep uses rotation SLERP and linear camera-center interpolation,
+holding test-camera intrinsics fixed. Calibration-only mode is available for
+checking geometry before decoding. Output directories must be new.
+
+The STG SelfCap entry point now supports budget-counted integration runs and
+resumption (commands below). Long-run densification/EMS validation is unfinished.
+Do not launch the generic command wrapper as an unattended training scheduler.
+
 First complete the [pretrained rendering experiments](pretrained-experiments.md). This guide is the later training phase; its training commands are not prerequisites for viewing downloaded models.
 
 Use the [shared uv/Python 3.14/cu130 environment guide](environments.md) first. It selects Torch 2.13.0+cu130, torchvision 0.28.0+cu130 and the existing CUDA 13.0 toolkit, with one environment and extension cache per implementation. No older-toolkit or interpreter fallback is part of this workflow.
@@ -208,3 +231,87 @@ nvidia-smi --query-gpu=name,memory.total,memory.used,driver_version --format=csv
 ```
 
 A single memory sample is not a peak measurement. For a measured run, sample throughout execution or add framework instrumentation and document what it includes. Count supporting networks and metadata when reporting model size, and distinguish pure render timing from data loading, metrics, and video encoding.
+
+## Training-only SelfCap initialization
+
+After preparing and verifying the SelfCap manifest, generate a new sparse cloud
+from training cameras only (CPU preprocessing, outside the training budget):
+
+```bash
+.local/envs/stg-colmap/bin/python scripts/initialize-selfcap.py \
+  --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+  --output .local/data/selfcap/dance1-initialization-20260906
+```
+
+The output directory must not already exist. Source frame 4150 is selected from
+each of the 23 training cameras; supplied intrinsics and poses remain fixed.
+`inputs.json` records image and manifest hashes, and `result.json` records point
+count and reprojection error. The sparse cloud still needs coverage inspection
+before training; low reprojection error alone does not validate motion timing.
+
+Validate checkpoint groundwork separately from experiment training:
+
+```bash
+.local/envs/stg-render/bin/python -m unittest discover -s tests -v
+.local/envs/stg-render/bin/python scripts/verify-stg-checkpoint.py \
+  --checkout .local/SpacetimeGaussians
+```
+
+The second command uses the GPU and native STG model/optimizer classes with
+synthetic parameters. Exact next-step equality is a serializer check, not a
+substitute for scene-training resume and offline renderer reload validation.
+
+Validate the manifest-native cameras with the actual training rasterizers:
+
+```bash
+.local/envs/stg-render/bin/python scripts/verify-stg-manifest-renderer.py \
+  --checkout .local/SpacetimeGaussians \
+  --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+  --output .local/runs/stg-manifest-renderer-NEW
+```
+
+This uses synthetic Gaussians and a full-size processed camera for both Lite
+and Full forward/backward checks; it does not optimize against SelfCap images.
+The camera adapter preserves fractional timestamps and calibrated principal
+points and loads RGB images on demand. The supervised STG entry point below
+connects training, checkpoints and budget accounting.
+
+## Budget-counted STG SelfCap integration
+
+These commands train on real images and consume the method's two-hour SelfCap
+allocation, including startup and failed attempts. Use a new output directory
+for every attempt. Do not remove or replace the central ledger at
+`.local/runs/plan-004-training-budget.json` to retry an experiment.
+
+```bash
+.local/envs/stg-render/bin/python scripts/train-stg-manifest.py \
+  --checkout .local/SpacetimeGaussians \
+  --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+  --initialization .local/data/selfcap/dance1-initialization-20260906 \
+  --output .local/runs/stg-full-selfcap-integration-NEW \
+  --model full --max-steps 2
+```
+
+Use `--model lite` with its own output for the matched Lite baseline. To test
+resumption, use a new output and add
+`--resume .local/runs/stg-full-selfcap-integration-NEW/checkpoint.pt`.
+`--max-steps 2` then executes two additional steps without changing the
+30,000-step optimizer schedule. The supervisor launches the worker itself;
+do not invoke `--worker` manually. Do not remove the short-run limit until
+the densification/EMS and initialization-coverage gates in the
+[integration record](experiments/contender-training-20260906.md) are resolved.
+
+Render every held-out sample and the common sweep from that checkpoint:
+
+```bash
+.local/envs/stg-render/bin/python scripts/render-stg-manifest.py \
+  --checkout .local/SpacetimeGaussians \
+  --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+  --checkpoint .local/runs/stg-full-selfcap-integration-NEW/checkpoint.pt \
+  --output .local/runs/stg-full-selfcap-render-NEW --benchmark
+```
+
+Rendering is outside the training ledger. This command validates all pinned
+checkpoint component hashes and refuses changed source/input files; it does
+not establish network isolation or compare reload output automatically.
+Short integration checkpoints are not suitable for quality rankings.

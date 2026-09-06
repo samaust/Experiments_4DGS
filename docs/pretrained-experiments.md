@@ -482,6 +482,11 @@ the full NoPo4D reconstruction and its successful cached offline rerun.
 
 ### 6.1. Strong contenders against Native STG
 
+The executable matched-scene follow-up is documented in the
+[contender experiments guide](contender-experiments.md), with reports for
+experiments 006–010 and the STG Lite baseline. Section 6 remains the historical
+pretrained evidence record; its `sear_steak` outputs are not overwritten.
+
 The local native STG run uses a lite, all-camera checkpoint. For published
 comparisons, use the full STG baseline where the paper reports it and read the
 [Native STG quality comparison](stg-comparison.md) for protocol details. The

@@ -1,0 +1,43 @@
+{
+  "scene": "SelfCap dance1",
+  "source": {
+    "release": "zju3dv/SelfCap-Dataset hair-release.tar.gz",
+    "revision": "9ab7e2ce156f7e9f4e09b50a85599fd11753296a",
+    "calibration": "hair-calib.tar.gz",
+    "frame_rate": 60,
+    "files": [
+      "../.local/downloads/selfcap/hair-release.tar.gz",
+      "../.local/downloads/selfcap/hair-calib.tar.gz"
+    ],
+    "video_root": "../.local/data/selfcap/hair-release/videos",
+    "calibration_root": "../.local/data/selfcap/hair-calib/optimized",
+    "calibration_files": ["intri.yml", "extri.yml", "sync.json"],
+    "sync_file": "../.local/data/selfcap/hair-calib/optimized/sync.json"
+  },
+  "frames": {
+    "start": 4120,
+    "end": 4180,
+    "source_frame_ids": "0015.mp4 frames 4120 through 4179"
+  },
+  "cameras": [
+    {"id": "0000", "role": "training"}, {"id": "0001", "role": "training"},
+    {"id": "0002", "role": "training"}, {"id": "0003", "role": "training"},
+    {"id": "0004", "role": "training"}, {"id": "0005", "role": "training"},
+    {"id": "0006", "role": "training"}, {"id": "0007", "role": "training"},
+    {"id": "0008", "role": "training"}, {"id": "0009", "role": "training"},
+    {"id": "0010", "role": "training"}, {"id": "0011", "role": "training"},
+    {"id": "0012", "role": "training"}, {"id": "0013", "role": "training"},
+    {"id": "0014", "role": "training"}, {"id": "0015", "role": "held-out"},
+    {"id": "0016", "role": "training"}, {"id": "0017", "role": "training"},
+    {"id": "0018", "role": "training"}, {"id": "0019", "role": "training"},
+    {"id": "0020", "role": "training"}, {"id": "0021", "role": "training"},
+    {"id": "0022", "role": "training"}, {"id": "0023", "role": "training"}
+  ],
+  "evaluation": {
+    "held_out_cameras": ["0015"],
+    "processing": "COLMAP undistortion blank_pixels=0, then INTER_AREA downsample 0.5",
+    "resolution": "approximately 1080p",
+    "time_correction": "actual_timestamp_seconds = frame_index / 60 - sync.json[camera]"
+  },
+  "notes": "Verify camera numbering against the downloaded calibration before generation."
+}

@@ -1,95 +1,92 @@
-"""Exercise metadata selection with small synthetic checkpoints, without CUDA."""
+"""CPU synthetic optimizer tests; no experiment training budget is consumed."""
+from argparse import Namespace
 import importlib.util
-import json
 from pathlib import Path
+import random
 import tempfile
 import unittest
 
-spec = importlib.util.spec_from_file_location(
-    "checkpoint", Path(__file__).resolve().parents[1] / "scripts/resolve-stg-checkpoint.py")
+import numpy as np
+import torch
+
+spec = importlib.util.spec_from_file_location('stg_checkpoint',
+    Path(__file__).resolve().parents[1]/'scripts/stg_checkpoint.py')
 checkpoint = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checkpoint)
 
 
+class Model:
+    def __init__(self, full):
+        self.names = checkpoint.PARAMETERS + (('_features_t',) if full else ())
+        for name in self.names:
+            setattr(self, name, torch.nn.Parameter(torch.randn(5, 3)))
+        for name in checkpoint.BUFFERS:
+            setattr(self, name, torch.rand(5, 1))
+        self.rgbdecoder = torch.nn.Linear(3, 3) if full else None
+        self.spatial_lr_scale = 2.0
+        self.training_setup(Namespace(lr=0.003))
+
+    def training_setup(self, args):
+        groups = [{'params': [getattr(self, n)], 'name': n} for n in self.names]
+        if self.rgbdecoder is not None:
+            groups.append({'params': list(self.rgbdecoder.parameters()), 'name': 'decoder'})
+        self.optimizer = torch.optim.Adam(groups, lr=args.lr)
+        # Upstream resets these during setup; restoration must undo that.
+        for name in checkpoint.BUFFERS:
+            setattr(self, name, torch.zeros(5, 1))
+
+    def step(self):
+        value = sum((getattr(self, n)*torch.randn(5, 3)).square().sum() for n in self.names)
+        if self.rgbdecoder is not None:
+            value = value + self.rgbdecoder(torch.randn(5, 3)).square().sum()
+        value.backward()
+        self.optimizer.step()
+        self.optimizer.zero_grad(set_to_none=True)
+        return value.detach()
+
+
 class CheckpointTests(unittest.TestCase):
-    def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
-        self.model = self.root / "download with spaces" / "scene"
-        self.model.mkdir(parents=True)
-        (self.model / "cfg_args").write_text(
-            "Namespace(source_path='/old/location/colmap_12', duration=50, resolution=2)")
-        (self.model / "cameras.json").write_text("[]")
-        self.profile = self.root / "profile.json"
-        self.profile.write_text(json.dumps({"duration": 25, "resolution": 4}))
-        self.add_ply(9000)
-        self.add_ply(25000)
+    def test_next_step_exact_after_restore(self):
+        for variant in ('lite', 'full'):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as directory:
+                model = Model(variant == 'full')
+                model.step()
+                model.optimizer.param_groups[0]['lr'] = np.float64(0.001)
+                model.denom.fill_(7)
+                path = Path(directory)/'state.pt'
+                provenance = {'manifest_sha256': 'synthetic', 'source': 'test'}
+                checkpoint.save_checkpoint(path, model, variant=variant,
+                    training_args=Namespace(lr=0.003), iteration=1,
+                    loop_state={'remaining_views': [2, 7]}, provenance=provenance)
+                expected_random = (random.random(), np.random.random())
+                expected_loss = model.step()
+                restored = Model(variant == 'full')
+                iteration, loop, _ = checkpoint.restore_checkpoint(path, restored,
+                    variant=variant, provenance=provenance, device='cpu')
+                self.assertEqual(iteration, 1)
+                self.assertEqual(loop, {'remaining_views': [2, 7]})
+                self.assertEqual(expected_random, (random.random(), np.random.random()))
+                self.assertTrue(torch.equal(model.denom, restored.denom))
+                self.assertTrue(torch.equal(expected_loss, restored.step()))
+                for name in model.names:
+                    self.assertTrue(torch.equal(getattr(model, name), getattr(restored, name)))
+                if model.rgbdecoder is not None:
+                    for a, b in zip(model.rgbdecoder.parameters(), restored.rgbdecoder.parameters()):
+                        self.assertTrue(torch.equal(a, b))
+                with self.assertRaisesRegex(ValueError, 'provenance mismatch'):
+                    checkpoint.restore_checkpoint(path, restored, variant=variant,
+                        provenance={}, device='cpu')
+                state = torch.load(path, weights_only=True)
+                del state['parameters']['_motion']
+                torch.save(state, path)
+                with self.assertRaisesRegex(ValueError, 'missing or unexpected'):
+                    checkpoint.restore_checkpoint(path, restored, variant=variant,
+                        provenance=provenance, device='cpu')
 
-    def add_ply(self, iteration):
-        path = self.model / "point_cloud" / ("iteration_" + str(iteration)) / "point_cloud.ply"
-        path.parent.mkdir(parents=True)
-        fields = ["motion_0", "motion_8", "omega_0", "omega_3", "trbf_center", "trbf_scale"]
-        path.write_text("ply\nformat ascii 1.0\nelement vertex 0\n" +
-                        "".join("property float " + field + "\n" for field in fields) +
-                        "end_header\n")
-
-    def test_saved_window_and_numeric_iteration_selection(self):
-        values = checkpoint.resolve(self.root, self.profile)
-        self.assertEqual(values["STG_ITERATION"], 25000)
-        self.assertEqual(values["STG_START"], 12)
-        self.assertEqual(values["STG_END"], 62)
-        self.assertEqual(values["STG_DURATION"], 50)
-        self.assertEqual(values["STG_RESOLUTION"], 2)
-        self.assertEqual(values["STG_MODEL"], str(self.model))
-
-    def test_profile_fallback_and_windows_saved_path(self):
-        (self.model / "cfg_args").write_text("Namespace(source_path='C:\\\\data\\\\colmap_0')")
-        values = checkpoint.resolve(self.root, self.profile)
-        self.assertEqual(values["STG_START"], 0)
-        self.assertEqual(values["STG_DURATION"], 25)
-
-    def test_rejects_executable_saved_settings(self):
-        (self.model / "cfg_args").write_text("Namespace(duration=__import__('os').getcwd())")
-        with self.assertRaises(ValueError):
-            checkpoint.resolve(self.root, self.profile)
-
-    def test_rejects_ambiguous_models(self):
-        other = self.root / "another"
-        other.mkdir()
-        (other / "cfg_args").write_text("Namespace()")
-        with self.assertRaisesRegex(ValueError, "exactly one"):
-            checkpoint.resolve(self.root, self.profile)
-
-    def test_rejects_missing_temporal_fields(self):
-        ply = self.model / "point_cloud/iteration_25000/point_cloud.ply"
-        ply.write_text("ply\nformat ascii 1.0\nelement vertex 0\nend_header\n")
-        with self.assertRaisesRegex(ValueError, "temporal PLY"):
-            checkpoint.resolve(self.root, self.profile)
-
-    def test_rejects_unknown_or_out_of_range_time_window(self):
-        for source in ["/old/scene", "/old/colmap_299"]:
-            (self.model / "cfg_args").write_text(
-                "Namespace(source_path=" + repr(source) + ", duration=50, resolution=2)")
-            with self.assertRaises(ValueError):
-                checkpoint.resolve(self.root, self.profile)
-
-    def test_redacted_release_path_requires_explicit_start(self):
-        (self.model / "cfg_args").write_text("Namespace(source_path='xxx', resolution=2)")
-        with self.assertRaisesRegex(ValueError, "--start-frame"):
-            checkpoint.resolve(self.root, self.profile)
-        values = checkpoint.resolve(self.root, self.profile, start_frame=0)
-        self.assertEqual(values["STG_START"], 0)
-        self.assertEqual(values["STG_END"], 25)
-        for start in (-1, 299):
-            with self.assertRaises(ValueError):
-                checkpoint.resolve(self.root, self.profile, start_frame=start)
-
-    def test_explicit_start_cannot_override_saved_window(self):
-        with self.assertRaisesRegex(ValueError, "conflicts"):
-            checkpoint.resolve(self.root, self.profile, start_frame=0)
-        self.assertEqual(checkpoint.resolve(self.root, self.profile, start_frame=12)["STG_START"], 12)
-
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_uncleared_gradients_rejected(self):
+        model = Model(False)
+        model._xyz.sum().backward()
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, 'cleared gradients'):
+                checkpoint.save_checkpoint(Path(directory)/'state.pt', model, variant='lite',
+                    training_args=Namespace(lr=.003), iteration=0, loop_state={}, provenance={})

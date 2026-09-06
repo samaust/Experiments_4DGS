@@ -23,6 +23,7 @@ Animated-world generation is supplied independently. This repository focuses on 
 2. Read the [research guide](docs/research.md) for methods, papers, downloadable assets, and license distinctions.
 3. Use the [rendering guide](docs/rendering.md) for representation compatibility and additional rendering procedures.
 4. When ready to train, check the [input-data guide](docs/input-data.md) and follow the [local creation guide](docs/local-creation.md).
+5. For the matched Native STG contender protocol, use the [contender experiments guide](docs/contender-experiments.md).
 
 Start with splaTV's bundled scene and its local time-control patch. Next inspect the published `sear_steak` checkpoints, then run the bundled NoPo4D example. Record your visual assessment using the [experiment template](docs/experiments/template.md). The HUST D-NeRF `bouncingballs` walkthrough remains a later synthetic training option. These are experiment choices, not local quality rankings.
 
