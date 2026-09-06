@@ -78,7 +78,7 @@ This survey includes permissively licensed code and source-available research co
 | splaTV | [MIT](https://github.com/antimatter15/splaTV/blob/main/LICENSE) | Viewer licensing does not determine the license of a loaded scene. |
 | FreeTimeGsVanilla (third-party reproduction) | [AGPL-3.0](https://github.com/OpsiClear-4DGS/FreeTimeGsVanilla/blob/911dcf4157a3ddf5c96d9147f97627480268fe0f/LICENSE) | Pin `911dcf4157a3ddf5c96d9147f97627480268fe0f`; not the author implementation. Local sparse initialization was generated from training images only, with per-cloud input hashes; it is not a released dense ROMA asset. SelfCap's dataset terms remain separate. |
 | FreeTimeGS native dependencies | [gsplat Apache-2.0](https://github.com/nerfstudio-project/gsplat/blob/b60e917c95afc449c5be33a634f1f457e116ff5e/LICENSE); [fused-ssim MIT](https://github.com/rahul-goel/fused-ssim/blob/1272e21a282342e89537159e4bad508b19b34157/LICENSE) | gsplat pin `b60e917c95afc449c5be33a634f1f457e116ff5e`; fused-ssim pin `1272e21a282342e89537159e4bad508b19b34157`. GLM submodule `33b4a621a697a305bc3a7610d290677b96beb181` offers MIT or Happy Bunny terms. Native-binary hashes are recorded in the local GPU verification reports, not represented as pretrained-model licenses. |
-| RoMa dense matcher | [MIT](https://github.com/Parskatt/RoMa/blob/77f8d68803526dcddfd9b7a46bc76125bdc25f15/LICENSE) | Candidate pin `77f8d68803526dcddfd9b7a46bc76125bdc25f15`. Source imports tested; matcher and DINOv2 checkpoint downloads/hashes are not yet recorded. The source identifies separate indoor/outdoor matcher assets and a DINOv2 ViT-L/14 backbone. No separate matcher-weight grant was independently established; do not assume the top-level code license resolves every asset. Standard DINOv2 code/weights are declared Apache-2.0 in its [README](https://github.com/facebookresearch/dinov2#license); this does not cover its separately licensed medical variants. |
+| RoMa dense matcher | [MIT](https://github.com/Parskatt/RoMa/blob/77f8d68803526dcddfd9b7a46bc76125bdc25f15/LICENSE) | Standalone candidate pin `77f8d68803526dcddfd9b7a46bc76125bdc25f15`; EDGS runtime pin and acquired indoor/backbone hashes recorded below. The source identifies separate indoor/outdoor matcher assets and a DINOv2 ViT-L/14 backbone. No separate matcher-weight grant was independently established; do not assume the top-level code license resolves every asset. Standard DINOv2 code/weights are declared Apache-2.0 in its [README](https://github.com/facebookresearch/dinov2#license); this does not cover its separately licensed medical variants. |
 | EDGS dense initializer | [Non-commercial academic research and/or non-commercial personal use only](https://github.com/CompVis/EDGS/blob/f90b022445fc88368f75e66e8fb34aea88372cac/LICENSE.txt) | Audited pin `f90b022445fc88368f75e66e8fb34aea88372cac`; other uses require a separate license. User confirmed qualifying intended use on 2026-09-06. Its RoMa submodule pin is `370117431ffc5dc000fb46f6e581b74bdb2c3ff8`, different from the standalone candidate above. Gaussian-Splatting dependencies and matcher/backbone assets require their own audits; permissive RoMa terms do not remove EDGS's restrictions. Preserve upstream copyright, conditions, and disclaimer with any redistributed source or binary derivatives. |
 
 Dense-initializer audit updated 2026-09-06. Keep source inspection, dependency
@@ -90,6 +90,28 @@ intended use qualifies as non-commercial academic research and/or non-commercial
 personal use. This resolves the EDGS intended-use question for this work; it does
 not grant broader commercial rights or waive notices and third-party terms.
 No completed dense SelfCap initialization is claimed by this survey update.
+
+The EDGS-pinned RoMa revision is also checked out in `.local/RoMa-edgs`, with
+its MIT notice retained and source imports verified. EDGS geometry helpers have
+now executed in synthetic CPU tests via a thin loader; source, AST, and license
+hashes are available from that loader. No EDGS source has been copied into this
+repository, and neither dense scene initialization nor trained assets have been
+produced by it. This does not imply that EDGS and AGPL-licensed FreeTimeGS code
+can be redistributed together under a single permissive license.
+
+Released assets acquired on 2026-09-06 for the indoor EDGS candidate (local only,
+not redistributed):
+
+| Asset | Official source | SHA-256 |
+| --- | --- | --- |
+| RoMa indoor matcher | [Author release](https://github.com/Parskatt/storage/releases/download/roma/roma_indoor.pth) | `4d3dca889ae1ef245123dc62aab914475c7bbf41f2c8002606450fb6cf2d91e6` |
+| Standard DINOv2 ViT-L/14 backbone | [Meta release](https://dl.fbaipublicfiles.com/dinov2/dinov2_vitl14/dinov2_vitl14_pretrain.pth) | `d5383ea8f4877b2472eb973e0fd72d557c7da5d3611bd527ceeb1d7162cbf428` |
+
+These hashes identify the downloaded bytes; they are not publisher signatures.
+The matcher release does not independently establish a separate weight-license
+grant in the inspected page. Keep that uncertainty distinct from the RoMa code's
+MIT notice and the standard DINOv2 code/weights' declared Apache-2.0 terms.
+Do not infer unrestricted redistribution or commercial rights from this download.
 
 ## Research sources, revisions, and watchlist
 

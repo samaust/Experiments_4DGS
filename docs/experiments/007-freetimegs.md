@@ -225,3 +225,52 @@ uv pip install --offline --no-deps --no-build-isolation --python /home/auss/git_
 /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/roma/bin/python -c 'import romatch; from romatch import roma_outdoor, roma_indoor; print(romatch.__file__)'
 uv pip check --python /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/roma/bin/python
 ```
+
+### Released geometry compatibility check
+
+The matching EDGS RoMa revision `370117431ffc5dc000fb46f6e581b74bdb2c3ff8`
+is now checked out separately in `.local/RoMa-edgs`; its `roma_indoor` import
+passed in the prepared environment without loading weights. This preserves the
+standalone candidate installation. Upstream reports optional xFormers unavailable;
+no replacement attention package has been installed.
+
+`scripts/edgs_source.py` loads four unchanged EDGS geometry helpers from the
+external checkout and records source, extracted-AST, and license hashes. It does
+not import the Gaussian-Splatting trainer or redistribute its source. Three CPU
+tests passed: malformed calibration rejection, calibrated triangulation with
+non-identity extrinsics and an off-center principal point, and self-excluding
+native nearest-neighbor selection.
+
+The thin projection adapter packs `K[R|t]` for row-vector use, with camera depth
+in both columns 2 and 3: the native solver uses the former and its error routine
+uses the latter. This deliberately uses processed-image pixel coordinates, not
+graphics clip-space near/far depth. The native error calculation adds `1e-4` to
+depth, so its reported residual is slightly nonzero even for exact observations.
+Dense matching, match-coordinate conversion, positive-depth filtering, scene
+coverage, and complete initializer integration remain unvalidated.
+
+```bash
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/roma/bin/python -m unittest discover -s tests -p test_edgs_geometry.py -v
+```
+
+### Pinned matcher CUDA smoke check
+
+After the preparation-only checks above, the released indoor matcher and standard
+DINOv2 backbone were downloaded into `.local/weights/roma-edgs`; official URLs and
+SHA-256 hashes are in the research provenance table. `verify-roma-edgs.py` requires
+those hashes and a clean pinned source checkout, loads with `weights_only=True`,
+blocks Python socket connections, and prohibits CPU fallback. Using the EDGS fast
+settings (560 coarse resolution, no upsampling, asymmetric matching), an identical
+synthetic image pair passed on RTX 4090 / Torch 2.13.0+cu130. Wall time was 4.781 s,
+peak allocated memory 2,738,577,408 bytes, mean certainty 0.83114, and mean absolute
+identity error 0.000638 in normalized coordinates. Report:
+`.local/runs/roma-edgs-cuda-20260906.json`. Sandbox device access failed; the single
+approved host retry succeeded. This is not scene-quality or training evidence.
+
+```bash
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/roma/bin/python scripts/verify-roma-edgs.py --checkout .local/RoMa-edgs --weights .local/weights/roma-edgs --output .local/runs/roma-edgs-cuda-20260906.json
+```
+
+The full CPU regression suite discovered 108 tests: 107 passed and one existing
+optional-dependency test skipped in the STG environment. All three new EDGS
+geometry tests passed independently in the RoMa environment.
