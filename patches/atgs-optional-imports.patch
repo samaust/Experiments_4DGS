@@ -1,0 +1,59 @@
+diff --git a/gaussian_renderer/__init__.py b/gaussian_renderer/__init__.py
+index 8045f7b..5460ef4 100755
+--- a/gaussian_renderer/__init__.py
++++ b/gaussian_renderer/__init__.py
+@@ -19,18 +19,15 @@ import tinycudann as tcnn
+ import torch.nn.functional as F
+ 
+ import os
+-import open3d as o3d
+ import torch
+ 
+ import numpy as np
+ 
+-import gsplat
+-
+-from gsplat.cuda._wrapper import fully_fused_projection_2dgs
+ from arguments.atgs_cfg import cfg
+ 
+ 
+ def save_anchor(anchor):
++    import open3d as o3d
+     anchor_1 = anchor.detach().cpu().numpy()
+ 
+     pcd = o3d.geometry.PointCloud()
+@@ -307,6 +304,7 @@ def render_2dgs(viewpoint_camera, pc, pipe, bg_color : torch.Tensor, opt_thro =
+     
+     Background tensor (bg_color) must be on GPU!
+     """
++    import gsplat
+     is_training = pc.get_color_mlp.training
+         
+     opt_thro = 0.0
+@@ -476,6 +474,8 @@ def prefilter_voxel_2dgs(viewpoint_camera, pc, pipe, bg_color : torch.Tensor, sc
+     Background tensor (bg_color) must be on GPU!
+     """
+ 
++    from gsplat.cuda._wrapper import fully_fused_projection_2dgs
++
+     time_mask = get_time_mask_by_window(pc, viewpoint_camera.time)
+ 
+     means = pc.get_anchor[time_mask]
+@@ -531,4 +531,4 @@ def prefilter_voxel_2dgs(viewpoint_camera, pc, pipe, bg_color : torch.Tensor, sc
+     mask2 = radii.squeeze(0) < 1600
+     
+     # print(torch.logical_and(mask1, mask2).all(dim=1).shape)
+-    return torch.logical_and(mask1, mask2).all(dim=1)
+\ No newline at end of file
++    return torch.logical_and(mask1, mask2).all(dim=1)
+diff --git a/train_long.py b/train_long.py
+--- a/train_long.py
++++ b/train_long.py
+@@ -46,7 +46,6 @@ import matplotlib
+ matplotlib.use('Agg')
+ import matplotlib.pyplot as plt
+ from matplotlib import cm
+-import open3d as o3d
+ from PIL import Image
+ from utils.visualize_utils import tensor2image
+ import cv2

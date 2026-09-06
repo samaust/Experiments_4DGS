@@ -1,0 +1,27 @@
+diff --git a/train_long.py b/train_long.py
+--- a/train_long.py
++++ b/train_long.py
+@@ -917,8 +917,8 @@
+     if args.configs:
+-        import mmcv
++        from mmengine.config import Config
+         from utils.general_utils import merge_hparams
+ 
+-        config = mmcv.Config.fromfile(args.configs)
++        config = Config.fromfile(args.configs)
+         args = merge_hparams(args, config)
+ 
+     args.save_iterations.append(args.iterations)
+diff --git a/render.py b/render.py
+--- a/render.py
++++ b/render.py
+@@ -278,7 +278,7 @@
+     if args.configs:
+-        import mmcv
++        from mmengine.config import Config
+         from utils.general_utils import merge_hparams
+-        config = mmcv.Config.fromfile(args.configs)
++        config = Config.fromfile(args.configs)
+         args = merge_hparams(args, config)
+     # enable logging
+     # Initialize system state (RNG)

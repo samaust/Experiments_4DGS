@@ -1,0 +1,19 @@
+diff --git a/gaussian_renderer/__init__.py b/gaussian_renderer/__init__.py
+index 8045f7b..c843af7 100755
+--- a/gaussian_renderer/__init__.py
++++ b/gaussian_renderer/__init__.py
+@@ -230,9 +227,12 @@ def render_3dgs(viewpoint_camera, pc: GaussianModel, pipe, bg_color: torch.Tenso
+ 
+     opt_thro = 0.0
+ 
+-    xyz, color, opacity, scaling, rot, neural_opacity, mask = \
+-        generate_full_neural_gaussians(viewpoint_camera, pc, iteration=iteration, visible_mask=visible_mask,
++    generated = generate_full_neural_gaussians(viewpoint_camera, pc, iteration=iteration, visible_mask=visible_mask,
+                                         is_training=is_training, opt_thro=opt_thro)
++    if is_training:
++        xyz, color, opacity, scaling, rot, neural_opacity, mask = generated
++    else:
++        xyz, color, opacity, scaling, rot = generated
+ 
+     if iteration % 1001 == 0:
+         print(f"Temporal Gaussian points number: {xyz.shape[0]}, total seeds: {pc.get_anchor.shape[0]}")

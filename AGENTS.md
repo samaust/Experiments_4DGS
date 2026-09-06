@@ -38,7 +38,6 @@ When this happens:
 3. Report the exact error or timeout.
 4. State whether the failure is definitely a Codex permission/sandbox denial
    or only suspected to be one.
-5. If known, identify the permission, sandbox setting, or `prefix_rule` that
-   would be required.
+5. Print the Codex rule to add to allow the exact command that failed.
 6. Wait for the user to resolve the permission issue before continuing the
    affected work.

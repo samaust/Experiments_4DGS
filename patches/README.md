@@ -3,6 +3,38 @@
 Native compatibility patches (apply once using `git apply --check`, then
 `git apply`; preserve existing checkout edits):
 
+- [atgs-lr-python-float.patch](atgs-lr-python-float.patch), ATGS
+  `10388ebf973658a1cee219901a74128148bca051`: return a Python float from
+  the exponential scheduler so optimizer checkpoints remain loadable with
+  `weights_only=True`. CPU tests verify unchanged values and Adam serialization.
+
+- [atgs-render-eval-unpack.patch](atgs-render-eval-unpack.patch), ATGS
+  `10388ebf973658a1cee219901a74128148bca051`: unpack five generator outputs
+  in 3DGS inference mode and preserve seven in training mode. No rendering
+  equations change. CPU regression tests exercise both branches; the full-model
+  GPU verifier additionally compares inference and training-mode images.
+
+- [localdygs-cstdint.patch](localdygs-cstdint.patch), LocalDyGS
+  `39dacdcd8ef6d2b93824df79041713b4a29fb828`: include `<cstdint>` explicitly
+  in its bundled rasterizer for CUDA 13. No rasterization math changes.
+  This is a recovered ATGS dependency candidate, not an author-pinned ATGS submodule.
+- [atgs-optional-imports.patch](atgs-optional-imports.patch), ATGS
+  `10388ebf973658a1cee219901a74128148bca051`: defer gsplat imports to the
+  2DGS functions and Open3D to debug export; remove an unused training import.
+  The selected hash/3DGS path does not call these optional functions.
+
+- [tcnn17-python314-cu130.patch](tcnn17-python314-cu130.patch), tiny-cuda-nn
+  `32507f059d7abc8c13f5df81ea9597b70923ee44` (declares version 1.7): use
+  `packaging.version`, C++20 and disable fmt 9's incompatible compile-time
+  format check under NVCC. No model/kernel mathematics are changed. Build with
+  `scripts/build-atgs-tcnn.sh`; GPU verification is a separate gate.
+
+- [atgs-mmengine-config.patch](atgs-mmengine-config.patch), ATGS revision
+  `10388ebf973658a1cee219901a74128148bca051`: replace only `mmcv.Config`
+  loading with `mmengine.config.Config` in training/render entry points.
+  Inherited config values and CLI precedence are checked by
+  `scripts/verify-atgs-config.py`. This does not port CUDA operators.
+
 - [stg-python314-cu130.patch](stg-python314-cu130.patch), STG revision
   `427abfc58309a4a5213843dd673fb22c4529306c`: CUDA 13 integer headers,
   NumPy/SSIM API updates, early missing-COLMAP failure, and lazy import of

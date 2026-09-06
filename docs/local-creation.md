@@ -417,3 +417,131 @@ deltas are **second minus first**, including per-frame differences. It retains
 both iteration counts and incomplete-training flags. Different iteration counts
 are labeled, not silently equated; equal iterations do not establish equal
 training time. Infinite-PSNR differences are recorded as JSON null.
+
+## ATGS Python environment gate
+
+```bash
+bash scripts/setup-environment.sh atgs
+git -C .local/ATGS apply --check ../../patches/atgs-mmengine-config.patch
+git -C .local/ATGS apply ../../patches/atgs-mmengine-config.patch
+.local/envs/atgs/bin/python scripts/verify-atgs-config.py \
+  --checkout .local/ATGS --output .local/runs/atgs-config-NEW.json
+```
+
+The patch is already applied in the recorded checkout; use a reverse `--check`
+to identify that state rather than applying twice. These checks do not validate
+GPU access, native extensions, complete model reload or training. See the
+[ATGS report](experiments/009-atgs.md) for remaining integration gates.
+
+### tiny-cuda-nn 1.7 dependency
+
+The repository has no `v1.7` tag. The ATGS dependency choice is an explicit
+pre-2.0/JIT commit declaring version 1.7; do not silently upgrade it to main.
+
+```bash
+git clone https://github.com/NVlabs/tiny-cuda-nn.git .local/tiny-cuda-nn-atgs
+git -C .local/tiny-cuda-nn-atgs switch --detach 32507f059d7abc8c13f5df81ea9597b70923ee44
+git -C .local/tiny-cuda-nn-atgs submodule update --init --recursive -- dependencies/cutlass dependencies/fmt
+git -C .local/tiny-cuda-nn-atgs apply --check ../../patches/tcnn17-python314-cu130.patch
+git -C .local/tiny-cuda-nn-atgs apply ../../patches/tcnn17-python314-cu130.patch
+bash scripts/build-atgs-tcnn.sh
+.local/envs/atgs/bin/python scripts/verify-atgs-tcnn.py --output .local/runs/atgs-tcnn-NEW.json
+```
+
+Use the existing clone when present; preserve local edits and do not reapply
+patches. The build script checks all three source revisions and the applied
+patch, uses two compiler jobs and explicit SM89, and installs offline without
+changing dependencies. Compilation runs on CPU; the final verifier requires
+GPU access and never falls back to CPU. It tests one ATGS-shaped encoder/MLP,
+not the complete multi-encoder ATGS model or its renderer.
+
+### Recovered ATGS rasterizer and KNN
+
+ATGS omits its referenced native source directory. The same author's LocalDyGS
+bundles a candidate rasterizer with the required two-output forward and
+`visible_filter` interface, and `simple_knn`. This is an explicit dependency
+choice, not a verified original ATGS pin. Preserve its research-only license.
+Use existing clones when present and reverse-check already applied patches.
+
+```bash
+git clone https://github.com/WuJH2001/LocalDyGS.git .local/LocalDyGS
+git -C .local/LocalDyGS switch --detach 39dacdcd8ef6d2b93824df79041713b4a29fb828
+git -C .local/LocalDyGS apply --check ../../patches/localdygs-cstdint.patch
+git -C .local/LocalDyGS apply ../../patches/localdygs-cstdint.patch
+git -C .local/ATGS apply --check ../../patches/atgs-optional-imports.patch
+git -C .local/ATGS apply ../../patches/atgs-optional-imports.patch
+bash scripts/build-atgs-rasterizer.sh
+.local/envs/atgs/bin/python scripts/verify-atgs-rasterizer.py --output .local/runs/atgs-rasterizer-NEW.json
+```
+
+The offline build targets SM89; it does not execute GPU kernels. The final
+command requires GPU access and tests synthetic forward/backward, visibility,
+and KNN distances against a brute-force reference. It is not a full ATGS
+renderer, manifest-adapter, or checkpoint validation. Torch-scatter and the
+complete model integration remain separate gates.
+
+### ATGS scatter dependency and module-import gate
+
+```bash
+git clone --branch 2.1.2 --depth 1 https://github.com/rusty1s/pytorch_scatter.git .local/pytorch-scatter-atgs
+bash scripts/build-atgs-scatter.sh
+.local/envs/atgs/bin/python scripts/verify-atgs-imports.py --output .local/runs/atgs-imports-NEW.json
+```
+
+The build checks commit `140d3ad677aae615767412873b90982cbf97d35d` and requests
+both CUDA and CPU extensions explicitly. The verifier requires GPU access,
+checks scatter-max forward/backward and imports ATGS model/render modules.
+It does not import `train_long`, which allocates LPIPS-VGG at module import,
+or execute a full ATGS model. See the experiment report for observed status.
+
+### ATGS full-model smoke test
+
+```bash
+git -C .local/ATGS apply --check ../../patches/atgs-render-eval-unpack.patch
+git -C .local/ATGS apply ../../patches/atgs-render-eval-unpack.patch
+.local/envs/atgs/bin/python scripts/verify-atgs-model.py --output .local/runs/atgs-model-NEW.json
+```
+
+This requires GPU access and performs no optimizer steps. It tests the full
+representation on synthetic 64×64 views, not the matched evaluation resolution.
+The upstream automatic encoder count becomes three for the 60-frame profile;
+the configured optimizer schedule is not shortened. The shared-profile config
+loader disables duplicate resizing/synchronization and records ignored legacy
+config keys. No training entry-point LPIPS download occurs.
+Apply the inference unpacking patch only once; reverse-check if already applied.
+The verifier compares training-mode and inference-mode images at all three
+synthetic timestamps. This does not test offline checkpoint reload.
+
+To probe native directory save/reload, use new report and checkpoint paths:
+
+```bash
+.local/envs/atgs/bin/python scripts/verify-atgs-model.py --output .local/runs/atgs-native-reload-NEW.json --native-checkpoint .local/runs/atgs-native-checkpoint-NEW
+```
+
+This retains the synthetic native checkpoint and records component sizes and
+hashes. It only checks in-process inference reload, using a supplied lifetime
+cloud; it does not claim optimizer, RNG, sampler, or offline fresh-process
+resumption. Both destination paths must be unused.
+
+Add `--restore-auxiliary` to the probe with new destination paths to save and
+restore supplemental model tensors and rebuild the native optimizers. This
+also checks tensor values and gradient flags, but only empty Adam states are
+exercised because the smoke test takes no optimizer steps. It is not yet a
+complete resumable checkpoint adapter.
+
+For populated Adam-state validation, add `--populate-optimizer-state` alongside
+`--restore-auxiliary`, again using unused report/checkpoint paths. This performs
+three synthetic updates (one per encoder), then verifies both restored optimizer
+state dictionaries exactly. It does not exercise the matched training loop's
+gradient accumulation, warmup, RNG/sampler continuation or next-update equality.
+
+Apply the scheduler compatibility patch before creating populated optimizer
+checkpoints (only once; reverse-check if already applied):
+
+```bash
+git -C .local/ATGS apply --check ../../patches/atgs-lr-python-float.patch
+git -C .local/ATGS apply ../../patches/atgs-lr-python-float.patch
+```
+
+This prevents NumPy learning-rate scalars from entering new optimizer files.
+It does not rewrite existing checkpoints or disable restricted Torch loading.

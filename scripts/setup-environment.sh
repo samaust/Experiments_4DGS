@@ -5,7 +5,7 @@ GS_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 GS_WORK="$GS_ROOT/.local"
 GS_ENV="${1:?Usage: bash scripts/setup-environment.sh METHOD}"
 case "$GS_ENV" in
-  stg-render|stg-colmap|hust|mango-render|nopo4d|downloads) ;;
+  stg-render|stg-colmap|hust|mango-render|nopo4d|atgs|downloads) ;;
   *) printf 'Unknown environment: %s\n' "$GS_ENV" >&2; exit 2 ;;
 esac
 if [ "$#" -ne 1 ]; then

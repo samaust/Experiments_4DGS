@@ -1,0 +1,26 @@
+# Python-only ATGS dependencies. Native CUDA extensions are a separate build gate.
+# mmengine.Config replaces only upstream mmcv.Config; no MMCV CUDA operators.
+-r base-cu130.in
+numpy
+scipy
+scikit-image
+opencv-python
+Pillow
+plyfile
+tqdm
+matplotlib
+colorama
+einops
+lpips
+laspy
+torchmetrics
+jaxtyping
+pytorch-msssim
+imageio[ffmpeg]
+tensorboard
+mmengine
+wandb
+
+# Deferred: tiny-cuda-nn 1.7, torch-scatter, gsplat, the compatible upstream
+# diff-gaussian-rasterization fork, and simple-knn. Do not substitute STG's
+# temporal renderer for ATGS's native 3DGS rasterizer.

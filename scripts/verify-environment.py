@@ -5,6 +5,9 @@ import sys
 import sysconfig
 
 METHOD_IMPORTS = {
+    'atgs': ('numpy', 'scipy', 'skimage', 'cv2', 'PIL', 'plyfile', 'tqdm', 'matplotlib',
+             'colorama', 'einops', 'lpips', 'laspy', 'torchmetrics', 'jaxtyping',
+             'pytorch_msssim', 'imageio', 'imageio_ffmpeg', 'tensorboard', 'mmengine', 'wandb'),
     'stg-render': ('numpy', 'scipy', 'skimage', 'cv2', 'PIL', 'plyfile', 'kornia', 'natsort', 'tqdm', 'yapf'),
     'stg-colmap': ('numpy', 'cv2', 'tqdm', 'natsort', 'PIL'),
     'hust': ('numpy', 'scipy', 'skimage', 'cv2', 'PIL', 'plyfile', 'tqdm', 'imageio', 'imageio_ffmpeg', 'matplotlib', 'lpips', 'tensorboard'),
