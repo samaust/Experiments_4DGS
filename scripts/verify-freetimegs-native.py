@@ -5,6 +5,7 @@ import hashlib
 import json
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 
 def main():
@@ -63,12 +64,48 @@ def main():
     parameter.square().sum().backward()
     optimizer.step(visibility=torch.tensor([True, False, True], device='cuda'))
     assert (parameter[[0, 2]] < 1).all() and (parameter[1] == 1).all()
+
+    from freetimegs_model import NativeFreeTimeModel
+    from gsplat.strategy import DefaultStrategy
+    cfg = SimpleNamespace(init_scale=.3, init_opacity=.5, init_duration=.2,
+        sh_degree=3, batch_size=1, position_lr=.00016, scales_lr=.005,
+        quats_lr=.001, opacities_lr=.05, sh0_lr=.0025, shN_lr=.000125,
+        times_lr=.001, durations_lr=.005, velocity_lr_start=.005,
+        use_velocity=True, antialiased=False, packed=True, near_plane=.01,
+        far_plane=1e10, strategy=DefaultStrategy())
+    init_data = dict(positions=torch.tensor([[-.2, -.1, 2.], [.2, -.1, 2.2],
+                                            [0., .2, 2.4], [.1, .1, 2.8]]),
+        colors=torch.rand((4, 3)), times=torch.full((4, 1), .5),
+        durations=torch.full((4, 1), .2), velocities=torch.tensor([[.3, 0., 0.]] * 4))
+    model = NativeFreeTimeModel(Path(__file__).resolve().parents[1] / '.local/FreeTimeGsVanilla',
+                               cfg, init_data, scene_scale=1., device='cuda')
+    model_camera = SimpleNamespace(camtoworlds=camera, Ks=intrinsic,
+                                   width=64, height=64, t=.4)
+    temporal_images = []
+    for timestamp in (.4, .6):
+        model_camera.t = timestamp
+        rendered, _, info = model.render(model_camera, sh_degree=3)
+        assert rendered.shape == (1, 64, 64, 3) and torch.isfinite(rendered).all()
+        temporal_images.append(rendered.detach())
+        loss = rendered.square().mean() + .001 * model.compute_4d_regularization(info['temporal_opacity'])
+        loss.backward()
+    assert not torch.equal(*temporal_images)
+    for name, optimizer in model.optimizers.items():
+        gradient = model.splats[name].grad
+        assert gradient is not None and torch.isfinite(gradient).all(), name
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
     torch.cuda.synchronize()
 
     report = dict(status='passed', scope='synthetic native kernels only; no scene training',
                   torch_version=torch.__version__, device=torch.cuda.get_device_name(),
                   packed_max_abs_difference=(results[0] - results[1]).abs().max().item(),
                   ssim_identical=identical.item(), ssim_perturbed=score.item(),
+                  native_model=dict(parameter_groups=sorted(model.splats),
+                                    source_digests=model.source_digests,
+                                    diagnostic_init_scale=cfg.init_scale,
+                                    temporal_images_differ=True,
+                                    optimizer_steps=1),
                   wall_seconds=time.monotonic() - start,
                   native_sha256={name: hashlib.sha256(Path(module.__file__).read_bytes()).hexdigest()
                                  for name, module in [('gsplat', native), ('fused_ssim', ssim_native)]})

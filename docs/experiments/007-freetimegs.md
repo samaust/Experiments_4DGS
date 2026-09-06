@@ -135,3 +135,11 @@ reconstruction. The existing midpoint cloud has not been relabeled as a
 multi-time initialization or assigned unverified velocities. Choosing and
 validating temporal geometry, complete training-state resume and the native
 loss/relocation loop remain unfinished.
+
+`scripts/freetimegs_model.py` now binds the native initializer, temporal methods
+and renderer to the shared camera layout. The extended GPU verifier passed in
+`.local/runs/freetimegs-model-cuda-20260906.json`: four synthetic Gaussians,
+two distinct time renders, finite gradients for all nine groups and one ordinary
+Adam update per group. Initializer/render AST hashes and extension binary hashes
+are recorded. Its scale `0.3` is a diagnostic setting, not a selected scene
+preset. No native loss schedule, relocation or scene training is claimed.
