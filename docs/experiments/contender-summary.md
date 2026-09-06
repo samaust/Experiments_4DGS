@@ -2,33 +2,49 @@
 
 Status: **partial execution; matched comparison incomplete**.
 
-See the [2026-09-06 execution record](contender-progress-20260906.md) for the
-successful native Lite regression render, evaluator fixes, and current gates.
-The subsequent [data preparation record](contender-data-20260906.md) supersedes
-its missing-Basketball and missing-pycolmap statuses and adds benchmark evidence.
-The [training integration record](contender-training-20260906.md) now supersedes
-the earlier not-started status for STG Lite and Full on SelfCap: both completed
-short, budget-counted training/resume checks. Full's held-out rendering path
-also executed. Long training remains incomplete.
-The [growth/offline record](contender-growth-20260906.md) adds the EMS fix,
-Lite and Full iteration-2000 metrics, fixed visual evidence, and exact offline reload
-for all held-out frames and sweep poses. These are provisional results, not
-completion of the allocated two-hour experiments.
-The [evaluation-pipeline continuation](contender-evaluation-pipeline-20260906.md)
-extends Lite to iteration 5000 and adds strict reload comparison and an automated
-offline evaluation workflow. The equal-step table below remains the historical
-iteration-2000 comparison; it must not be relabeled as final-budget results.
-At iteration 5000, Lite measures 22.082603 dB PSNR, 0.827138 SSIM and
-0.270207 LPIPS-Alex, with 449.311 FPS warm rendering. All 80 reload PNGs
-remain byte-exact. The [Full continuation](contender-full-5000-20260906.md)
-now reaches the same iteration and adds timed evaluation plus checked per-frame
-and aggregate deltas.
+Lite and Full have completed their native SelfCap schedules and final evaluations.
+ATGS and FreeTimeGS still require continuation within their existing budgets.
+MoE-GS and FreeTimeGS++ retain the source gates in their experiment reports;
+Basketball remains blocked on matching calibration.
+
+Earlier records cover [initial execution](contender-progress-20260906.md),
+[data preparation](contender-data-20260906.md),
+[training integration](contender-training-20260906.md),
+[growth/offline validation](contender-growth-20260906.md),
+[Lite evaluation integration](contender-evaluation-pipeline-20260906.md) and
+[Full's 5,000-step pilot](contender-full-5000-20260906.md). Their historical
+statuses and measurements are superseded where newer results are given below.
+
+## SelfCap dance1 — completed native STG schedules
+
+Both variants reached 30,000 steps within their individual two-hour limits.
+All metrics cover the same 60 camera-0015 frames at 1890×1061. The
+[completed STG record](contender-native-stg-20260906.md) contains resource use,
+checkpoint hashes, commands, visual findings and evidence paths.
+
+| Method | PSNR dB | SSIM | LPIPS-Alex | Δ vs Lite (PSNR / SSIM / LPIPS) | Δ vs Full (PSNR / SSIM / LPIPS) | Warm FPS |
+| --- | ---: | ---: | ---: | --- | --- | ---: |
+| STG Lite | 22.418750 | 0.851204 | 0.219363 | 0 / 0 / 0 | -2.078003 / -0.013010 / +0.004752 | 317.056 |
+| STG Full | 24.496753 | 0.864213 | 0.214612 | +2.078003 / +0.013010 / -0.004752 | 0 / 0 / 0 | 224.135 |
+
+Checked deltas: `.local/runs/stg-selfcap-final-comparison-20260906.json`.
+Charged training totals are 3819.048855 seconds for Lite and 4652.027359 seconds
+for Full, including earlier attempts. Both reload byte-exactly for 60 held-out
+PNGs and 20 sweep PNGs in fresh offline processes. Raw floating-point render
+equality was not measured by the STG evaluator; the earlier Lite float-equality
+claim was incorrect.
+
+Full improves all three aggregate metrics, while Lite has higher measured
+throughput. Both retain substantial head/hair and body-boundary blur in fast
+motion, especially frames 4120 and 4150 relative to ground truth. Static shelves
+are recognizable but small book text remains soft. The metric improvement does
+not establish a sharp reconstruction of fast motion or a flicker ranking.
 
 ## SelfCap dance1 — provisional 5,000-step checkpoints
 
 Same 60 held-out camera-0015 frames, shared metric protocol and 1890×1061
-resolution. Lite has completed its native 30,000-step schedule; Full, ATGS and
-FreeTimeGS remain incomplete against their native schedules.
+resolution. These historical checkpoints precede native-schedule completion for
+Lite and Full; equal iteration labels do not imply equal updates or budget usage.
 
 | Method | PSNR dB | SSIM | LPIPS-Alex | Δ vs Lite (PSNR / SSIM / LPIPS) | Δ vs Full (PSNR / SSIM / LPIPS) | Warm FPS |
 | --- | ---: | ---: | ---: | --- | --- | ---: |
@@ -37,25 +53,11 @@ FreeTimeGS remain incomplete against their native schedules.
 | ATGS | 21.637782 | 0.802142 | 0.341477 | -0.444821 / -0.024997 / +0.071270 | -1.815171 / -0.030719 / +0.062324 | 281.242 |
 | FreeTimeGS reproduction | 19.153970 | 0.682328 | 0.528610 | -2.928633 / -0.144810 / +0.258403 | -4.298983 / -0.150533 / +0.249456 | 162.731 |
 
-The completed Lite schedule is reported separately because its 30,000-step
-checkpoint is not an equal-training-state comparison with the 5,000-step rows.
-
-| Method | Iteration | PSNR dB | SSIM | LPIPS-Alex | Warm FPS | Charged training |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| STG Lite | 30,000 | 22.418750 | 0.851204 | 0.219363 | 317.056 | 3819.049 s |
-
-The completed Lite evaluation is `.local/runs/stg-lite-selfcap-final-evaluation-20260906`.
-Its final checkpoint is 30,000 iterations with exact PNG and float reload checks
-for all 60 held-out frames and 20 sweep poses. The 30,000-step visuals retain
-motion blur around the dancer, but improve background detail and overall
-sharpness relative to the 5,000-step pilot. The fixed book-text crop is still
-soft and partially unreadable.
-
 The checked comparison is `.local/runs/stg-selfcap-5000-comparison-20260906.json`.
-Full has higher PSNR/SSIM, while Lite has lower LPIPS and higher measured warm
+At this earlier checkpoint, Full has higher PSNR/SSIM, while Lite has lower LPIPS and higher measured warm
 throughput. Both retain strong blur/ghosting around the moving person; no final
 artifact-quality winner is established. Both have byte-exact offline reloads
-for all 80 PNGs. Total charged training time is 709.725114 seconds for Lite and
+for all 80 PNGs. Charged training time at that point was 709.725114 seconds for Lite and
 816.799333 seconds for Full, including earlier attempts.
 
 [ATGS](009-atgs.md) now has a 5,000-microstep checkpoint (1,666 optimizer updates),

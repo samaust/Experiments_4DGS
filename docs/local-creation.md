@@ -527,6 +527,10 @@ The resulting 30,000-step output and evaluation directories are retained under
 `.local/runs/stg-lite-selfcap-final-20260906` and
 `.local/runs/stg-lite-selfcap-final-evaluation-20260906`.
 
+The [completed native STG record](experiments/contender-native-stg-20260906.md)
+adds the exact Full continuation, evaluation and comparison commands, resource
+measurements and final checkpoint hashes for both variants.
+
 The pipeline now records each stage's UTC start/end, monotonic wall seconds,
 exit code and status in `commands.json`, including failed launches. Successful
 `evaluation.json` reports also include total evaluation wall time. Older Lite

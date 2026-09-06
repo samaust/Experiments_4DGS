@@ -138,7 +138,14 @@ same source, dataset and initializer provenance. Its offline held-out renders
 are likewise local research outputs, not separately licensed author assets. The
 native STG Lite continuation later completed iteration 30,000; its final
 checkpoint and rendered evidence are local outputs from the pinned STG source,
-not released pretrained assets.
+not released pretrained assets. The completed Lite checkpoint SHA-256 is
+`8eac0b3373167db5ff2e5a17c757e9fe5938e60f4b0c8ad55820eff5b9d20d9c`.
+Full has also completed 30,000 steps; its local checkpoint
+`.local/runs/stg-full-selfcap-final-20260906/checkpoint.pt` has SHA-256
+`1c810245d4faa182df201eaf00372b8dd7bc23b6e5a2ae8c1f7d0fb8a461a65a` and includes
+the appearance decoder. Both retain the same audited SelfCap input and STG source
+provenance. Their [final record](experiments/contender-native-stg-20260906.md)
+links complete offline evidence and reproducible commands.
 
 ## Research sources, revisions, and watchlist
 

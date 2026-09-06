@@ -1,6 +1,13 @@
 # Experiment 006: STG Full
 
-Status: **SelfCap training/rendering integration executed; experiment incomplete**.
+Status: **SelfCap native 30,000-step schedule and final evaluation complete;
+Basketball blocked on calibration**.
+
+The [completed native STG comparison](contender-native-stg-20260906.md) records
+the final Full result: PSNR 24.496753, SSIM 0.864213, LPIPS-Alex 0.214612 and
+224.135 FPS. All 80 PNGs reload byte-exactly offline. Total charged training is
+4652.027359 seconds; the final model contains 50,607 Gaussians. The records below
+describe earlier integration and pilot milestones.
 
 Full completed initial training/resume checks, then a fresh 2,000-step run
 including densification and two EMS insertions, ending at 667,064 Gaussians.
@@ -12,8 +19,7 @@ for commands, budget charges, limitations and remaining gates.
 Full subsequently resumed to iteration 5000, ending at 211,618 Gaussians after
 the default opacity reset/pruning. The [5,000-step record](contender-full-5000-20260906.md)
 contains the longer run, offline evaluation, checked Lite comparison and current
-budget charges. It remains incomplete against the 30,000-step schedule; the
-remaining native continuation is still pending.
+budget charges. The subsequent native continuation above completes the schedule.
 
 Release audit, 2026-09-06: downloaded `techni_Birthday_allcam_allpoints.zip`
 from `stack93/spacetimegaussians` revision `9534842`. Despite its unsuffixed
