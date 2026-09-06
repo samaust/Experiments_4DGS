@@ -679,3 +679,37 @@ speed is not representative of a trained scene. Do not rank it against the
 The renderer passed syntax checks; the existing 88-test suite passes. Rendering,
 CPU metrics and packaging were not charged as training. Device-wide sampled
 resource measurement and native binary provenance remain outstanding gates.
+
+### Iteration-1,000 measured continuation
+
+Using the absolute STG interpreter path allowed the measurement wrapper and its
+GPU sampler to run on the host. The failed relative-path measurement remains
+preserved; it stopped before launching training and charged no training time.
+The successful run is `.local/runs/atgs-selfcap-1000-measurement-retry-20260906`.
+
+Training resumed iteration 6 and reached iteration 1,000 / update count 333,
+preserving one pending microstep in
+`.local/runs/atgs-selfcap-1000-20260906/checkpoint-001000-001`. The ledger charged
+140.155569 seconds, totaling **176.732366 seconds** for ATGS/SelfCap so far.
+Measured command wall time was 140.269063 seconds. Device-wide 200 ms sampling
+recorded an 849–854 MiB baseline and **8,763 MiB peak** (711 samples).
+Torch peak allocated/reserved memory was 6,355,923,968 / 7,646,216,192 bytes.
+Periodic and pause snapshots coincided at iteration 1,000, producing two
+equivalent boundary saves (6.625 and 6.826 seconds); both costs were charged.
+The controller's duplicate-save avoidance does not currently cover this pause
+case. No checkpoint files were deleted.
+
+Offline outputs under `.local/runs/atgs-selfcap-1000-render-{a,b}-20260906`
+match exactly for all 60 held-out frames and 20 sweep poses, both PNG bytes and
+raw float hashes. Both current-runtime extension inventories match. The complete
+bundle contains 4,698,024,951 component bytes, including pending gradients.
+Reports are `atgs-selfcap-1000-reload-{frames,sweep}-20260906.json`;
+fixed crops, videos and sheets are in `atgs-selfcap-1000-evidence-20260906`.
+
+`atgs-selfcap-1000-metrics-20260906.json` measures PSNR **17.396115 dB**,
+SSIM **0.678128**, LPIPS-Alex **0.617919** across 60 held-out images. Warm rendering
+measured **326.448 FPS**. Inspection of frame 4150 now shows shelves and objects,
+but with severe smoothing, distorted edges and no clearly reconstructed moving
+person. This is an unfinished intermediate result, not a matched-budget ranking.
+The current runtime records extension hashes and package versions, but does not
+retroactively certify training binaries or all dynamically loaded system libraries.
