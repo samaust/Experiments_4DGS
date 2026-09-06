@@ -8,6 +8,18 @@
 
 Stage and create local commits for completed, validated implementation milestones. Include only task-related changes. Add a commit title and description. Do not push, amend commits, or rewrite history unless explicitly requested.
 
+## Continue after commits
+
+Creating a local commit is a checkpoint, not a stopping condition.
+After committing a completed, validated milestone, continue implementing
+the next unfinished task in the active plan without waiting for another
+"continue" message.
+
+Stop only when the plan is complete, I explicitly ask you to stop, or
+progress requires missing information, new authorization, or resolution
+of a blocker. The Sandbox and permission failures instructions still
+apply. Do not expand the plan's scope or exceed its budgets.
+
 ## Never actions
 
 Never read `prompts` directory content.
