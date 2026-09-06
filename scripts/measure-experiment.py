@@ -4,6 +4,7 @@ import csv
 import datetime
 import json
 import os
+import signal
 from pathlib import Path
 import subprocess
 import time
@@ -36,16 +37,36 @@ record = dict(command=command, cwd=str(a.cwd.resolve()), environment={k:env[k] f
 record['environment'].update(dict(assignment.split('=',1) for assignment in a.env))
 (a.output / 'command.json').write_text(json.dumps(record, indent=2)+'\n')
 with (a.output / 'gpu.csv').open('w') as gpu, (a.output / 'run.log').open('w') as log:
-    sampler = subprocess.Popen(['nvidia-smi','--query-gpu=timestamp,memory.used,utilization.gpu',
-                                '--format=csv,nounits','-lms','200'], stdout=gpu, stderr=subprocess.STDOUT)
+    sampler_command = ['nvidia-smi','--query-gpu=timestamp,memory.used,utilization.gpu',
+                       '--format=csv,nounits','-lms','200']
+    sampler = subprocess.Popen(sampler_command, stdout=gpu, stderr=subprocess.STDOUT)
+    child = None
+    def check_sampler():
+        if sampler.poll() is not None:
+            raise RuntimeError('GPU sampler stopped; affected experiment aborted. Command: '+
+                repr(sampler_command)+'; exit code: '+str(sampler.returncode)+'; output:\n'+
+                (a.output/'gpu.csv').read_text())
     try:
         time.sleep(2)
+        check_sampler()
         record['command_started_utc'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         start = time.monotonic()
-        result = subprocess.run(command, cwd=a.cwd, env=env, stdout=log, stderr=subprocess.STDOUT)
-        record.update(exit_code=result.returncode, wall_seconds=time.monotonic()-start,
+        child = subprocess.Popen(command, cwd=a.cwd, env=env, stdout=log,
+                                 stderr=subprocess.STDOUT, start_new_session=True)
+        while child.poll() is None:
+            check_sampler()
+            time.sleep(.2)
+        check_sampler()
+        record.update(exit_code=child.returncode, wall_seconds=time.monotonic()-start,
                       command_ended_utc=datetime.datetime.now(datetime.timezone.utc).isoformat())
     finally:
+        if child is not None and child.poll() is None:
+            try:
+                os.killpg(child.pid, signal.SIGTERM)
+                child.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                os.killpg(child.pid, signal.SIGKILL)
+                child.wait(timeout=5)
         sampler.terminate()
         sampler.wait(timeout=10)
 rows = list(csv.DictReader((a.output / 'gpu.csv').open()))

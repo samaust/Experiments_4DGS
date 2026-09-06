@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 import time
@@ -100,7 +101,7 @@ def main():
         incomplete_training=iteration < state['training_args']['iterations'],
         frames=records, sweep=scene.manifest['sweep'], benchmark=benchmark,
         wall_seconds=time.monotonic()-started, gpu=torch.cuda.get_device_name(),
-        network_isolation='not enforced by this command')
+        network_isolation=os.environ.get('STG_OFFLINE_GUARD', 'not enforced by this command'))
     (a.output/'render.json').write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps(dict(iteration=iteration, held_out_frames=len(records), sweep_poses=20,
                          fps=benchmark['fps'] if benchmark else None), indent=2))

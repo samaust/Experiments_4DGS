@@ -2,7 +2,10 @@
 
 [Repository overview](../README.md) · [Pretrained experiments](pretrained-experiments.md) · [Research](research.md) · [Input data](input-data.md) · [Rendering](rendering.md)
 
-Target: Ubuntu 24.04 LTS, RTX 4090. Reviewed on 2026-09-05. The commands below are source-checked procedures, **not locally executed GPU results**. Older upstream environments are recorded explicitly; compatibility with this workstation still needs the checks below.
+Target: Ubuntu 24.04 LTS, RTX 4090. Historical upstream procedures below remain
+conditional. The plan-004 STG integration commands have executed locally; see
+the [growth and offline evaluation record](experiments/contender-growth-20260906.md)
+for measured results and remaining limitations.
 
 ## Environment and workspace
 
@@ -26,7 +29,8 @@ holding test-camera intrinsics fixed. Calibration-only mode is available for
 checking geometry before decoding. Output directories must be new.
 
 The STG SelfCap entry point now supports budget-counted integration runs and
-resumption (commands below). Long-run densification/EMS validation is unfinished.
+resumption (commands below). Densification and EMS now have targeted validation;
+the full two-hour training runs and comparison remain unfinished.
 Do not launch the generic command wrapper as an unattended training scheduler.
 
 First complete the [pretrained rendering experiments](pretrained-experiments.md). This guide is the later training phase; its training commands are not prerequisites for viewing downloaded models.
@@ -315,3 +319,54 @@ Rendering is outside the training ledger. This command validates all pinned
 checkpoint component hashes and refuses changed source/input files; it does
 not establish network isolation or compare reload output automatically.
 Short integration checkpoints are not suitable for quality rankings.
+
+## EMS fix, offline reload, and evidence packaging
+
+Apply the identity-quaternion EMS patch once to the pinned, compatibility-patched
+STG checkout before training beyond EMS. Preserve existing checkout edits:
+
+```bash
+git -C .local/SpacetimeGaussians apply --unidiff-zero --check \
+  ../../patches/stg-ems-quaternion.patch
+git -C .local/SpacetimeGaussians apply --unidiff-zero \
+  ../../patches/stg-ems-quaternion.patch
+.local/envs/stg-render/bin/python scripts/verify-stg-growth.py \
+  --checkout .local/SpacetimeGaussians \
+  --output .local/runs/stg-growth-NEW.json --require-valid
+```
+
+The patch is already applied in the recorded local run. A reverse `--check`
+identifies this state; do not apply it twice. Existing checkpoints retain strict
+source hashes, so keep pre-patch checkpoints with their matching source.
+
+Prefix rendering with the offline launcher, using a new output for each reload:
+
+```bash
+.local/envs/stg-render/bin/python scripts/offline-python.py \
+  scripts/render-stg-manifest.py \
+  --checkout .local/SpacetimeGaussians \
+  --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+  --checkpoint .local/runs/stg-lite-selfcap-ems-20260906/checkpoint.pt \
+  --output .local/runs/stg-lite-offline-NEW --benchmark
+```
+
+The launcher requires Linux and `libseccomp.so.2`. It validates the intended
+socket restrictions before executing the renderer; unexpected setup/device
+failures must be reported, not bypassed. Local Unix-domain IPC remains allowed.
+Repeat in a fresh process and use `analyze-sequence.py --previous-run` for both
+the `images/0015` and `sweep` directories.
+
+Package the shared fixed crops, contact sheets and videos:
+
+```bash
+.local/envs/stg-render/bin/python scripts/package-stg-evidence.py \
+  --render-directory .local/runs/stg-lite-offline-NEW \
+  --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+  --crops configs/detail-crops.selfcap-dance1.json \
+  --output .local/runs/stg-lite-evidence-NEW
+```
+
+Run `evaluate-reconstruction.py --lpips-alex` separately against the complete
+processed `images/0015` directory. Set `TORCH_HOME` to the existing
+`.local/cache/torch` when evaluating offline. Packaging uses CPU FFmpeg, retains
+native PNG dimensions, and pads videos by one bottom row for H.264 4:2:0.

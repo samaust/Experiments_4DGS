@@ -2,8 +2,9 @@
 
 Status: **SelfCap training/rendering integration executed; experiment incomplete**.
 
-Full completed two training steps, resumed for two more in a fresh process,
-and rendered all 60 held-out timestamps and the 20-pose sweep. This does not
+Full completed initial training/resume checks, then a fresh 2,000-step run
+including densification and two EMS insertions, ending at 667,064 Gaussians.
+It rendered all 60 held-out timestamps and the 20-pose sweep offline. This does not
 establish quality at the agreed training budget. Basketball is still blocked
 on calibration. See the [training integration record](contender-training-20260906.md)
 for commands, budget charges, limitations and remaining gates.
@@ -20,8 +21,12 @@ This run must retain and validate the appearance decoder state. The native
 preview helper accepts `--model full --decoder PATH` and refuses a missing or
 mismatched decoder.
 
-Results, held-out metrics, reload equality, and visual findings are not yet
-available. Do not use the all-camera `sear_steak` checkpoint as held-out evidence.
+Provisional held-out metrics, reload checks, and visual findings are recorded in
+the [growth/offline record](contender-growth-20260906.md). The native warm-render
+benchmark at iteration 2000 is 293.384 FPS at 1890×1061. The complete checkpoint
+retains the appearance decoder and optimizer state; exported inference files
+include both the PLY and decoder sidecar. Do not use the all-camera `sear_steak`
+checkpoint as held-out evidence.
 
 Native Full forward/backward compatibility is now validated on synthetic points
 through a full-size SelfCap manifest camera, including finite decoder gradients.

@@ -77,10 +77,12 @@ Before extending these runs, validate densification and EMS, audit sparse-cloud
 coverage and moving-region synchronization, investigate resume differences,
 and complete offline reload checks. The two-step tests did not reach any
 densification or EMS threshold. Source inspection also found an apparent Lite
-EMS call/signature mismatch: `addgaussians()` passes a temporal-feature argument
-to the nine-argument `densification_postfix()`; this needs a tracked fix and a
-targeted test before the long run. Both models initialize newly EMS-added
-rotations to zero, which also needs investigation.
+EMS call/signature mismatch. **Correction after further inspection:** Lite's
+`densification_postfix()` accepts `dummy=None`, so the extra temporal-feature
+argument is supported and this is not a blocker. Both models' zero-initialized
+EMS rotations were subsequently shown to cause nonfinite positions during
+splitting; see the tracked `stg-ems-quaternion.patch` and growth-validation
+record. The earlier mismatch claim is withdrawn.
 
 Basketball calibration and the other contender adapters remain unfinished.
 No quality ranking, held-out metric comparison, artifact assessment or full
