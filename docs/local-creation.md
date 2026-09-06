@@ -370,3 +370,29 @@ Run `evaluate-reconstruction.py --lpips-alex` separately against the complete
 processed `images/0015` directory. Set `TORCH_HOME` to the existing
 `.local/cache/torch` when evaluating offline. Packaging uses CPU FFmpeg, retains
 native PNG dimensions, and pads videos by one bottom row for H.264 4:2:0.
+
+### Sequential evaluation pipeline
+
+After training stops, run the complete evaluation workflow with no other GPU
+experiment active. This command performs two fresh offline reloads, benchmarks
+the first, validates complete frame sets, records byte/pixel equality and
+numerical differences, computes all three metrics, and packages the fixed crops
+and videos. It stops on the first subprocess failure and prints that command
+and its log; it never installs dependencies or downloads missing weights.
+
+```bash
+.local/envs/stg-render/bin/python scripts/evaluate-stg-checkpoint.py \
+  --checkout .local/SpacetimeGaussians \
+  --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+  --checkpoint .local/runs/stg-lite-selfcap-5000-20260906/checkpoint.pt \
+  --crops configs/detail-crops.selfcap-dance1.json \
+  --torch-cache .local/cache/torch \
+  --output .local/runs/stg-lite-selfcap-5000-evaluation-20260906
+```
+
+Output directories must be new. `commands.json` records exact subprocess
+commands, `evaluation.json` is written only after all stages succeed, and each
+stage retains a separate log. Metrics/encoding use two CPU threads. This
+adapter currently accepts only the SelfCap dance1 held-out profile. Evaluation
+is outside the training ledger. PNG equality does not establish floating-point
+model-state or next-training-step equality.

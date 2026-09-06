@@ -14,6 +14,13 @@ The [growth/offline record](contender-growth-20260906.md) adds the EMS fix,
 Lite and Full iteration-2000 metrics, fixed visual evidence, and exact offline reload
 for all held-out frames and sweep poses. These are provisional results, not
 completion of the allocated two-hour experiments.
+The [evaluation-pipeline continuation](contender-evaluation-pipeline-20260906.md)
+extends Lite to iteration 5000 and adds strict reload comparison and an automated
+offline evaluation workflow. The equal-step table below remains the historical
+iteration-2000 comparison; it must not be relabeled as final-budget results.
+At iteration 5000, Lite measures 22.082603 dB PSNR, 0.827138 SSIM and
+0.270207 LPIPS-Alex, with 449.311 FPS warm rendering. All 80 reload PNGs
+remain byte-exact. Full has not yet been extended to this training boundary.
 
 ## SelfCap dance1 — provisional 2,000-step checkpoints
 
