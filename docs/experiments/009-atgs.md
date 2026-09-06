@@ -323,3 +323,30 @@ The measured section took 10.751 seconds, with peak framework allocation
 differences has not been established: a same-model repeated-backward control
 and per-parameter-group diagnostics are needed before attributing them to
 CUDA reduction variability. No scene training or fresh offline reload has run.
+
+### Repeated-backward control
+
+The expanded probe passed finite-execution checks on the RTX 4090:
+`.local/runs/atgs-backward-control-cuda-20260906.json`, with retained checkpoint
+`.local/runs/atgs-backward-control-checkpoint-20260906/`. Before the next-update
+comparison, it runs two backward passes on the same model without optimizer
+updates, restores Torch RNG state between passes, and checks that parameter
+version counters did not change. Gradient snapshots are copied to CPU and
+labelled by optimizer/group/parameter; missing-gradient mismatches fail.
+
+The control losses were identical, but gradients were not: the largest
+difference was `5.005858838558197e-09` in anchors, versus
+`5.587935447692871e-09` for original-versus-restored gradients. Dynamic-encoder
+gradients matched exactly in both comparisons. The largest next-update
+parameter difference was `2.975575625896454e-06` in the covariance MLP;
+image difference remained `1.7881393432617188e-07`. The native backward source
+uses floating-point `atomicAdd` for color, projected means, covariance and
+opacity gradients. The control demonstrates backward non-repeatability
+independent of reload, consistent with reduction-order variability; it does
+not isolate a single kernel or prove all resume state correct.
+
+No renderer math or determinism settings were changed. Exact resumption is
+still not claimed; the report preserves both control and reload differences.
+Runtime was 13.966 seconds and peak allocated memory 13,409,336,832 bytes.
+All 59 unit tests pass. Fresh-process offline reload and complete training-loop
+state remain next implementation gates.

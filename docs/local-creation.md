@@ -551,3 +551,9 @@ synthetic update on both the original and restored model. Choose unused report
 and checkpoint paths. The report distinguishes successful finite execution from
 exact equality and includes parameter/image differences and optimizer-state
 equality. It is still an in-process check, not offline training resumption.
+
+The next-update check also runs a same-model repeated-backward control with no
+optimizer updates and restored Torch RNG state. It records per-parameter
+gradient differences and per-group post-update parameter differences, helping
+distinguish backward variability from checkpoint-specific effects. CPU copies
+of gradients add host memory overhead; the diagnostic is not a throughput test.

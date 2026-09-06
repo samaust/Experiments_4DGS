@@ -110,12 +110,70 @@ def tensor_difference(left, right):
     return (left.detach().double() - right.detach().double()).abs().max().item()
 
 
+def capture_gradients(model):
+    """Copy gradients to CPU with stable optimizer/group/parameter labels."""
+    gradients = {}
+    for optimizer_name in ('optimizer', 'dy_optimizer'):
+        optimizer = getattr(model, optimizer_name)
+        for group_index, group in enumerate(optimizer.param_groups):
+            label = f"{optimizer_name}/{group_index}:{group.get('name', 'unnamed')}"
+            for index, parameter in enumerate(group['params']):
+                gradients[f'{label}/{index}'] = (None if parameter.grad is None else
+                                                 parameter.grad.detach().cpu().clone())
+    return gradients
+
+
+def compare_gradients(first, second):
+    if first.keys() != second.keys():
+        raise ValueError('gradient labels mismatch')
+    result = {}
+    for name, a in first.items():
+        b = second[name]
+        if (a is None) != (b is None):
+            raise ValueError(f'gradient presence mismatch: {name}')
+        result[name] = None if a is None else tensor_difference(a, b)
+    return result
+
+
+def probe_repeated_backward(model, *, camera, pipe, background):
+    """Same-model control: two backward passes with no intervening update."""
+    import torch
+    from gaussian_renderer import prefilter_voxel, render
+    model.mlp_color.train()
+    snapshots, losses = [], []
+    parameters = [p for optimizer in (model.optimizer, model.dy_optimizer)
+                  for group in optimizer.param_groups for p in group['params']]
+    versions = [p._version for p in parameters]
+    for _ in range(2):
+        for optimizer in (model.optimizer, model.dy_optimizer):
+            optimizer.zero_grad(set_to_none=True)
+        with torch.random.fork_rng(devices=[background.device.index]):
+            visible = prefilter_voxel(camera, model, pipe, background)
+            image = render(camera, model, pipe, background, iteration=4, visible_mask=visible)['render']
+            loss = (image - .25).square().mean()
+            if not torch.isfinite(loss):
+                raise ValueError('nonfinite repeated-backward loss')
+            loss.backward()
+        snapshots.append(capture_gradients(model))
+        losses.append(loss.item())
+    if [p._version for p in parameters] != versions:
+        raise ValueError('repeated backward modified model parameters')
+    differences = compare_gradients(*snapshots)
+    for optimizer in (model.optimizer, model.dy_optimizer):
+        optimizer.zero_grad(set_to_none=True)
+    return dict(losses=losses, loss_abs_difference=abs(losses[0] - losses[1]),
+                gradient_max_abs_differences=differences,
+                exact=losses[0] == losses[1] and all(v in (None, 0.) for v in differences.values()),
+                optimizer_updates=0, torch_rng_restored_between_passes=True)
+
+
 def probe_next_update(model, restored, *, camera, pipe, background, opt):
     """Compare a synthetic fourth update; no RNG/sampler resume claim."""
     import torch
     from gaussian_renderer import prefilter_voxel, render
 
-    losses, images = [], []
+    control = probe_repeated_backward(model, camera=camera, pipe=pipe, background=background)
+    losses, images, gradients = [], [], []
     for current in (model, restored):
         current.mlp_color.train()
         current.update_learning_rate(4, opt, camera.time)
@@ -129,6 +187,7 @@ def probe_next_update(model, restored, *, camera, pipe, background, opt):
             raise ValueError('nonfinite next-update loss')
         losses.append(loss.item())
         loss.backward()
+        gradients.append(capture_gradients(current))
         for optimizer in optimizers:
             parameters = [p for group in optimizer.param_groups for p in group['params']]
             torch.nn.utils.clip_grad_norm_(parameters, opt.gradient_clip_norm, error_if_nonfinite=True)
@@ -138,15 +197,19 @@ def probe_next_update(model, restored, *, camera, pipe, background, opt):
             visible = prefilter_voxel(camera, current, pipe, background)
             images.append(render(camera, current, pipe, background, iteration=4, visible_mask=visible)['render'])
     differences = {}
+    group_differences = {}
     state_exact = {}
     for name in ('optimizer', 'dy_optimizer'):
         a, b = getattr(model, name), getattr(restored, name)
         assert len(a.param_groups) == len(b.param_groups)
         maximum = 0.
-        for ga, gb in zip(a.param_groups, b.param_groups):
+        for group_index, (ga, gb) in enumerate(zip(a.param_groups, b.param_groups)):
             assert len(ga['params']) == len(gb['params'])
+            group_maximum = 0.
             for pa, pb in zip(ga['params'], gb['params']):
-                maximum = max(maximum, tensor_difference(pa, pb))
+                group_maximum = max(group_maximum, tensor_difference(pa, pb))
+            group_differences[f"{name}/{group_index}:{ga.get('name', 'unnamed')}"] = group_maximum
+            maximum = max(maximum, group_maximum)
         differences[name] = maximum
         try:
             assert_state_equal(a.state_dict(), b.state_dict())
@@ -154,6 +217,9 @@ def probe_next_update(model, restored, *, camera, pipe, background, opt):
         except AssertionError:
             state_exact[name] = False
     return dict(losses=losses, loss_abs_difference=abs(losses[0] - losses[1]),
+                repeated_backward_control=control,
+                gradient_max_abs_differences=compare_gradients(*gradients),
+                parameter_group_max_abs_differences=group_differences,
                 parameter_max_abs_differences=differences, optimizer_state_exact=state_exact,
                 image_max_abs_difference=tensor_difference(*images),
                 exact=losses[0] == losses[1] and all(v == 0 for v in differences.values())

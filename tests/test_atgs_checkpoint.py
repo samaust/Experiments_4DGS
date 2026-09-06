@@ -8,11 +8,29 @@ from atgs_checkpoint import MODEL_FILES, OPTIMIZER_FILES, inspect_native_checkpo
 from atgs_checkpoint import capture_auxiliary_state, restore_auxiliary_state
 from atgs_checkpoint import assert_state_equal
 from atgs_checkpoint import tensor_difference
+from atgs_checkpoint import capture_gradients, compare_gradients
 from types import SimpleNamespace
 import torch
 
 
 class ATGSCheckpointTests(unittest.TestCase):
+    def test_gradient_snapshots_are_independent_and_presence_is_checked(self):
+        parameter = torch.nn.Parameter(torch.tensor([2.]))
+        model = SimpleNamespace(optimizer=torch.optim.Adam([parameter]),
+                                dy_optimizer=torch.optim.Adam([torch.nn.Parameter(torch.ones(1))]))
+        parameter.square().sum().backward()
+        first = capture_gradients(model)
+        parameter.grad.add_(1)
+        second = capture_gradients(model)
+        differences = compare_gradients(first, second)
+        self.assertEqual(differences['optimizer/0:unnamed/0'], 1.)
+        self.assertIsNone(differences['dy_optimizer/0:unnamed/0'])
+        parameter.grad = None
+        with self.assertRaisesRegex(ValueError, 'presence'):
+            compare_gradients(first, capture_gradients(model))
+        with self.assertRaisesRegex(ValueError, 'labels'):
+            compare_gradients(first, {})
+
     def test_tensor_difference_reports_errors_and_rejects_invalid_inputs(self):
         a = torch.tensor([1., 2.])
         self.assertEqual(tensor_difference(a, a.clone()), 0.)
