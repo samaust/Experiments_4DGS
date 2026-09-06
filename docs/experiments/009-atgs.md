@@ -654,3 +654,28 @@ memory across these attempts was 6,355,890,688 bytes; reserved memory peaked at
 sampled peaks. The final bundle is
 `.local/runs/atgs-selfcap-resumed-20260906/checkpoint-000006-000`.
 No final quality, throughput or matched-budget ranking is claimed.
+
+### Iteration-6 offline rendering and evidence
+
+`render-atgs-manifest.py` rendered the final integration bundle in two independent
+network-disabled processes. All 60 held-out frames and 20 sweep poses match in
+both PNG bytes and raw floating-point image hashes. Bundle component bytes total
+3,904,978,683. Evidence directories/reports under `.local/runs/`:
+
+- `atgs-selfcap-render-a-20260906` and `atgs-selfcap-render-b-20260906`;
+- `atgs-selfcap-reload-frames-20260906.json` and
+  `atgs-selfcap-reload-sweep-20260906.json` (all 80 PNGs byte-exact);
+- `atgs-selfcap-metrics-20260906.json` (60 held-out frames);
+- `atgs-selfcap-evidence-20260906` (videos, sheets and fixed GT-selected crops).
+
+Shared metrics: PSNR **12.735074 dB**, SSIM **0.588788**, LPIPS-Alex **0.818783**.
+Ten warmups plus 100 timed renders measured **311.553 FPS**. Inspection of the
+start/middle/end prediction contact sheet shows essentially uniform gray images,
+with no discernible scene or person detail. This two-update checkpoint is an
+integration result, not usable reconstruction quality; its near-blank rendering
+speed is not representative of a trained scene. Do not rank it against the
+5,000-step STG baselines. Scene training must continue within the existing budget.
+
+The renderer passed syntax checks; the existing 88-test suite passes. Rendering,
+CPU metrics and packaging were not charged as training. Device-wide sampled
+resource measurement and native binary provenance remain outstanding gates.

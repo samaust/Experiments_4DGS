@@ -768,3 +768,18 @@ Checkpoint and step reserves default to conservative 120/30 seconds, in addition
 to the external supervisor's 30-second shutdown margin. Actual checkpoint times
 are recorded. These defaults need validation against measured scene-run costs.
 The parent stays free of Torch imports before launching the supervised worker.
+
+### ATGS offline scene rendering
+
+```bash
+.local/envs/atgs/bin/python scripts/render-atgs-manifest.py --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json --checkpoint .local/runs/atgs-selfcap-resumed-20260906/checkpoint-000006-000 --training-config .local/runs/atgs-selfcap-resumed-20260906/training-config.json --provenance .local/runs/atgs-selfcap-resumed-20260906/provenance.json --output .local/runs/atgs-selfcap-render-a-20260906 --benchmark
+```
+
+Choose unused output paths. This installs the network guard before Torch import,
+verifies bundle/configuration/manifest and patched Python source hashes, and
+restores the complete inference model without the original initialization cloud.
+All 60 held-out frames and 20 shared sweep poses are saved with PNG and raw-float
+hashes. Optional benchmarking uses ten warmups and 100 synchronized timed renders,
+excluding validation, saving, encoding and camera setup. Repeat in a new process
+and compare all PNGs with `compare-render-reloads.py`; raw-float hashes are in
+`render.json`. The existing evaluator and evidence packager accept these outputs.
