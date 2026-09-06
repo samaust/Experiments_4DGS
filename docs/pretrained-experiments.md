@@ -487,12 +487,12 @@ The executable matched-scene follow-up is documented in the
 experiments 006–010 and the STG Lite baseline. Section 6 remains the historical
 pretrained evidence record; its `sear_steak` outputs are not overwritten.
 
-The local native STG run uses a lite, all-camera checkpoint. For published
+The historical native STG run used a lite, all-camera checkpoint. For published
 comparisons, use the full STG baseline where the paper reports it and read the
 [Native STG quality comparison](stg-comparison.md) for protocol details. The
 shortlist below prioritizes fewer visible artifacts. Research and project links
-were reviewed on **2026-09-05**; these contenders have not been rendered locally
-in this repository. Compare numbers within each cited paper: training windows,
+were reviewed on **2026-09-05**, before the matched local contender runs described
+in section 6.4 below. Compare numbers within each cited paper: training windows,
 metric implementations, and baseline reproductions differ between papers.
 
 | Method | Published evidence against full STG | Why investigate it | Main cost or qualification |
@@ -505,7 +505,7 @@ Also consider **STG Full** as the nearest upgrade to the existing lite preview.
 The [original paper, Table 6](https://arxiv.org/html/2312.16812v2) reports
 32.05 dB / 0.044 LPIPS-Alex for full versus 31.59 / 0.047 for lite on Neural 3D
 Video. A full checkpoint needs its matching appearance decoder and full renderer;
-the lite preview helper does not establish full-model compatibility.
+the matched Full renderer and decoder have since been validated locally (section 6.4).
 
 Keep **FreeTimeGS++** on the research watchlist for this artifact-focused task.
 Its fixed B variant reports 33.45 dB but LPIPS-Alex 0.062, compared with the STG
@@ -577,6 +577,61 @@ nvidia-smi --query-gpu=timestamp,memory.used,utilization.gpu --format=csv -lms 2
 Stop with Ctrl-C after the run; choose a new filename per experiment. This samples device-wide usage, including the desktop/browser, and can miss brief peaks. Measure a baseline before starting and document sampling boundaries. Framework peak allocated memory is a different measure. Do not label a single `nvidia-smi` snapshot as peak VRAM.
 
 Use the same visual checklist for each method: fixed-camera animation, start/middle/end detail, temporal flicker, edges and transparency, newly exposed surfaces, and background stability. For splaTV also inspect a frozen-time orbit; for stock native scripts record if their camera path cannot be freely controlled. Compare original and exported representations separately.
+
+### 6.4. Preview the locally trained matched contenders
+
+Plan 004 has produced local SelfCap checkpoints using the shared training split
+and corrected camera times. These assets were trained locally; source, dataset
+and initializer provenance is recorded in [research](research.md#licenses-and-asset-provenance).
+The [comparison summary](experiments/contender-summary.md) distinguishes final
+results from earlier pilots and links their PNGs, MP4s, fixed crops and sweeps.
+The original section-6 `sear_steak` evidence remains available above.
+
+| Method | Tested local state | Report |
+| --- | --- | --- |
+| STG Lite / Full | Complete 30,000-step schedules, including Full's decoder | [Final native STG record](experiments/contender-native-stg-20260906.md) |
+| FreeTimeGS reproduction | Dense EDGS initialization; evaluated budget-stop checkpoint at 42,061 / 70,000 steps | [007](experiments/007-freetimegs.md) |
+| ATGS | Hash-encoder 5,000-microstep pilot with partial accumulation state retained | [009](experiments/009-atgs.md) |
+| MoE-GS | Modified STG expert training route unresolved | [008](experiments/008-moe-gs.md) |
+| FreeTimeGS++ | Fixed-B source availability gate | [010](experiments/010-freetimegs-plus-plus.md) |
+
+To inspect the completed STG Full checkpoint, run the tested manifest renderer
+in a fresh offline process. The checkpoint selects Full and carries its decoder;
+use the corresponding Lite checkpoint to inspect Lite. Choose a new output path:
+
+```bash
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-render/bin/python scripts/offline-python.py scripts/render-stg-manifest.py \
+  --checkout .local/SpacetimeGaussians \
+  --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+  --checkpoint .local/runs/stg-full-selfcap-final-20260906/checkpoint.pt \
+  --output .local/runs/stg-full-selfcap-manual-preview-NEW --benchmark
+```
+
+The native FreeTimeGS and ATGS renderers also export all 60 held-out frames and
+the shared 20-pose midpoint sweep. These examples select final-budget FreeTimeGS
+and the retained ATGS 5,000-microstep pilot; check the reports for newer results:
+
+```bash
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/freetimegs/bin/python scripts/render-freetimegs-manifest.py \
+  --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+  --checkpoint .local/runs/freetimegs-selfcap-final-20260906/checkpoint-042061.pt \
+  --training-config .local/runs/freetimegs-selfcap-final-20260906/training-config.json \
+  --provenance .local/runs/freetimegs-selfcap-final-20260906/provenance.json \
+  --output .local/runs/freetimegs-selfcap-manual-preview-NEW --benchmark
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/atgs/bin/python scripts/render-atgs-manifest.py \
+  --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+  --checkpoint .local/runs/atgs-selfcap-5000-20260906/checkpoint-005000-004 \
+  --training-config .local/runs/atgs-selfcap-5000-20260906/training-config.json \
+  --provenance .local/runs/atgs-selfcap-5000-20260906/provenance.json \
+  --output .local/runs/atgs-selfcap-manual-preview-NEW --benchmark
+```
+
+Run GPU rendering after training exits. Both method renderers enforce offline
+execution and validate their saved provenance. `render.json` records camera/time
+metadata and optional synchronized throughput. For the full two-process reload,
+metric and evidence-packaging workflow, use the evaluation commands in the
+[training guide](local-creation.md). Training commands and budget accounting also
+remain in that guide and the experiment reports.
 
 Choose one conclusion per experiment: **investigate training**, **investigate rendering further**, or **defer**, with the observed reason. Browser FPS, warm CUDA rendering speed, end-to-end reconstruction time, and video playback rate answer different questions. A useful outcome can be deciding that an available viewer or representation does not fit your needs.
 

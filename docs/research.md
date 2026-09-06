@@ -147,6 +147,15 @@ the appearance decoder. Both retain the same audited SelfCap input and STG sourc
 provenance. Their [final record](experiments/contender-native-stg-20260906.md)
 links complete offline evidence and reproducible commands.
 
+The final budget-limited FreeTimeGS continuation stopped at iteration 42,061.
+Its local checkpoint
+`.local/runs/freetimegs-selfcap-final-20260906/checkpoint-042061.pt` has SHA-256
+`49d732ee75bbc85863acf4eb4b621683b3df51720a69d9e536197fa2a66f7856`.
+It retains the same dense EDGS/RoMa initializer, SelfCap inputs, reproduction
+source and dependency provenance as the 5,000-step pilot. Neither further
+training nor rendering changes the applicable asset conditions or establishes
+a separate unrestricted license for these local research outputs.
+
 ## Research sources, revisions, and watchlist
 
 The walkthrough reference revisions are HUST [`843d5ac636c37e4b611242287754f3d4ed150144`](https://github.com/hustvl/4DGaussians/tree/843d5ac636c37e4b611242287754f3d4ed150144), SpacetimeGaussians [`427abfc`](https://github.com/oppo-us-research/SpacetimeGaussians/commit/427abfc), and splaTV [`8b313fe`](https://github.com/antimatter15/splaTV/commit/8b313fe). The latter two are upstream abbreviated commit IDs; expand them with `git rev-parse HEAD` after checkout and save the result with an experiment. These are documentation references, not certified environment lockfiles. General comparison links track upstream development.

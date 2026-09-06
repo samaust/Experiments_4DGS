@@ -3,7 +3,8 @@
 Status: **partial execution; matched comparison incomplete**.
 
 Lite and Full have completed their native SelfCap schedules and final evaluations.
-ATGS and FreeTimeGS still require continuation within their existing budgets.
+FreeTimeGS has completed its budget-limited run and evaluation at 42,061 steps;
+its native schedule is unfinished. ATGS still requires continuation within its budget.
 MoE-GS and FreeTimeGS++ retain the source gates in their experiment reports;
 Basketball remains blocked on matching calibration.
 
@@ -15,9 +16,10 @@ Earlier records cover [initial execution](contender-progress-20260906.md),
 [Full's 5,000-step pilot](contender-full-5000-20260906.md). Their historical
 statuses and measurements are superseded where newer results are given below.
 
-## SelfCap dance1 — completed native STG schedules
+## SelfCap dance1 — final native-schedule or budget-stop checkpoints
 
-Both variants reached 30,000 steps within their individual two-hour limits.
+Both STG variants reached 30,000 steps within their individual two-hour limits.
+FreeTimeGS stopped at 42,061 / 70,000 steps to preserve its shutdown reserve.
 All metrics cover the same 60 camera-0015 frames at 1890×1061. The
 [completed STG record](contender-native-stg-20260906.md) contains resource use,
 checkpoint hashes, commands, visual findings and evidence paths.
@@ -26,6 +28,7 @@ checkpoint hashes, commands, visual findings and evidence paths.
 | --- | ---: | ---: | ---: | --- | --- | ---: |
 | STG Lite | 22.418750 | 0.851204 | 0.219363 | 0 / 0 / 0 | -2.078003 / -0.013010 / +0.004752 | 317.056 |
 | STG Full | 24.496753 | 0.864213 | 0.214612 | +2.078003 / +0.013010 / -0.004752 | 0 / 0 / 0 | 224.135 |
+| FreeTimeGS reproduction (incomplete schedule) | 25.496026 | 0.881698 | 0.137213 | +3.077277 / +0.030494 / -0.082150 | +0.999274 / +0.017485 / -0.077399 | 182.781 |
 
 Checked deltas: `.local/runs/stg-selfcap-final-comparison-20260906.json`.
 Charged training totals are 3819.048855 seconds for Lite and 4652.027359 seconds
@@ -39,6 +42,18 @@ throughput. Both retain substantial head/hair and body-boundary blur in fast
 motion, especially frames 4120 and 4150 relative to ground truth. Static shelves
 are recognizable but small book text remains soft. The metric improvement does
 not establish a sharp reconstruction of fast motion or a flicker ranking.
+
+[FreeTimeGS's final record](007-freetimegs.md#final-budget-limited-selfcap-continuation)
+records 7026.107790 seconds charged, no overrun, a 3,199,531,938-byte complete
+checkpoint and exact offline PNG/raw-float reloads for all 80 images. Checked
+deltas are `.local/runs/freetimegs-vs-lite-selfcap-final-20260906.json` and
+`.local/runs/freetimegs-vs-full-selfcap-final-20260906.json`.
+Its static shelves and moving person are much more coherent than in the pilot,
+but frame 4120 face/forearm smearing, frame 4150 excess hair blur, soft book text
+and oversmoothed hands remain. It leads these aggregate metrics at higher
+charged training time, with dense initialization and lower measured FPS than
+either STG variant. This supports further artifact inspection, not a claim of
+full-paper convergence, equal-compute superiority or an established flicker win.
 
 ## SelfCap dance1 — provisional 5,000-step checkpoints
 

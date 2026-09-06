@@ -1,7 +1,8 @@
 # Experiment 007: FreeTimeGS
 
-Status: **SelfCap dense-initialized 5,000-step pilot completed; native 70,000-step
-schedule unfinished. Basketball calibration remains blocked.**
+Status: **SelfCap dense-initialized training stopped cleanly at the budget reserve
+at 42,061 steps; native 70,000-step schedule unfinished. Final evaluation complete.
+Basketball calibration remains blocked.**
 
 The author-linked EasyVolcap framework was inspected at
 `4cb3c000a31b8764834c79792b355f110d947e75` in `.local/EasyVolcap` on
@@ -454,3 +455,63 @@ Checked aggregate and per-frame deltas are
 both STG pilots, but initialization, update counts and charged time differ.
 This is a third-party reproduction with an adapted released EDGS initializer,
 not an author checkpoint or a completed native-schedule comparison.
+
+### Final budget-limited SelfCap continuation
+
+The continuation from 5,000 steps stopped cleanly at **42,061 / 70,000** with
+reason `deadline`. No forced kill or budget overrun occurred. Native loss,
+learning-rate schedule, relocation and initialization were unchanged; periodic
+checkpoints were spaced every 5,000 steps to limit disk use. All logged losses
+were finite, with 4,101,912 Gaussians retained. The remaining 173.892210 seconds
+are below the trainer's restart/reserve requirement and are not a new segment.
+
+| Measurement | Result |
+| --- | ---: |
+| Continuation command wall | 6,460.046399 s |
+| Total charged training, including earlier attempts | 7,026.107790 s / 7,200 s |
+| Device baseline / sampled peak | 825 / 7,532 MiB |
+| Framework peak allocated / reserved | 5,542,404,096 / 6,387,924,992 bytes |
+| Final checkpoint size / save wall | 3,199,531,938 bytes / 2.901995 s |
+
+Run: `.local/runs/freetimegs-selfcap-final-20260906`;
+measurement: `.local/runs/freetimegs-selfcap-final-measurement-20260906`.
+The final `checkpoint-042061.pt` SHA-256 is
+`49d732ee75bbc85863acf4eb4b621683b3df51720a69d9e536197fa2a66f7856`.
+Reproduce the continuation with the command in [the training guide](../local-creation.md).
+This is the final checkpoint within the allocated budget, **not native-schedule
+completion or full-paper convergence**.
+
+Final evaluation: `.local/runs/freetimegs-selfcap-final-evaluation-20260906`.
+All 60 held-out camera-0015 frames and 20 midpoint sweep poses reload exactly
+in PNG bytes and raw-float hashes across two fresh network-disabled processes.
+PSNR is **25.496026 dB**, SSIM **0.881698**, LPIPS-Alex **0.137213**;
+warm throughput is **182.781 FPS** (10 warmups, 100 synchronized renders).
+Evaluation wall time is **181.371234 seconds**, separate from training.
+
+Checked comparisons against the completed 30,000-step STG checkpoints are
+`.local/runs/freetimegs-vs-lite-selfcap-final-20260906.json` and
+`.local/runs/freetimegs-vs-full-selfcap-final-20260906.json`. Deltas in
+PSNR / SSIM / LPIPS are +3.077277 / +0.030494 / -0.082150 versus Lite and
++0.999274 / +0.017485 / -0.077399 versus Full. These are observed budget-limited
+results with different initialization, update counts and charged time, not a
+converged author-implementation ranking.
+
+Inspected `evidence/prediction-contact.png`, matching ground truth, fixed
+`prediction-hands_body_boundary-contact.png` and
+`prediction-static_book_text-contact.png`, plus `sweep-contact.png`:
+
+- Frame 4120 still has severe face/hair and forearm smearing relative to the
+  sharper ground truth. Frame 4150 retains excess hair blur despite motion blur
+  also being present in the source image. Frame 4179 has clearer facial features,
+  but fine hair remains oversmoothed.
+- Shelves and the dancer are much more coherent than in the 5,000-step pilot;
+  the prominent colored streaks are not evident in these sampled views. Small
+  book-spine text is still soft, and hands/skin boundaries are oversmoothed.
+  This does not establish the absence of floaters throughout the sequence.
+- Sweep poses 0, 10 and 19 retain hair/hand blur; there is no ground truth for
+  this path. The sampled contact sheets do not establish a flicker ranking.
+
+All PNGs, MP4s, crops, camera/time records and sequence-analysis output are
+retained in that evaluation directory. **Investigate rendering further** for
+motion artifacts: the improvement supports closer inspection, not an unqualified
+quality win or permission to extend the agreed training budget.

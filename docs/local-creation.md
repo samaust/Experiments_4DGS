@@ -358,6 +358,26 @@ with `freetimegs-selfcap-5000-20260906`, select `checkpoint-005000.pt`, and use 
 new output `freetimegs-selfcap-5000-evaluation-20260906`. Preserve earlier outputs;
 commands reject overwriting completed runs.
 
+The final budget-limited continuation resumes the 5,000-step checkpoint without
+an additional step limit. Periodic saves are spaced at 5,000 steps to reduce
+disk use; the native optimizer and 70,000-step schedule are unchanged:
+
+```bash
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-render/bin/python scripts/measure-experiment.py --output .local/runs/freetimegs-selfcap-final-measurement-20260906 --cwd /home/auss/git_repos/samaust/Experiments_4DGS -- /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/freetimegs/bin/python scripts/train-freetimegs-manifest.py --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json --initialization .local/data/selfcap/dance1-freetimegs-edgs-initialization-20260906 --reference-cloud .local/data/selfcap/dance1-initialization-20260906 --torch-cache .local/cache/torch --output .local/runs/freetimegs-selfcap-final-20260906 --resume .local/runs/freetimegs-selfcap-5000-20260906/checkpoint-005000.pt --checkpoint-interval 5000
+```
+
+The existing ledger includes earlier training attempts; this command does not
+allocate another two hours. Read the actual final iteration and checkpoint from
+`worker-result.json` and `checkpoints.json`, rather than assuming 70,000 steps
+completed. Leave the checkpoint/step shutdown reserve unused and evaluate after
+the worker exits. Do not redistribute another method's unused allocation.
+
+This continuation stopped at iteration 42,061. Evaluate its actual final snapshot:
+
+```bash
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-render/bin/python scripts/evaluate-freetimegs-checkpoint.py --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json --checkpoint .local/runs/freetimegs-selfcap-final-20260906/checkpoint-042061.pt --training-config .local/runs/freetimegs-selfcap-final-20260906/training-config.json --provenance .local/runs/freetimegs-selfcap-final-20260906/provenance.json --crops configs/detail-crops.selfcap-dance1.json --torch-cache .local/cache/torch --output .local/runs/freetimegs-selfcap-final-evaluation-20260906
+```
+
 Evaluate a completed checkpoint using two fresh offline native processes and the
 same metrics, sweep, fixed crops and evidence packaging as the other contenders:
 
