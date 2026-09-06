@@ -101,3 +101,21 @@ records the two extension binary hashes and Torch version. This supersedes the
 pending GPU status above, but does not validate a complete reproduction model,
 training resume, scene training, or offline scene evaluation. All 94 CPU tests
 also passed before this device check.
+
+## Shared camera adapter
+
+`scripts/freetimegs_scene.py` wraps the validated SelfCap scene loader and exposes
+batched camera-to-world/world-to-camera matrices, unchanged continuous pinhole
+intrinsics, corrected time, and contiguous batch/height/width/RGB pixels in
+`[0,1]`. It performs no additional resizing or coordinate recentering. Training
+camera requests explicitly reject the held-out split, while evaluation requests
+can load it. The shared sweep, lazy loading and source-image hash checks are
+preserved.
+
+Three tests cover nonidentity pose conversion and off-center projection, RGB
+layout, split exclusion, corrected times, sweep poses and image tampering.
+The real manifest check loaded held-out camera 0015/frame 4150 at corrected time
+`0.5002984601802468`, with shape `1 x 1061 x 1890 x 3`, confirmed 1,380 training
+samples, and converted all 20 sweep poses. No model was trained or evaluated in
+this check. Temporal initialization and complete native training/resume remain
+the next adapter gates.
