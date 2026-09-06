@@ -669,3 +669,21 @@ synthetic cameras/timestamps, not the SelfCap manifest; the configuration hash
 covers resolved argparse settings, and the source revision and helper AST hash
 are also recorded. This remains a same-process synthetic test. Omitting the
 flag retains the earlier in-memory supplement check.
+
+Fresh-process training-resume probes use only the bundle and its successful
+report, without the original checkpoint or initialization fixture files:
+
+```bash
+.local/envs/atgs/bin/python scripts/verify-atgs-accumulation.py --resume-bundle .local/runs/atgs-accumulation-bundle-20260906 --reference .local/runs/atgs-bundle-cuda-20260906.json --output .local/runs/atgs-resume-offline-a-20260906.json
+.local/envs/atgs/bin/python scripts/verify-atgs-accumulation.py --resume-bundle .local/runs/atgs-accumulation-bundle-20260906 --reference .local/runs/atgs-resume-offline-a-20260906.json --output .local/runs/atgs-resume-offline-b-20260906.json
+```
+
+This mode installs the seccomp network guard before Torch import; intentional
+socket-denial self-tests are expected. GPU access is required. It restores both
+optimizers and pending gradients, consumes the remaining two synthetic views,
+and performs the upstream accumulation update. Sample keys, random targets,
+discrete counters and warmup must match the reference. Loss differences and
+post-update parameter hashes are recorded separately. A reference without
+parameter hashes yields `reference_parameters_exact: null`, not an equality
+claim; subsequent runs can compare parameter hashes but do not quantify their
+numerical differences. This is a synthetic resume test, not scene training.

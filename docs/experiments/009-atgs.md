@@ -529,3 +529,32 @@ exactly. The report explicitly records non-exact parameter equality.
 All 73 unit tests pass, syntax compilation and diff checks pass. This establishes
 a native same-process bundle round trip, not fresh-process or offline training
 resumption. Production scene training and deadline integration remain pending.
+
+### Fresh-process offline accumulation resume
+
+The verifier's `--resume-bundle` mode installs the seccomp network guard before
+Torch import, loads the bundle without the original checkpoint/initialization
+files, restores optimizer/gradient/RNG/sampler state, and completes the pending
+synthetic update. `--reference` requires matching successful bundle evidence.
+Sample keys, targets, discrete loop counters and warmup must match; numerical
+loss differences and parameter hashes are reported independently.
+
+Two RTX 4090 processes passed with intentional offline socket-denial self-tests:
+
+- `.local/runs/atgs-resume-offline-a-20260906.json`, PID 398018, compared with
+  the original on-disk bundle probe.
+- `.local/runs/atgs-resume-offline-b-20260906.json`, PID 398391, compared with
+  the first fresh-process run.
+
+Both loss differences were zero in both comparisons. Both processes reached
+iteration 6 / update count 4 with zero pending microsteps. The first reference
+had no parameter hashes (`reference_parameters_exact: null`). Between the two
+fresh processes, parameter hashes were not identical
+(`reference_parameters_exact: false`); dynamic-parameter hashes matched. Hashes
+do not quantify the numerical differences, and these results do not establish
+bit-exact training resumption.
+
+Two regression tests cover JSON key normalization, numerical loss reporting,
+and rejection of changed sample sequences/counters. All 75 tests pass; syntax
+and diff checks pass. Production scene training, full source/patch provenance
+coverage and deadline integration remain pending.
