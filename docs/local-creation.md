@@ -516,6 +516,17 @@ adapter currently accepts only the SelfCap dance1 held-out profile. Evaluation
 is outside the training ledger. PNG equality does not establish floating-point
 model-state or next-training-step equality.
 
+The final Lite continuation used the 5,000-step checkpoint as its resume input
+and ran without `--max-steps`, allowing the native 30,000-step schedule to finish:
+
+```bash
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-render/bin/python scripts/measure-experiment.py --output .local/runs/stg-lite-selfcap-final-measurement-20260906 --cwd /home/auss/git_repos/samaust/Experiments_4DGS -- /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-render/bin/python scripts/train-stg-manifest.py --checkout .local/SpacetimeGaussians --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json --initialization .local/data/selfcap/dance1-initialization-20260906 --output .local/runs/stg-lite-selfcap-final-20260906 --model lite --resume .local/runs/stg-lite-selfcap-5000-20260906/checkpoint.pt
+```
+
+The resulting 30,000-step output and evaluation directories are retained under
+`.local/runs/stg-lite-selfcap-final-20260906` and
+`.local/runs/stg-lite-selfcap-final-evaluation-20260906`.
+
 The pipeline now records each stage's UTC start/end, monotonic wall seconds,
 exit code and status in `commands.json`, including failed launches. Successful
 `evaluation.json` reports also include total evaluation wall time. Older Lite

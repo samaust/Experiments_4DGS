@@ -27,7 +27,8 @@ and aggregate deltas.
 ## SelfCap dance1 — provisional 5,000-step checkpoints
 
 Same 60 held-out camera-0015 frames, shared metric protocol and 1890×1061
-resolution. All remain incomplete; equal steps do not mean equal budget usage.
+resolution. Lite has completed its native 30,000-step schedule; Full, ATGS and
+FreeTimeGS remain incomplete against their native schedules.
 
 | Method | PSNR dB | SSIM | LPIPS-Alex | Δ vs Lite (PSNR / SSIM / LPIPS) | Δ vs Full (PSNR / SSIM / LPIPS) | Warm FPS |
 | --- | ---: | ---: | ---: | --- | --- | ---: |
@@ -35,6 +36,20 @@ resolution. All remain incomplete; equal steps do not mean equal budget usage.
 | STG Full | 23.452953 | 0.832861 | 0.279153 | +1.370350 / +0.005722 / +0.008946 | 0 / 0 / 0 | 275.750 |
 | ATGS | 21.637782 | 0.802142 | 0.341477 | -0.444821 / -0.024997 / +0.071270 | -1.815171 / -0.030719 / +0.062324 | 281.242 |
 | FreeTimeGS reproduction | 19.153970 | 0.682328 | 0.528610 | -2.928633 / -0.144810 / +0.258403 | -4.298983 / -0.150533 / +0.249456 | 162.731 |
+
+The completed Lite schedule is reported separately because its 30,000-step
+checkpoint is not an equal-training-state comparison with the 5,000-step rows.
+
+| Method | Iteration | PSNR dB | SSIM | LPIPS-Alex | Warm FPS | Charged training |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| STG Lite | 30,000 | 22.418750 | 0.851204 | 0.219363 | 317.056 | 3819.049 s |
+
+The completed Lite evaluation is `.local/runs/stg-lite-selfcap-final-evaluation-20260906`.
+Its final checkpoint is 30,000 iterations with exact PNG and float reload checks
+for all 60 held-out frames and 20 sweep poses. The 30,000-step visuals retain
+motion blur around the dancer, but improve background detail and overall
+sharpness relative to the 5,000-step pilot. The fixed book-text crop is still
+soft and partially unreadable.
 
 The checked comparison is `.local/runs/stg-selfcap-5000-comparison-20260906.json`.
 Full has higher PSNR/SSIM, while Lite has lower LPIPS and higher measured warm

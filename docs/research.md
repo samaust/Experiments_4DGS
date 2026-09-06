@@ -135,7 +135,10 @@ author-released checkpoints or unrestricted pretrained weights. The subsequent
 `.local/runs/freetimegs-selfcap-5000-20260906/checkpoint-005000.pt` has SHA-256
 `d964bc3ce2758be7c57e324d3f2343553d507a8df0048d2c79dbdf7c2852620f` and retains the
 same source, dataset and initializer provenance. Its offline held-out renders
-are likewise local research outputs, not separately licensed author assets.
+are likewise local research outputs, not separately licensed author assets. The
+native STG Lite continuation later completed iteration 30,000; its final
+checkpoint and rendered evidence are local outputs from the pinned STG source,
+not released pretrained assets.
 
 ## Research sources, revisions, and watchlist
 
