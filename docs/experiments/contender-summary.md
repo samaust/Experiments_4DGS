@@ -1,10 +1,11 @@
 # Contender comparison summary
 
-Status: **partial execution; matched comparison incomplete**.
+Status: **plan's result-or-specific-blocker coverage complete: four evaluated
+SelfCap pairs and eight blocked pairs. A full six-method/two-scene ranking is unavailable.**
 
 Lite and Full have completed their native SelfCap schedules and final evaluations.
-FreeTimeGS has completed its budget-limited run and evaluation at 42,061 steps;
-its native schedule is unfinished. ATGS still requires continuation within its budget.
+FreeTimeGS and ATGS have completed their budget-limited runs and evaluations at
+42,061 steps and 61,008 microsteps respectively; their native schedules remain unfinished.
 MoE-GS and FreeTimeGS++ retain the source gates in their experiment reports;
 Basketball remains blocked on matching calibration.
 
@@ -20,6 +21,7 @@ statuses and measurements are superseded where newer results are given below.
 
 Both STG variants reached 30,000 steps within their individual two-hour limits.
 FreeTimeGS stopped at 42,061 / 70,000 steps to preserve its shutdown reserve.
+ATGS stopped at 61,008 / 100,000 microsteps (20,336 optimizer updates).
 All metrics cover the same 60 camera-0015 frames at 1890×1061. The
 [completed STG record](contender-native-stg-20260906.md) contains resource use,
 checkpoint hashes, commands, visual findings and evidence paths.
@@ -29,6 +31,7 @@ checkpoint hashes, commands, visual findings and evidence paths.
 | STG Lite | 22.418750 | 0.851204 | 0.219363 | 0 / 0 / 0 | -2.078003 / -0.013010 / +0.004752 | 317.056 |
 | STG Full | 24.496753 | 0.864213 | 0.214612 | +2.078003 / +0.013010 / -0.004752 | 0 / 0 / 0 | 224.135 |
 | FreeTimeGS reproduction (incomplete schedule) | 25.496026 | 0.881698 | 0.137213 | +3.077277 / +0.030494 / -0.082150 | +0.999274 / +0.017485 / -0.077399 | 182.781 |
+| ATGS (incomplete schedule) | 22.180802 | 0.842141 | 0.239707 | -0.237948 / -0.009063 / +0.020344 | -2.315951 / -0.022072 / +0.025096 | 256.625 |
 
 Checked deltas: `.local/runs/stg-selfcap-final-comparison-20260906.json`.
 Charged training totals are 3819.048855 seconds for Lite and 4652.027359 seconds
@@ -54,6 +57,44 @@ and oversmoothed hands remain. It leads these aggregate metrics at higher
 charged training time, with dense initialization and lower measured FPS than
 either STG variant. This supports further artifact inspection, not a claim of
 full-paper convergence, equal-compute superiority or an established flicker win.
+
+[ATGS's final record](009-atgs.md#final-budget-limited-selfcap-continuation)
+records 7026.233249 seconds charged, no overrun, 3,904,977,664 bundle component
+bytes and exact PNG/raw-float reloads for all 80 views. Checked deltas are
+`.local/runs/atgs-vs-lite-selfcap-final-20260906.json` and
+`.local/runs/atgs-vs-full-selfcap-final-20260906.json`.
+Static book lettering improves over its pilot, but severe foreground smearing
+at 4120, excess hair/arm blur at 4150 and soft/distorted boundaries at 4179
+persist. Its final aggregate metrics trail both STG variants despite higher
+charged training time. Defer it as an artifact-quality upgrade for this profile;
+native no-growth settings and incomplete training limit generalization.
+
+### Budget and interpretation
+
+| Method | Final progress | Charged training seconds / 7,200 | Command wall for final continuation | Device baseline / sampled peak MiB | Complete checkpoint bytes |
+| --- | --- | ---: | ---: | ---: | ---: |
+| STG Lite | 30,000 steps, native complete | 3,819.048855 | 3,109.387550 s | 833 / 7,158 | 34,044,289 |
+| STG Full | 30,000 steps, native complete | 4,652.027359 | 3,835.337033 s | 866 / 7,292 | 29,778,653 |
+| FreeTimeGS reproduction | 42,061 steps, budget stop | 7,026.107790 | 6,460.046399 s | 825 / 7,532 | 3,199,531,938 |
+| ATGS | 61,008 microsteps, budget stop | 7,026.233249 | 6,349.703736 s | 792 / 8,633 | 3,904,977,664 |
+
+Checkpoint accounting follows each method's complete saved state; FreeTimeGS
+and ATGS include large optimizer/resume state, so these sizes are not comparable
+inference-only payloads. ATGS reports summed bundle components. Sampled peaks
+are device-wide and can miss brief peaks; framework peaks are in each report.
+The ledger totals **22,523.417254 seconds (6.256505 hours) / 24 hours**, including
+earlier attempts, with zero overruns and no live reservations. Downloads, builds,
+initialization and evaluation are separate; unused scene/method budgets were not
+redistributed. The small remaining ATGS/FreeTimeGS allowances are below their
+restart/reserve gates.
+
+For further **inspection**, prioritize the dense-initialized FreeTimeGS
+reproduction: sampled foreground/background coherence and aggregate metrics
+improved substantially. Its severe fast-motion blur still prevents an
+unqualified quality recommendation. Keep STG Full as the completed native
+comparison and Lite as the faster measured renderer. This conclusion is based
+on the local artifacts, not paper scores or an invented combined artifact score.
+No measured flicker ranking or long-sequence claim is established.
 
 ## SelfCap dance1 — provisional 5,000-step checkpoints
 
@@ -116,8 +157,37 @@ No quantitative results yet: the downloaded DG archive has no calibration,
 and matching calibration remains unresolved for every method. Do not substitute
 another Basketball release's cameras or claim an evaluated result.
 
-The matched comparison is incomplete until experiments 006–010 and the STG Lite
-baseline produce reproducible outputs or record a specific method/scene blocker.
-Present separate SelfCap dance1 and VRU Basketball tables, including differences
-from STG Lite and STG Full. Keep unfinished training and unmatched checkpoints
-visible rather than inferring wins or failures.
+| Method | PSNR / SSIM / LPIPS-Alex | Δ vs Lite / Full | Specific blocker |
+| --- | --- | --- | --- |
+| STG Lite | Not measured | Not available | Matching calibration for the exact downloaded 34-video DG release |
+| [STG Full](006-stg-full.md) | Not measured | Not available | Same matching-calibration gate |
+| [FreeTimeGS reproduction](007-freetimegs.md) | Not measured | Not available | Same matching-calibration gate; training-only temporal initialization depends on it |
+| [MoE-GS](008-moe-gs.md) | Not measured | Not available | Same calibration gate plus a validated released modified-STG expert training route or matching checkpoint |
+| [ATGS](009-atgs.md) | Not measured | Not available | Same matching-calibration gate |
+| [FreeTimeGS++](010-freetimegs-plus-plus.md) | Not measured | Not available | Same calibration gate plus an identified author implementation of fixed B |
+
+These six scene runs have not consumed training budget. The missing calibration
+prevents validating the prescribed frame range, held-out projections and shared
+training-only geometry; another release's cameras are not a safe substitution.
+
+## Unexecuted SelfCap methods
+
+| Method | Specific blocker | Training charged | Decision |
+| --- | --- | ---: | --- |
+| [MoE-GS](008-moe-gs.md) | Modified SH-based STG model/rasterizer source exists, but its standalone released expert-training route or matching pretrained state is unvalidated; router trainers expect pretrained experts | 0 s | Defer until that route or asset is available; original STG Full is not equivalent |
+| [FreeTimeGS++](010-freetimegs-plus-plus.md) | No author implementation of fixed B was identified in the recorded source audit | 0 s | Defer until a usable release is identified; paper-only reimplementation is outside scope |
+
+All twelve method/scene pairs now have a reproducible final-budget result or
+the specific blocker above, with reports 006–010 and the matched Lite record.
+The blocked pairs require external calibration or a usable released training
+route/implementation; they are not quality failures. Further training beyond
+the existing reserve gates requires a new budget decision. No paper-only
+implementation, calibration substitution or budget redistribution was performed.
+
+Final validation rechecked both budget-stop evaluations, 80 exact offline views
+per method, retained PNG/video/crop evidence, complete 60-frame comparison
+records and the ledger's absence of overruns/live reservations. All 167 local
+documentation links resolve, 76 Bash blocks in the training/preview guides pass
+`bash -n`, and `git diff --check` passes. Earlier integration reports retain
+camera/split/time, missing-state, evaluator and regression-test evidence; this
+final documentation-only milestone did not change the validated training adapters.

@@ -1,6 +1,8 @@
 # Experiment 009: ATGS
 
-Status: **SelfCap iteration-5,000 checkpoint trained and evaluated; budgeted experiment incomplete**.
+Status: **SelfCap training stopped cleanly at its budget reserve at 61,008
+microsteps; native 100,000-microstep schedule unfinished. Final evaluation complete.
+Basketball remains blocked on matching calibration.**
 
 Use the selected hash encoder and exact short windows from the shared manifests.
 Record support for calibration, held-out rendering, offline reload, and required
@@ -752,3 +754,68 @@ all three runs remain unfinished and well below their allocated limits.
 
 All 92 tests pass, including evaluation launch-failure handling, retained virtualenv
 interpreter paths, runtime/hash mismatches and ATGS-vs-STG comparison validation.
+
+### Final budget-limited SelfCap continuation
+
+The continuation from 5,000 microsteps stopped with reason `deadline` at
+**61,008 / 100,000 microsteps**, with **20,336 optimizer updates** and no pending
+microsteps. Its resumed partial accumulation was preserved; the final boundary
+naturally completed an update rather than flushing a partial batch. All 56,008
+new logged microsteps were consecutive and had finite loss. Native no-growth
+settings were unchanged. Periodic bundles were spaced every 5,000 microsteps
+to reduce disk use, without changing optimization.
+
+| Measurement | Result |
+| --- | ---: |
+| Continuation command wall | 6,349.703736 s |
+| Total charged training, including earlier attempts | 7,026.233249 s / 7,200 s |
+| Device baseline / sampled peak | 792 / 8,633 MiB |
+| Framework peak allocated / reserved | 6,356,892,160 / 7,711,227,904 bytes |
+| Final bundle save wall | 5.471593 s |
+
+There was no forced kill or budget overrun. The remaining 173.766751 seconds
+are below the trainer's restart/reserve requirement, not an additional segment.
+Training and measurement directories are
+`.local/runs/atgs-selfcap-final-20260906` and
+`.local/runs/atgs-selfcap-final-measurement-20260906`.
+The final bundle is `checkpoint-061008-011`; its commit marker `bundle.json`
+SHA-256 is `7e4d1157c133e7ec57b53aeeb11ef4b66c7cd38aec82ed956021941a39e3f621`.
+That marker inventories component hashes; it is not the hash of one model file.
+See [the training guide](../local-creation.md) for the exact continuation command.
+This is final-budget evidence, not native-schedule completion or full-paper convergence.
+
+The complete final bundle contains **3,904,977,664 component bytes**. Its smaller
+size than the 5,000-microstep bundle reflects the absence of pending accumulated
+gradients at this boundary, not a compressed or incomplete inference model.
+Evaluation is in `.local/runs/atgs-selfcap-final-evaluation-20260906`:
+
+| Measurement | ATGS final | Difference from final Lite | Difference from final Full |
+| --- | ---: | ---: | ---: |
+| PSNR dB | 22.180802 | -0.237948 | -2.315951 |
+| SSIM | 0.842141 | -0.009063 | -0.022072 |
+| LPIPS-Alex | 0.239707 | +0.020344 | +0.025096 |
+
+Warm rendering measured **256.625 FPS** with 10 warmups and 100 synchronized
+renders. Evaluation wall time was **169.002520 seconds**, separate from training.
+Both fresh network-disabled reloads matched exactly for all 60 held-out frames
+and 20 sweep poses in PNG bytes and raw-float hashes, with matching runtime and
+bundle inventories. Checked comparisons are
+`.local/runs/atgs-vs-lite-selfcap-final-20260906.json` and
+`.local/runs/atgs-vs-full-selfcap-final-20260906.json`.
+
+Inspected start/middle/end prediction and ground-truth sheets, the fixed
+hands/body-boundary and book-text crops, and sweep poses 0, 10 and 19 under
+`evidence/`. Frame 4120 has severe face, torso and leg smearing/ghosting; frame
+4150 has strong head/hair and arm blur beyond the source motion blur. The slower
+4179 face is recognizable, but hair, shoulder and hands remain soft/distorted.
+Static book spines are considerably clearer than in the pilot, with some larger
+lettering legible, while shelf edges and the left plant retain blur. The sampled
+views do not establish the absence of floaters elsewhere. Frozen-time sweeps
+retain the foreground blur, with no matched ground truth. Adjacent-difference
+statistics and sampled sheets do not isolate flicker from actual motion.
+
+**Defer as an artifact-quality upgrade for this tested profile**: the completed
+budget run improves on the pilot but does not resolve foreground ghosting or
+beat either final STG baseline's aggregate metrics. This is a qualified local
+result with native no-growth settings and an unfinished schedule, not a general
+claim about ATGS or permission to extend the training budget.

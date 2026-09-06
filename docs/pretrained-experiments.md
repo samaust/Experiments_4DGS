@@ -591,7 +591,7 @@ The original section-6 `sear_steak` evidence remains available above.
 | --- | --- | --- |
 | STG Lite / Full | Complete 30,000-step schedules, including Full's decoder | [Final native STG record](experiments/contender-native-stg-20260906.md) |
 | FreeTimeGS reproduction | Dense EDGS initialization; evaluated budget-stop checkpoint at 42,061 / 70,000 steps | [007](experiments/007-freetimegs.md) |
-| ATGS | Hash-encoder 5,000-microstep pilot with partial accumulation state retained | [009](experiments/009-atgs.md) |
+| ATGS | Evaluated budget-stop bundle at 61,008 / 100,000 microsteps (20,336 optimizer updates) | [009](experiments/009-atgs.md) |
 | MoE-GS | Modified STG expert training route unresolved | [008](experiments/008-moe-gs.md) |
 | FreeTimeGS++ | Fixed-B source availability gate | [010](experiments/010-freetimegs-plus-plus.md) |
 
@@ -608,8 +608,8 @@ use the corresponding Lite checkpoint to inspect Lite. Choose a new output path:
 ```
 
 The native FreeTimeGS and ATGS renderers also export all 60 held-out frames and
-the shared 20-pose midpoint sweep. These examples select final-budget FreeTimeGS
-and the retained ATGS 5,000-microstep pilot; check the reports for newer results:
+the shared 20-pose midpoint sweep. These examples select their validated
+final-budget checkpoints; neither method completed its native schedule:
 
 ```bash
 /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/freetimegs/bin/python scripts/render-freetimegs-manifest.py \
@@ -620,9 +620,9 @@ and the retained ATGS 5,000-microstep pilot; check the reports for newer results
   --output .local/runs/freetimegs-selfcap-manual-preview-NEW --benchmark
 /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/atgs/bin/python scripts/render-atgs-manifest.py \
   --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
-  --checkpoint .local/runs/atgs-selfcap-5000-20260906/checkpoint-005000-004 \
-  --training-config .local/runs/atgs-selfcap-5000-20260906/training-config.json \
-  --provenance .local/runs/atgs-selfcap-5000-20260906/provenance.json \
+  --checkpoint .local/runs/atgs-selfcap-final-20260906/checkpoint-061008-011 \
+  --training-config .local/runs/atgs-selfcap-final-20260906/training-config.json \
+  --provenance .local/runs/atgs-selfcap-final-20260906/provenance.json \
   --output .local/runs/atgs-selfcap-manual-preview-NEW --benchmark
 ```
 

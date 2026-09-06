@@ -925,6 +925,27 @@ The parent stays free of Torch imports before launching the supervised worker.
 
 ### ATGS offline scene rendering
 
+The final SelfCap continuation resumes the validated 5,000-microstep bundle,
+including its two pending accumulated microsteps. It runs toward the unchanged
+100,000-microstep native schedule until completion or the existing budget reserve:
+
+```bash
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-render/bin/python scripts/measure-experiment.py --output .local/runs/atgs-selfcap-final-measurement-20260906 --cwd /home/auss/git_repos/samaust/Experiments_4DGS -- /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/atgs/bin/python scripts/train-atgs-manifest.py --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json --initialization .local/data/selfcap/dance1-initialization-20260906 --output .local/runs/atgs-selfcap-final-20260906 --resume .local/runs/atgs-selfcap-5000-20260906/checkpoint-005000-004 --checkpoint-interval 5000
+```
+
+Checkpoint spacing is an operational disk-use choice, not a change to native
+optimization. Do not reset the ledger, enable growth, flush partial accumulation
+or interpret microsteps as optimizer updates. Inspect `worker-result.json` and
+`checkpoints.json` for the actual stop reason, update count and final bundle;
+then evaluate that bundle after training exits.
+
+The recorded final stop was 61,008 microsteps / 20,336 optimizer updates.
+Evaluate its actual final bundle with:
+
+```bash
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-render/bin/python scripts/evaluate-atgs-checkpoint.py --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json --checkpoint .local/runs/atgs-selfcap-final-20260906/checkpoint-061008-011 --training-config .local/runs/atgs-selfcap-final-20260906/training-config.json --provenance .local/runs/atgs-selfcap-final-20260906/provenance.json --crops configs/detail-crops.selfcap-dance1.json --torch-cache .local/cache/torch --output .local/runs/atgs-selfcap-final-evaluation-20260906
+```
+
 ```bash
 .local/envs/atgs/bin/python scripts/render-atgs-manifest.py --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json --checkpoint .local/runs/atgs-selfcap-resumed-20260906/checkpoint-000006-000 --training-config .local/runs/atgs-selfcap-resumed-20260906/training-config.json --provenance .local/runs/atgs-selfcap-resumed-20260906/provenance.json --output .local/runs/atgs-selfcap-render-a-20260906 --benchmark
 ```
