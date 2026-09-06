@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render untrained sparse initialization coverage; not quantitative evaluation."""
+"""Render untrained sparse or dense initialization; not quantitative evaluation."""
 import argparse
 import json
 from pathlib import Path

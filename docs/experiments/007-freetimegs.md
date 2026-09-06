@@ -274,3 +274,53 @@ approved host retry succeeded. This is not scene-quality or training evidence.
 The full CPU regression suite discovered 108 tests: 107 passed and one existing
 optional-dependency test skipped in the STG environment. All three new EDGS
 geometry tests passed independently in the RoMa environment.
+
+### Training-only dense temporal initialization and coverage
+
+`initialize-edgs-selfcap.py` generated all 24 required keyframe/successor clouds
+using the released EDGS geometry helpers and pinned RoMa. This is an explicitly
+adapted geometry-only **fast** path, not EDGS's default three-neighbor pipeline:
+all 23 training references, one native nearest neighbor, 15,000 weighted samples
+per reference, indoor matcher, no upsampling, and unchanged 560 coarse matching.
+RoMa's continuous pixel mapping matches the shared calibration; the EDGS helper's
+`W-1`/`H-1` color-index remapping is not used. Nonfinite or negative-depth points
+and points exceeding 0.01 L1 normalized reprojection error in either image are
+dropped, rather than assigned EDGS's near-zero opacity. EDGS scale/SH/opacity
+construction is omitted; FreeTimeGS constructs those natively from the geometry.
+All differences and source/asset/input hashes are recorded per cloud. The EDGS
+copyright, conditions, and disclaimer are retained in `docs/licenses/EDGS.txt`.
+
+All 24 clouds completed sequentially with 339,785–343,430 points each. The sum of
+their reported matcher/geometry wall times is 206.700 seconds (excludes process
+startup and initial input validation), and peak allocated GPU memory per frame
+was 2,752,895,488 bytes. The midpoint retained 342,669 of 345,000 sampled matches.
+The dense loader rejects wrong frames/splits, changed input/archive hashes,
+invalid dimensions/types/colors, and nonfinite data. Regression suite: 112 tests,
+111 passed and one existing optional-dependency skip; all seven EDGS tests passed
+separately in the FreeTimeGS environment.
+
+The `--dense-edgs` assembly produced 4,106,783 temporal points, including 4,100,548
+with native nearest-neighbor displacement estimates. Archive:
+`.local/data/selfcap/dance1-freetimegs-edgs-initialization-20260906/initialization.npz`,
+SHA-256 `e2753700453c55fa59f30fe5d9c14ba74627016445cefb6bc5176019d57de6b4`.
+Keyframe spacing, duration multiplier, and velocity-unit conversion are unchanged
+from the audited sparse assembly. Camera-time spread and estimated, untracked
+velocities remain limitations.
+
+Native start/middle/end previews at 1890×1061 are in
+`.local/runs/freetimegs-edgs-initialization-preview-20260906`. Mean alpha was
+0.267991, 0.386303, and 0.229530 respectively, versus 0.010088, 0.017385, and
+0.008063 for sparse initialization. These are average alpha values, not pixel
+coverage percentages. Peak allocated memory was 2,972,953,600 bytes. All three
+images were inspected: shelves and background are much more recognizable, but
+the images remain dark/grainy and the moving person is poorly represented in
+these unoptimized temporal Gaussian previews. Scale 0.03 and opacity 0.5 were
+not changed to improve appearance.
+
+A separate quarter-resolution, nearest-depth point diagnostic at the midpoint
+(`.local/runs/edgs-midpoint-points-20260906.png`, 472×265) shows the dancer's torso
+and legs in the per-frame cloud. It uses held-out calibration, not held-out RGB;
+the held-out RGB was inspected separately for qualitative comparison. This rules
+out complete foreground omission at that frame, but does not validate temporal
+motion or trained quality. The diagnostic is not a reduced-resolution benchmark.
+Reproduction commands are in [the creation guide](../local-creation.md).

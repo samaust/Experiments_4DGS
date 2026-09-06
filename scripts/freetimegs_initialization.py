@@ -1,4 +1,4 @@
-"""Training-only sparse temporal initialization using the reproduction's KNN helper."""
+"""Training-only temporal initialization using the reproduction's KNN helper."""
 import ast
 import hashlib
 import json
@@ -53,14 +53,44 @@ def load_cloud(directory, scene, frame_id):
         input_time_range=[min(times), max(times)])
 
 
-def assemble_initialization(checkout, scene, clouds):
+def load_dense_cloud(directory, scene, frame_id):
+    directory = Path(directory)
+    report = json.loads((directory / 'result.json').read_text())
+    if (report.get('schema') != 'edgs-selfcap-cloud/v1' or report.get('status') != 'prepared'
+            or report.get('manifest_sha256') != scene.sha256 or report.get('frame_id') != frame_id):
+        raise ValueError('dense cloud manifest, frame or status mismatch')
+    keys = [(item['camera_id'], item['frame_id']) for item in report['inputs']]
+    if len(keys) != 23 or set(keys) != set(scene.training_keys(frame_id)):
+        raise ValueError('dense cloud training split mismatch')
+    for item, key in zip(report['inputs'], keys):
+        if item['sha256'] != scene.frames[key]['sha256']:
+            raise ValueError('dense cloud image digest mismatch')
+    archive = directory / 'cloud.npz'
+    if digest(archive) != report.get('archive_sha256'):
+        raise ValueError('dense cloud archive digest mismatch')
+    with np.load(archive, allow_pickle=False) as arrays:
+        points, colors = arrays['positions'].copy(), arrays['colors'].copy()
+    if (points.shape != (report['points'], 3) or colors.shape != points.shape or len(points) < 4
+            or points.dtype != np.float32 or colors.dtype != np.float32
+            or not np.isfinite(points).all() or not np.isfinite(colors).all()
+            or (colors < 0).any() or (colors > 1).any()):
+        raise ValueError('invalid dense cloud')
+    times = [scene.frames[key]['normalized_time'] for key in keys]
+    return points, colors, dict(frame_id=frame_id, directory=str(directory.absolute()),
+        archive_sha256=digest(archive), evidence_sha256=digest(directory / 'result.json'),
+        points=len(points), normalized_time=float(np.mean(times)),
+        input_time_range=[min(times), max(times)])
+
+
+def assemble_initialization(checkout, scene, clouds, *, dense=False):
     """Use every fifth frame and its successor; never infer a missing next cloud."""
     keyframes = list(range(4120, 4180, 5))
     required = {frame for key in keyframes for frame in (key, key + 1)}
     if set(clouds) != required:
         raise ValueError('requires exactly all keyframe and next-frame clouds')
     velocity, helper_digest = load_velocity_helper(checkout)
-    loaded = {frame: load_cloud(clouds[frame], scene, frame) for frame in sorted(required)}
+    loader = load_dense_cloud if dense else load_cloud
+    loaded = {frame: loader(clouds[frame], scene, frame) for frame in sorted(required)}
     arrays = {name: [] for name in ('positions', 'colors', 'velocities', 'times', 'durations', 'has_velocity')}
     dt = 1. / (scene.manifest['source_fps'] * scene.manifest['time']['duration_seconds'])
     if not np.isfinite(dt) or dt <= 0:
@@ -78,12 +108,14 @@ def assemble_initialization(checkout, scene, clouds):
         for name, value in values.items():
             arrays[name].append(value)
     arrays = {name: np.concatenate(values) for name, values in arrays.items()}
-    report = dict(schema='freetimegs-sparse-initialization/v1', manifest_sha256=scene.sha256,
+    report = dict(schema=('freetimegs-edgs-initialization/v1' if dense else
+                          'freetimegs-sparse-initialization/v1'), manifest_sha256=scene.sha256,
                   helper_ast_sha256=helper_digest, keyframe_step=5, duration_gap_multiplier=3,
                   max_match_distance=.5, normalized_frame_interval=dt,
                   points=len(arrays['positions']), valid_velocity_points=int(arrays['has_velocity'].sum()),
                   clouds=[loaded[f][2] for f in sorted(required)],
-                  limitations=['Sparse COLMAP geometry, not dense ROMA initialization.',
+                  limitations=[('Adapted EDGS fast-path geometry, not the author FreeTimeGS initialization.'
+                                if dense else 'Sparse COLMAP geometry, not dense ROMA initialization.'),
                                'KNN displacements are estimates, not tracked correspondences.',
                                'Cloud time is mean corrected training-camera time; fractional offsets remain.'])
     return arrays, report

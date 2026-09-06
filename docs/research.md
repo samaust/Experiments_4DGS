@@ -89,14 +89,15 @@ and training-view-only input inventory. On 2026-09-06 the user confirmed that th
 intended use qualifies as non-commercial academic research and/or non-commercial
 personal use. This resolves the EDGS intended-use question for this work; it does
 not grant broader commercial rights or waive notices and third-party terms.
-No completed dense SelfCap initialization is claimed by this survey update.
+The adapted dense SelfCap initialization described below is preprocessing, not a
+trained-model result or a reproduction of the author's full initialization.
 
 The EDGS-pinned RoMa revision is also checked out in `.local/RoMa-edgs`, with
 its MIT notice retained and source imports verified. EDGS geometry helpers have
 now executed in synthetic CPU tests via a thin loader; source, AST, and license
-hashes are available from that loader. No EDGS source has been copied into this
-repository, and neither dense scene initialization nor trained assets have been
-produced by it. This does not imply that EDGS and AGPL-licensed FreeTimeGS code
+hashes are available from that loader. The geometry-only fast-path adapter retains
+an exact copy of the upstream [EDGS notice](licenses/EDGS.txt) for attribution and
+derivative-work obligations. This does not imply that EDGS and AGPL-licensed FreeTimeGS code
 can be redistributed together under a single permissive license.
 
 Released assets acquired on 2026-09-06 for the indoor EDGS candidate (local only,
@@ -112,6 +113,17 @@ The matcher release does not independently establish a separate weight-license
 grant in the inspected page. Keep that uncertainty distinct from the RoMa code's
 MIT notice and the standard DINOv2 code/weights' declared Apache-2.0 terms.
 Do not infer unrestricted redistribution or commercial rights from this download.
+
+Scene-derived assets: 24 training-only dense clouds in
+`.local/data/selfcap/dance1-edgs-frameFRAME-20260906` (339,785–343,430 points each)
+record every processed input image hash, source/license hashes, nearest-neighbor
+pairs, filters, camera-time range, and archive digest. Camera `0015` is excluded
+from geometry generation. The temporal FreeTimeGS archive at
+`.local/data/selfcap/dance1-freetimegs-edgs-initialization-20260906/initialization.npz`
+contains 4,106,783 points and has SHA-256
+`e2753700453c55fa59f30fe5d9c14ba74627016445cefb6bc5176019d57de6b4`.
+SelfCap dataset terms continue to apply; generated clouds do not become MIT
+assets merely because the matcher code is MIT. No training has run on them yet.
 
 ## Research sources, revisions, and watchlist
 

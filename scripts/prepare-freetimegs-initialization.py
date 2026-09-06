@@ -16,13 +16,15 @@ def main():
     parser.add_argument('--checkout', type=Path, default=Path('.local/FreeTimeGsVanilla'))
     parser.add_argument('--cloud', nargs=2, action='append', metavar=('FRAME', 'DIRECTORY'), required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--dense-edgs', action='store_true', help='Require audited EDGS dense NPZ clouds')
     args = parser.parse_args()
     clouds = {int(frame): Path(path) for frame, path in args.cloud}
     if len(clouds) != len(args.cloud):
         parser.error('duplicate frame argument')
     if args.output.exists():
         parser.error('choose a new output directory')
-    arrays, report = assemble_initialization(args.checkout, FreeTimeSelfCapScene(args.manifest), clouds)
+    arrays, report = assemble_initialization(args.checkout, FreeTimeSelfCapScene(args.manifest), clouds,
+                                             dense=args.dense_edgs)
     args.output.mkdir(parents=True)
     archive = args.output / 'initialization.npz'
     np.savez(archive, **arrays)

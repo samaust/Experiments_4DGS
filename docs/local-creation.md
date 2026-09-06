@@ -295,6 +295,40 @@ Inspect the untrained initialization before training (GPU inference only):
   --output .local/runs/freetimegs-initialization-preview-20260906
 ```
 
+For the released EDGS-based dense candidate, first prepare the pinned RoMa
+checkout and hash-verified local weights as recorded in experiment 007. This
+workflow requires EDGS's non-commercial terms; retain `docs/licenses/EDGS.txt`.
+Generate each cloud sequentially on the GPU, using fresh output paths for reruns:
+
+```bash
+EDGS_CLOUD_ARGS=()
+for EDGS_KEYFRAME in {4120..4175..5}; do
+  for EDGS_FRAME in "$EDGS_KEYFRAME" "$((EDGS_KEYFRAME + 1))"; do
+    EDGS_CLOUD=".local/data/selfcap/dance1-edgs-frame${EDGS_FRAME}-20260906"
+    /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/roma/bin/python \
+      scripts/initialize-edgs-selfcap.py \
+      --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+      --edgs .local/EDGS --roma .local/RoMa-edgs --weights .local/weights/roma-edgs \
+      --frame-id "$EDGS_FRAME" --output "$EDGS_CLOUD" || break 2
+    EDGS_CLOUD_ARGS+=(--cloud "$EDGS_FRAME" "$EDGS_CLOUD")
+  done
+done
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/freetimegs/bin/python \
+  scripts/prepare-freetimegs-initialization.py --dense-edgs \
+  --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+  --output .local/data/selfcap/dance1-freetimegs-edgs-initialization-20260906 \
+  "${EDGS_CLOUD_ARGS[@]}"
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/freetimegs/bin/python \
+  scripts/preview-freetimegs-initialization.py \
+  --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+  --initialization .local/data/selfcap/dance1-freetimegs-edgs-initialization-20260906 \
+  --output .local/runs/freetimegs-edgs-initialization-preview-20260906
+```
+
+Only run assembly after all 24 cloud commands succeed. It rejects incomplete
+sets. The EDGS pipeline is an adapted geometry-only fast path, not a full EDGS
+model, and these operations do not train FreeTimeGS.
+
 Validate checkpoint groundwork separately from experiment training:
 
 ```bash

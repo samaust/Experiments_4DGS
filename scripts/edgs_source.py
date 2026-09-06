@@ -6,8 +6,55 @@ redistribute the extracted source; source and license hashes identify execution.
 import ast
 import hashlib
 from pathlib import Path
+import socket
+import subprocess
+import sys
 
 import torch
+
+
+ROMA_PIN = '370117431ffc5dc000fb46f6e581b74bdb2c3ff8'
+ROMA_WEIGHTS = {
+    'roma_indoor.pth': '4d3dca889ae1ef245123dc62aab914475c7bbf41f2c8002606450fb6cf2d91e6',
+    'dinov2_vitl14_pretrain.pth': 'd5383ea8f4877b2472eb973e0fd72d557c7da5d3611bd527ceeb1d7162cbf428',
+}
+
+
+def load_roma(checkout, weights):
+    """Load the pinned released matcher offline on CUDA, with no fallback."""
+    checkout, weights = Path(checkout), Path(weights)
+    pin = subprocess.check_output(['git', '-C', str(checkout), 'rev-parse', 'HEAD'],
+                                  text=True).strip()
+    if pin != ROMA_PIN:
+        raise ValueError('expected EDGS-pinned RoMa revision')
+    if subprocess.check_output(['git', '-C', str(checkout), 'status', '--porcelain',
+                                '--untracked-files=no'], text=True):
+        raise ValueError('modified tracked RoMa source')
+    for name, expected in ROMA_WEIGHTS.items():
+        with (weights / name).open('rb') as stream:
+            if hashlib.file_digest(stream, 'sha256').hexdigest() != expected:
+                raise ValueError(f'checkpoint hash mismatch: {name}')
+
+    def deny_network(*unused, **kwargs):
+        raise RuntimeError('network disabled during matcher execution')
+
+    socket.create_connection = deny_network
+    socket.socket.connect = deny_network
+    socket.socket.connect_ex = deny_network
+    if 'romatch' in sys.modules:
+        raise RuntimeError('load pinned RoMa in a fresh process')
+    sys.path.insert(0, str(checkout.absolute()))
+    from romatch import roma_indoor
+    if not torch.cuda.is_available():
+        raise RuntimeError('CUDA unavailable; no CPU fallback permitted')
+    torch.set_float32_matmul_precision('highest')
+    model = roma_indoor(device='cuda',
+        weights=torch.load(weights / 'roma_indoor.pth', map_location='cpu', weights_only=True),
+        dinov2_weights=torch.load(weights / 'dinov2_vitl14_pretrain.pth',
+                                  map_location='cpu', weights_only=True))
+    model.upsample_preds = False
+    model.symmetric = False
+    return model.eval()
 
 
 def load_geometry(checkout):
