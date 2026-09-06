@@ -93,13 +93,19 @@ class EvaluationComparisonTests(unittest.TestCase):
         self.assertIsNone(self.module.difference(a, a)['psnr'])
 
     def test_atgs_bundle_comparison_and_runtime_mismatch(self):
+        self.check_bundle_comparison('atgs')
+
+    def test_freetimegs_bundle_comparison_and_runtime_mismatch(self):
+        self.check_bundle_comparison('freetimegs')
+
+    def check_bundle_comparison(self, model):
         for path in (self.b/'evaluation.json', self.b/'reload-a/render.json'):
             report = json.loads(path.read_text())
             report.pop('checkpoint_sha256')
-            report.update(model='atgs', bundle={'schema': 'atgs-bundle/v1'}, runtime={'extensions': {}})
+            report.update(model=model, bundle={'schema': model+'-bundle/v1'}, runtime={'extensions': {}})
             self.write(path, report)
         result = self.module.compare(self.a, self.b)
-        self.assertEqual(result['second']['model'], 'atgs')
+        self.assertEqual(result['second']['model'], model)
         self.assertIsNone(result['second']['checkpoint_sha256'])
         self.assertEqual(result['delta_second_minus_first']['psnr'], 2)
         self.change(self.b/'evaluation.json', 'runtime', {'changed': True})

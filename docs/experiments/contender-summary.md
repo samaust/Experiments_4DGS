@@ -27,13 +27,14 @@ and aggregate deltas.
 ## SelfCap dance1 — provisional 5,000-step checkpoints
 
 Same 60 held-out camera-0015 frames, shared metric protocol and 1890×1061
-resolution. Both remain incomplete; equal steps do not mean equal budget usage.
+resolution. All remain incomplete; equal steps do not mean equal budget usage.
 
 | Method | PSNR dB | SSIM | LPIPS-Alex | Δ vs Lite (PSNR / SSIM / LPIPS) | Δ vs Full (PSNR / SSIM / LPIPS) | Warm FPS |
 | --- | ---: | ---: | ---: | --- | --- | ---: |
 | STG Lite | 22.082603 | 0.827138 | 0.270207 | 0 / 0 / 0 | −1.370350 / −0.005722 / −0.008946 | 449.311 |
 | STG Full | 23.452953 | 0.832861 | 0.279153 | +1.370350 / +0.005722 / +0.008946 | 0 / 0 / 0 | 275.750 |
 | ATGS | 21.637782 | 0.802142 | 0.341477 | -0.444821 / -0.024997 / +0.071270 | -1.815171 / -0.030719 / +0.062324 | 281.242 |
+| FreeTimeGS reproduction | 19.153970 | 0.682328 | 0.528610 | -2.928633 / -0.144810 / +0.258403 | -4.298983 / -0.150533 / +0.249456 | 162.731 |
 
 The checked comparison is `.local/runs/stg-selfcap-5000-comparison-20260906.json`.
 Full has higher PSNR/SSIM, while Lite has lower LPIPS and higher measured warm
@@ -48,7 +49,17 @@ raw float hashes. Its moving-person reconstruction remains heavily blurred,
 and its metrics trail both current STG baselines. Equal iteration labels do not
 mean equal update counts, time budgets or converged quality. Checked ATGS deltas
 are `.local/runs/atgs-vs-lite-selfcap-5000-20260906.json` and
-`.local/runs/atgs-vs-full-selfcap-5000-20260906.json`. All three are provisional.
+`.local/runs/atgs-vs-full-selfcap-5000-20260906.json`.
+
+[FreeTimeGS](007-freetimegs.md) now adds a 5,000-step third-party reproduction
+pilot using training-only dense EDGS geometry. It has 567.387962 seconds charged
+and exact offline PNG/float reloads for all 80 renders. The inspected dancer,
+background and fixed book-text crop remain strongly blurred, with thin colored
+streaks/floaters. Checked deltas are
+`.local/runs/freetimegs-vs-lite-selfcap-5000-20260906.json` and
+`.local/runs/freetimegs-vs-full-selfcap-5000-20260906.json`. Its native 70,000-step
+schedule is unfinished. All four results are provisional, not final-budget
+rankings; no final artifact-quality winner is established.
 
 ## SelfCap dance1 — provisional 2,000-step checkpoints
 

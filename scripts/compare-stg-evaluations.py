@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare completed matched-profile STG/ATGS evaluations without inventing rankings."""
+"""Compare completed matched-profile contender evaluations without inventing rankings."""
 import argparse
 import json
 import math
@@ -13,7 +13,7 @@ def read_evaluation(directory):
     render = json.loads((directory/'reload-a/render.json').read_text())
     if evaluation['status'] != 'completed':
         raise ValueError('evaluation is not complete')
-    identity_fields = ('bundle', 'runtime') if evaluation['model'] == 'atgs' else ('checkpoint_sha256',)
+    identity_fields = ('bundle', 'runtime') if evaluation['model'] in ('atgs', 'freetimegs') else ('checkpoint_sha256',)
     for key in ('model', 'iteration', 'manifest_sha256', 'incomplete_training', *identity_fields):
         if evaluation[key] != render[key]:
             raise ValueError('evaluation/render metadata mismatch: '+key)

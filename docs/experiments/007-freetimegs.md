@@ -1,18 +1,18 @@
 # Experiment 007: FreeTimeGS
 
-Status: **SelfCap dense initialization and native training/reload integration validated;
-longer benchmark run pending. Basketball calibration remains blocked.**
+Status: **SelfCap dense-initialized 5,000-step pilot completed; native 70,000-step
+schedule unfinished. Basketball calibration remains blocked.**
 
 The author-linked EasyVolcap framework was inspected at
 `4cb3c000a31b8764834c79792b355f110d947e75` in `.local/EasyVolcap` on
 2026-09-06. No FreeTimeGS-named model/configuration was found in its `main`
 checkout. The linked fast Gaussian rasterizer alone is not a complete dynamic
-training implementation. An explicitly identified reproduction remains an
-option, but has not been integrated or measured for either matched scene.
+training implementation. The explicitly identified reproduction below has since
+been integrated and measured on SelfCap.
 
 Identify the author implementation and any vanilla reproduction separately.
 Record commit, license, checkpoint format, rasterizer, and adaptations to the
-shared scene manifest before training. No local result is claimed yet.
+shared scene manifest before training. Local results below are reproduction results.
 
 ## Third-party reproduction audit (2026-09-06)
 
@@ -30,7 +30,7 @@ actual CLI presets are `default_keyframe` and `default_keyframe_small`.
 Both disable ordinary strategy refinement and enable custom relocation.
 Both override 4D regularization to `1e-4` and duration regularization to
 `1e-3`. The small preset actually caps samples at 5,000,000 despite its
-4M description. No preset has yet been selected for matched training.
+4M description. Matched training below uses `default_keyframe`.
 
 The model stores means, scales, quaternions, opacities, SH DC/rest, canonical
 times, durations, and velocities. Rendering uses gsplat. Saved checkpoints
@@ -356,10 +356,10 @@ overrides were scale 0.3 and relocation ratio 0.5; these are not scene-training
 settings. CPU suite: 116 discovered, 113 passed, three optional-dependency skips;
 both native training-source tests also passed in the FreeTimeGS environment.
 
-Fresh-process scene reload, supervisor integration, and actual training remain
-unfinished. Before scene training, apply the reproduction's coordinate
-normalization and loader duration override (two keyframe gaps); the earlier
-world-space previews used the combiner's three-gap archive durations.
+The subsequent scene integration below adds fresh-process reload and supervised
+training with the reproduction's coordinate normalization and loader duration
+override (two keyframe gaps); the earlier world-space previews used the
+combiner's three-gap archive durations.
 
 ```bash
 /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/freetimegs/bin/python scripts/verify-freetimegs-training.py --torch-cache .local/cache/torch --output .local/runs/freetimegs-training-state-cuda-20260906.json
@@ -381,6 +381,8 @@ and linear-motion invariance tests passed. The native five-extent distance filte
 retained 4,101,912 of 4,106,783 points; normalized scene scale is 1.10000013.
 The two-gap loader duration is 0.16264537 in corrected manifest time units. The
 negative duration-regularizer target remains native, as documented above.
+The native loader's velocity-norm cap of 10 is a no-op for this archive: the
+maximum normalized velocity norm is 5.407525, with zero points above the cap.
 
 Five initial scene steps and a separate-process five-step resume succeeded:
 
@@ -409,3 +411,46 @@ These intentionally tiny integration segments are not a quality comparison with
 the other 5,000-step pilots. Rendering uses the learned active SH degree (zero at
 this early checkpoint); the unused higher-degree coefficients remain zero.
 CPU regression suite: 117 tests, 114 passed, three optional-dependency skips.
+
+### 5,000-step SelfCap pilot
+
+The fresh-process continuation from iteration 10 completed another 4,990 native
+steps without changing the 70,000-step schedule. All losses remained finite;
+native relocation ran every 100 steps and retained 4,101,912 Gaussians. Periodic
+complete checkpoints were saved at iterations 1,000 through 5,000.
+
+| Measurement | Result |
+| --- | ---: |
+| Continuation command wall | 519.042032 s |
+| Total charged training, including integration segments | 567.387962 s / 7,200 s |
+| Device baseline / sampled peak | 851 / 7,843 MiB |
+| Framework peak allocated / reserved | 5,612,892,672 / 6,824,132,608 bytes |
+| Final checkpoint size | 3,199,531,938 bytes |
+| Held-out PSNR / SSIM / LPIPS-Alex | 19.153970 / 0.682328 / 0.528610 |
+| Warm throughput (10 warmups, 100 synchronized renders) | 162.731 FPS |
+| Evaluation command wall | 176.102405 s |
+
+Training and measurement directories are
+`.local/runs/freetimegs-selfcap-5000-20260906` and
+`.local/runs/freetimegs-selfcap-5000-measurement-20260906`.
+The final `checkpoint-005000.pt` SHA-256 is
+`d964bc3ce2758be7c57e324d3f2343553d507a8df0048d2c79dbdf7c2852620f`.
+Evaluation and packaged evidence are in
+`.local/runs/freetimegs-selfcap-5000-evaluation-20260906`.
+Two fresh network-disabled processes produced exact PNG bytes and raw float
+hashes for all 60 held-out images and 20 sweep poses. SH degree is three here.
+
+Inspected start/middle/end frames 4120, 4150 and 4179, the fixed body-boundary and
+book-text crops, and sweep poses 0, 10 and 19. The dancer is now recognizable,
+but head/hair and body edges remain strongly blurred/ghosted; frame 4120 has
+particularly washed-out upper-body detail. Thin colored streaks/floaters appear
+over the torso and background. Static book text is unreadable in the inspected
+crop. The frozen-time sweep retains blur and streaks; it has no matched ground
+truth. These sampled sheets do not establish a quantified flicker claim.
+
+Checked aggregate and per-frame deltas are
+`.local/runs/freetimegs-vs-lite-selfcap-5000-20260906.json` and
+`.local/runs/freetimegs-vs-full-selfcap-5000-20260906.json`. All three metrics trail
+both STG pilots, but initialization, update counts and charged time differ.
+This is a third-party reproduction with an adapted released EDGS initializer,
+not an author checkpoint or a completed native-schedule comparison.

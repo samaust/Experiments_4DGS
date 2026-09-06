@@ -130,7 +130,12 @@ SHA-256 `265fda2ee8c9530e1643a90a020d8401bfd115d6900e3d39c79c3edc513fabd5`.
 Its training configuration records the dense archive, training-only SfM reference
 used for native normalization, source/binary hashes, cached LPIPS backbone, and
 coordinate/time adaptations. These are locally generated research assets, not
-author-released checkpoints or unrestricted pretrained weights.
+author-released checkpoints or unrestricted pretrained weights. The subsequent
+5,000-step checkpoint
+`.local/runs/freetimegs-selfcap-5000-20260906/checkpoint-005000.pt` has SHA-256
+`d964bc3ce2758be7c57e324d3f2343553d507a8df0048d2c79dbdf7c2852620f` and retains the
+same source, dataset and initializer provenance. Its offline held-out renders
+are likewise local research outputs, not separately licensed author assets.
 
 ## Research sources, revisions, and watchlist
 

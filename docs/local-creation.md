@@ -347,6 +347,17 @@ directory, and specify the number of additional steps with `--max-steps`.
 Omitting that limit runs toward the native 70,000-step schedule until the budget
 reserve stops it. Existing allow rules do not bypass source/provenance checks.
 
+The measured 5,000-step continuation used:
+
+```bash
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-render/bin/python scripts/measure-experiment.py --output .local/runs/freetimegs-selfcap-5000-measurement-20260906 --cwd /home/auss/git_repos/samaust/Experiments_4DGS -- /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/freetimegs/bin/python scripts/train-freetimegs-manifest.py --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json --initialization .local/data/selfcap/dance1-freetimegs-edgs-initialization-20260906 --reference-cloud .local/data/selfcap/dance1-initialization-20260906 --torch-cache .local/cache/torch --output .local/runs/freetimegs-selfcap-5000-20260906 --resume .local/runs/freetimegs-selfcap-10-20260906/checkpoint-000010.pt --max-steps 4990
+```
+
+For its evaluation command below, replace the three training-directory references
+with `freetimegs-selfcap-5000-20260906`, select `checkpoint-005000.pt`, and use the
+new output `freetimegs-selfcap-5000-evaluation-20260906`. Preserve earlier outputs;
+commands reject overwriting completed runs.
+
 Evaluate a completed checkpoint using two fresh offline native processes and the
 same metrics, sweep, fixed crops and evidence packaging as the other contenders:
 
