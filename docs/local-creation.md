@@ -783,3 +783,11 @@ hashes. Optional benchmarking uses ten warmups and 100 synchronized timed render
 excluding validation, saving, encoding and camera setup. Repeat in a new process
 and compare all PNGs with `compare-render-reloads.py`; raw-float hashes are in
 `render.json`. The existing evaluator and evidence packager accept these outputs.
+
+Rendering reports also fingerprint the installed rasterizer, KNN, tiny-cuda-nn
+and scatter shared objects, selected package versions and renderer source bytes.
+These describe the current rendering runtime, not a retroactive attestation of
+the training environment or every dynamically linked system library. Missing
+extension files are rejected. Use absolute interpreter paths with Codex rules
+that name absolute paths, including for `measure-experiment.py`: its spawned
+GPU sampler inherits the measurement process's sandbox/host access.

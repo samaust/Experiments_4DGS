@@ -37,6 +37,8 @@ def main():
     from atgs_scene import ATGSSelfCapScene
     from atgs_config import load_config
     from atgs_update import load_update_helpers
+    from atgs_runtime import runtime_inventory
+    runtime = runtime_inventory()
     scene = ATGSSelfCapScene(args.manifest)
     provenance = json.loads(args.provenance.read_text())
     config = json.loads(args.training_config.read_text())
@@ -124,6 +126,8 @@ def main():
         checkpoint_bytes=sum(item['bytes'] for item in record['files'].values()),
         wall_seconds=time.monotonic() - started, process_id=os.getpid(), gpu=torch.cuda.get_device_name(),
         network_isolation=offline, peak_allocated_bytes=torch.cuda.max_memory_allocated())
+    report['runtime'] = runtime
+    report['renderer_sha256'] = digest(__file__)
     (args.output / 'render.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(dict(iteration=record['iteration'], held_out_frames=len(frames), sweep_poses=len(sweep_frames),
                          fps=benchmark['fps'] if benchmark else None), indent=2))
