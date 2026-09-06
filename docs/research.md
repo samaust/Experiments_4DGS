@@ -123,7 +123,14 @@ from geometry generation. The temporal FreeTimeGS archive at
 contains 4,106,783 points and has SHA-256
 `e2753700453c55fa59f30fe5d9c14ba74627016445cefb6bc5176019d57de6b4`.
 SelfCap dataset terms continue to apply; generated clouds do not become MIT
-assets merely because the matcher code is MIT. No training has run on them yet.
+assets merely because the matcher code is MIT. Two supervised FreeTimeGS
+integration segments have now trained through iteration 10. The complete local
+checkpoint `.local/runs/freetimegs-selfcap-10-20260906/checkpoint-000010.pt` has
+SHA-256 `265fda2ee8c9530e1643a90a020d8401bfd115d6900e3d39c79c3edc513fabd5`.
+Its training configuration records the dense archive, training-only SfM reference
+used for native normalization, source/binary hashes, cached LPIPS backbone, and
+coordinate/time adaptations. These are locally generated research assets, not
+author-released checkpoints or unrestricted pretrained weights.
 
 ## Research sources, revisions, and watchlist
 

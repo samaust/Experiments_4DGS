@@ -329,6 +329,38 @@ Only run assembly after all 24 cloud commands succeed. It rejects incomplete
 sets. The EDGS pipeline is an adapted geometry-only fast path, not a full EDGS
 model, and these operations do not train FreeTimeGS.
 
+Run the budget-charged native FreeTimeGS integration segment (use the measurement
+wrapper above this section to capture a device baseline and sampled peak):
+
+```bash
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/freetimegs/bin/python \
+  scripts/train-freetimegs-manifest.py \
+  --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+  --initialization .local/data/selfcap/dance1-freetimegs-edgs-initialization-20260906 \
+  --reference-cloud .local/data/selfcap/dance1-initialization-20260906 \
+  --torch-cache .local/cache/torch \
+  --output .local/runs/freetimegs-selfcap-5-20260906 --max-steps 5
+```
+
+For continuation, add `--resume PATH/TO/checkpoint-000005.pt`, use a new output
+directory, and specify the number of additional steps with `--max-steps`.
+Omitting that limit runs toward the native 70,000-step schedule until the budget
+reserve stops it. Existing allow rules do not bypass source/provenance checks.
+
+Evaluate a completed checkpoint using two fresh offline native processes and the
+same metrics, sweep, fixed crops and evidence packaging as the other contenders:
+
+```bash
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-render/bin/python \
+  scripts/evaluate-freetimegs-checkpoint.py \
+  --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
+  --checkpoint .local/runs/freetimegs-selfcap-10-20260906/checkpoint-000010.pt \
+  --training-config .local/runs/freetimegs-selfcap-10-20260906/training-config.json \
+  --provenance .local/runs/freetimegs-selfcap-10-20260906/provenance.json \
+  --crops configs/detail-crops.selfcap-dance1.json --torch-cache .local/cache/torch \
+  --output .local/runs/freetimegs-selfcap-10-evaluation-20260906
+```
+
 Validate checkpoint groundwork separately from experiment training:
 
 ```bash

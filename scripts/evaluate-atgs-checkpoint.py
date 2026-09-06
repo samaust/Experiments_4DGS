@@ -26,6 +26,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     repo = Path(__file__).resolve().parents[1]
     parser.add_argument('--atgs-python', type=Path, default=repo / '.local/envs/atgs/bin/python')
+    parser.add_argument('--freetimegs-python', type=Path, default=repo / '.local/envs/freetimegs/bin/python')
+    parser.add_argument('--model', choices=('atgs', 'freetimegs'), default='atgs')
     parser.add_argument('--checkout', type=Path, default=repo / '.local/ATGS')
     for name in ('manifest', 'checkpoint', 'training-config', 'provenance', 'crops', 'torch-cache', 'output'):
         parser.add_argument('--' + name, type=Path, required=True)
@@ -33,7 +35,8 @@ def main():
     for name, value in vars(args).items():
         # Preserve virtualenv interpreter spelling; resolving its symlink would
         # execute the base interpreter without the environment's packages.
-        setattr(args, name, value.absolute())
+        if isinstance(value, Path):
+            setattr(args, name, value.absolute())
     if args.output.exists():
         parser.error('choose a new evaluation output directory')
     manifest = json.loads(args.manifest.read_text())
@@ -73,13 +76,13 @@ def main():
             (args.output / 'commands.json').write_text(json.dumps(stages, indent=2) + '\n')
 
     for label in ('reload-a', 'reload-b'):
-        command = [helpers / 'render-atgs-manifest.py', '--checkout', args.checkout,
+        command = [helpers / f'render-{args.model}-manifest.py', '--checkout', args.checkout,
                    '--manifest', args.manifest, '--checkpoint', args.checkpoint,
                    '--training-config', args.training_config, '--provenance', args.provenance,
                    '--output', args.output / label]
         if label == 'reload-a':
             command.append('--benchmark')
-        run(label, args.atgs_python, command)
+        run(label, args.atgs_python if args.model == 'atgs' else args.freetimegs_python, command)
     first = json.loads((args.output / 'reload-a/render.json').read_text())
     second = json.loads((args.output / 'reload-b/render.json').read_text())
     equality = compare_reports(first, second)
@@ -96,7 +99,7 @@ def main():
     run('package', sys.executable, [helpers / 'package-stg-evidence.py', '--render-directory',
         args.output / 'reload-a', '--manifest', args.manifest, '--crops', args.crops,
         '--output', args.output / 'evidence'])
-    report = dict(status='completed', model='atgs', iteration=first['iteration'],
+    report = dict(status='completed', model=args.model, iteration=first['iteration'],
                   manifest_sha256=first['manifest_sha256'], bundle=first['bundle'], runtime=first['runtime'],
                   incomplete_training=first['incomplete_training'], benchmark=first['benchmark'],
                   checkpoint_bytes=first['checkpoint_bytes'], equality=equality, comparisons=comparisons,

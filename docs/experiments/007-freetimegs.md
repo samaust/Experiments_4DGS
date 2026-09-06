@@ -1,6 +1,7 @@
 # Experiment 007: FreeTimeGS
 
-Status: **pending source/data validation**.
+Status: **SelfCap dense initialization and native training/reload integration validated;
+longer benchmark run pending. Basketball calibration remains blocked.**
 
 The author-linked EasyVolcap framework was inspected at
 `4cb3c000a31b8764834c79792b355f110d947e75` in `.local/EasyVolcap` on
@@ -363,3 +364,48 @@ world-space previews used the combiner's three-gap archive durations.
 ```bash
 /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/freetimegs/bin/python scripts/verify-freetimegs-training.py --torch-cache .local/cache/torch --output .local/runs/freetimegs-training-state-cuda-20260906.json
 ```
+
+### Supervised scene integration and fresh-process evaluation
+
+`train-freetimegs-manifest.py` now uses the shared two-hour ledger and process-group
+deadline supervisor. It checkpoints at cleared-gradient iteration boundaries with
+120 seconds reserved for checkpointing and a further 30-second step allowance.
+Its synchronous shuffled-epoch sampler reuses the existing balanced sampler with
+one bucket, preserving uniform training-view sampling without prefetch ambiguity.
+All initialization, loss, optimizer, scheduler, relocation and pruning settings
+are native except the documented shared-profile adaptations.
+
+`freetimegs_normalization.py` fits the released similarity/PCA normalization to
+23 training cameras and the audited training-only midpoint SfM cloud. Projection
+and linear-motion invariance tests passed. The native five-extent distance filter
+retained 4,101,912 of 4,106,783 points; normalized scene scale is 1.10000013.
+The two-gap loader duration is 0.16264537 in corrected manifest time units. The
+negative duration-regularizer target remains native, as documented above.
+
+Five initial scene steps and a separate-process five-step resume succeeded:
+
+| Segment | Completed iteration | Measured command wall | Sampled peak GPU memory |
+| --- | ---: | ---: | ---: |
+| `.local/runs/freetimegs-selfcap-5-20260906` | 5 | 25.421 s | 7,936 MiB |
+| `.local/runs/freetimegs-selfcap-10-20260906` | 10 | 26.817 s | 7,696 MiB |
+
+Both baselines were 850 MiB. The ledger charged **49.677513 seconds total**;
+measurement includes additional command startup outside the supervised worker.
+Each checkpoint is 3,166,716,200 bytes and includes optimizer state. The latest
+checkpoint SHA-256 is `265fda2ee8c9530e1643a90a020d8401bfd115d6900e3d39c79c3edc513fabd5`.
+
+`render-freetimegs-manifest.py` reconstructs the complete native rendering state
+without reloading initialization clouds or optimizer buffers onto the GPU. It
+validates configuration, normalization, source, binary and checkpoint provenance.
+The FreeTimeGS evaluation wrapper reuses the matched evaluator and packaging
+pipeline; ATGS's default dispatch is unchanged. Two fresh, network-disabled
+processes rendered all 60 held-out frames and 20 sweep poses with **exact PNG and
+float hashes**. Evidence and fixed crops are in
+`.local/runs/freetimegs-selfcap-10-evaluation-20260906/evidence`.
+
+Iteration-10 diagnostics: PSNR 8.38402, SSIM 0.0816383, LPIPS-Alex 1.143195,
+131.212 FPS (10 warmups, 100 synchronized renders), evaluation wall 180.069 s.
+These intentionally tiny integration segments are not a quality comparison with
+the other 5,000-step pilots. Rendering uses the learned active SH degree (zero at
+this early checkpoint); the unused higher-degree coefficients remain zero.
+CPU regression suite: 117 tests, 114 passed, three optional-dependency skips.
