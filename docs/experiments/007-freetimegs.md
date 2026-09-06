@@ -119,3 +119,19 @@ The real manifest check loaded held-out camera 0015/frame 4150 at corrected time
 samples, and converted all 20 sweep poses. No model was trained or evaluated in
 this check. Temporal initialization and complete native training/resume remain
 the next adapter gates.
+
+## Native initialization loader
+
+`freetimegs_source.load_initializer` now extracts the reproduction's native
+`create_splats_with_optimizers_4d`, KNN and RGB-to-SH functions without importing
+the full trainer. It returns an AST digest alongside the callable. A synthetic
+CPU test in the FreeTimeGS environment passed for all nine parameter groups,
+KNN-derived scales, SH layout, duration clamping, scene-scale-adjusted position
+learning rate and an ordinary Adam update for every group. The test supplies
+explicit synthetic inputs/settings; it does not select a scene-training preset.
+
+This adds native model construction support, not training-only temporal
+reconstruction. The existing midpoint cloud has not been relabeled as a
+multi-time initialization or assigned unverified velocities. Choosing and
+validating temporal geometry, complete training-state resume and the native
+loss/relocation loop remain unfinished.
