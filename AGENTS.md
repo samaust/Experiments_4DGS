@@ -8,6 +8,19 @@
 
 Stage and create local commits for completed, validated implementation milestones. Include only task-related changes. Add a commit title and description. Do not push, amend commits, or rewrite history unless explicitly requested.
 
+The user gives standing approval for task-related `git add` and `git commit`
+commands in this repository. Because the sandbox protects `.git` as read-only,
+invoke these commands with `sandbox_permissions: "require_escalated"` from the
+outset; do not first attempt them inside the sandbox. Use separate tool calls
+for staging and committing, with the repository as the working directory, a
+task-specific justification, and the respective approval prefixes
+`["git", "add"]` and `["git", "commit"]`. Inspect the staged diff before committing
+and stage explicit task-related paths only.
+
+This approval does not override Codex execution policy or filesystem controls.
+If outside-sandbox execution is denied or fails with a suspected permission
+restriction, follow the Sandbox and permission failures instructions below.
+
 ## Continue after commits
 
 Creating a local commit is a checkpoint, not a stopping condition.
