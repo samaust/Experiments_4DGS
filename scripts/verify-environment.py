@@ -5,6 +5,8 @@ import sys
 import sysconfig
 
 METHOD_IMPORTS = {
+    'roma': ('numpy', 'scipy', 'cv2', 'PIL', 'kornia', 'einops', 'loguru',
+             'matplotlib', 'tqdm', 'h5py', 'timm', 'albumentations', 'poselib', 'wandb'),
     'freetimegs': ('numpy', 'scipy', 'sklearn', 'cv2', 'PIL', 'plyfile', 'tqdm',
                    'matplotlib', 'imageio', 'imageio_ffmpeg', 'tyro', 'yaml',
                    'tensorboard', 'torchmetrics'),

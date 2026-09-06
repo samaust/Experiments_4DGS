@@ -190,3 +190,35 @@ Before committing scene training budget, choose whether to explicitly accept a
 sparse-initialization pilot or prioritize a released dense training-only
 initializer. Increasing splat scale or enabling densification has not been
 silently substituted. Native training-state integration is still unfinished.
+
+## Released dense-initializer investigation
+
+Following the user's choice to prioritize dense initialization, audited
+RoMa `77f8d68803526dcddfd9b7a46bc76125bdc25f15` in `.local/RoMa` and EDGS
+`f90b022445fc88368f75e66e8fb34aea88372cac` in `.local/EDGS`. EDGS exposes a
+correspondence-based initializer but permits only non-commercial academic or
+personal use; intended-use confirmation is pending before integrating that code.
+Its native RoMa submodule pin differs from the standalone checkout; do not claim
+the standalone installation reproduces EDGS's locked runtime.
+
+The isolated `roma` candidate environment passed Python 3.14.6 / Torch
+2.13.0+cu130 setup and dependency import checks in
+`.local/runs/environment-roma-hiaGTxDE`. Standalone RoMa 0.1.2 installed offline
+from the inspected checkout with `--no-deps --no-build-isolation`. This is
+matcher preparation only: no matcher/backbone checkpoints were downloaded and
+no dense matching or triangulation has run. The separate license and asset
+provenance audit is maintained in [research.md](../research.md#licenses-and-asset-provenance).
+
+The standalone `romatch`, `roma_outdoor`, and `roma_indoor` imports passed
+without loading weights. `uv pip check` verified all 85 installed packages are
+compatible; its cache-lock check required the approved outside-sandbox retry.
+These checks establish installation compatibility, not GPU matcher correctness.
+
+Reproduce the candidate preparation after cloning RoMa at the pin above:
+
+```bash
+bash scripts/setup-environment.sh roma
+uv pip install --offline --no-deps --no-build-isolation --python /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/roma/bin/python .local/RoMa
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/roma/bin/python -c 'import romatch; from romatch import roma_outdoor, roma_indoor; print(romatch.__file__)'
+uv pip check --python /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/roma/bin/python
+```
