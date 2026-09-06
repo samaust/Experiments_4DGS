@@ -33,6 +33,7 @@ resolution. Both remain incomplete; equal steps do not mean equal budget usage.
 | --- | ---: | ---: | ---: | --- | --- | ---: |
 | STG Lite | 22.082603 | 0.827138 | 0.270207 | 0 / 0 / 0 | −1.370350 / −0.005722 / −0.008946 | 449.311 |
 | STG Full | 23.452953 | 0.832861 | 0.279153 | +1.370350 / +0.005722 / +0.008946 | 0 / 0 / 0 | 275.750 |
+| ATGS | 21.637782 | 0.802142 | 0.341477 | -0.444821 / -0.024997 / +0.071270 | -1.815171 / -0.030719 / +0.062324 | 281.242 |
 
 The checked comparison is `.local/runs/stg-selfcap-5000-comparison-20260906.json`.
 Full has higher PSNR/SSIM, while Lite has lower LPIPS and higher measured warm
@@ -40,6 +41,14 @@ throughput. Both retain strong blur/ghosting around the moving person; no final
 artifact-quality winner is established. Both have byte-exact offline reloads
 for all 80 PNGs. Total charged training time is 709.725114 seconds for Lite and
 816.799333 seconds for Full, including earlier attempts.
+
+[ATGS](009-atgs.md) now has a 5,000-microstep checkpoint (1,666 optimizer updates),
+with 676.653776 seconds charged and all 80 offline renders exact in PNG bytes and
+raw float hashes. Its moving-person reconstruction remains heavily blurred,
+and its metrics trail both current STG baselines. Equal iteration labels do not
+mean equal update counts, time budgets or converged quality. Checked ATGS deltas
+are `.local/runs/atgs-vs-lite-selfcap-5000-20260906.json` and
+`.local/runs/atgs-vs-full-selfcap-5000-20260906.json`. All three are provisional.
 
 ## SelfCap dance1 — provisional 2,000-step checkpoints
 

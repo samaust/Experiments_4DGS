@@ -91,3 +91,17 @@ class EvaluationComparisonTests(unittest.TestCase):
     def test_infinite_psnr_delta_is_explicit_null(self):
         a = dict(psnr='Infinity', ssim=1, lpips_alex=0)
         self.assertIsNone(self.module.difference(a, a)['psnr'])
+
+    def test_atgs_bundle_comparison_and_runtime_mismatch(self):
+        for path in (self.b/'evaluation.json', self.b/'reload-a/render.json'):
+            report = json.loads(path.read_text())
+            report.pop('checkpoint_sha256')
+            report.update(model='atgs', bundle={'schema': 'atgs-bundle/v1'}, runtime={'extensions': {}})
+            self.write(path, report)
+        result = self.module.compare(self.a, self.b)
+        self.assertEqual(result['second']['model'], 'atgs')
+        self.assertIsNone(result['second']['checkpoint_sha256'])
+        self.assertEqual(result['delta_second_minus_first']['psnr'], 2)
+        self.change(self.b/'evaluation.json', 'runtime', {'changed': True})
+        with self.assertRaisesRegex(ValueError, 'runtime'):
+            self.module.compare(self.a, self.b)

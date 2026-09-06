@@ -791,3 +791,21 @@ the training environment or every dynamically linked system library. Missing
 extension files are rejected. Use absolute interpreter paths with Codex rules
 that name absolute paths, including for `measure-experiment.py`: its spawned
 GPU sampler inherits the measurement process's sandbox/host access.
+
+For a complete sequential ATGS evaluation, run the following with the STG
+environment (shared CPU metrics/video tools). The driver uses the ATGS
+interpreter for both GPU reloads and requires already-cached AlexNet weights:
+
+```bash
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-render/bin/python scripts/evaluate-atgs-checkpoint.py --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json --checkpoint .local/runs/atgs-selfcap-5000-20260906/checkpoint-005000-004 --training-config .local/runs/atgs-selfcap-5000-20260906/training-config.json --provenance .local/runs/atgs-selfcap-5000-20260906/provenance.json --crops configs/detail-crops.selfcap-dance1.json --torch-cache .local/cache/torch --output .local/runs/atgs-selfcap-5000-evaluation-20260906
+```
+
+Check the actual final bundle path in the training run's `checkpoints.json`
+before execution; the command above assumes saves at 2,000/3,000/4,000/5,000
+plus the final pause snapshot. Output must be new. The driver stops on the first
+failure and retains exact commands and per-stage logs. It checks all 80 raw-float
+and PNG hashes, bundle/runtime identity, then runs the shared evaluator and fixed
+crop/video packager. The completed `evaluation.json` is written only after every
+stage succeeds. `compare-stg-evaluations.py` also accepts this ATGS evaluation
+format alongside STG results, preserving the bundle inventory instead of
+inventing a single checkpoint-file hash. Equal steps are not equal training time.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare completed matched-profile STG evaluations without inventing rankings."""
+"""Compare completed matched-profile STG/ATGS evaluations without inventing rankings."""
 import argparse
 import json
 import math
@@ -13,7 +13,8 @@ def read_evaluation(directory):
     render = json.loads((directory/'reload-a/render.json').read_text())
     if evaluation['status'] != 'completed':
         raise ValueError('evaluation is not complete')
-    for key in ('model', 'iteration', 'checkpoint_sha256', 'manifest_sha256', 'incomplete_training'):
+    identity_fields = ('bundle', 'runtime') if evaluation['model'] == 'atgs' else ('checkpoint_sha256',)
+    for key in ('model', 'iteration', 'manifest_sha256', 'incomplete_training', *identity_fields):
         if evaluation[key] != render[key]:
             raise ValueError('evaluation/render metadata mismatch: '+key)
     if evaluation['metrics'] != metrics['aggregate']:
@@ -55,7 +56,8 @@ def compare(first, second):
     def summary(directory, report):
         return dict(directory=str(Path(directory).resolve()), model=report['model'],
             iteration=report['iteration'], incomplete_training=report['incomplete_training'],
-            metrics=report['metrics'], checkpoint_sha256=report['checkpoint_sha256'],
+            metrics=report['metrics'], checkpoint_sha256=report.get('checkpoint_sha256'),
+            checkpoint_bundle=report.get('bundle'),
             checkpoint_bytes=report['checkpoint_bytes'], benchmark=report['benchmark'])
     return dict(first=summary(first, a), second=summary(second, b),
         manifest_sha256=a['manifest_sha256'], protocol=am['protocol'], count=am['count'],

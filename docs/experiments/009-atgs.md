@@ -1,6 +1,6 @@
 # Experiment 009: ATGS
 
-Status: **SelfCap scene training/resume integration passed at six microsteps; budgeted experiment incomplete**.
+Status: **SelfCap iteration-5,000 checkpoint trained and evaluated; budgeted experiment incomplete**.
 
 Use the selected hash encoder and exact short windows from the shared manifests.
 Record support for calibration, held-out rendering, offline reload, and required
@@ -713,3 +713,42 @@ but with severe smoothing, distorted edges and no clearly reconstructed moving
 person. This is an unfinished intermediate result, not a matched-budget ranking.
 The current runtime records extension hashes and package versions, but does not
 retroactively certify training binaries or all dynamically loaded system libraries.
+
+### Iteration-5,000 evaluation and baseline comparison
+
+The measured continuation `.local/runs/atgs-selfcap-5000-measurement-20260906`
+completed 4,000 further microsteps in 500.058923 seconds. The ledger charged
+499.921410 seconds, for **676.653776 seconds total** of the 7,200-second scene
+allocation. Device-wide sampling recorded an 837 MiB baseline and 9,010 MiB peak.
+Torch allocated/reserved peaks were 6,355,966,464 / 7,671,382,016 bytes.
+The final bundle is
+`.local/runs/atgs-selfcap-5000-20260906/checkpoint-005000-004`: 1,666 optimizer
+updates completed, with two pending microsteps. Full native schedule: 100,000
+microsteps; no growth was enabled. Equal iteration counts across methods do not
+imply equal optimizer-update counts or charged time.
+
+`evaluate-atgs-checkpoint.py` completed both offline reloads, all comparisons,
+shared metrics and fixed-crop/video packaging in 170.957888 seconds under
+`.local/runs/atgs-selfcap-5000-evaluation-20260906`. All 80 PNG and raw-float hashes
+match exactly; native extension/runtime and bundle inventories also match.
+Bundle component size is 4,951,878,833 bytes.
+
+| Measurement | ATGS at 5,000 | Difference from Lite at 5,000 | Difference from Full at 5,000 |
+| --- | ---: | ---: | ---: |
+| PSNR dB | 21.637782 | -0.444821 | -1.815171 |
+| SSIM | 0.802142 | -0.024997 | -0.030719 |
+| LPIPS-Alex | 0.341477 | +0.071270 | +0.062324 |
+
+Warm rendering is 281.242 FPS. Checked per-frame/aggregate comparisons are
+`.local/runs/atgs-vs-lite-selfcap-5000-20260906.json` and
+`.local/runs/atgs-vs-full-selfcap-5000-20260906.json`. The comparison helper now
+supports ATGS bundle/runtime metadata alongside STG file checkpoints.
+
+Frame 4150 shows a reconstructed person, unlike the near-empty early output,
+but face, hair, arms and body boundaries remain heavily blurred. Bookshelf
+structure is more recognizable than at iteration 1,000, with persistent smeared
+book spines and doubled/soft shelf edges. No final quality winner is established;
+all three runs remain unfinished and well below their allocated limits.
+
+All 92 tests pass, including evaluation launch-failure handling, retained virtualenv
+interpreter paths, runtime/hash mismatches and ATGS-vs-STG comparison validation.
