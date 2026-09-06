@@ -1,6 +1,6 @@
 # Experiment 009: ATGS
 
-Status: **Native dependency smoke tests passed; full-model and training adapter pending**.
+Status: **SelfCap scene training/resume integration passed at six microsteps; budgeted experiment incomplete**.
 
 Use the selected hash encoder and exact short windows from the shared manifests.
 Record support for calibration, held-out rendering, offline reload, and required
@@ -629,3 +629,28 @@ All 88 CPU tests pass, with syntax and diff checks clean. The executable's GPU
 scene integration remains pending; no ATGS scene result is claimed. Native
 binary provenance, device-wide sampling and held-out evaluation integration
 remain required for final experiment evidence.
+
+### SelfCap scene training and partial resume executed
+
+Three budget-counted RTX 4090 attempts passed with 5,077 training-only initial
+anchors at the unchanged shared image resolution:
+
+| Run directory under `.local/runs/` | Final iteration | Pending microsteps | Optimizer updates | Charged seconds |
+| --- | ---: | ---: | ---: | ---: |
+| `atgs-selfcap-integration-20260906` | 3 | 0 | 1 | 9.369208 |
+| `atgs-selfcap-partial-20260906` | 4 | 1 | 1 | 13.777042 |
+| `atgs-selfcap-resumed-20260906` | 6 | 0 | 2 | 13.430548 |
+
+Each later process restored the preceding committed bundle. The last process
+resumed the pending gradient/encoder state and completed the second update.
+These are successful continuation checks, not uninterrupted-vs-resumed numerical
+comparisons on the real scene. Total charged time is 36.576797 seconds of the
+7,200-second ATGS/SelfCap allocation. The full 100,000-step schedule remains
+unchanged; `--max-steps` only paused each attempt.
+
+Checkpoint writes took 5.999, 7.191 and 5.673 seconds. Maximum reported allocated
+memory across these attempts was 6,355,890,688 bytes; reserved memory peaked at
+7,637,827,584 bytes. These are Torch allocator measurements, not device-wide
+sampled peaks. The final bundle is
+`.local/runs/atgs-selfcap-resumed-20260906/checkpoint-000006-000`.
+No final quality, throughput or matched-budget ranking is claimed.
