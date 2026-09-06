@@ -1,0 +1,23 @@
+# FreeTimeGsVanilla 911dcf4157a3ddf5c96d9147f97627480268fe0f.
+# Candidate adapter dependencies only; not an upstream package installation.
+# NumPy <2 upstream constraint is incompatible with the Python 3.14 policy.
+# Validate NumPy 2 compatibility before claiming a working reproduction.
+-r base-cu130.in
+numpy
+scipy
+scikit-learn
+opencv-python
+Pillow
+plyfile
+tqdm
+matplotlib
+imageio[ffmpeg]
+tyro
+pyyaml
+tensorboard
+torchmetrics
+typing-extensions
+
+# Deferred native gates: pinned gsplat and fused-ssim.
+# Shared-manifest adapter bypasses COLMAP parsing; viewer, PLAS compression,
+# Open3D and alternate point-cloud preprocessing are not candidate imports.

@@ -5,6 +5,9 @@ import sys
 import sysconfig
 
 METHOD_IMPORTS = {
+    'freetimegs': ('numpy', 'scipy', 'sklearn', 'cv2', 'PIL', 'plyfile', 'tqdm',
+                   'matplotlib', 'imageio', 'imageio_ffmpeg', 'tyro', 'yaml',
+                   'tensorboard', 'torchmetrics'),
     'atgs': ('numpy', 'scipy', 'skimage', 'cv2', 'PIL', 'plyfile', 'tqdm', 'matplotlib',
              'colorama', 'einops', 'lpips', 'laspy', 'torchmetrics', 'jaxtyping',
              'pytorch_msssim', 'imageio', 'imageio_ffmpeg', 'tensorboard', 'mmengine', 'wandb'),
