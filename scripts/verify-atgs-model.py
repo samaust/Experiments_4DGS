@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Synthetic ATGS integration gate; optional Adam steps are not scene training."""
 import argparse
+import copy
 import json
 import sys
 import time
@@ -11,6 +12,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--checkout', type=Path, default=Path('.local/ATGS'))
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--native-training-step', action='store_true',
+                        help='probe native L1/SSIM/scaling loss and active densification statistics on synthetic views')
     parser.add_argument('--native-checkpoint', type=Path,
                         help='new directory for an optional native save/reload probe')
     parser.add_argument('--restore-auxiliary', action='store_true',
@@ -20,6 +23,8 @@ def main():
     parser.add_argument('--check-next-update', action='store_true',
                         help='compare one further update on the original and restored models')
     args = parser.parse_args()
+    if args.native_training_step and args.native_checkpoint is not None:
+        parser.error('--native-training-step is a standalone probe, without --native-checkpoint')
     if args.check_next_update and not args.populate_optimizer_state:
         parser.error('--check-next-update requires --populate-optimizer-state')
     if args.restore_auxiliary and args.native_checkpoint is None:
@@ -61,6 +66,30 @@ def main():
     calibration = dict(width=64, height=64, K=[[60, 0, 29], [0, 60, 30], [0, 0, 1]],
                        world_to_camera_R=np.eye(3).tolist(), world_to_camera_T=[0, 0, 0])
     records = []
+    native_step = None
+    loss_hash = None
+    if args.native_training_step:
+        from atgs_native_step import NativeTrainingStep, load_loss_helpers
+        from atgs_update import load_update_helpers
+        losses, loss_hash = load_loss_helpers(args.checkout)
+        updates, _ = load_update_helpers(args.checkout)
+        probe_opt = copy.copy(opt)
+        # Upstream selected defaults disable statistics throughout training.
+        # Exercise the branch only in this explicit synthetic diagnostic.
+        probe_opt.start_stat = 0
+        # Normal training_setup leaves inactive statistics as empty CPU tensors.
+        # Allocate diagnostic buffers with the shapes used by training_setup_fine,
+        # without invoking its incompatible dynamic-MLP optimizer construction.
+        anchors = model.get_anchor.shape[0]
+        for name, shape in dict(opacity_accum=(anchors, 1), anchor_demon=(anchors, 1),
+                                offset_gradient_accum=(anchors * model.n_offsets, 1),
+                                offset_denom=(anchors * model.n_offsets, 1),
+                                grad_max=(anchors * model.n_offsets, 1),
+                                grad_max_points=(anchors * model.n_offsets, 3)).items():
+            setattr(model, name, torch.zeros(shape, device='cuda'))
+        native_step = NativeTrainingStep(scene=None, opt=probe_opt, pipe=pipe, cfg=cfg,
+                                        background=torch.zeros(3, device='cuda'), render=render,
+                                        prefilter=prefilter_voxel, losses=losses, updates=updates)
     for step, timestamp in enumerate((.1, .5, .9), start=1):
         model.optimizer.zero_grad(set_to_none=True)
         model.dy_optimizer.zero_grad(set_to_none=True)
@@ -68,12 +97,18 @@ def main():
         background = torch.zeros(3, device='cuda')
         visible = prefilter_voxel(camera, model, pipe, background)
         assert visible.any(), 'no visible anchors'
-        output = render(camera, model, pipe, background, iteration=1,
+        probe_iteration = 1
+        output = render(camera, model, pipe, background, iteration=probe_iteration,
                         retain_grad=True, visible_mask=visible)
         image = output['render']
         assert image.shape == (3, 64, 64) and torch.isfinite(image).all()
-        loss = (image - .25).square().mean()
-        loss.backward()
+        if native_step is None:
+            loss = (image - .25).square().mean()
+            loss.backward()
+        else:
+            camera.original_image = torch.full_like(image, .25)
+            _, loss_value = native_step.camera_step(model, camera, probe_iteration)
+            loss = torch.tensor(loss_value, device='cuda')
         gradients = [p.grad for optimizer in (model.optimizer, model.dy_optimizer)
                      for group in optimizer.param_groups for p in group['params'] if p.grad is not None]
         assert gradients and all(torch.isfinite(g).all() for g in gradients)
@@ -83,13 +118,17 @@ def main():
         assert encoder_gradients and any(g.abs().sum() > 0 for g in encoder_gradients)
         model.mlp_color.eval()
         with torch.no_grad():
-            inference = render(camera, model, pipe, background, iteration=1, visible_mask=visible)
+            inference = render(camera, model, pipe, background, iteration=probe_iteration, visible_mask=visible)
         model.mlp_color.train()
         torch.testing.assert_close(inference['render'], image.detach(), rtol=0, atol=0)
         assert 'neural_opacity' not in inference
         records.append(dict(time=timestamp, encoder=active, loss=loss.item(),
                             visible_anchors=int(visible.sum()), gradient_tensors=len(gradients),
                             inference_max_abs_difference=(inference['render'] - image.detach()).abs().max().item()))
+        if native_step is not None:
+            records[-1]['native_loss'] = native_step.last_metrics
+            records[-1]['statistics_iteration'] = probe_iteration
+            records[-1]['statistics_active'] = native_step.statistics_active(probe_iteration)
         if args.populate_optimizer_state:
             model.update_learning_rate(step, opt, timestamp)
             for optimizer in (model.optimizer, model.dy_optimizer):
@@ -121,6 +160,13 @@ def main():
                   records=records, wall_seconds=time.monotonic() - start,
                   native_reload=reload_result,
                   peak_allocated_bytes=torch.cuda.max_memory_allocated())
+    report['native_training_step'] = args.native_training_step
+    report['loss_helper_ast_sha256'] = loss_hash
+    if native_step is not None:
+        report['synthetic_option_overrides'] = dict(start_stat=dict(upstream=opt.start_stat, probe=0))
+        report['synthetic_statistics_buffers_allocated'] = True
+        report['upstream_schedule'] = dict(iterations=opt.iterations, start_stat=opt.start_stat,
+                                           update_from=opt.update_from, update_until=opt.update_until)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open('x') as stream:
         json.dump(report, stream, indent=2)

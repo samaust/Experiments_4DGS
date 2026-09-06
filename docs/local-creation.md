@@ -715,3 +715,26 @@ bundle. Budget accounting must charge failures. Periodic saves and final/deadlin
 saves do not duplicate the same boundary. CPU tests cover balanced updates,
 partial snapshots, continuation counters, callback failure and deadline overrun.
 This controller is not yet wired to production ATGS scene loss/densification.
+
+`atgs_native_step.NativeTrainingStep` supplies native hash/3DGS callbacks:
+L1/SSIM/scaling loss, gradient sanitization, active densification statistics,
+post-update anchor adjustment and scheduled buffer cleanup. Bind its callable,
+`update`, `force_update_due` and `after_microstep` methods to the controller.
+Loss helpers are extracted without importing the unused module-level CUDA
+MS-SSIM metric. The native helper AST hash is recorded by this standalone probe:
+
+```bash
+.local/envs/atgs/bin/python scripts/verify-atgs-model.py --output .local/runs/atgs-native-statistics-cuda-20260906.json --native-training-step
+```
+
+This uses three synthetic views at iteration 1 with an explicitly recorded
+diagnostic-only `start_stat=0` override to exercise the active statistics path,
+without advancing a real scene schedule or stepping optimizers. Selected native
+defaults have `start_stat=150000000`, `update_until=30000`, `iterations=100000`:
+statistics and densification are inactive throughout that production schedule.
+The diagnostic also explicitly allocates the normally inactive statistics
+buffers on CUDA; ordinary native training setup leaves them empty on CPU.
+It does not test actual anchor growth. CPU tests cover the loss combination,
+statistics gating, post-update densification ordering, cleanup and bad targets.
+Production scene construction, growth validation and budgeted execution remain
+pending.

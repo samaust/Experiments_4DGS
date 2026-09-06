@@ -583,3 +583,33 @@ restart, before any checkpoint, to support densification/buffer cleanup in nativ
 order. Extra deadline/periodic bundle saves still preserve partial accumulation.
 Three additional CPU tests cover final partial flushing, callback/restart order
 and post-update callback failure. Native scene callbacks remain the next gate.
+
+### Native loss and statistics callbacks
+
+`atgs_native_step.NativeTrainingStep` supplies hash/3DGS forward/backward with
+the upstream weighted L1/SSIM loss plus 0.01 scaling-volume regularization,
+gradient sanitization, statistics, post-update densification and buffer cleanup.
+L1/SSIM helpers are AST-extracted without the unused module-level CUDA MS-SSIM
+allocation. Three CPU tests cover loss composition and callback guards; the
+suite passes 86 tests.
+
+Audit correction: the selected config has `start_stat=150000000`,
+`update_from=1600`, `update_until=30000`, `iterations=100000`. Consequently
+statistics and densification never activate under these defaults. Preserve this
+configuration for production; do not silently turn growth on. The first probe
+`.local/runs/atgs-native-step-cuda-20260906.json` passed native loss evaluation
+but did **not** exercise active statistics despite its intended purpose.
+
+The corrected synthetic probe explicitly sets a copied `start_stat=0` and
+allocates diagnostic statistics buffers matching native fine-setup shapes.
+The first corrected attempt exposed empty CPU buffers left by normal setup
+(tensor-device mismatch, not a sandbox denial); the diagnostic-only allocation
+resolved that failure. No production configuration was changed.
+
+`.local/runs/atgs-native-statistics-cuda-20260906.json` passes on the RTX 4090
+at iteration 1 for three synthetic timestamps, with active statistics, 21 finite
+gradient tensors per view, and exactly matching training/evaluation renders.
+Loss is approximately 0.3715705; peak allocated memory is 3,565,699,584 bytes.
+No optimizer updates, real scene training or actual anchor growth were performed.
+Loss-helper AST SHA-256:
+`faafee3fdcf5a90065fbda709a99e27da182dbb21b7ee856f4e127f41c27a476`.
