@@ -54,3 +54,50 @@ Candidate setup subsequently passed with
 `uv pip check` passed. Full resolved inventory and setup log are in
 `.local/runs/environment-freetimegs-WuxlCoTY`. This validates the dependency
 profile only, not upstream imports, CUDA kernels or training.
+
+## Locked native dependencies
+
+Use the reproduction's `uv.lock`, not the current renderer HEAD:
+
+| Component | Revision | License |
+| --- | --- | --- |
+| gsplat 1.5.3 | `b60e917c95afc449c5be33a634f1f457e116ff5e` | Apache-2.0 |
+| gsplat GLM submodule | `33b4a621a697a305bc3a7610d290677b96beb181` | MIT or Happy Bunny |
+| fused-ssim | `1272e21a282342e89537159e4bad508b19b34157` | MIT |
+
+Checkouts live in `.local/gsplat-freetimegs` and
+`.local/fused-ssim-freetimegs`. `scripts/build-freetimegs-native.sh` verifies
+these revisions and builds offline with CUDA 13.0, architecture 8.9 and two
+compiler jobs. `scripts/verify-freetimegs-native.py` separately checks packed
+and unpacked rasterization, finite backward gradients, identical/perturbed
+fused SSIM and selective Adam visibility updates. Neither check is a matched
+scene training result. gsplat's Python dependencies `jaxtyping` and `rich`
+were added to the isolated environment; refreshed setup and imports passed in
+`.local/runs/environment-freetimegs-H5dfjqo7`.
+
+Additional resume incompatibility found by inspecting the locked sources:
+fresh initialization creates ordinary `torch.optim.Adam`, whereas
+`load_checkpoint` replaces it with `SelectiveAdam` and omits that pinned class's
+required `betas` argument. An exact-resume adapter must preserve the original
+optimizer type and settings rather than adopting this upstream reload path.
+
+The offline build passed without source compatibility patches in
+`.local/runs/freetimegs-native-build-PzZiBfzi` (3m30s package preparation).
+Both native packages installed and `uv pip check` passed. GPU kernel execution
+remains pending; a successful compilation is not evidence of device access.
+
+`scripts/freetimegs_source.py` extracts the three native temporal methods by AST
+without executing trainer imports or initialization. Two CPU tests passed for
+linear motion, static mode, temporal Gaussian opacity, finite gradients, and
+the regularizer's stop-gradient behavior. This reuses the reproduction equations;
+it is not a new implementation from the paper or a complete training adapter.
+
+The synthetic GPU gate subsequently passed on the NVIDIA GeForce RTX 4090:
+`.local/runs/freetimegs-native-cuda-20260906.json`. Packed/unpacked render
+maximum absolute difference was zero; fused SSIM was 1.0 for identical images
+and 0.9519809484 for the deliberately perturbed pair. Native render/SSIM
+backward gradients and selective Adam visibility updates passed. The report
+records the two extension binary hashes and Torch version. This supersedes the
+pending GPU status above, but does not validate a complete reproduction model,
+training resume, scene training, or offline scene evaluation. All 94 CPU tests
+also passed before this device check.
