@@ -625,3 +625,32 @@ The report records their AST hash. A CPU regression checks gradient averaging,
 warmup, learning-rate restoration and gradient clearing. The GPU probe uses the
 native model and optimizers in one process; it is not a fresh-process resume
 test, an atomic checkpoint bundle, or SelfCap scene training.
+
+### ATGS commit-marked checkpoint bundles
+
+`atgs_bundle.save_bundle(directory, model, sampler, loop, provenance)` saves
+native model files, both optimizers, auxiliary tensors and the loop supplement
+in one exclusively created directory. The parent must exist. Call it
+synchronously after a completed microstep, keeping training paused until it
+returns; pending gradients must not yet have been averaged. CUDA capture is
+required by default.
+
+Supply `manifest_sha256`, `source_revision`, `config_sha256` and
+`helper_ast_sha256` in `provenance`, computed from the actual shared manifest,
+source revision, resolved configuration and selected upstream helper AST.
+The writer hashes every component, fsyncs the files and atomically publishes
+`bundle.json` last, then syncs the checkpoint and parent directories. This is
+a completion-marker protocol, not an atomic directory replacement. Interrupted
+directories are retained for diagnosis and existing destinations are never
+overwritten. There is no automatic latest-checkpoint pointer.
+
+Use `load_bundle_supplements(directory, expected_provenance=provenance)` to
+verify completion, all component hashes and expected provenance before
+weights-only loading the auxiliary and loop supplements on CPU. It returns
+`(auxiliary, loop_state, record)`. Restore native files and auxiliary state
+before constructing/loading both optimizers; restore loop state last. Bundles
+must remain immutable while loading. These hashes detect accidental mismatch,
+not maliciously replaced data, and native model restoration remains the
+caller's responsibility. CPU fixture tests cover publication, interruption,
+overwrite refusal, corruption, counter mismatch and provenance checks; native
+GPU bundle round-trip and production training integration remain pending.

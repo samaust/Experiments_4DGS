@@ -489,3 +489,21 @@ execution but explicitly records `parameters_exact: false`.
 This is a same-process synthetic test, not a bit-exact guarantee, fresh-process
 training resume, atomic model/loop bundle, or SelfCap training. Production loop
 wiring, checkpoint provenance and deadline integration remain pending.
+
+### Commit-marked model/loop bundle component
+
+`scripts/atgs_bundle.py` now writes all eleven native/optimizer/auxiliary/loop
+components together, with SHA-256 inventories and explicit manifest, source,
+resolved-configuration and helper-AST provenance. It reserves a new directory,
+syncs the component files and publishes a completion marker last. Failed writes
+leave diagnostic directories without an accepted marker; existing checkpoints
+are never overwritten. Readers verify provenance and every component before
+weights-only loading supplements, and cross-check iteration/update counters.
+
+Four CPU fixture tests cover successful publication and loading, interrupted
+writes, overwrite refusal, wrong provenance, corrupt bytes, mismatched counters
+and linked checkpoint directories. This adds a checkpoint transaction component,
+not a native GPU bundle-resume result or production training adapter. The caller
+must pause training throughout capture and restore model/auxiliary state before
+optimizers, followed by the loop supplement. GPU round-trip, fresh-process
+training resumption and deadline integration remain pending.
