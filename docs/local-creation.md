@@ -242,16 +242,21 @@ After preparing and verifying the SelfCap manifest, generate a new sparse cloud
 from training cameras only (CPU preprocessing, outside the training budget):
 
 ```bash
-.local/envs/stg-colmap/bin/python scripts/initialize-selfcap.py \
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python scripts/initialize-selfcap.py \
   --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json \
   --output .local/data/selfcap/dance1-initialization-20260906
 ```
 
-The output directory must not already exist. Source frame 4150 is selected from
+The output directory must not already exist. Source frame 4150 is selected by default from
 each of the 23 training cameras; supplied intrinsics and poses remain fixed.
 `inputs.json` records image and manifest hashes, and `result.json` records point
 count and reprojection error. The sparse cloud still needs coverage inspection
 before training; low reprojection error alone does not validate motion timing.
+
+For an individual temporal-initialization frame, add `--frame-id 4120` (or another
+frame in `[4120,4180)`) and use a separate output directory. This preserves fixed
+calibration, held-out exclusion and image-hash evidence for that frame; it does
+not estimate temporal correspondences by itself.
 
 Validate checkpoint groundwork separately from experiment training:
 

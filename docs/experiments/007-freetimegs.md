@@ -143,3 +143,11 @@ two distinct time renders, finite gradients for all nine groups and one ordinary
 Adam update per group. Initializer/render AST hashes and extension binary hashes
 are recorded. Its scale `0.3` is a diagnostic setting, not a selected scene
 preset. No native loss schedule, relocation or scene training is claimed.
+
+The shared CPU triangulation helper now accepts `--frame-id` while retaining
+4150 as its default. Its first-frame integration test produced 5,256 points from
+all 23 training cameras, mean reprojection error 0.5564470705 pixels, in 8.04s:
+`.local/data/selfcap/dance1-initialization-frame4120-20260906`. Fixed calibration
+checks passed. Three added frame-selection tests reject invalid windows,
+duplicate training camera IDs and missing/duplicate frames. This is preprocessing,
+not charged training time. Temporal pair generation is not yet complete.

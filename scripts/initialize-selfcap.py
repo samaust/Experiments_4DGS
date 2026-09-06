@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Triangulate a training-only SelfCap midpoint cloud using fixed calibration.
+"""Triangulate a training-only SelfCap frame using fixed calibration.
 
 CPU COLMAP preprocessing, separate from model training time. No supplied point
 cloud or held-out image enters the reconstruction database.
@@ -11,20 +11,40 @@ from pathlib import Path
 import time
 
 
+def select_training_frames(manifest, frame_id):
+    if not 4120 <= frame_id < 4180:
+        raise ValueError('frame must be in the matched SelfCap window [4120, 4180)')
+    if manifest.get('schema') != 'selfcap-processed/v1' or manifest.get('status') != 'prepared':
+        raise ValueError('requires completed SelfCap processed manifest')
+    cameras = [c for c in manifest['cameras'] if c['split'] == 'train']
+    if (len(cameras) != 23 or len({c['id'] for c in cameras}) != 23
+            or any(c['id'] == '0015' for c in cameras)):
+        raise ValueError('invalid training split')
+    selected = []
+    for camera in cameras:
+        frames = [f for f in camera['frames'] if f['frame_id'] == frame_id]
+        if len(frames) != 1:
+            raise ValueError('selected training frame missing or duplicated')
+        selected.append((camera, frames[0]))
+    return selected
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--manifest', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
+    p.add_argument('--frame-id', type=int, default=4150,
+                   help='Source frame in [4120,4180); default retains midpoint initialization')
     a = p.parse_args()
     import numpy as np
     import pycolmap as colmap
     from scipy.spatial.transform import Rotation
     m = json.loads(a.manifest.read_text())
-    if m.get('schema') != 'selfcap-processed/v1' or m.get('status') != 'prepared':
-        p.error('requires completed SelfCap processed manifest')
-    cameras = [c for c in m['cameras'] if c['split'] == 'train']
-    if len(cameras) != 23 or any(c['id'] == '0015' for c in cameras):
-        p.error('invalid training split')
+    try:
+        selected = select_training_frames(m, a.frame_id)
+    except ValueError as error:
+        p.error(str(error))
+    cameras = [camera for camera, _ in selected]
     if a.output.exists():
         p.error('choose a new output directory')
     a.output.mkdir(parents=True)
@@ -36,9 +56,10 @@ def main():
     camera_lines, image_lines, inputs = [], [], []
     started = time.monotonic()
     with colmap.Database.open(database_path) as db:
-        for index, camera in enumerate(cameras, 1):
-            frame = next(f for f in camera['frames'] if f['frame_id'] == 4150)
+        for index, (camera, frame) in enumerate(selected, 1):
             source = (a.manifest.parent / frame['path']).resolve()
+            if not source.is_relative_to(a.manifest.parent.resolve()):
+                raise ValueError('source path escapes processed scene')
             with source.open('rb') as stream:
                 if hashlib.file_digest(stream, 'sha256').hexdigest() != frame['sha256']:
                     raise ValueError('source hash mismatch')
@@ -62,8 +83,8 @@ def main():
     provenance = dict(manifest=str(a.manifest.resolve()),
                       manifest_sha256=hashlib.sha256(a.manifest.read_bytes()).hexdigest(),
                       inputs=inputs, held_out_excluded=['0015'], pycolmap=colmap.__version__,
-                      device='CPU', source_frame=4150, seed=0,
-                      note='Midpoint initialization only; moving matches may be rejected due to fractional camera offsets.')
+                      device='CPU', source_frame=a.frame_id, seed=0,
+                      note='Single-frame initialization only; moving matches may be rejected due to fractional camera offsets.')
     (a.output/'inputs.json').write_text(json.dumps(provenance, indent=2)+'\n')
     colmap.set_random_seed(0)
     colmap.extract_features(database_path, images,
