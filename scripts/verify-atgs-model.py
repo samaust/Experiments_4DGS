@@ -17,7 +17,11 @@ def main():
                         help='also save/restore supplemental tensors and rebuild optimizers')
     parser.add_argument('--populate-optimizer-state', action='store_true',
                         help='take three synthetic Adam updates before checkpoint validation')
+    parser.add_argument('--check-next-update', action='store_true',
+                        help='compare one further update on the original and restored models')
     args = parser.parse_args()
+    if args.check_next_update and not args.populate_optimizer_state:
+        parser.error('--check-next-update requires --populate-optimizer-state')
     if args.restore_auxiliary and args.native_checkpoint is None:
         parser.error('--restore-auxiliary requires --native-checkpoint')
     if args.populate_optimizer_state and not args.restore_auxiliary:
@@ -106,10 +110,12 @@ def main():
                                  dataset.add_cov_dist, dataset.add_color_dist)
         reload_result = probe_native_reload(model, factory, cloud, args.native_checkpoint,
                                             camera=camera, pipe=pipe, background=background,
-                                            restore_auxiliary=args.restore_auxiliary, opt=opt)
+                                            restore_auxiliary=args.restore_auxiliary, opt=opt,
+                                            next_update=args.check_next_update)
     torch.cuda.synchronize()
     report = dict(status='passed', scope='synthetic full model integration; not scene training',
                   synthetic_optimizer_updates=3 if args.populate_optimizer_state else 0,
+                  additional_comparison_updates=2 if args.check_next_update else 0,
                   device=torch.cuda.get_device_name(), levels=cfg.levels,
                   feat_dim=dataset.feat_dim, voxel_resolution=model.voxel_grid_resolution,
                   records=records, wall_seconds=time.monotonic() - start,

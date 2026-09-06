@@ -98,7 +98,70 @@ def inspect_native_checkpoint(directory, *, require_optimizers=False, require_au
     return result
 
 
-def probe_native_reload(model, factory, cloud, directory, *, camera, pipe, background, restore_auxiliary=False, opt=None):
+def tensor_difference(left, right):
+    """Report finite tensor differences without hiding CUDA reduction variability."""
+    import torch
+    if left.shape != right.shape or left.dtype != right.dtype:
+        raise ValueError('tensor structure mismatch')
+    if not torch.isfinite(left).all() or not torch.isfinite(right).all():
+        raise ValueError('nonfinite comparison input')
+    if left.numel() == 0:
+        return 0.0
+    return (left.detach().double() - right.detach().double()).abs().max().item()
+
+
+def probe_next_update(model, restored, *, camera, pipe, background, opt):
+    """Compare a synthetic fourth update; no RNG/sampler resume claim."""
+    import torch
+    from gaussian_renderer import prefilter_voxel, render
+
+    losses, images = [], []
+    for current in (model, restored):
+        current.mlp_color.train()
+        current.update_learning_rate(4, opt, camera.time)
+        optimizers = (current.optimizer, current.dy_optimizer)
+        for optimizer in optimizers:
+            optimizer.zero_grad(set_to_none=True)
+        visible = prefilter_voxel(camera, current, pipe, background)
+        output = render(camera, current, pipe, background, iteration=4, visible_mask=visible)
+        loss = (output['render'] - .25).square().mean()
+        if not torch.isfinite(loss):
+            raise ValueError('nonfinite next-update loss')
+        losses.append(loss.item())
+        loss.backward()
+        for optimizer in optimizers:
+            parameters = [p for group in optimizer.param_groups for p in group['params']]
+            torch.nn.utils.clip_grad_norm_(parameters, opt.gradient_clip_norm, error_if_nonfinite=True)
+            optimizer.step()
+        current.mlp_color.eval()
+        with torch.no_grad():
+            visible = prefilter_voxel(camera, current, pipe, background)
+            images.append(render(camera, current, pipe, background, iteration=4, visible_mask=visible)['render'])
+    differences = {}
+    state_exact = {}
+    for name in ('optimizer', 'dy_optimizer'):
+        a, b = getattr(model, name), getattr(restored, name)
+        assert len(a.param_groups) == len(b.param_groups)
+        maximum = 0.
+        for ga, gb in zip(a.param_groups, b.param_groups):
+            assert len(ga['params']) == len(gb['params'])
+            for pa, pb in zip(ga['params'], gb['params']):
+                maximum = max(maximum, tensor_difference(pa, pb))
+        differences[name] = maximum
+        try:
+            assert_state_equal(a.state_dict(), b.state_dict())
+            state_exact[name] = True
+        except AssertionError:
+            state_exact[name] = False
+    return dict(losses=losses, loss_abs_difference=abs(losses[0] - losses[1]),
+                parameter_max_abs_differences=differences, optimizer_state_exact=state_exact,
+                image_max_abs_difference=tensor_difference(*images),
+                exact=losses[0] == losses[1] and all(v == 0 for v in differences.values())
+                      and all(state_exact.values()) and torch.equal(*images),
+                scope='one synthetic next update, same process; differences reported, not assumed zero')
+
+
+def probe_native_reload(model, factory, cloud, directory, *, camera, pipe, background, restore_auxiliary=False, opt=None, next_update=False):
     """Synthetic in-process model reload probe, not a resume implementation.
 
 Uses a supplied cloud for upstream lifetime reconstruction and writes only a
@@ -143,7 +206,11 @@ when restore_auxiliary is explicitly selected. No sampler/RNG state is restored.
         original, loaded = getattr(model, name), getattr(restored, name)
         omitted[name] = dict(original_shape=list(original.shape), reloaded_shape=list(loaded.shape),
                              equal=original.shape == loaded.shape and torch.equal(original, loaded))
+    next_result = None
+    if next_update:
+        next_result = probe_next_update(model, restored, camera=camera, pipe=pipe, background=background, opt=opt)
     return dict(scope='native in-process inference reload, supplied lifetime cloud; not resumable',
+                next_update=next_result,
                 files=files, max_abs_difference=(reference - reloaded).abs().max().item(),
                 auxiliary_tensors=omitted, anchor_requires_grad=restored._anchor.requires_grad,
                 optimizers_restored=restore_auxiliary, auxiliary_restored=restore_auxiliary,

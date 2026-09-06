@@ -295,3 +295,31 @@ Remaining resume gates: identical next-update behavior, saved gradients at
 accumulation boundaries, warmup/update counters, RNG/sampler continuation,
 constructor/config/source provenance and fresh-process offline reload. The
 training adapter must satisfy these before any resumable scene run is claimed.
+
+### Next-update probe preparation
+
+The model verifier now accepts `--check-next-update` together with populated
+optimizer-state validation. After exact checkpoint-state restoration it runs
+the same synthetic fourth update on the original and restored models, comparing
+pre-update loss, post-update parameters, optimizer state and inference images.
+Nonfinite values or structural mismatches fail; finite numerical differences
+are reported explicitly with an `exact` flag rather than assumed to be zero.
+This test is in-process, uses a fixed camera and no stochastic sampler, and
+does not establish the production training loop's accumulation or RNG contract.
+GPU execution of the new probe remains pending.
+
+The first GPU next-update probe completed:
+`.local/runs/atgs-next-update-cuda-20260906.json`, with the saved pre-update
+checkpoint at `.local/runs/atgs-next-update-checkpoint-20260906/`. Both
+pre-update losses were `0.04807592183351517`. After the same fourth update,
+the shared optimizer's maximum parameter difference was
+`2.0801089704036713e-06` and its optimizer state was not exact; dynamic-encoder
+parameters and optimizer state were exact. The post-update image difference
+was `1.7881393432617188e-07`. Accordingly `next_update.exact` is **false**:
+the top-level passed status denotes finite execution, not exact resumption.
+
+The measured section took 10.751 seconds, with peak framework allocation
+13,409,336,832 bytes. All 58 unit tests pass. The cause of these small
+differences has not been established: a same-model repeated-backward control
+and per-parameter-group diagnostics are needed before attributing them to
+CUDA reduction variability. No scene training or fresh offline reload has run.

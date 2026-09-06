@@ -545,3 +545,9 @@ git -C .local/ATGS apply ../../patches/atgs-lr-python-float.patch
 
 This prevents NumPy learning-rate scalars from entering new optimizer files.
 It does not rewrite existing checkpoints or disable restricted Torch loading.
+
+Add `--check-next-update` to the populated-state probe to compare a fourth
+synthetic update on both the original and restored model. Choose unused report
+and checkpoint paths. The report distinguishes successful finite execution from
+exact equality and includes parameter/image differences and optimizer-state
+equality. It is still an in-process check, not offline training resumption.

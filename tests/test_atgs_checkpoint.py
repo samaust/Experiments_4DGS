@@ -7,11 +7,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from atgs_checkpoint import MODEL_FILES, OPTIMIZER_FILES, inspect_native_checkpoint
 from atgs_checkpoint import capture_auxiliary_state, restore_auxiliary_state
 from atgs_checkpoint import assert_state_equal
+from atgs_checkpoint import tensor_difference
 from types import SimpleNamespace
 import torch
 
 
 class ATGSCheckpointTests(unittest.TestCase):
+    def test_tensor_difference_reports_errors_and_rejects_invalid_inputs(self):
+        a = torch.tensor([1., 2.])
+        self.assertEqual(tensor_difference(a, a.clone()), 0.)
+        self.assertEqual(tensor_difference(a, a + .5), .5)
+        self.assertEqual(tensor_difference(torch.empty(0), torch.empty(0)), 0.)
+        with self.assertRaisesRegex(ValueError, 'nonfinite'):
+            tensor_difference(a, torch.tensor([float('nan'), 2.]))
+        with self.assertRaisesRegex(ValueError, 'structure'):
+            tensor_difference(a, torch.ones(3))
+
     def test_optimizer_comparison_detects_step_moment_and_structure_changes(self):
         import copy
         expected = {'state': {0: {'step': torch.tensor(3.), 'exp_avg': torch.ones(2)}},
