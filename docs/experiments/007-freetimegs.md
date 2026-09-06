@@ -197,7 +197,10 @@ Following the user's choice to prioritize dense initialization, audited
 RoMa `77f8d68803526dcddfd9b7a46bc76125bdc25f15` in `.local/RoMa` and EDGS
 `f90b022445fc88368f75e66e8fb34aea88372cac` in `.local/EDGS`. EDGS exposes a
 correspondence-based initializer but permits only non-commercial academic or
-personal use; intended-use confirmation is pending before integrating that code.
+personal use. On 2026-09-06 the user confirmed the intended use qualifies as
+non-commercial academic research and/or non-commercial personal use. This clears
+the intended-use gate for evaluating EDGS, not the separate dependency and asset
+audits or redistribution-notice requirements.
 Its native RoMa submodule pin differs from the standalone checkout; do not claim
 the standalone installation reproduces EDGS's locked runtime.
 
