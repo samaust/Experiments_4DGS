@@ -324,3 +324,42 @@ the held-out RGB was inspected separately for qualitative comparison. This rules
 out complete foreground omission at that frame, but does not validate temporal
 motion or trained quality. The diagnostic is not a reduced-resolution benchmark.
 Reproduction commands are in [the creation guide](../local-creation.md).
+
+### Native optimization and checkpoint groundwork
+
+`freetimegs_training.py` fails closed on trainer source SHA-256
+`fc3e4320da73a470d0a16bcb5803f84d1bda5bdeafb000fcc39e022fbcfaaeb4` and extracts the
+released `default_keyframe` preset and complete optimization-step statements.
+Only camera inputs and the iteration-boundary metrics return are adapted; loss,
+annealing, optimizer update, gradient accumulation, relocation, strategy, and
+pruning statements remain native. The preset resolves to 70,000 steps, relocation
+starting at 100 and stopping at 63,000, and standard densification disabled until
+100,000. The native `init_duration=-1` sentinel is preserved, including its use as
+the duration-regularization target; this is not silently repaired to the positive
+duration computed by the upstream data loader.
+
+`freetimegs_checkpoint.py` records all nine parameter groups, ordinary-Adam
+states, position scheduler, strategy state, relocation accumulator/count, caller
+loop/sampler state, RNG, configuration, and provenance. It rejects uncleared
+gradients, malformed parameter shapes and changed configuration/source identity,
+and publishes new checkpoints without overwriting previous ones. CPU tests verify
+exact next-update equality and rejection of incomplete updates/wrong provenance.
+
+Synthetic CUDA verification at
+`.local/runs/freetimegs-training-state-cuda-20260906.json` passed native L1,
+valid-padding fused SSIM, LPIPS-Alex, duration regularization and relocation.
+It restored a checkpoint into a newly constructed model **in the same process**:
+next loss difference was zero, with maximum parameter difference
+`1.7881393432617188e-7` in quaternions (all other groups exact). Four-point diagnostic
+overrides were scale 0.3 and relocation ratio 0.5; these are not scene-training
+settings. CPU suite: 116 discovered, 113 passed, three optional-dependency skips;
+both native training-source tests also passed in the FreeTimeGS environment.
+
+Fresh-process scene reload, supervisor integration, and actual training remain
+unfinished. Before scene training, apply the reproduction's coordinate
+normalization and loader duration override (two keyframe gaps); the earlier
+world-space previews used the combiner's three-gap archive durations.
+
+```bash
+/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/freetimegs/bin/python scripts/verify-freetimegs-training.py --torch-cache .local/cache/torch --output .local/runs/freetimegs-training-state-cuda-20260906.json
+```
