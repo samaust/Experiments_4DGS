@@ -91,6 +91,12 @@ class TrainingControlTests(unittest.TestCase):
         self.assertEqual(self.loop['micro_steps'], 0)
         self.assertTrue(self.saved[-1][2])
 
+    def test_integration_pause_preserves_full_schedule_and_gradients(self):
+        self.assertEqual(self.run_segment(pause_requested=lambda: self.loop['iteration'] == 1), 'paused')
+        self.assertEqual(self.loop['micro_steps'], 1)
+        self.assertEqual(self.loop['update_count'], 0)
+        self.assertEqual(self.saved[-1][0], 'paused')
+
     def test_special_boundary_restarts_before_post_update_callback(self):
         events = []
         def after(model, iteration, updated):

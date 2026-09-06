@@ -738,3 +738,33 @@ It does not test actual anchor growth. CPU tests cover the loss combination,
 statistics gating, post-update densification ordering, cleanup and bad targets.
 Production scene construction, growth validation and budgeted execution remain
 pending.
+
+### ATGS supervised SelfCap trainer
+
+`train-atgs-manifest.py` connects native callbacks and bundle resumption to the
+shared manifest and training-only initialization. The executable is ready for
+GPU integration validation; do not treat its existence as a completed scene run.
+
+```bash
+.local/envs/atgs/bin/python scripts/train-atgs-manifest.py --check-gpu
+.local/envs/atgs/bin/python scripts/train-atgs-manifest.py --manifest .local/data/selfcap/dance1-processed-20260906/manifest.json --initialization .local/data/selfcap/dance1-initialization-20260906 --output .local/runs/atgs-selfcap-integration-20260906 --max-steps 3
+```
+
+Every training attempt, including failed startup and integration runs, charges
+the central ATGS/SelfCap ledger under the two-hour limit. `--max-steps` pauses at
+a completed microstep without changing the full native schedule or flushing a
+partial encoder batch. `--resume` accepts a committed bundle and requires matching
+configuration/provenance. Choose a new output directory for every attempt.
+
+The trainer preserves native no-growth defaults and refuses a configuration
+that would activate unvalidated production densification. Initial midpoint
+geometry gets ATGS's always-active frame-zero lifetime marker; that marker does
+not assert reconstruction at frame zero. Input image hashes, manifest identity
+and the exact training-camera set are checked. Patched Python source and adapter
+hashes enter configuration provenance; native binary/dependency provenance and
+device-wide GPU sampling still need integration before benchmark-quality runs.
+
+Checkpoint and step reserves default to conservative 120/30 seconds, in addition
+to the external supervisor's 30-second shutdown margin. Actual checkpoint times
+are recorded. These defaults need validation against measured scene-run costs.
+The parent stays free of Torch imports before launching the supervised worker.

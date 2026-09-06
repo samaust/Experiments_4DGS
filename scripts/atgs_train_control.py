@@ -11,7 +11,8 @@ from atgs_loop_state import validate_loop
 def run_training_segment(*, model, sampler, loop, max_iterations,
                          remaining_seconds, microstep, update, checkpoint,
                          checkpoint_interval=1000, checkpoint_reserve=60.,
-                         step_reserve=5., force_update_due=None, after_microstep=None):
+                         step_reserve=5., force_update_due=None, after_microstep=None,
+                         pause_requested=None):
     """Run complete microsteps, preserving pending gradients at a deadline.
 
     microstep(model, key, iteration) performs forward/loss/backward and any
@@ -51,6 +52,9 @@ def run_training_segment(*, model, sampler, loop, max_iterations,
             raise RuntimeError('deadline exhausted during checkpoint')
 
     while loop['iteration'] < max_iterations:
+        if pause_requested is not None and pause_requested():
+            save('paused')
+            return 'paused'
         # Reserve one complete microstep plus any resulting optimizer update.
         if remaining() <= checkpoint_reserve + step_reserve:
             save('deadline')

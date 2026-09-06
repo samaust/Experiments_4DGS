@@ -613,3 +613,19 @@ Loss is approximately 0.3715705; peak allocated memory is 3,565,699,584 bytes.
 No optimizer updates, real scene training or actual anchor growth were performed.
 Loss-helper AST SHA-256:
 `faafee3fdcf5a90065fbda709a99e27da182dbb21b7ee856f4e127f41c27a476`.
+
+### Executable SelfCap training integration
+
+`train-atgs-manifest.py` now wires the native callbacks, synchronous controller,
+manifest sampler and commit-marked bundles into the shared budget ledger and
+external deadline supervisor. Integration-step limits pause rather than shorten
+the optimization schedule. Initial geometry uses the existing training-only
+midpoint PLY with native always-active initial-anchor lifetime markers. New
+initialization validation matches the manifest, exact training split and image
+hashes; it passed on the actual SelfCap initialization (PLY SHA-256
+`13f1131ccca5f91868999deac74ff8fce1b98661ddf79085ce136c6808222d09`).
+
+All 88 CPU tests pass, with syntax and diff checks clean. The executable's GPU
+scene integration remains pending; no ATGS scene result is claimed. Native
+binary provenance, device-wide sampling and held-out evaluation integration
+remain required for final experiment evidence.
