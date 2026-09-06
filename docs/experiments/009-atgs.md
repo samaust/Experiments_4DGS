@@ -382,3 +382,57 @@ state rather than silently dropping it. State validation precedes global RNG
 restoration. CPU regression tests reproduce all three CPU streams after a
 Torch serialization round trip and reject malformed state. CUDA RNG behavior
 and integration into ATGS sampler/accumulation checkpoints remain pending.
+
+`verify-training-rng.py` now exercises a weights-only serialization round trip
+for all four RNG families, including every visible CUDA generator. It compares
+samples exactly after deliberately advancing the streams. GPU execution of
+this verifier remains pending.
+
+The training-loop audit identifies additional adapter requirements:
+
+- `EncoderBalancedSampler` derives buckets from raw frame index, not corrected
+  per-camera timestamps. Manifest adaptation must bucket by the actual encoder
+  routing time, preserving explicit train-only membership.
+- `train_long.py` forces balanced accumulation on. With three active encoders,
+  completion requires visits to all three; the nominal eight-step config is
+  not the effective update rule. Shared gradients divide by microstep count;
+  routed gradients divide by per-encoder visits.
+- Warmup depends on optimizer-update count, and save/test/densification
+  boundaries can force a partial update and sampler restart. A resumable
+  adapter must record update count/iteration and the chosen boundary behavior.
+- Upstream uses a 16-worker prefetched DataLoader. Saving only generator state
+  does not recover the consumed sample position: checkpointable sampling needs
+  bucket permutations, consumption cursor, encoder order and sampler RNG state.
+
+These findings are implementation requirements, not a claim that sampler or
+accumulation resumption is already implemented.
+
+The approved RNG GPU retry passed exactly on the RTX 4090:
+`.local/runs/training-rng-cuda-20260906.json`. Python, NumPy (including its
+cached Gaussian), Torch CPU and every visible Torch CUDA stream reproduced
+the expected samples after weights-only serialization and stream advancement.
+
+### Checkpointable corrected-time sampler
+
+`scripts/atgs_sampler.py` implements synchronous encoder-balanced sampling over
+the shared manifest's training keys. Buckets use corrected normalized times,
+not source frame numbers. Each logical batch visits every encoder once in
+random order; smaller shuffled buckets cycle as in upstream. Sampling uses a
+dedicated CPU generator and eagerly records the epoch order, an explicit local
+adaptation that preserves the sampling policy but not upstream's global-RNG
+draw timing. No held-out view is admitted.
+
+The saved state contains manifest/routing identity, epoch order, cursor, epoch
+number and generator state. Tests verify weights-only round trips mid-batch
+and across epochs, global RNG isolation, and rejection of held-out membership,
+empty buckets, invalid cursors, changed identities and unbalanced saved batches.
+All 66 unit tests pass.
+
+On the actual processed SelfCap manifest, corrected-time bucket sizes are
+`[469, 467, 444]`; cycling yields 1,407 samples per epoch from 1,380 training
+views. Restoring after 17 samples reproduced the next 3,000 keys exactly,
+including epoch transitions, with camera 0015 excluded throughout. Routing
+identity: `2548f4210b39a9465b82f7c79fcf3c9277ae5360ccd5aabcee83859eb787a689`.
+This sampler must be consumed synchronously without worker prefetch; checkpoint
+the cursor together with model/accumulation state after the corresponding
+microstep completes. It is not yet wired into the ATGS training adapter.

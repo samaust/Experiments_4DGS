@@ -571,3 +571,23 @@ requires checkpoint hashes to match the successful evidence and reconstructs
 lifetimes from the supplemental file, without the original cloud. The second
 process checks exact float-image hashes against the first, at all three
 synthetic timestamps. This is inference-only, not sampler/optimizer resumption.
+
+### Training RNG validation
+
+```bash
+.local/envs/atgs/bin/python scripts/verify-training-rng.py --output .local/runs/training-rng-cuda-NEW.json
+```
+
+This requires GPU access and verifies exact Python, NumPy (including cached
+Gaussian), Torch CPU and all visible Torch CUDA sample sequences after a
+weights-only checkpoint round trip. It performs no model training and does not
+validate the sampler cursor or gradient-accumulation state.
+
+The checkpointable manifest sampler is `atgs_sampler.ManifestBalancedSampler`.
+Construct it with the validated `ATGSSelfCapScene`, effective encoder count and
+seed; `next(sampler)` returns a training `(camera_id, frame_id)` key. Save its
+`state_dict()` alongside the training state and restore with `load_state_dict()`.
+Its dedicated generator and saved cursor support mid-batch and cross-epoch
+continuation. Do not attach a prefetched DataLoader: the cursor records keys
+already handed to the synchronous loop, not completed background loads.
+Full accumulation/model checkpoint integration remains pending.
