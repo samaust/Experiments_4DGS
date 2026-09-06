@@ -604,3 +604,24 @@ use its returned loop dictionary to resume bookkeeping. CUDA state is required
 by default; `include_cuda=False` is solely for explicit CPU fixtures. This API
 is a tested component, not an executable ATGS training adapter or an atomic
 checkpoint bundle writer.
+
+### ATGS partial-accumulation validation
+
+```bash
+.local/envs/atgs/bin/python scripts/verify-atgs-accumulation.py --checkpoint .local/runs/atgs-backward-control-checkpoint-20260906 --evidence .local/runs/atgs-backward-control-cuda-20260906.json --output .local/runs/atgs-accumulation-cuda-20260906.json
+```
+
+This GPU probe requires the hash-verified three-update synthetic checkpoint and
+an unused output path. It saves pending gradients, sampler cursor and RNG after
+one microstep, then compares uninterrupted and restored completion of the
+three-encoder accumulation cycle. Sample keys, random targets and warmup factors
+must match exactly; finite parameter differences are reported separately and
+are not required to be zero. A passing report does not establish bit-exact
+training resumption.
+
+`atgs_update.load_update_helpers` extracts only the five upstream accumulation
+helpers from `train_long.py`, avoiding its module-level LPIPS initialization.
+The report records their AST hash. A CPU regression checks gradient averaging,
+warmup, learning-rate restoration and gradient clearing. The GPU probe uses the
+native model and optimizers in one process; it is not a fresh-process resume
+test, an atomic checkpoint bundle, or SelfCap scene training.

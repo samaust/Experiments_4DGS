@@ -461,3 +461,31 @@ also reject inconsistent visit counts, changed topology and uncleared boundary
 gradients. All 68 tests pass. This demonstrates the combined component on a
 CPU fixture, not actual ATGS partial-accumulation resume; training-loop wiring,
 GPU validation and model/loop bundle provenance remain pending.
+
+### Native GPU partial-accumulation probe
+
+`scripts/verify-atgs-accumulation.py` now exercises the combined loop-state
+component with the actual native model and both optimizers. It uses the
+hash-verified three-update synthetic checkpoint, saves pending gradients after
+one microstep, and compares uninterrupted completion with a newly loaded model
+that restores the supplement before consuming the remaining two encoder views.
+The supplement is serialized through a weights-only Torch round trip in memory.
+
+The upstream averaging, clipping, warmup and stepping helpers are extracted by
+`scripts/atgs_update.py` without importing the full training module (and its
+LPIPS initialization). Their AST SHA-256 is
+`1b5c9b2b79dc0b955be6de8826b7fc4a931b11b23b22e5a275bf4a0135fcc5e4`.
+A CPU test checks averaging divisors, warmup, restored learning rates and
+cleared gradients. The suite passes all 69 tests.
+
+GPU evidence: `.local/runs/atgs-accumulation-cuda-20260906.json`, RTX 4090.
+The resumed sample keys, random targets, losses, gradient norms, warmup factor
+(`0.10360000000000001`) and final loop state matched exactly. Both paths reached
+iteration 6, update count 4, with no pending gradients/encoder visits after the
+update. Maximum parameter difference was `2.176966518163681e-08` (covariance
+MLP); dynamic optimizer parameters matched exactly. The report passes finite
+execution but explicitly records `parameters_exact: false`.
+
+This is a same-process synthetic test, not a bit-exact guarantee, fresh-process
+training resume, atomic model/loop bundle, or SelfCap training. Production loop
+wiring, checkpoint provenance and deadline integration remain pending.
