@@ -1,0 +1,40 @@
+test_actual_sparse_analytic_jacobian (test_basketball_shared_spline_v2.SharedSplineTests.test_actual_sparse_analytic_jacobian) ... ok
+test_held_out_observations_cannot_modify_training_fit (test_basketball_shared_spline_v2.SharedSplineTests.test_held_out_observations_cannot_modify_training_fit) ... ERROR
+test_independent_api_and_regularization_only_confidence (test_basketball_shared_spline_v2.SharedSplineTests.test_independent_api_and_regularization_only_confidence) ... ok
+test_initialization_role_clipping_and_missing_support (test_basketball_shared_spline_v2.SharedSplineTests.test_initialization_role_clipping_and_missing_support) ... ok
+test_known_fractional_offset_and_identifiable_constant_velocity (test_basketball_shared_spline_v2.SharedSplineTests.test_known_fractional_offset_and_identifiable_constant_velocity) ... ok
+test_missing_evidence_and_inconsistent_independent_cycles (test_basketball_shared_spline_v2.SharedSplineTests.test_missing_evidence_and_inconsistent_independent_cycles) ... ok
+test_projection_pose_distortion_derivative (test_basketball_shared_spline_v2.SharedSplineTests.test_projection_pose_distortion_derivative) ... ok
+test_soft_l1_before_normalization_and_quadratic_acceleration (test_basketball_shared_spline_v2.SharedSplineTests.test_soft_l1_before_normalization_and_quadratic_acceleration) ... ok
+
+======================================================================
+ERROR: test_held_out_observations_cannot_modify_training_fit (test_basketball_shared_spline_v2.SharedSplineTests.test_held_out_observations_cannot_modify_training_fit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_basketball_shared_spline_v2.py", line 65, in test_held_out_observations_cannot_modify_training_fit
+    result=estimate_held_out(groups,cameras,fit,held_out=(0,))
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_shared_spline_v2.py", line 190, in estimate_held_out
+    r=least_squares(residual,[start],bounds=([-25],[25]),method='trf',tr_solver='lsmr',
+        ftol=1e-6,xtol=1e-6,gtol=1e-6,max_nfev=200)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/calibration-global/lib/python3.14/site-packages/scipy/_lib/_util.py", line 662, in inner
+    return func(*args, **kwargs)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/calibration-global/lib/python3.14/site-packages/scipy/optimize/_lsq/least_squares.py", line 1019, in least_squares
+    result = trf(vector_fun.fun, vector_fun.jac, x0, f0, J0, lb, ub, ftol, xtol,
+                 gtol, max_nfev, x_scale, loss_function, tr_solver,
+                 tr_options.copy(), verbose, callback=callback_wrapped)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/calibration-global/lib/python3.14/site-packages/scipy/optimize/_lsq/trf.py", line 124, in trf
+    return trf_bounds(
+        fun, jac, x0, f0, J0, lb, ub, ftol, xtol, gtol, max_nfev, x_scale,
+        loss_function, tr_solver, tr_options, verbose, callback=callback)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/calibration-global/lib/python3.14/site-packages/scipy/optimize/_lsq/trf.py", line 332, in trf_bounds
+    p_S, _ = solve_trust_region_2d(B_S, g_S, Delta)
+             ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/calibration-global/lib/python3.14/site-packages/scipy/optimize/_lsq/common.py", line 203, in solve_trust_region_2d
+    b = B[0, 1] * Delta**2
+        ~^^^^^^
+IndexError: index 1 is out of bounds for axis 1 with size 1
+
+----------------------------------------------------------------------
+Ran 8 tests in 1.104s
+
+FAILED (errors=1)

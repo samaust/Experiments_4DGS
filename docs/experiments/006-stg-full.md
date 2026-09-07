@@ -5,8 +5,17 @@ Basketball blocked on synchronization**.
 
 ## Current Basketball continuation — 2026-09-07
 
-[Plan 007 shared-trajectory investigation](basketball-shared-timing-v1.md) now
-records an admission blocker for the revised method: 16/72 fixed edges lack
+[Plan 008](basketball-shared-timing-v2.md) resolves the multiview admission
+failure: all 72 edges pass with 667 whole groups per half and at least 19 groups
+per edge per half. Timing remains blocked at independent synthetic validation:
+71/612 data-only nuisance fits hit the 200-evaluation cap on a noiseless
+100-frame direction-change control, leaving 0/12 complete group profiles.
+The spline optimizer and evaluator are implemented; no real offsets were fitted
+or selection reevaluated. Final frames 200–249 and Basketball training remain
+untouched.
+
+The earlier [Plan 007 shared-trajectory investigation](basketball-shared-timing-v1.md)
+recorded an admission blocker for the revised method: 16/72 fixed edges lack
 12 multiview groups in both deterministic halves. The estimator audit and
 all-camera native fitting extraction are complete; spline fitting and selection
 reevaluation did not start. The previous failed selection remains evidence.

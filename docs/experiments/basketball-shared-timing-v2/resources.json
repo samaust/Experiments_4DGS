@@ -1,0 +1,141 @@
+{
+  "environment": {
+    "python": "3.14.6 (main, Jun 11 2026, 12:32:48) [GCC 13.3.0]",
+    "opencv": "5.0.0",
+    "scipy": "1.18.1"
+  },
+  "investigation_started_unix": 1788804379.0,
+  "elapsed_seconds": 7124.593004465103,
+  "limit_elapsed_seconds": 14400,
+  "packaging_reserve_seconds": 1200,
+  "cpu_threads_limit": 8,
+  "extraction_wall_seconds": 503.83898542801035,
+  "stages": {
+    "prepare": {
+      "wall_seconds": 2.2375880390172824,
+      "process_cpu_seconds": 2.410928,
+      "child_cpu_seconds": null,
+      "maximum_rss_kib": 81480,
+      "investigation_elapsed_seconds": 1559.9004707336426
+    },
+    "associate": {
+      "wall_seconds": 567.1373109550041,
+      "process_cpu_seconds": 567.23373,
+      "child_cpu_seconds": null,
+      "maximum_rss_kib": 3069156,
+      "investigation_elapsed_seconds": 2179.88298869133
+    },
+    "terminal": {
+      "wall_seconds": 764.6928766469937,
+      "process_cpu_seconds": 584.309483,
+      "child_cpu_seconds": 892.0051659999999,
+      "maximum_rss_kib": 144544,
+      "investigation_elapsed_seconds": 6451.405321836472
+    },
+    "package": {
+      "wall_seconds": 5.051157922018319,
+      "process_cpu_seconds": 5.254440000000001,
+      "child_cpu_seconds": 0.0,
+      "maximum_rss_kib": 111344,
+      "investigation_elapsed_seconds": 6676.406623840332
+    }
+  },
+  "interrupted_attempts": [
+    {
+      "status": "interrupted_implementation_performance",
+      "reason": "Per-checkpoint SIFT.compute rebuilt image pyramid; batch by frame with unchanged descriptor policy before any camera completed.",
+      "original_commit": "b7ca6b4",
+      "ended_unix": 1788805025.6184525,
+      "partial_output": ".local/calibration/basketball-rev2/shared-v2/associate",
+      "source_archive_sha256": {
+        ".local/calibration/basketball-rev2/shared-v2/interrupted-implementation/basketball_shared_tracks_v2.py": "3e1e471ce80c338f08b4d1dd6c3f64093532dbdf10cf6ff2fef1069dc2ae1f5c",
+        ".local/calibration/basketball-rev2/shared-v2/interrupted-implementation/basketball_shared_timing_v2.py": "5da405622db5a5810d4a09f2e223918051e016601a2bc5d20df5ce073ab13cd0",
+        ".local/calibration/basketball-rev2/shared-v2/interrupted-implementation/basketball_shared_association_v2.py": "81bc8af1bff35695c057fdbcccd6a7d96fe839791e79dbc0cfe0742b846eebec"
+      },
+      "exit_code": 241,
+      "termination_signal": "SIGTERM",
+      "elapsed_since_stage_frozen_seconds": 123.33039832115173,
+      "optimizer_controls_preserved": 0
+    },
+    {
+      "status": "interrupted_implementation_performance",
+      "reason": "Completed extraction reused unchanged; accelerate exact duplicate candidate filtering and checkpoint distance reductions before full graph association.",
+      "ended_unix": 1788805876.9462066,
+      "partial_output": ".local/calibration/basketball-rev2/shared-v2/associate-batched",
+      "source_archive_sha256": {
+        ".local/calibration/basketball-rev2/shared-v2/association-interrupted-implementation/basketball_shared_tracks_v2.py": "c19451428436517c1c22a7a217ffbb11464f5b98cb926a07305f249782e8f575",
+        ".local/calibration/basketball-rev2/shared-v2/association-interrupted-implementation/basketball_shared_timing_v2.py": "5da405622db5a5810d4a09f2e223918051e016601a2bc5d20df5ce073ab13cd0",
+        ".local/calibration/basketball-rev2/shared-v2/association-interrupted-implementation/basketball_shared_association_v2.py": "81bc8af1bff35695c057fdbcccd6a7d96fe839791e79dbc0cfe0742b846eebec"
+      },
+      "exit_code": 241,
+      "termination_signal": "SIGTERM",
+      "elapsed_since_stage_frozen_seconds": 765.1423733234406,
+      "optimizer_controls_preserved": 0
+    },
+    {
+      "status": "interrupted_implementation_performance",
+      "reason": "Parallelize only independent group-separable profiles with eight single-thread CPU workers; no thresholds, synthetic cases, starts or model settings changed.",
+      "ended_unix": 1788808161.7898161,
+      "partial_output": ".local/calibration/basketball-rev2/shared-v2/safeguard",
+      "source_archive_sha256": {
+        ".local/calibration/basketball-rev2/shared-v2/synthetic-interrupted-implementation/test_basketball_shared_spline_v2.py": "b246f5ddc05bc52b5e2aa18b78ac6c0abb8fa43cb5b6e620cc01f5034659c6be",
+        ".local/calibration/basketball-rev2/shared-v2/synthetic-interrupted-implementation/basketball_shared_spline_v2.py": "e6ca3e38927c6ae55a70444c08ab2100a1dd8c4969bc8f3cac14bf899cb72899",
+        ".local/calibration/basketball-rev2/shared-v2/synthetic-interrupted-implementation/basketball_shared_synthetic_v2.py": "7e670099318db49c11b8558581047facf876f83f643205a443f3fb8c8fa1f37f",
+        ".local/calibration/basketball-rev2/shared-v2/synthetic-interrupted-implementation/basketball_shared_workflow_v2.py": "8757af0dec75443676e5bd21e41119a01ec379395155a3ffe21d2c3533ca50c3"
+      },
+      "exit_code": 241,
+      "termination_signal": "SIGTERM",
+      "elapsed_since_stage_frozen_seconds": 378.08953285217285,
+      "optimizer_controls_preserved": 791
+    },
+    {
+      "status": "superseded_invalid_guard",
+      "reason": "Optimizer-only motion label was incorrectly treated as established identifiability. Restore Plan008 requirement: assess data-only identifiability before imposing short-control recovery. Keep all thresholds, six configurations, observations and fitted results unchanged.",
+      "ended_unix": 1788809814.5564468,
+      "partial_output": ".local/calibration/basketball-rev2/shared-v2/safeguard-parallel",
+      "source_archive_sha256": {
+        ".local/calibration/basketball-rev2/shared-v2/guard-correction-implementation/test_basketball_shared_spline_v2.py": "b246f5ddc05bc52b5e2aa18b78ac6c0abb8fa43cb5b6e620cc01f5034659c6be",
+        ".local/calibration/basketball-rev2/shared-v2/guard-correction-implementation/basketball_shared_spline_v2.py": "65f86f99226c19b1e0efd493e6a127e9a0cbeb5a269b2e745408ac6c83085688",
+        ".local/calibration/basketball-rev2/shared-v2/guard-correction-implementation/test_basketball_shared_profiles_v2.py": "0ec51cea86a77a1b0495d2d66c1d0af50ce725f21680a149935658b2b7c5b36f",
+        ".local/calibration/basketball-rev2/shared-v2/guard-correction-implementation/basketball_shared_synthetic_v2.py": "7e670099318db49c11b8558581047facf876f83f643205a443f3fb8c8fa1f37f",
+        ".local/calibration/basketball-rev2/shared-v2/guard-correction-implementation/basketball_shared_workflow_v2.py": "c9fca72e007e1c7315183b21820b921108665f55cd315141af08ef8880577fe1"
+      },
+      "exit_code": 1,
+      "termination_signal": null,
+      "elapsed_since_stage_frozen_seconds": 1370.2034606933594,
+      "optimizer_controls_preserved": 799
+    }
+  ],
+  "development_failures": [
+    {
+      "stage": "identifiability guard development",
+      "error": "A motion label was incorrectly treated as proof of short-window identifiability",
+      "outcome": "Corrected to the user plan: independent data-only evidence determines whether recovery is required. All thresholds, configurations and existing fits remain unchanged; original rejection is superseded."
+    },
+    {
+      "stage": "test fixture development",
+      "error": "FileExistsError from exclusive-create write used to mutate an existing test fixture",
+      "outcome": "test fixture corrected before extraction"
+    },
+    {
+      "stage": "edit command",
+      "error": "/bin/bash: line 1: python: command not found",
+      "outcome": "used installed calibration interpreter; no dependency download"
+    },
+    {
+      "stage": "held-out estimator development",
+      "error": "SciPy one-dimensional bounded TRF/LSMR: IndexError: index 1 is out of bounds for axis 1 with size 1",
+      "outcome": "joint production solver remains sparse TRF/LSMR; separate held-out estimation profiles scalar lag against frozen trajectories and refines integer basins"
+    }
+  ],
+  "failure_audit_wall_seconds": 22.64671665499918,
+  "plot": {
+    "path": "docs/experiments/basketball-shared-timing-v2/independent-failure.svg",
+    "matplotlib_version": "3.11.1",
+    "missing_data_only_solves": 71
+  },
+  "gpu_seconds": 0,
+  "ledger_sha256": "d7349ba41bf9457c03e81e1baadaf9e94290025b0927910865fc2bf7ce81b803",
+  "archived_source_verification": "Earlier v2 code hashes are verified against byte-identical archived Python sources; data/config/video hashes retain their original paths. Plan007 hashes are unchanged.",
+  "accounting": "Elapsed includes first inspection, implementation, tests, failed/interrupted commands, extraction and reporting. Profile pool has at most eight single-thread CPU workers. No downloads, GPU work, initialization or training."
+}
