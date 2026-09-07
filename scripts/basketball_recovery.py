@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sqlite3
 import time
+import tempfile
 
 import numpy as np
 from basketball_audit import sha256
@@ -70,6 +71,39 @@ def check_fixed(before, after, policy):
         raise ValueError(f'fixed intrinsic parameters changed under {policy}')
 
 
+def subset_database(colmap, source, target, Ks):
+    """Copy only retained training observations; never mutate historical databases."""
+    from basketball_static_rig import register_image
+    digest = sha256(source)
+    # Native Database.open updates SQLite metadata even for read-only method calls.
+    # Open a SQLite read-only backup instead, preserving historical file hashes.
+    with tempfile.TemporaryDirectory(dir=target.parent) as temporary:
+        snapshot = Path(temporary) / 'source.db'
+        with sqlite3.connect(f'file:{source.resolve()}?mode=ro', uri=True) as old_sql, sqlite3.connect(snapshot) as copied_sql:
+            old_sql.backup(copied_sql)
+        _copy_subset(colmap, snapshot, target, Ks, register_image)
+    if sha256(source) != digest:
+        raise ValueError('historical source database changed')
+
+
+def _copy_subset(colmap, source, target, Ks, register_image):
+    with colmap.Database.open(source) as old, colmap.Database.open(target) as new:
+        available = {im.camera_id - 1 for im in old.read_all_images()}
+        if not set(TRAINING) <= available:
+            raise ValueError('source is missing retained training cameras')
+        for c in TRAINING:
+            register_image(new, colmap, camera_id=c+1, image_id=c+1, name=f'camera{c}.png', K=Ks[c])
+            new.write_keypoints(c+1, old.read_keypoints(c+1))
+            if old.exists_descriptors(c+1):
+                new.write_descriptors(c+1, old.read_descriptors(c+1))
+        for i, c in enumerate(TRAINING):
+            for other in TRAINING[i+1:]:
+                if old.exists_matches(c+1, other+1):
+                    new.write_matches(c+1, other+1, old.read_matches(c+1, other+1))
+                if old.exists_two_view_geometry(c+1, other+1):
+                    new.write_two_view_geometry(c+1, other+1, old.read_two_view_geometry(c+1, other+1))
+
+
 def reconstruct(source, priors_path, output, frames, policy, initial_pair=None):
     import pycolmap as colmap
     if colmap.__version__ != '4.2.0':
@@ -81,8 +115,7 @@ def reconstruct(source, priors_path, output, frames, policy, initial_pair=None):
     mapper, ba, absolute = native_options(colmap, policy, initial_pair)
     output.mkdir(exist_ok=False)
     dbpath = output / 'merged.db'
-    with sqlite3.connect(f'file:{(source / "merged.db").resolve()}?mode=ro', uri=True) as original, sqlite3.connect(dbpath) as copied:
-        original.backup(copied)
+    subset_database(colmap, source / 'merged.db', dbpath, Ks)
     before = {}
     with colmap.Database.open(dbpath) as db:
         if sorted(im.camera_id - 1 for im in db.read_all_images()) != list(TRAINING):
@@ -97,7 +130,9 @@ def reconstruct(source, priors_path, output, frames, policy, initial_pair=None):
             db.update_camera(camera)
             before[c] = camera.params.copy()
     images = output / 'merged-images'
-    images.symlink_to((source / 'merged-images').resolve(), target_is_directory=True)
+    images.mkdir()
+    for c in TRAINING:
+        (images / f'camera{c}.png').symlink_to((source / 'merged-images' / f'camera{c}.png').resolve())
     config = dict(schema='basketball-recovery-run/v1', protocol=PROTOCOL, policy=policy,
                   frames=frames, initial_pair=initial_pair, source=str(source),
                   source_database_sha256=sha256(source / 'merged.db'), priors_sha256=sha256(priors_path),

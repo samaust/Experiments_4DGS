@@ -39,8 +39,8 @@ class AuditTests(unittest.TestCase):
                 validate_probe(probe)
 
     def test_frozen_intrinsic_gate(self):
-        self.assertTrue(intrinsic_stability([900, 900, 900, 787.5, 1012.5])['passed'])
-        self.assertFalse(intrinsic_stability([900, 900, 900, 787.5, 1013.5])['passed'])
+        self.assertTrue(intrinsic_stability([900, 900, 900, 810, 990])['passed'])
+        self.assertFalse(intrinsic_stability([900, 900, 900, 810, 990.1])['passed'])
         for values in [[float('nan')]*5, [float('inf')]*5, [-1]*5, []]:
             self.assertFalse(intrinsic_stability(values)['passed'])
 
@@ -62,7 +62,7 @@ class AuditTests(unittest.TestCase):
         for camera, frame in [(4, 49), (4, 150), (4, 200), (0, 50), (10, 100), (34, 100)]:
             with self.assertRaises(ValueError):
                 fitting_frame(camera, frame)
-        self.assertEqual(fitting_frame(4, 50), 0)
+        self.assertEqual(fitting_frame(12, 50), 0)
         self.assertEqual(fitting_frame(29, 149), 99)
 
 

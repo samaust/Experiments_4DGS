@@ -12,13 +12,13 @@ import sys
 import time
 
 from basketball_audit import PIN, frame_roles, sha256
-from basketball_protocol import CAMERAS, TRAINING, PROTOCOL, EXCLUDED
+from basketball_protocol import CAMERAS, TRAINING, PROTOCOL, EXCLUDED, INTRINSIC_LIMIT
 
 FRAMES = [50, 75, 100, 125, 149]
-CONFIG = {'schema': 'basketball-vipe-pilot/v2', 'cameras': [4, 12, 21, 29],
+CONFIG = {'schema': 'basketball-vipe-pilot/v3', 'cameras': [12, 14, 21, 29],
           'source_frames': FRAMES, 'resolution': [960, 540],
           'mask_phrases': ['person', 'basketball'],
-          'max_focal_relative_range': .25, 'min_dynamic_fraction': .001,
+          'max_focal_relative_range': INTRINSIC_LIMIT, 'min_dynamic_fraction': .001,
           'max_dynamic_fraction': .75, 'min_positive_depth_fraction': .99,
           'motion_gray_threshold': 20, 'motion_dilation_pixels': 9,
           'depth_scale': 'uncertain estimated scale; not measured metric ground truth'}
@@ -47,15 +47,19 @@ def main():
     parser.add_argument('--vipe', type=Path, required=True)
     parser.add_argument('--output', type=Path, help='New attempt directory; never overwritten')
     parser.add_argument('--all-priors', type=Path, metavar='PASSED_PILOT_RESULT',
-                        help='Process the active 33 cameras after a successful pilot')
+                        help='Process retained cameras after a successful pilot')
     parser.add_argument('--intrinsics-from', type=Path, help='Reuse hash-bound intrinsic estimates for retained cameras')
     parser.add_argument('--expand-from', type=Path, help='Revision-one expansion of verified existing five-frame priors')
+    parser.add_argument('--retained-from', type=Path, help='Complete missing masks from retained, passing ten-frame observations')
     a = parser.parse_args()
     frames = FRAMES
-    if a.expand_from:
+    artifact_source = a.expand_from or a.retained_from
+    if artifact_source:
+        if a.expand_from and a.retained_from:
+            parser.error('choose one artifact reuse mode')
         if a.intrinsics_from or not a.all_priors:
-            parser.error('--expand-from requires --all-priors and replaces --intrinsics-from')
-        a.intrinsics_from = a.expand_from / 'result.json'
+            parser.error('artifact reuse requires --all-priors and replaces --intrinsics-from')
+        a.intrinsics_from = artifact_source / 'result.json'
         frames = [50, 62, 75, 87, 99, 100, 112, 125, 137, 149]
     config = dict(CONFIG)
     if a.all_priors:
@@ -67,9 +71,10 @@ def main():
         config.update(schema='basketball-vipe-all-priors/v1', cameras=list(CAMERAS), seed=0, protocol=PROTOCOL, excluded_cameras=list(EXCLUDED),
                       pilot_result_sha256=sha256(a.all_priors))
     config['source_frames'] = frames
-    if a.expand_from:
+    if artifact_source:
         config['schema'] = 'basketball-vipe-expanded-priors/v1'
-        config['expansion_source'] = str(a.expand_from)
+        config['expansion_source'] = str(artifact_source)
+        config['reuse_mode'] = 'retained' if a.retained_from else 'expand'
     reuse = None
     if a.intrinsics_from:
         if not a.all_priors:
@@ -78,28 +83,33 @@ def main():
         if reuse['input_audit_sha256'] != sha256(a.workspace / 'input-audit.json'):
             raise ValueError('reused intrinsic input provenance changed')
         config['intrinsics_from_sha256'] = sha256(a.intrinsics_from)
-        expected = {(c, f) for c in CAMERAS for f in FRAMES}
+        reuse_frames = frames if a.retained_from else FRAMES
+        expected = {(c, f) for c in CAMERAS for f in reuse_frames}
         retained = [e for e in reuse['observations'] if e['camera_id'] in CAMERAS]
         if {(e['camera_id'], e['source_frame_id']) for e in retained} != expected or len(retained) != len(expected):
             raise ValueError('missing or duplicate retained intrinsic estimates')
         for camera in CAMERAS:
             focals = [e['K_960x540'][0][0] for e in retained if e['camera_id'] == camera]
-            if not intrinsic_stability(focals)['passed']:
+            if not intrinsic_stability(focals, expected_count=len(reuse_frames))['passed']:
                 raise ValueError(f'retained camera {camera} has unstable intrinsic estimates')
         reuse_entries = {(e['camera_id'], e['source_frame_id']): e for e in retained}
     output = a.output if a.output is not None else a.workspace / 'pilot'
     output.mkdir(exist_ok=False)
     reused_artifacts = {}
-    if a.expand_from:
-        if reuse['status'] != 'priors-generated' or reuse['blockers']:
+    if artifact_source:
+        if a.expand_from and (reuse['status'] != 'priors-generated' or reuse['blockers']):
             raise ValueError('expansion requires passing original priors')
-        reused_artifacts = json.loads((a.expand_from / 'artifacts.json').read_text())
+        if a.retained_from and any(b not in {f'camera {c}: unusable intrinsic stability' for c in EXCLUDED} for b in reuse['blockers']):
+            raise ValueError('source contains unresolved blockers unrelated to excluded cameras')
+        reused_artifacts = json.loads((artifact_source / 'artifacts.json').read_text())
         for entry in reuse_entries.values():
             for suffix in ['.png', '-motion.npy', '-static.png'] + (['-depth.npz'] if entry['source_frame_id'] == 100 else []):
                 name = entry['stem'] + suffix
-                if sha256(a.expand_from / name) != reused_artifacts[name]:
+                if a.retained_from and suffix == '-static.png' and name not in reused_artifacts:
+                    continue
+                if sha256(artifact_source / name) != reused_artifacts[name]:
                     raise ValueError(f'changed reused artifact: {name}')
-                shutil.copy2(a.expand_from / name, output / name)
+                shutil.copy2(artifact_source / name, output / name)
     (output / 'config.json').write_text(json.dumps(config, indent=2) + '\n')
     audit = json.loads((a.workspace / 'input-audit.json').read_text())
     if audit['status'] != 'inputs-verified':
@@ -174,7 +184,7 @@ def main():
             focals = []
             for frame_id in frames:
                 stream_id = fitting_frame(camera, frame_id, all_priors=bool(a.all_priors))
-                if a.expand_from and (camera, frame_id) in reuse_entries:
+                if artifact_source and (camera, frame_id) in reuse_entries:
                     entry = dict(reuse_entries[(camera, frame_id)])
                     result['observations'].append(entry)
                     focals.append(float(entry['K_960x540'][0][0]))
@@ -221,11 +231,11 @@ def main():
         torch.cuda.empty_cache()
         # Stop before expensive depth/masks if intrinsic pilot has already failed.
         if not result['blockers']:
-            depth = UniDepth2Model() if not a.expand_from else None
+            depth = UniDepth2Model() if not artifact_source else None
             for entry in result['observations']:
                 if entry['source_frame_id'] != 100:
                     continue
-                if a.expand_from:
+                if artifact_source:
                     continue
                 rgb = torch.from_numpy(cv2.cvtColor(cv2.imread(str(output / (entry['stem'] + '.png'))), cv2.COLOR_BGR2RGB)).to(device).float()/255
                 K = np.array(entry['K_960x540'])
@@ -240,7 +250,7 @@ def main():
             gc.collect()
             torch.cuda.empty_cache()
             for entry in result['observations']:
-                if a.expand_from and (entry['camera_id'], entry['source_frame_id']) in reuse_entries:
+                if artifact_source and (output / (entry['stem'] + '-static.png')).exists():
                     continue
                 # Independent semantic detections avoid tracking across nonconsecutive pilot samples.
                 tracker = TrackAnythingPipeline(config['mask_phrases'])

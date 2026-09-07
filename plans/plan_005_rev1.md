@@ -1,3 +1,22 @@
+# Authorized 20% camera-set revision
+
+The user restored the intrinsic-prior variation limit to **20%** and excluded
+all failures from the completed ten-frame test. Camera 5 remains excluded.
+Active exclusions: **4, 5, 8, 11, 15, 16, 17, 18, 20, 23**.
+The active protocol is `basketball-intrinsic20/v1`: **24 cameras, 21 training,
+three held-out (0, 10, 30)**. Preserve physical IDs; do not replace removed
+held-out camera 20. Expected preparation: **1,200 images, 1,050 training and
+150 held-out**. These values supersede the 25%, 33/29/4-camera and
+1,650/1,450/200-image values in the historical revision below and downstream
+reports. All rig acceptance gates apply to the 24 retained cameras.
+
+Reuse hash-bound retained ten-frame priors, complete missing masks, and restart
+the same finite A/B/C search for this camera set. Remove excluded observations
+from copied match databases before reconstruction. Preserve all previous
+attempts and budget charges; the existing downstream-only extension policy and
+per-method training allocations are unchanged. No additional camera removal
+based on pose or matching results is authorized by this selection.
+
 # Plan 005 revision 1: Stable Basketball calibration and experiment continuation
 
 ## Objective and preserved constraints

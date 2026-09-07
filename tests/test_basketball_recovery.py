@@ -2,13 +2,33 @@ import unittest
 import sys
 from pathlib import Path
 import numpy as np
+import tempfile
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from basketball_recovery import native_options, search_manifest, check_fixed, window_intrinsics, POLICIES
+from basketball_recovery import native_options, search_manifest, check_fixed, window_intrinsics, POLICIES, subset_database
 from basketball_protocol import TRAINING
 from basketball_vipe_pilot import intrinsic_stability
 
 
 class RecoveryTests(unittest.TestCase):
+    def test_subset_removes_excluded_observations_and_matches(self):
+        import pycolmap as p
+        from basketball_static_rig import register_image
+        with tempfile.TemporaryDirectory() as tmp:
+            source=Path(tmp)/'old.db'; target=Path(tmp)/'new.db'
+            Ks={c:np.array([[900.,0,480.],[0,900.,270.],[0,0,1.]]) for c in TRAINING}
+            with p.Database.open(source) as db:
+                for c in (*TRAINING,5):
+                    register_image(db,p,camera_id=c+1,image_id=c+1,name=f'camera{c}.png',K=Ks[1])
+                    db.write_keypoints(c+1,np.array([[10.,20.,1.,0.]],np.float32))
+                db.write_matches(2,3,np.array([[0,0]],np.uint32))
+                db.write_matches(2,6,np.array([[0,0]],np.uint32))
+            subset_database(p,source,target,Ks)
+            with p.Database.open(target) as db:
+                self.assertEqual(sorted(i.camera_id-1 for i in db.read_all_images()),list(TRAINING))
+                self.assertFalse(db.exists_keypoints(6))
+                self.assertFalse(db.exists_matches(2,6))
+                self.assertTrue(db.exists_matches(2,3))
+
     def test_native_policy_covers_registration_and_adjustment(self):
         import pycolmap
         for policy in POLICIES:
