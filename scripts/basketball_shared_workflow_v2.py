@@ -27,7 +27,7 @@ from basketball_shared_timing_v2 import bounded,validate_config
 from basketball_shared_spline_v2 import (fit_trajectories,clip_groups,estimate_held_out,independent_edge,independent_cycles,InsufficientSupport)
 from basketball_shared_synthetic_v2 import synthetic
 
-IMPLEMENTATION=['scripts/basketball_shared_workflow_v2.py','scripts/basketball_shared_spline_v2.py','scripts/basketball_shared_synthetic_v2.py','tests/test_basketball_shared_spline_v2.py','tests/test_basketball_shared_profiles_v2.py']
+IMPLEMENTATION=['scripts/basketball_shared_workflow_v2.py','scripts/basketball_shared_spline_v2.py','scripts/basketball_shared_synthetic_v2.py','tests/test_basketball_shared_spline_v2.py','tests/test_basketball_shared_profiles_v2.py','tests/test_basketball_shared_safeguard_v2.py']
 
 
 def starts(cameras,current):
@@ -56,45 +56,82 @@ def production_starts(groups,cameras,current,window,configuration,check):
     return dict(passed=passed,starts=fits,maximum_start_disagreement_frames=agreement,best=best)
 
 
-def safeguard(p,output,check):
-    """Stop on a failed required safeguard; preserve every attempted control."""
+def recovery_decision(motion,length,noise,errors,starts_passed,independent):
+    """Apply Plan008 recovery limits only after independent identifiability.
+
+    Motion labels alone do not establish timing identifiability. Long noiseless
+    positive controls must additionally establish it; short controls may reject.
+    """
+    negative=motion in ['stationary','epipolar_direction']
+    identified=independent['profiles']['data_only']['passed']
+    qualified=independent['passed'] and starts_passed
+    if negative:
+        passed=not independent['passed'];required=False
+    elif noise==0:
+        required=identified or length==100
+        passed=(starts_passed and identified and all(e is not None and e<=.05 for e in errors)) if required else True
+    else:
+        required=qualified
+        passed=not qualified or all(e is not None and e<=.25 for e in errors)
+    return dict(safeguard_passed=bool(passed),recovery_required=bool(required),data_only_identified=bool(identified),
+        estimator_qualified=bool(qualified),recovery_limit_frames=.05 if noise==0 else .25,
+        interpretation='Rejected/unsupported short controls do not have an identifiable offset to recover; they remain unqualified.')
+
+
+def safeguard(p,output,check,reuse=None):
     optimizer_dir=output/'optimizer-controls';optimizer_dir.mkdir()
     profile_dir=output/'independent-controls';profile_dir.mkdir()
-    rows=[];profile_rows=[];failures=[]
+    targeted_dir=output/'targeted-controls';targeted_dir.mkdir()
+    rows=[];profile_rows=[];targeted_rows=[];failures=[];suspects=[]
     motions=['constant_velocity','acceleration','direction_changes','stationary','epipolar_direction']
     planned_optimizer=6*5*3*3*7
-    # Freeze the full requested injection/length/noise cross product before
-    # running it. Three actual starts are evaluated for every optimizer control.
     for ci,configuration in enumerate(p['configurations']):
         for motion in motions:
             for length in [100,50,25]:
                 for noise in [0.,.25,.5]:
                     for delta in p['injections']:
-                        check();groups,cameras,truth,window=synthetic(motion,noise,delta,length,groups=3)
-                        current={1:0.,2:.1,3:-.1}
-                        result=production_starts(groups,cameras,current,window,configuration,check)
-                        errors=[abs(r['offsets'][2]-truth[2]) for r in result['starts'] if r['converged']]
-                        positive=motion in motions[:3];required=positive and noise==0
-                        passed=not required or (result['passed'] and len(errors)==3 and max(errors)<=.05)
-                        row=dict(case_id=len(rows),configuration=configuration,motion=motion,length=length,noise_pixels=noise,
-                            known_offset_frames=delta,absolute_errors_frames=errors,required_noiseless_recovery=required,
-                            safeguard_passed=passed,timing_qualified=False,qualification_reason='optimizer control only; independent profile required',result=result)
-                        write(optimizer_dir/f'case{len(rows):04d}.json',row);rows.append({k:v for k,v in row.items() if k!='result'})
-                        if not passed:
-                            failures.append(dict(stage='optimizer_control',case_id=row['case_id'],kind='numerical_failure' if any(not r['converged'] for r in result['starts']) else 'scientific_rejection',reason='noiseless identifiable production control failed convergence,0.05 recovery or three-start agreement'))
-                            break
-                    if failures:break
-                if failures:break
-            if failures:break
-        if failures:break
+                        check();case_id=len(rows);oldfile=reuse/'optimizer-controls'/f'case{case_id:04d}.json' if reuse else None
+                        recipe=dict(configuration=configuration,motion=motion,length=length,noise_pixels=noise,known_offset_frames=delta)
+                        if oldfile and oldfile.exists():
+                            old=read(oldfile)
+                            if any(old[k]!=v for k,v in recipe.items()):raise ValueError('cached synthetic recipe mismatch')
+                            result=old['result']
+                            for fit in result['starts']:
+                                if 'offsets' in fit:fit['offsets']={int(c):v for c,v in fit['offsets'].items()}
+                            reused=dict(path=str(oldfile),sha256=sha256(oldfile))
+                        else:
+                            groups,cameras,_,window=synthetic(motion,noise,delta,length,groups=3)
+                            result=production_starts(groups,cameras,{1:0.,2:.1,3:-.1},window,configuration,check);reused=None
+                        errors=[abs(r['offsets'][2]-delta) for r in result['starts'] if r['converged']]
+                        positive=motion in motions[:3];point_passed=result['passed'] and len(errors)==3 and max(errors)<=.05
+                        needs_audit=positive and noise==0 and not point_passed
+                        row=dict(case_id=case_id,**recipe,absolute_errors_frames=errors,
+                            required_noiseless_recovery=positive and noise==0 and length==100,
+                            safeguard_passed=None if needs_audit else True,requires_identifiability_audit=needs_audit,
+                            timing_qualified=False,qualification_reason='optimizer alone cannot establish independent identifiability',
+                            reused_control=reused,result=result)
+                        write(optimizer_dir/f'case{case_id:04d}.json',row);rows.append({k:v for k,v in row.items() if k!='result'})
+                        if needs_audit:suspects.append((row,result))
         print('synthetic optimizer configuration',ci,'controls',len(rows),flush=True)
-    # Independent positive cases cover every requested offset x length x noise.
-    # Motion rotates deterministically through all three positive geometries.
+    # Audit every uncertain noiseless recovery with the exact original three
+    # groups. The three-group diagnostic cannot satisfy a real edge's12 groups.
+    for row,production in suspects:
+        check();groups,cameras,truth,window=synthetic(row['motion'],row['noise_pixels'],row['known_offset_frames'],row['length'],groups=3)
+        c=row['configuration']
+        independent=independent_edge(groups,cameras,dict(a=1,b=2),window,c['knot_spacing_frames'],c['acceleration_weight'],check,
+            minimum_groups=3,workers=3,deadline=p['investigation_started_unix']+13200)
+        errors=row['absolute_errors_frames']+[None if r['lag'] is None else abs(r['lag']-truth[2]) for r in independent['profiles'].values()]
+        decision=recovery_decision(row['motion'],row['length'],0.,errors,production['passed'],independent)
+        audit=dict(optimizer_case_id=row['case_id'],configuration=c,motion=row['motion'],length=row['length'],
+            known_offset_frames=truth[2],absolute_errors_frames=errors,real_edge_qualification=False,synthetic_groups=3,**decision,result=independent)
+        write(targeted_dir/f"case{row['case_id']:04d}.json",audit);targeted_rows.append({k:v for k,v in audit.items() if k!='result'})
+        print('targeted identifiability audit',row['case_id'],decision,flush=True)
+        if not decision['safeguard_passed']:
+            failures.append(dict(stage='targeted_identifiability',case_id=row['case_id'],kind='numerical_failure' if not decision['data_only_identified'] else 'scientific_rejection',reason='independently identifiable noiseless recovery or required long positive validation failed'));break
     cases=[]
     for length in [100,50,25]:
         for noise in [0.,.25,.5]:
-            for delta in p['injections']:
-                cases.append(dict(motion=motions[len(cases)%3],length=length,noise=noise,delta=delta,weight=1.,negative=False))
+            for delta in p['injections']:cases.append(dict(motion=motions[len(cases)%3],length=length,noise=noise,delta=delta,weight=1.,negative=False))
     for motion in motions[3:]:
         for weight in [.1,1.,10.]:
             for length in [100,50,25]:
@@ -102,29 +139,44 @@ def safeguard(p,output,check):
     if not failures:
         for case in cases:
             check();groups,cameras,truth,window=synthetic(case['motion'],case['noise'],case['delta'],case['length'],groups=12)
-            result=independent_edge(groups,cameras,dict(a=1,b=2),window,10,case['weight'],check,workers=8,deadline=p['investigation_started_unix']+13200)
-            regularized=result['profiles']['regularized'];data=result['profiles']['data_only']
-            errors={k:None if v['lag'] is None else abs(v['lag']-truth[2]) for k,v in result['profiles'].items()}
-            threshold=.05 if case['noise']==0 else .25
-            # Long noiseless positive controls have overlapping calibrated
-            # observations throughout the full search and must be identifiable.
-            required=not case['negative'] and case['noise']==0 and case['length']==100
-            passed=(not result['passed'] if case['negative'] else (not result['passed'] or all(e is not None and e<=threshold for e in errors.values())))
-            if required:passed=passed and result['passed'] and all(e is not None and e<=.05 for e in errors.values())
-            row=dict(case_id=len(profile_rows),**case,result=result,absolute_errors_frames=errors,safeguard_passed=passed,
-                interval_covers_truth={k:(v['bootstrap_95_frames'][0]<=truth[2]<=v['bootstrap_95_frames'][1]) if v.get('bootstrap_95_frames') else None for k,v in result['profiles'].items()})
-            write(profile_dir/f'case{len(profile_rows):04d}.json',row);profile_rows.append({k:v for k,v in row.items() if k!='result'})
-            print('independent synthetic control',row['case_id'],case,'passed safeguard',passed,flush=True)
-            if not passed:
-                failures.append(dict(stage='independent_control',case_id=row['case_id'],kind='numerical_failure' if any(r.get('support',0)<12 for r in result['profiles'].values()) else 'scientific_rejection',reason='required recovery/identifiability or negative-control rejection failed'));break
-    summary=dict(status='blocked' if failures else 'passed',terminal_kind=failures[0]['kind'] if failures else None,
-        blockers=failures,optimizer_controls=rows,independent_controls=profile_rows,
-        planned_optimizer_controls=planned_optimizer,planned_independent_controls=len(cases),
-        optimizer_matrix_complete=len(rows)==planned_optimizer,independent_matrix_complete=len(profile_rows)==len(cases),
-        model_configurations_fitted_to_real_data=0)
+            configuration=dict(knot_spacing_frames=10,acceleration_weight=case['weight'])
+            production=production_starts(groups,cameras,{1:0.,2:.1,3:-.1},window,configuration,check) if not case['negative'] else None
+            independent=independent_edge(groups,cameras,dict(a=1,b=2),window,10,case['weight'],check,workers=8,deadline=p['investigation_started_unix']+13200)
+            errors={k:None if v['lag'] is None else abs(v['lag']-truth[2]) for k,v in independent['profiles'].items()}
+            production_errors=[abs(r['offsets'][2]-truth[2]) for r in production['starts'] if r['converged']] if production else []
+            decision=recovery_decision(case['motion'],case['length'],case['noise'],[*errors.values(),*production_errors],production['passed'] if production else False,independent)
+            row=dict(case_id=len(profile_rows),**case,result=independent,production_result=production,production_absolute_errors_frames=production_errors,
+                absolute_errors_frames=errors,**decision,
+                interval_covers_truth={k:(v['bootstrap_95_frames'][0]<=truth[2]<=v['bootstrap_95_frames'][1]) if v.get('bootstrap_95_frames') else None for k,v in independent['profiles'].items()})
+            write(profile_dir/f'case{len(profile_rows):04d}.json',row);profile_rows.append({k:v for k,v in row.items() if k not in ['result','production_result']})
+            print('independent synthetic control',row['case_id'],case,'safeguard',decision,flush=True)
+            if not decision['safeguard_passed']:
+                failures.append(dict(stage='independent_control',case_id=row['case_id'],kind='numerical_failure' if any(r.get('support',0)<12 for r in independent['profiles'].values()) else 'scientific_rejection',reason='required independent identifiability, recovery or negative rejection failed'));break
+    summary=dict(status='blocked' if failures else 'passed',terminal_kind=failures[0]['kind'] if failures else None,blockers=failures,
+        optimizer_controls=rows,targeted_controls=targeted_rows,independent_controls=profile_rows,planned_optimizer_controls=planned_optimizer,
+        planned_independent_controls=len(cases),optimizer_matrix_complete=len(rows)==planned_optimizer,independent_matrix_complete=len(profile_rows)==len(cases),
+        reused_optimizer_controls=sum(r['reused_control'] is not None for r in rows),model_configurations_fitted_to_real_data=0)
     write(output/'synthetic-summary.json',summary)
-    return {k:v for k,v in summary.items() if k not in ['optimizer_controls','independent_controls']}
+    return {k:v for k,v in summary.items() if k not in ['optimizer_controls','targeted_controls','independent_controls']}
 
+
+def control_sources(path,archive,p):
+    """Reuse immutable fits only when recipes and actual fitting code match."""
+    import ast
+    prior=read(path/'result.json')
+    if prior['stage']!='safeguard' or prior['config_sha256']!=sha256('configs/basketball-rev2/timing-shared-v2.json'):
+        raise ValueError('synthetic predecessor mismatch')
+    verify_hashes(prior['artifacts_sha256'])
+    rebound={str(archive/Path(name).name) if (archive/Path(name).name).exists() else name:digest for name,digest in prior['source_sha256'].items()}
+    verify_hashes(rebound)
+    for name in ['scripts/basketball_shared_spline_v2.py','scripts/basketball_shared_synthetic_v2.py']:
+        if sha256(name)!=prior['source_sha256'][name]:raise ValueError('cached synthetic model implementation changed')
+    def definitions(file):
+        tree=ast.parse(file.read_text());return {n.name:ast.dump(n,include_attributes=False) for n in tree.body if isinstance(n,ast.FunctionDef)}
+    previous=definitions(archive/'basketball_shared_workflow_v2.py');current=definitions(Path(__file__))
+    if any(previous[name]!=current[name] for name in ['starts','production_starts']):raise ValueError('synthetic starts/optimizer changed')
+    if read(path/'frozen.json')['config']!=p:raise ValueError('synthetic configuration changed')
+    return {**rebound,**prior['artifacts_sha256'],str(path/'result.json'):sha256(path/'result.json')}
 
 def load_associated(folder):
     saved=read(folder/'groups.json')['groups'];tracks={c:read(folder/f'merged-camera{c}.json')['tracks'] for c in range(34)}
@@ -228,10 +280,13 @@ def stage(a):
         admission=predecessor(a.association,sha256(a.config),{'associate'})
         if admission['status']!='passed':raise ValueError('support admission failed')
         sources[str(a.association/'result.json')]=sha256(a.association/'result.json')
+    if a.controls_predecessor:
+        if a.stage!='safeguard' or a.controls_archive is None:raise ValueError('synthetic reuse requires safeguard role and code archive')
+        sources.update(control_sources(a.controls_predecessor,a.controls_archive,p))
     a.output.mkdir(parents=True,exist_ok=False);write(a.output/'frozen.json',dict(config=p,source_sha256=sources))
     check=lambda:bounded(p)
     try:
-        if a.stage=='safeguard':result=safeguard(p,a.output,check)
+        if a.stage=='safeguard':result=safeguard(p,a.output,check,a.controls_predecessor)
         elif a.stage=='fit':
             if a.association is None:raise ValueError('hashed association required')
             result=fit_real(p,a.output,a.association,check)
@@ -286,5 +341,6 @@ if __name__=='__main__':
     parser.add_argument('stage',choices=['prepare','associate','safeguard','fit','assess','select','package'])
     parser.add_argument('--config',type=Path,required=True);parser.add_argument('--predecessor',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True);parser.add_argument('--association',type=Path)
+    parser.add_argument('--controls-predecessor',type=Path);parser.add_argument('--controls-archive',type=Path)
     parser.add_argument('--extracted-predecessor',type=Path);parser.add_argument('--worker',action='store_true',help=argparse.SUPPRESS)
     args=parser.parse_args();raise SystemExit(stage(args) if args.worker else main(args))
