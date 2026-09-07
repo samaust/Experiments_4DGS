@@ -46,7 +46,7 @@ class AuditTests(unittest.TestCase):
 
     def test_all_priors_allow_held_out_only_in_fitting_window(self):
         self.assertEqual(fitting_frame(0, 50, all_priors=True), 0)
-        for camera, frame in [(0, 49), (0, 150), (34, 50)]:
+        for camera, frame in [(0, 49), (0, 150), (34, 50), (5, 100)]:
             with self.assertRaises(ValueError):
                 fitting_frame(camera, frame, all_priors=True)
 

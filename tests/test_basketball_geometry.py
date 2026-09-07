@@ -25,10 +25,10 @@ class GeometryTests(unittest.TestCase):
 
     def test_training_geometry_excludes_held_out(self):
         result = {'status':'priors-generated','blockers':[], 'observations':[
-            {'camera_id':c,'source_frame_id':f} for c in range(34) for f in [50,75,100,125,149]]}
+            {'camera_id':c,'source_frame_id':f} for c in range(34) if c != 5 for f in [50,75,100,125,149]]}
         selected = training_prior_entries(result)
-        self.assertEqual(len(selected), 150)
-        self.assertFalse({0,10,20,30} & {e['camera_id'] for e in selected})
+        self.assertEqual(len(selected), 145)
+        self.assertFalse({0,5,10,20,30} & {e['camera_id'] for e in selected})
         result['observations'][0]['source_frame_id'] = 25
         with self.assertRaises(ValueError):
             training_prior_entries(result)

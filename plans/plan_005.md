@@ -1,3 +1,15 @@
+# Authorized camera-set revision
+
+The user removed physical camera 5 after the 25% intrinsic-stability continuation.
+The active variant is `basketball-no-camera5/v1`: **33 cameras, 29 training and
+four held-out (0, 10, 20, 30)**, with original camera IDs preserved. Preparation
+must contain **1,650 images: 1,450 training and 200 held-out**. All rig acceptance
+gates apply to all 33 retained cameras. Raw input inventory remains 34 videos;
+retain camera 5's source and historical evidence, but exclude its observations
+from subsequent estimation, geometry, initialization, training and evaluation.
+Keep the 25% intrinsic limit, original budgets and existing training ledger.
+These counts supersede the original 34-camera/30-training/1,700-image counts below.
+
   # ViPE-assisted Basketball calibration and experiment continuation
 
   ## Summary and constraints

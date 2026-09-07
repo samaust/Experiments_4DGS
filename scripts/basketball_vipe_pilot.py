@@ -11,6 +11,7 @@ import sys
 import time
 
 from basketball_audit import PIN, frame_roles, sha256
+from basketball_protocol import CAMERAS, TRAINING, PROTOCOL, EXCLUDED
 
 FRAMES = [50, 75, 100, 125, 149]
 CONFIG = {'schema': 'basketball-vipe-pilot/v2', 'cameras': [4, 12, 21, 29],
@@ -23,7 +24,7 @@ CONFIG = {'schema': 'basketball-vipe-pilot/v2', 'cameras': [4, 12, 21, 29],
 
 
 def fitting_frame(camera_id, frame_id, *, all_priors=False):
-    cameras = range(34) if all_priors else frame_roles()['training_cameras']
+    cameras = CAMERAS if all_priors else TRAINING
     if camera_id not in cameras or frame_id not in frame_roles()['fit']:
         raise ValueError('pilot may only access training-camera fitting frames')
     return frame_id - 50
@@ -44,7 +45,8 @@ def main():
     parser.add_argument('--vipe', type=Path, required=True)
     parser.add_argument('--output', type=Path, help='New attempt directory; never overwritten')
     parser.add_argument('--all-priors', type=Path, metavar='PASSED_PILOT_RESULT',
-                        help='Process all 34 cameras after a successful pilot')
+                        help='Process the active 33 cameras after a successful pilot')
+    parser.add_argument('--intrinsics-from', type=Path, help='Reuse hash-bound intrinsic estimates for retained cameras')
     a = parser.parse_args()
     config = dict(CONFIG)
     if a.all_priors:
@@ -53,8 +55,25 @@ def main():
             raise ValueError('all-camera priors require a successful pilot')
         if pilot['input_audit_sha256'] != sha256(a.workspace / 'input-audit.json'):
             raise ValueError('pilot input provenance changed')
-        config.update(schema='basketball-vipe-all-priors/v1', cameras=list(range(34)), seed=0,
+        config.update(schema='basketball-vipe-all-priors/v1', cameras=list(CAMERAS), seed=0, protocol=PROTOCOL, excluded_cameras=list(EXCLUDED),
                       pilot_result_sha256=sha256(a.all_priors))
+    reuse = None
+    if a.intrinsics_from:
+        if not a.all_priors:
+            raise ValueError('intrinsic reuse requires all-priors mode')
+        reuse = json.loads(a.intrinsics_from.read_text())
+        if reuse['input_audit_sha256'] != sha256(a.workspace / 'input-audit.json'):
+            raise ValueError('reused intrinsic input provenance changed')
+        config['intrinsics_from_sha256'] = sha256(a.intrinsics_from)
+        expected = {(c, f) for c in CAMERAS for f in FRAMES}
+        retained = [e for e in reuse['observations'] if e['camera_id'] in CAMERAS]
+        if {(e['camera_id'], e['source_frame_id']) for e in retained} != expected or len(retained) != len(expected):
+            raise ValueError('missing or duplicate retained intrinsic estimates')
+        for camera in CAMERAS:
+            focals = [e['K_960x540'][0][0] for e in retained if e['camera_id'] == camera]
+            if not intrinsic_stability(focals)['passed']:
+                raise ValueError(f'retained camera {camera} has unstable intrinsic estimates')
+        reuse_entries = {(e['camera_id'], e['source_frame_id']): e for e in retained}
     output = a.output if a.output is not None else a.workspace / 'pilot'
     output.mkdir(exist_ok=False)
     (output / 'config.json').write_text(json.dumps(config, indent=2) + '\n')
@@ -88,6 +107,12 @@ def main():
         weights.extend(p for p in (hf / name / 'snapshots').glob('*/*') if p.is_file())
     for path in weights:
         result['weight_sha256'][str(path)] = sha256(path)
+    if reuse is not None:
+        for key in ['source_sha256', 'weight_sha256']:
+            if reuse[key] != result[key]:
+                raise ValueError(f'reused intrinsic {key} provenance changed')
+    result['protocol'] = PROTOCOL
+    result['excluded_cameras'] = list(EXCLUDED)
     os.environ['HF_HUB_OFFLINE'] = '1'
     os.environ['TRANSFORMERS_OFFLINE'] = '1'
     os.environ['TORCH_EXTENSIONS_DIR'] = str((a.workspace / 'torch_extensions').resolve())
@@ -115,7 +140,7 @@ def main():
             torch.manual_seed(config['seed'])
             torch.cuda.manual_seed_all(config['seed'])
         torch.cuda.reset_peak_memory_stats()
-        calib = GeoCalib().to(device).eval()
+        calib = GeoCalib().to(device).eval() if reuse is None else None
         videos = {int(v['camera_id']): v for v in audit['videos']}
         for camera in config['cameras']:
             source = videos[camera]
@@ -136,9 +161,15 @@ def main():
                         raise ValueError(f'cannot decode {camera}/{index}')
                     images.append(cv2.cvtColor(cv2.resize(bgr, (960, 540), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2RGB))
                 rgb = torch.from_numpy(images[0]).to(device).float() / 255
-                with torch.inference_mode():
-                    prior = calib.calibrate(rgb.permute(2, 0, 1))
-                K = prior['camera'].K[0].cpu().numpy()
+                if reuse is None:
+                    with torch.inference_mode():
+                        prior = calib.calibrate(rgb.permute(2, 0, 1))
+                    K = prior['camera'].K[0].cpu().numpy()
+                    uncertainty = prior['focal_uncertainty'].cpu().tolist()
+                else:
+                    previous = reuse_entries[(camera, frame_id)]
+                    K = np.array(previous['K_960x540'])
+                    uncertainty = previous['focal_uncertainty']
                 focal = float(K[0, 0])
                 focals.append(focal)
                 stem = f'camera{camera}-frame{frame_id}'
@@ -147,7 +178,7 @@ def main():
                 motion = cv2.dilate(motion.astype(np.uint8), np.ones((9, 9), np.uint8)) > 0
                 np.save(output / (stem + '-motion.npy'), motion)
                 entry = {'camera_id': camera, 'source_frame_id': frame_id, 'stream_frame_id': stream_id,
-                         'K_960x540': K.tolist(), 'focal_uncertainty': prior['focal_uncertainty'].cpu().tolist(),
+                         'K_960x540': K.tolist(), 'focal_uncertainty': uncertainty,
                          'stem': stem}
                 result['observations'].append(entry)
                 print(f'GeoCalib {camera}/{frame_id}: focal={focal:.2f}', flush=True)

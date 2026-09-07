@@ -1,5 +1,6 @@
 """Explicit conventions and diagnostics for estimated Basketball calibration."""
 import numpy as np
+from basketball_protocol import CAMERAS, TRAINING, FIT_FRAMES
 
 
 def opencv_to_colmap(K):
@@ -28,10 +29,10 @@ def training_prior_entries(result):
         raise ValueError('requires completed all-camera priors')
     entries = result['observations']
     keys = {(e['camera_id'], e['source_frame_id']) for e in entries}
-    expected = {(c, f) for c in range(34) for f in [50, 75, 100, 125, 149]}
+    expected = {(c, f) for c in CAMERAS for f in FIT_FRAMES}
     if keys != expected or len(entries) != len(expected):
         raise ValueError('missing or duplicate prior observations')
-    return [e for e in entries if e['camera_id'] not in (0, 10, 20, 30)]
+    return [e for e in entries if e['camera_id'] in TRAINING]
 
 
 def connected_components(nodes, edges):
