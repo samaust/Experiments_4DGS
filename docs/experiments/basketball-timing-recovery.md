@@ -1,6 +1,9 @@
 # Basketball synchronization recovery
 
-Status: both recovery fits blocked; complementary-edge diagnostic also fails.
+Historical result: both recovery fits blocked; complementary-edge diagnostic also fails.
+The [subsequent targeted recovery](basketball-advertising-recovery.md) connects
+camera 14 and resolves the four bridges; two other cycle closures now block the
+full graph. The evidence below preserves the earlier attempt.
 The user authorized autonomous choice of recovery solutions and continuation
 until completion or an evidenced blocker. The [accepted calibration and scale](basketball-rev2.md)
 remain unchanged. Timing selection/final validation and downstream experiments

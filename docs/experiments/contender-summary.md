@@ -160,11 +160,13 @@ pixel/distortion conventions and estimated scale validation: frozen scale
 1.31506947 estimated metres per calibration unit, with 3.13% reserved-frame
 disagreement. The full rig has 30 training cameras and held-outs 0, 10, 20, 30.
 
-[Autonomous timing recovery](basketball-timing-recovery.md) remains blocked.
-Temporal SIFT passes 67/146 edges; dense RoMa passes 0/146. The complementary
-fitting graph reaches 33 cameras, but camera 14 is disconnected and four bridges
-lack cycle support. The 0.25-frame gate remains unchanged. Timing selection/final validation,
-preparation, initialization, training and model evaluation remain unexecuted.
+[Targeted timing recovery](basketball-advertising-recovery.md) adds three passing
+edges: all 34 cameras are connected and all four former bridges have cycle support.
+The complete 74-edge graph remains blocked by two 0.30-frame cycle closures,
+above the unchanged 0.25-frame gate. Advertising diagnostics supply no accepted
+timing event. This recovery used 39.737675 CPU seconds and zero GPU seconds.
+Timing selection/final validation, preparation, initialization, training and model
+evaluation remain unexecuted.
 
 | Method | Basketball metrics | Remaining blocker |
 | --- | --- | --- |

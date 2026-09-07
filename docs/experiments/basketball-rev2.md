@@ -1,11 +1,11 @@
 # Basketball Plan 005 revision 2 continuation
 
-Latest continuation: [the autonomous timing recovery](basketball-timing-recovery.md)
-completed both declared fitting stages. Temporal SIFT passes 67/146 edges and
-RoMa passes 0/146; combining already-passing complementary edges reaches 33
-cameras but leaves camera 14 disconnected and four graph bridges unvalidated.
-Synchronization still blocks downstream execution. Calibration and scale remain
-accepted; the evidence below records the earlier initial continuation.
+Latest continuation: [targeted native-resolution timing recovery](basketball-advertising-recovery.md)
+connects all 34 cameras and resolves all four bridges. Three new edges pass, but
+the complete 74-edge graph exposes two 0.30-frame cycle closures, exceeding the
+0.25-frame gate. Advertising diagnostics supply no accepted timing event. This
+CPU-only attempt leaves GPU/training ledgers unchanged. Calibration and scale
+remain accepted; the evidence below records the earlier initial continuation.
 
 
 Status: provenance, camera conventions and estimated metric scale passed;

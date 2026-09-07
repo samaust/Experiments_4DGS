@@ -8,10 +8,11 @@ Status: **pending source/data validation**.
 [revision 2](basketball-rev2.md) verified provenance/conventions and passed the
 training-view estimated scale check (1.31506947 estimated metres per calibration
 unit, 3.13% reserved disagreement).
-[Autonomous timing recovery](basketball-timing-recovery.md) also remains blocked:
-67/146 temporal-SIFT edges and 0/146 RoMa edges pass. The complementary graph
-reaches 33 cameras, but camera 14 is disconnected and four bridges lack cycle
-support. No timing selection/final validation,
+[Targeted timing recovery](basketball-advertising-recovery.md) connects all 34
+cameras and resolves all four bridges with three new passing edges. The full
+74-edge graph still fails two signed cycle closures at 0.30 frames, above the
+unchanged 0.25-frame gate. Advertising diagnostics supply no accepted timing
+event. No timing selection/final validation,
 1,700-image preparation, Gaussian initialization or Basketball training/evaluation
 was launched. Held-outs remain 0, 10, 20, 30, with 30 training cameras. The
 original per-method two-hour Basketball allocation is unchanged and uncharged.

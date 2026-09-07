@@ -260,3 +260,12 @@ loader; no new model downloads or dependency/license substitutions occurred.
 All 438 dynamic matching calls completed, but the declared confidence/support
 policy retained too few reliable long tracks for accepted full-rig timing.
 The unchanged model/asset restrictions from the earlier RoMa/EDGS audit apply.
+
+## Basketball targeted timing recovery — 2026-09-07
+
+[Native motion and advertising diagnostics](experiments/basketball-advertising-recovery.md)
+reuse the existing CPU OpenCV/NumPy environment, with no new dependency, asset
+or weight. The run adds appearance-discontinuity rejection and native-coordinate
+conversion, connects all cameras and supplies cycle support for former bridges.
+Two other signed cycle closures exceed the unchanged timing gate. No advertising
+panel simultaneity is assumed and no advertising event supplies an accepted offset.
