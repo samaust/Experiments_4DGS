@@ -1,0 +1,35 @@
+{
+  "source_sha256": {
+    "scripts/basketball_shared_profiles_v3.py": "aa202f2e2fbc1aa3f24f09e9f9927145b5a38c6e9ddc6963684fc63ef0a2ccd5",
+    "scripts/basketball_shared_solver_v3.py": "45549e8ff03a66c488b5270e40adc4ce73f4e06282cfb8f87e2baa892cd4d0a7"
+  },
+  "solver": {
+    "policy": {
+      "method": "trf",
+      "tr_solver": "lsmr",
+      "x_scale": "jac",
+      "tr_options": {
+        "regularize": true
+      },
+      "ftol": 1e-06,
+      "xtol": 1e-06,
+      "gtol": 1e-06,
+      "max_nfev": 200
+    },
+    "scipy": "1.18.1",
+    "lsmr_defaults": {
+      "damp": 0.0,
+      "atol": 1e-06,
+      "btol": 1e-06,
+      "conlim": 100000000.0,
+      "maxiter": null,
+      "show": false,
+      "x0": null
+    },
+    "effective_lsmr_maxiter": "min(m,n) for each augmented linear system",
+    "objective": "sum of squared v2 residuals; no added ridge residual",
+    "reference": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html"
+  },
+  "frozen_unix": 1788817331.4976559,
+  "policy": "integer cold then ascending then descending; refinement cold/lower ascending/upper descending; no tuning"
+}

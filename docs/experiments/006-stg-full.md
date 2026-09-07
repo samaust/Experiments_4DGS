@@ -5,6 +5,15 @@ Basketball blocked on synchronization**.
 
 ## Current Basketball continuation — 2026-09-07
 
+[Plan 009](basketball-shared-timing-v3.md) repairs the independent solver's
+previous evaluation-cap failures, but timing remains blocked: the exact noiseless
+control has only 11/12 complete ascending and 10/12 complete descending data-only
+group profiles because some fits converge with negative depth. The best-of-three
+estimate recovers −0.10 frames but cannot qualify without both sweep directions.
+No real fitting, selection reevaluation, final validation or Basketball training
+was performed. The unchanged 1,890 production controls and Plan 008 admission
+were hash-verified; all six real configurations remain unassessed.
+
 [Plan 008](basketball-shared-timing-v2.md) resolves the multiview admission
 failure: all 72 edges pass with 667 whole groups per half and at least 19 groups
 per edge per half. Timing remains blocked at independent synthetic validation:

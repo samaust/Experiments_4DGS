@@ -1,0 +1,69 @@
+{
+  "investigation_started_unix": 1788816780.0,
+  "clock_origin": "2026-09-07 21:33:00 UTC; conservatively rounded down before the first inspection tool call",
+  "elapsed_seconds": 879.5552203655243,
+  "limit_seconds": 14400,
+  "computation_limit_seconds": 13200,
+  "early_retest_limit_seconds": 5400,
+  "cpu_workers_limit": 8,
+  "numerical_threads_per_worker": 1,
+  "gpu_seconds": 0,
+  "downloads": 0,
+  "solver": {
+    "policy": {
+      "method": "trf",
+      "tr_solver": "lsmr",
+      "x_scale": "jac",
+      "tr_options": {
+        "regularize": true
+      },
+      "ftol": 1e-06,
+      "xtol": 1e-06,
+      "gtol": 1e-06,
+      "max_nfev": 200
+    },
+    "scipy": "1.18.1",
+    "lsmr_defaults": {
+      "damp": 0.0,
+      "atol": 1e-06,
+      "btol": 1e-06,
+      "conlim": 100000000.0,
+      "maxiter": null,
+      "show": false,
+      "x0": null
+    },
+    "effective_lsmr_maxiter": "min(m,n) for each augmented linear system",
+    "objective": "sum of squared v2 residuals; no added ridge residual",
+    "reference": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html"
+  },
+  "stages": {
+    "prepare": {
+      "wall_seconds": 4.703454988019075,
+      "process_cpu_seconds": 4.896251,
+      "child_cpu_seconds": 0.0,
+      "maximum_rss_kib": 119604,
+      "investigation_elapsed_seconds": 243.06856417655945
+    },
+    "diagnose": {
+      "wall_seconds": 3.693177540990291,
+      "process_cpu_seconds": 0.45416199999999995,
+      "child_cpu_seconds": 23.820507,
+      "maximum_rss_kib": 86960,
+      "investigation_elapsed_seconds": 257.47934460639954
+    },
+    "safeguard": {
+      "wall_seconds": 56.5611049879808,
+      "process_cpu_seconds": 9.924608,
+      "child_cpu_seconds": 280.078432,
+      "maximum_rss_kib": 274760,
+      "investigation_elapsed_seconds": 608.052323102951
+    },
+    "package": {
+      "wall_seconds": 0.29985370399663225,
+      "process_cpu_seconds": 0.492853,
+      "child_cpu_seconds": 0.0,
+      "maximum_rss_kib": 81156,
+      "investigation_elapsed_seconds": 700.8730852603912
+    }
+  }
+}

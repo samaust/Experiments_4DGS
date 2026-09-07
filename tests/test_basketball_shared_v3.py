@@ -112,6 +112,39 @@ class V3Tests(unittest.TestCase):
         second=group_job(payload)
         self.assertEqual(first['frozen_training']['x'],second['frozen_training']['x'])
 
+    def test_fresh_outputs_and_hash_bound_control_reuse(self):
+        import tempfile
+        from types import SimpleNamespace
+        from basketball_shared_workflow_v3 import main,prepare
+        from basketball_continuation_audit import verify_hashes
+        from basketball_audit import sha256
+        from basketball_scale import read
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            with self.assertRaises(FileExistsError):main(SimpleNamespace(output=root))
+            control=root/'case.json';control.write_text('{"recipe": "original"}')
+            expected={str(control):sha256(control)}
+            control.write_text('{"recipe": "changed"}')
+            with self.assertRaises(ValueError):verify_hashes(expected)
+            # Recipe checks remain necessary even for internally hash-consistent files.
+            p=read('configs/basketball-rev2/timing-shared-v3.json')
+            original_read=read
+            def changed_recipe(path):
+                value=original_read(path)
+                if str(path).endswith('optimizer-controls/case0000.json'):
+                    value['known_offset_frames']=123.
+                return value
+            with patch('basketball_shared_workflow_v3.read',side_effect=changed_recipe), \
+                 patch('basketball_shared_workflow_v3.verify_hashes'):
+                with self.assertRaisesRegex(ValueError,'recipe mismatch'):prepare(p,root)
+
+    def test_worker_deadline_prevents_solves(self):
+        groups,cameras,window,_=self.fixture()
+        with patch('basketball_shared_profiles_v3.solve') as solver:
+            with self.assertRaises(TimeoutError):
+                group_job((groups[0],cameras,dict(a=1,b=2),window,10,0.,'synthetic',[0.],None,0.))
+            solver.assert_not_called()
+
     def test_cycles_deadline_and_objective_agreement(self):
         self.assertFalse(independent_cycles([dict(a=1,b=2,lag=0.),dict(a=2,b=3,lag=0.),dict(a=1,b=3,lag=1.)],[1,2,3])['passed'])
         with patch('basketball_shared_workflow_v3.time.time',return_value=5400.):
