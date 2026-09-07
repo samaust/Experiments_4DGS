@@ -533,13 +533,13 @@ Shared geometry, synchronization and Basketball training remain unexecuted.
 Cumulative calibration charge is 323.0525 seconds; training charge remains zero.
 
 
-### Current 24-camera variant under the 20% gate
+### Current 23-camera variant after camera 19 removal
 
-The user restored the intrinsic-prior gate to 20% and excluded all failing
-cameras. The current variant has 24 cameras: 21 training and held-outs 0, 10, 30,
-with 1,200 expected images (150 held-out). [The complete bounded rerun](basketball-intrinsic20.md)
-finished all 32 independent reconstructions. Its best comparison is **0.7182
-degrees / 1.1185% of rig diameter**, failing the unchanged 0.5 degree / 1% gate
-only at training camera 19. All retained priors and ten-frame focus screens pass.
-Calibration remains blocked; training/evaluation did not start. Cumulative GPU
-calibration charge is 1,056.0873 seconds; original training budgets are unchanged.
+The user also removed camera 19. The current variant has 23 cameras: 20
+training and held-outs 0, 10, 30; 1,150 expected images (150 held-out).
+[The rebuilt 23-camera search](basketball-no-camera19.md) completed 32 independent
+reconstruction commands. Its best result is **5.8807 degrees / 7.1892% of rig
+diameter**, failing the unchanged pose gates. All retained priors and full focus
+screens pass, but calibration and downstream training/evaluation remain blocked.
+No new GPU inference was used; cumulative calibration charge remains 1,056.0873
+seconds and the original training budgets are unchanged.

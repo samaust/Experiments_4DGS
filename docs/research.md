@@ -232,3 +232,10 @@ configurations. One new pinned RoMa pass supplies both frozen confidence variant
 without new downloads or dependencies. A strong common initialization pair gives
 0.7182 degree / 1.1185% disagreement, still failing the unchanged gate at camera
 19. No downstream training or extra budget allowance was used.
+
+
+[Removing camera 19](experiments/basketball-no-camera19.md) leaves 23 cameras.
+Verified priors, masks and per-camera feature caches are reused without new GPU
+inference or dependencies. Thirty-two fresh reconstruction commands fail the
+unchanged pose gates; the best result is 5.8807 degrees / 7.1892%. No accepted
+calibration or downstream training is claimed.

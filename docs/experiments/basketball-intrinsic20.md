@@ -1,7 +1,8 @@
 # Basketball recovery with the 20% intrinsic gate
 
-Status: **blocked by independent-window pose disagreement after the complete
-bounded A/B/C search**. The 20% prior gate and full ten-frame focus screening
+Historical 24-camera record. **Current status:** [camera 19 removal and the
+rebuilt 23-camera search](basketball-no-camera19.md) remain blocked by pose
+stability. The previous 24-camera outcomes below are preserved. The 20% prior gate and full ten-frame focus screening
 pass for all retained cameras. No accepted calibration or training result is
 claimed. This supersedes the [33-camera revision-one blocker](basketball-rev1.md).
 

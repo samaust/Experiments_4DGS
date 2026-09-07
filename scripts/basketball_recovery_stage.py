@@ -39,9 +39,13 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--workspace',type=Path,required=True)
     p.add_argument('--stage',choices=['B','C'],required=True)
+    p.add_argument('--already-tested',type=Path,help='Previously rebuilt C configuration counted once in the finite search')
     a=p.parse_args();workspace=a.workspace
     manifest=json.loads((workspace/'search.json').read_text())
     if manifest['protocol']!=PROTOCOL:raise ValueError('wrong camera protocol')
+    tested=json.loads(a.already_tested.read_text()) if a.already_tested else None
+    if tested and (a.stage!='C' or tested['config'] not in manifest['stages']['C']):
+        raise ValueError('already-tested result must identify a frozen C configuration')
     previous=json.loads((workspace/f'stage-{chr(ord(a.stage)-1)}.json').read_text())
     if any(e.get('stability',{}).get('passed') for e in previous):
         raise ValueError('previous stage has a fitting-pose candidate; validate before advancing')
@@ -58,6 +62,7 @@ def main():
         for policy in POLICIES:
             complete=[e for e in previous if e['config']['policy']==policy and 'stability' in e]
             if not complete:
+                if tested and tested['config']['policy']==policy:results.append(tested)
                 results.append(dict(policy=policy,status='skipped',reason='no complete Stage B pair'))
                 progress.write_text(json.dumps(results,indent=2)+'\n');continue
             def score(e):
@@ -69,6 +74,9 @@ def main():
             with (workspace/f'initial-pairs-{policy}.json').open('x') as out:json.dump(selection,out,indent=2)
             for i in range(2):
                 config=next(c for c in manifest['stages']['C'] if c['policy']==policy and c['recipe']==f'initial-pair-{i+1}')
+                if tested and config==tested['config']:
+                    results.append(tested)
+                    progress.write_text(json.dumps(results,indent=2)+'\n');continue
                 if i>=len(pairs):
                     results.append(dict(config=config,status='skipped',reason='no further pair eligible in both windows'))
                 else:results.append(run_pair(workspace,config,sources,pairs[i]))

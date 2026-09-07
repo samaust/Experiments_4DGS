@@ -79,8 +79,8 @@ datasets, checkpoints, and compatible implementations:
 Earlier `sear_steak` outputs remain historical evidence and are not replaced.
 
 
-The current user-authorized Basketball variant uses the 20% intrinsic-prior gate:
-24 retained cameras, 21 training and held-outs 0, 10, 30; 1,200 expected images.
-The [bounded rerun](experiments/basketball-intrinsic20.md) completes 32 independent
-reconstructions but remains above the pose limits at camera 19. Training stays
-gated on accepted calibration and synchronization; original budgets are unchanged.
+The current user-authorized Basketball variant also removes camera 19: 23
+retained cameras, 20 training and held-outs 0, 10, 30; 1,150 expected images.
+[The rebuilt bounded search](experiments/basketball-no-camera19.md) remains above
+the pose limits. Training stays gated on accepted calibration and synchronization;
+original budgets are unchanged and no additional GPU inference was required.
