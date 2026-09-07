@@ -1,0 +1,199 @@
+{
+  "schema": "basketball-shared-trajectories/v1",
+  "fit_frames": [
+    50,
+    149
+  ],
+  "target_cameras": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33
+  ],
+  "base_frozen_protocol": ".local/calibration/basketball-rev2/timing-recovery/frozen/protocol.json",
+  "prior_tracks": ".local/calibration/basketball-rev2/advertising-recovery/native-fit/tracks",
+  "native_dimensions": [
+    1920,
+    1080
+  ],
+  "seed_frames": [
+    50,
+    60,
+    70,
+    80
+  ],
+  "sift_features": 16000,
+  "seed_spacing_native_pixels": 8,
+  "maximum_tracks_per_seed": 1000,
+  "lk_window_native_pixels": 31,
+  "maximum_forward_backward_native_pixels": 1.0,
+  "appearance_patch_native_pixels": 15,
+  "minimum_adjacent_patch_correlation": 0.7,
+  "transition_tile_pixels": 30,
+  "transition_channel_difference": 25,
+  "transition_changed_fraction": 0.5,
+  "transition_minimum_tiles": 6,
+  "transition_policy": "Diagnostic full-frame persistent tile changes only; moving people and clocks may trigger candidates. Never identify these as shared panel events or export timing without physical-panel correspondence and switch-delay validation. No manual annotations.",
+  "track_policy": "Native-resolution dynamic-mask SIFT and forward/backward LK with adjacent patch correlation; terminate on appearance discontinuity. Convert coordinates by (xy+0.5)/2-0.5 before using immutable calibration. Preserve original moving-track and full-search support gates.",
+  "maximum_cpu_seconds": 14400,
+  "fractional_step_frames": 0.01,
+  "subset_minimum_tracks": 6,
+  "subset_seed": 0,
+  "previous_frozen": "docs/experiments/basketball-timing-selection/frozen.json",
+  "audit": ".local/calibration/basketball-rev2/provenance/result.json",
+  "investigation_started_unix": 1788795206.7374403,
+  "held_out_cameras": [
+    0,
+    10,
+    20,
+    30
+  ],
+  "minimum_groups_per_half": 12,
+  "minimum_training_cameras": 3,
+  "split_seed": 0,
+  "duplicate_overlap_samples": 8,
+  "duplicate_maximum_distance_pixels": 1.0,
+  "injections": [
+    -0.75,
+    -0.25,
+    -0.1,
+    0,
+    0.1,
+    0.25,
+    0.75
+  ],
+  "audit_windows": [
+    [
+      50,
+      99
+    ],
+    [
+      100,
+      149
+    ],
+    [
+      50,
+      74
+    ],
+    [
+      75,
+      99
+    ],
+    [
+      100,
+      124
+    ],
+    [
+      125,
+      149
+    ]
+  ],
+  "diagnostic_search_radius": 2,
+  "configurations": [
+    {
+      "knot_spacing_frames": 5,
+      "acceleration_weight": 0.1
+    },
+    {
+      "knot_spacing_frames": 5,
+      "acceleration_weight": 1
+    },
+    {
+      "knot_spacing_frames": 5,
+      "acceleration_weight": 10
+    },
+    {
+      "knot_spacing_frames": 10,
+      "acceleration_weight": 0.1
+    },
+    {
+      "knot_spacing_frames": 10,
+      "acceleration_weight": 1
+    },
+    {
+      "knot_spacing_frames": 10,
+      "acceleration_weight": 10
+    }
+  ],
+  "source_sha256": {
+    ".local/calibration/basketball-rev2/timing-recovery/frozen/protocol.json": "2c1cf775c577b95301ccd99ef9be911161f6f9a2b285e405d139777443777c03",
+    "docs/experiments/basketball-timing-selection/frozen.json": "64e2f2e3f90639e16b60daa2c8b955e7f9356578d143ea923d555075a817acb2",
+    ".local/calibration/basketball-rev2/provenance/result.json": "0b5a8c88a283597c95b9fef63634747ca144e15d531dee0e49b090cec7781273",
+    "docs/experiments/basketball-timing-selection/result.json": "ba3923851a220ab278736a873a370060cea3f0dbcd665d3669e260d0d08809a3",
+    "docs/experiments/basketball-timing-selection/selection-consumed.json": "851593995998638434a276d32798d3dcabaab2e78d5b79b4dfee254a81eb37b0",
+    "docs/experiments/basketball-rev2/scale-fit.json": "6491b0ec43bb4f95ea9aa3fe97d9bc0b3a420545c94ba39dc954337c092edd18",
+    "docs/experiments/basketball-rev2/scale-selection.json": "45e8422130f56d3898e6ba8ad06d736d10b7ee3b1a65b18496f84eb1078c1015",
+    "configs/basketball-rev2/scale.json": "158efdefe93d7c079380199381e063683644aff6d989ece6ad8fac123f93ea44",
+    "scripts/basketball_timing_advertising.py": "178a55e05fe4b781216454b882fed7c4ea321bf6bf3f6d89fc1694bf7030686b",
+    "scripts/basketball_timing_reserved.py": "fcec24ecdd64f21a70b96048deb3fd41bc53000b52ebbf69ce305798b704eea6",
+    "scripts/basketball_timing_recovery.py": "34486dabd0f7e619945dca3e542c54f1bff738f6a0c47fb09e5e77c00025ad85",
+    "scripts/basketball_timing.py": "6ca3798cbec91eab0b239a3854ed9b29d5a4584812995d20c734243ae93a9955"
+  },
+  "roles": {
+    "fit": [
+      50,
+      149
+    ],
+    "selection_previously_observed": [
+      150,
+      199
+    ],
+    "final_untouched": [
+      200,
+      249
+    ]
+  },
+  "association_policy": "Mutual RootSIFT ratio 0.8 in both directions; reject whole conflicting connected components; merge overlapping same-camera tracks before association and split entire multiview groups with seed0.",
+  "duplicate_policy": "At least 8 shared frames and maximum separation <=1 calibration pixel; union duplicates before matching; retain longest member descriptor, average shared pixels, reject noncontiguous merged tracks.",
+  "stop_policy": "Stop before fitting if any fixed edge has fewer than12 eligible groups in either half. Diagnostic local-search audit does not qualify timing. Never access final frames.",
+  "model_policy": {
+    "reference_camera": 1,
+    "offset_boundary_frames": 25,
+    "loss": "soft_l1",
+    "loss_scale_pixels": 1,
+    "time_units": "source seconds at25fps",
+    "spatial_units": "rig diameter",
+    "normalization": "data and acceleration sample counts separately",
+    "solver": "scipy sparse least_squares",
+    "starts": [
+      "current",
+      "zero",
+      "current plus seed0 uniform[-0.5,0.5]"
+    ],
+    "selection": "timing gates first, then assessment reprojection; ties fewer knots then lower acceleration weight",
+    "bootstrap_unit": "entire multiview group",
+    "bootstrap_resamples": 256,
+    "bootstrap_seed": 0,
+    "gate_frames": 0.25
+  }
+}
