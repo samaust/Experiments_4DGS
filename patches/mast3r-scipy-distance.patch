@@ -1,0 +1,21 @@
+diff --git a/mast3r/cloud_opt/sparse_ga.py b/mast3r/cloud_opt/sparse_ga.py
+index e5ff343..9e860bc 100644
+--- a/mast3r/cloud_opt/sparse_ga.py
++++ b/mast3r/cloud_opt/sparse_ga.py
+@@ -16,6 +16,7 @@ from functools import lru_cache
+ from scipy import sparse as sp
+ import copy
+ import scipy.cluster.hierarchy as sch
++from scipy.spatial.distance import squareform
+
+ from mast3r.utils.misc import mkdir_for, hash_md5
+ from mast3r.cloud_opt.utils.losses import gamma_loss
+@@ -159,7 +160,7 @@ def sparse_global_alignment(imgs, pairs_in, cache_path, model, subsample=8, desc
+         distance_matrix = np.where(pws, 1 - pws, 2)
+
+         # Compute the condensed distance matrix
+-        condensed_distance_matrix = sch.distance.squareform(distance_matrix)
++        condensed_distance_matrix = squareform(distance_matrix)
+
+         # Perform hierarchical clustering using the linkage method
+         Z = sch.linkage(condensed_distance_matrix, method=linkage)
