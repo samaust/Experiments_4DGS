@@ -1,0 +1,12 @@
+{
+  "schema": "basketball-timing-complementary/v1",
+  "purpose": "Fitting-only compatibility check of complementary estimators after denser matching produced sparse seeds; no new inference and no acceptance-threshold change",
+  "source_priority": ["sift-temporal-bias", "sift-absolute"],
+  "edge_policy": "for each camera pair use the first already-passing source in the declared priority; never choose an edge by the sign/value of its lag or by cycle residual",
+  "reference_camera": 1,
+  "timing_gate_frames": 0.25,
+  "camera_ids": [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33],
+  "gate": "all cameras connected, no unvalidated bridge, signed fundamental-cycle closure and fitted edge residual <=0.25 frame; reference-relative offsets strictly within +/-25 frames",
+  "no_pruning": "Do not remove inconsistent edges or refit the calibration to make this diagnostic pass",
+  "status_meaning": "A pass is only fitting eligibility and still needs frozen reserved timing selection/final checks. A failure is evidence that the available individually precise constraints do not form a consistent rig-wide solution."
+}

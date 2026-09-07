@@ -8,8 +8,10 @@ Status: **expert training integration unresolved for both scenes**.
 [revision 2](basketball-rev2.md) verified provenance/conventions and passed the
 training-view estimated scale check (1.31506947 estimated metres per calibration
 unit, 3.13% reserved disagreement).
-Synchronization is now the shared blocker: only 24/71 dynamic timing edges pass,
-leaving 19 cameras disconnected from camera 1. No timing selection/final validation,
+[Autonomous timing recovery](basketball-timing-recovery.md) also remains blocked:
+67/146 temporal-SIFT edges and 0/146 RoMa edges pass. The complementary graph
+reaches 33 cameras, but camera 14 is disconnected and four bridges lack cycle
+support. No timing selection/final validation,
 1,700-image preparation, Gaussian initialization or Basketball training/evaluation
 was launched. Held-outs remain 0, 10, 20, 30, with 30 training cameras. The
 original per-method two-hour Basketball allocation is unchanged and uncharged.

@@ -252,3 +252,11 @@ so the adapter explicitly remaps images to that exact K. The accepted Plan 006
 radial calibration remains immutable. Estimated scale passes the frozen
 cross-view and temporal checks; common metric bias is not measured, and timing
 remains an independent gate before downstream experiments.
+
+
+The [subsequent timing recovery](experiments/basketball-timing-recovery.md) reused
+the exact pinned RoMa indoor/DINOv2 assets and source through the existing offline
+loader; no new model downloads or dependency/license substitutions occurred.
+All 438 dynamic matching calls completed, but the declared confidence/support
+policy retained too few reliable long tracks for accepted full-rig timing.
+The unchanged model/asset restrictions from the earlier RoMa/EDGS audit apply.

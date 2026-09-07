@@ -160,9 +160,10 @@ pixel/distortion conventions and estimated scale validation: frozen scale
 1.31506947 estimated metres per calibration unit, with 3.13% reserved-frame
 disagreement. The full rig has 30 training cameras and held-outs 0, 10, 20, 30.
 
-Dynamic timing is blocked: 24/71 candidate edges pass, leaving 19 cameras
-unreachable from reference camera 1. Forty-five edges exceed the 0.25-frame
-uncertainty limit and two lack support. Timing selection/final validation,
+[Autonomous timing recovery](basketball-timing-recovery.md) remains blocked.
+Temporal SIFT passes 67/146 edges; dense RoMa passes 0/146. The complementary
+fitting graph reaches 33 cameras, but camera 14 is disconnected and four bridges
+lack cycle support. The 0.25-frame gate remains unchanged. Timing selection/final validation,
 preparation, initialization, training and model evaluation remain unexecuted.
 
 | Method | Basketball metrics | Remaining blocker |
@@ -175,9 +176,10 @@ preparation, initialization, training and model evaluation remain unexecuted.
 | [FreeTimeGS++](010-freetimegs-plus-plus.md) | Not measured | Same gates plus a validated author implementation of fixed B |
 
 Basketball training charges remain zero and each method retains its two-hour
-allocation. Revision 2 charged 24.550233 GPU seconds for scale, bringing the
-historical calibration ledger to 1,080.637553 seconds; its conditional extension
-is unused. These are input-gate results, not method-quality measurements.
+allocation. Revision 2 charged 24.550233 GPU seconds for scale and 56.904159 for
+timing recovery. The historical calibration ledger totals 1,137.541712 seconds;
+its conditional extension is unused. These are input-gate results, not
+method-quality measurements.
 
 ## Unexecuted SelfCap methods
 
