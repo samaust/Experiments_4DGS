@@ -5,6 +5,7 @@ import json
 import os
 import math
 import statistics
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -30,9 +31,10 @@ def fitting_frame(camera_id, frame_id, *, all_priors=False):
     return frame_id - 50
 
 
-def intrinsic_stability(focals):
+def intrinsic_stability(focals, *, expected_count=None):
     """Frozen pilot sanity gate for a fixed physical camera, not rig accuracy."""
-    if len(focals) != len(FRAMES) or any(not math.isfinite(f) or f <= 0 for f in focals):
+    count = len(FRAMES) if expected_count is None else expected_count
+    if count < 2 or len(focals) != count or any(not math.isfinite(f) or f <= 0 for f in focals):
         return {"passed": False, "relative_range": None}
     relative_range = (max(focals)-min(focals))/statistics.median(focals)
     return {"passed": relative_range <= CONFIG["max_focal_relative_range"],
@@ -47,7 +49,14 @@ def main():
     parser.add_argument('--all-priors', type=Path, metavar='PASSED_PILOT_RESULT',
                         help='Process the active 33 cameras after a successful pilot')
     parser.add_argument('--intrinsics-from', type=Path, help='Reuse hash-bound intrinsic estimates for retained cameras')
+    parser.add_argument('--expand-from', type=Path, help='Revision-one expansion of verified existing five-frame priors')
     a = parser.parse_args()
+    frames = FRAMES
+    if a.expand_from:
+        if a.intrinsics_from or not a.all_priors:
+            parser.error('--expand-from requires --all-priors and replaces --intrinsics-from')
+        a.intrinsics_from = a.expand_from / 'result.json'
+        frames = [50, 62, 75, 87, 99, 100, 112, 125, 137, 149]
     config = dict(CONFIG)
     if a.all_priors:
         pilot = json.loads(a.all_priors.read_text())
@@ -57,6 +66,10 @@ def main():
             raise ValueError('pilot input provenance changed')
         config.update(schema='basketball-vipe-all-priors/v1', cameras=list(CAMERAS), seed=0, protocol=PROTOCOL, excluded_cameras=list(EXCLUDED),
                       pilot_result_sha256=sha256(a.all_priors))
+    config['source_frames'] = frames
+    if a.expand_from:
+        config['schema'] = 'basketball-vipe-expanded-priors/v1'
+        config['expansion_source'] = str(a.expand_from)
     reuse = None
     if a.intrinsics_from:
         if not a.all_priors:
@@ -76,6 +89,17 @@ def main():
         reuse_entries = {(e['camera_id'], e['source_frame_id']): e for e in retained}
     output = a.output if a.output is not None else a.workspace / 'pilot'
     output.mkdir(exist_ok=False)
+    reused_artifacts = {}
+    if a.expand_from:
+        if reuse['status'] != 'priors-generated' or reuse['blockers']:
+            raise ValueError('expansion requires passing original priors')
+        reused_artifacts = json.loads((a.expand_from / 'artifacts.json').read_text())
+        for entry in reuse_entries.values():
+            for suffix in ['.png', '-motion.npy', '-static.png'] + (['-depth.npz'] if entry['source_frame_id'] == 100 else []):
+                name = entry['stem'] + suffix
+                if sha256(a.expand_from / name) != reused_artifacts[name]:
+                    raise ValueError(f'changed reused artifact: {name}')
+                shutil.copy2(a.expand_from / name, output / name)
     (output / 'config.json').write_text(json.dumps(config, indent=2) + '\n')
     audit = json.loads((a.workspace / 'input-audit.json').read_text())
     if audit['status'] != 'inputs-verified':
@@ -140,7 +164,7 @@ def main():
             torch.manual_seed(config['seed'])
             torch.cuda.manual_seed_all(config['seed'])
         torch.cuda.reset_peak_memory_stats()
-        calib = GeoCalib().to(device).eval() if reuse is None else None
+        calib = GeoCalib().to(device).eval() if reuse is None or a.expand_from else None
         videos = {int(v['camera_id']): v for v in audit['videos']}
         for camera in config['cameras']:
             source = videos[camera]
@@ -148,8 +172,13 @@ def main():
                 raise ValueError(f'changed video provenance: {camera}')
             capture = cv2.VideoCapture(source['path'])
             focals = []
-            for frame_id in FRAMES:
+            for frame_id in frames:
                 stream_id = fitting_frame(camera, frame_id, all_priors=bool(a.all_priors))
+                if a.expand_from and (camera, frame_id) in reuse_entries:
+                    entry = dict(reuse_entries[(camera, frame_id)])
+                    result['observations'].append(entry)
+                    focals.append(float(entry['K_960x540'][0][0]))
+                    continue
                 images = []
                 # Neighbor remains strictly inside fitting membership.
                 neighbor = frame_id + 1 if frame_id < 149 else frame_id - 1
@@ -161,7 +190,7 @@ def main():
                         raise ValueError(f'cannot decode {camera}/{index}')
                     images.append(cv2.cvtColor(cv2.resize(bgr, (960, 540), interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2RGB))
                 rgb = torch.from_numpy(images[0]).to(device).float() / 255
-                if reuse is None:
+                if reuse is None or (a.expand_from and (camera, frame_id) not in reuse_entries):
                     with torch.inference_mode():
                         prior = calib.calibrate(rgb.permute(2, 0, 1))
                     K = prior['camera'].K[0].cpu().numpy()
@@ -183,7 +212,7 @@ def main():
                 result['observations'].append(entry)
                 print(f'GeoCalib {camera}/{frame_id}: focal={focal:.2f}', flush=True)
             capture.release()
-            stability = intrinsic_stability(focals)
+            stability = intrinsic_stability(focals, expected_count=len(frames))
             result['intrinsic_stability'][str(camera)] = stability
             if not stability['passed']:
                 result['blockers'].append(f'camera {camera}: unusable intrinsic stability')
@@ -192,9 +221,11 @@ def main():
         torch.cuda.empty_cache()
         # Stop before expensive depth/masks if intrinsic pilot has already failed.
         if not result['blockers']:
-            depth = UniDepth2Model()
+            depth = UniDepth2Model() if not a.expand_from else None
             for entry in result['observations']:
                 if entry['source_frame_id'] != 100:
+                    continue
+                if a.expand_from:
                     continue
                 rgb = torch.from_numpy(cv2.cvtColor(cv2.imread(str(output / (entry['stem'] + '.png'))), cv2.COLOR_BGR2RGB)).to(device).float()/255
                 K = np.array(entry['K_960x540'])
@@ -209,6 +240,8 @@ def main():
             gc.collect()
             torch.cuda.empty_cache()
             for entry in result['observations']:
+                if a.expand_from and (entry['camera_id'], entry['source_frame_id']) in reuse_entries:
+                    continue
                 # Independent semantic detections avoid tracking across nonconsecutive pilot samples.
                 tracker = TrackAnythingPipeline(config['mask_phrases'])
                 rgb = torch.from_numpy(cv2.cvtColor(cv2.imread(str(output / (entry['stem'] + '.png'))), cv2.COLOR_BGR2RGB)).to(device).float()/255
@@ -233,8 +266,11 @@ def main():
         raise
     finally:
         result['wall_seconds'] = time.monotonic() - started
+        result['source_frames'] = frames
         result['status'] = 'blocked' if result['blockers'] else ('priors-generated' if a.all_priors else 'pilot-passed')
         (output / 'result.json').write_text(json.dumps(result, indent=2, allow_nan=False) + '\n')
+        artifacts = {p.name: sha256(p) for p in sorted(output.iterdir()) if p.suffix in {'.png', '.npy', '.npz'}}
+        (output / 'artifacts.json').write_text(json.dumps(artifacts, indent=2) + '\n')
     return bool(result['blockers'])
 
 
