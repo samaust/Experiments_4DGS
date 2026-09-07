@@ -165,8 +165,12 @@ edges: all 34 cameras are connected and all four former bridges have cycle suppo
 The complete 74-edge graph remains blocked by two 0.30-frame cycle closures,
 above the unchanged 0.25-frame gate. Advertising diagnostics supply no accepted
 timing event. This recovery used 39.737675 CPU seconds and zero GPU seconds.
-Timing selection/final validation, preparation, initialization, training and model
-evaluation remain unexecuted.
+The [clock diagnostic](basketball-clock-diagnostic.md) independently prefers zero
+whole-frame lag on all ten failed-loop connections. It cannot attribute the
+subframe failures to a camera or validate the 0.25-frame gate; its locator runs
+and guarded verification used 24.701799 CPU seconds and zero GPU seconds. Timing selection/final
+validation, preparation, initialization, training and model evaluation remain
+unexecuted.
 
 | Method | Basketball metrics | Remaining blocker |
 | --- | --- | --- |

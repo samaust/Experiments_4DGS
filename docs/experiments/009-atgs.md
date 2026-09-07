@@ -14,7 +14,9 @@ unit, 3.13% reserved disagreement).
 cameras and resolves all four bridges with three new passing edges. The full
 74-edge graph still fails two signed cycle closures at 0.30 frames, above the
 unchanged 0.25-frame gate. Advertising diagnostics supply no accepted timing
-event. No timing selection/final validation,
+event. The [clock diagnostic](basketball-clock-diagnostic.md) prefers zero
+whole-frame lag on all ten connections in the failed loops, but cannot identify
+a responsible camera or validate subframe timing. No timing selection/final validation,
 1,700-image preparation, Gaussian initialization or Basketball training/evaluation
 was launched. Held-outs remain 0, 10, 20, 30, with 30 training cameras. The
 original per-method two-hour Basketball allocation is unchanged and uncharged.

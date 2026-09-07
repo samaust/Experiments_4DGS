@@ -269,3 +269,12 @@ or weight. The run adds appearance-discontinuity rejection and native-coordinate
 conversion, connects all cameras and supplies cycle support for former bridges.
 Two other signed cycle closures exceed the unchanged timing gate. No advertising
 panel simultaneity is assumed and no advertising event supplies an accepted offset.
+
+## Basketball clock timing diagnostic — 2026-09-07
+
+[Clock-display comparisons](experiments/basketball-clock-diagnostic.md) use the
+existing CPU OpenCV/NumPy environment with no OCR model, dependency or asset
+addition. Color-only localization selected a court logo and was rejected; a
+frozen dark-background rule locates the green clock displays. Whole-frame
+agreement supplies no validated subframe timing or camera attribution, and no
+electronic display-face simultaneity is assumed.

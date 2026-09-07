@@ -1,6 +1,12 @@
 # Basketball Plan 005 revision 2 continuation
 
-Latest continuation: [targeted native-resolution timing recovery](basketball-advertising-recovery.md)
+Latest diagnostic: [clock-display changes](basketball-clock-diagnostic.md) prefer
+zero whole-frame lag across all ten connections in the two failed loops. This
+independent check cannot isolate a camera or resolve the subframe cycle failures.
+Reserved timing and downstream execution remain blocked; GPU/training ledgers
+are unchanged.
+
+Previous continuation: [targeted native-resolution timing recovery](basketball-advertising-recovery.md)
 connects all 34 cameras and resolves all four bridges. Three new edges pass, but
 the complete 74-edge graph exposes two 0.30-frame cycle closures, exceeding the
 0.25-frame gate. Advertising diagnostics supply no accepted timing event. This

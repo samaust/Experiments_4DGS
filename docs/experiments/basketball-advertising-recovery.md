@@ -1,5 +1,10 @@
 # Basketball targeted motion and advertising recovery
 
+Subsequent [clock diagnostic](basketball-clock-diagnostic.md): all ten connections
+in the failed loops prefer zero whole-frame lag. This does not resolve their
+subframe disagreement or identify a responsible camera. The native-motion
+results below remain unchanged.
+
 The targeted fit connects **all 34 cameras** and removes all four previously
 unvalidated bridges. The full graph remains **blocked by two 0.30-frame cycle
 closures**, above the unchanged 0.25-frame gate. Calibration and estimated scale
