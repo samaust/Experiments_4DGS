@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 import unittest
@@ -43,6 +44,16 @@ class AlternativesProtocolTests(unittest.TestCase):
         rows[0]['cameras'] = list(TRAINING)
         rows[0]['max_rotation_degrees'] = float('nan')
         self.assertEqual(rank_complete(rows), [])
+
+    def test_full_rig_handoff_profile_preserves_all_ids_and_original_holdouts(self):
+        root=Path(__file__).resolve().parents[1]
+        profile=json.loads((root/'configs/scene-manifest.vru-basketball-dg.full-rig.json').read_text())
+        self.assertEqual([int(c['id']) for c in profile['cameras']],list(CAMERAS))
+        self.assertEqual([int(c['id']) for c in profile['cameras'] if c['role']=='held-out'],list(HELD_OUT))
+        self.assertEqual(profile['variant']['expected_training_images'],1500)
+        self.assertEqual(profile['variant']['expected_held_out_images'],200)
+        self.assertFalse(profile['variant']['intrinsic_prior_limit_excludes_cameras'])
+        self.assertFalse(profile['calibration']['synchronization_verified'])
 
 
 if __name__ == '__main__':

@@ -114,3 +114,39 @@ and a measured [experiment report](../docs/experiments/basketball-calibration-al
 with machine-readable results, per-camera plots and reproducible commands.
 Create local commits at validated milestones. Finish with a validated full-rig
 calibration/handoff or documented ranking and precise remaining blocker.
+
+## Recorded implementation choices before final validation
+
+- Reserved-frame sampling is five evenly spaced timestamps per window:
+  selection 150,162,175,187,199; final validation 200,212,225,237,249. Neighboring
+  mask frames stay inside the same role. This does not evaluate every frame.
+- The common five-frame frontend is masked OpenCV SIFT, 8,192 features per
+  image, pooled and deduplicated per physical camera. The snapshot incremental
+  control and global mapper share SuperPoint/LightGlue exactly.
+- Learned native window predictions retain all 150 raw observations, then use
+  mean center, SO(3) mean rotation and median K per physical camera for a static
+  initialization. Common BA ties one pose and intrinsic set per camera.
+  MASt3R's released `logwin-5` graph bounds 150-view pair storage; snapshots use
+  complete graphs. Neither adjustment is described as an upstream native rig model.
+- Extend a 200-iteration common BA once to 1,000 only after its log reports
+  `NO_CONVERGENCE`. A remaining nonconvergence fails acceptance.
+- Selection exposed ambiguous repeated-pattern matches: descriptor consensus
+  and independent pairwise fundamental filtering were both retained as failed
+  diagnostic policies. The final evaluation policy continues verified fitting
+  static tracks by descriptor ratio 0.8 and measured 2D displacement at most
+  8 pixels. It does not filter using the tested camera's reprojection error.
+  Training tracks require three cameras and at least 1° parallax; held-outs use
+  fitting-only PnP inlier anchors against the frozen map. Repeated timestamps
+  are deduplicated for support, while all matched reprojections enter errors.
+  This measures held-out-frame consistency of established static tracks,
+  not accuracy on independently surveyed geometry or arbitrary unseen points.
+- Rank fitting-eligible full-rig candidates on selection by worst-camera p95,
+  aggregate median, then configuration ID (the existing Plan 005 rule).
+  Use seed 0's early fitting map as the export; late windows and other seeds
+  remain independent repeatability checks. No selection observations refine it.
+- Require cross-seed stability as well as early/late stability. Report robust
+  point-cloud nonplanarity (smallest/largest singular value after a 95% radial
+  trim, at least 0.01) as a degeneracy diagnostic, not a uniqueness proof.
+- Freeze calibration, training geometry, temporal anchors and evaluator before
+  preparing final-validation inputs. An exclusive marker permits one final
+  evaluation only. Downstream synchronization and metric scale remain separate.
