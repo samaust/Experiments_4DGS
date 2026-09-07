@@ -175,3 +175,27 @@ The search covered foundational 2023–2024 methods and 2025–2026 releases, in
 [Multi4D](https://github.com/BatFaceWayne/Multi4D), [arXiv:2606.22197](https://arxiv.org/abs/2606.22197), is a watchlist entry: the reviewed repository says the implementation is coming soon. Do not list it as a runnable baseline. World-generation systems, human-only capture pipelines, static-only reconstruction, and proprietary hosted services are not expanded into walkthroughs here.
 
 To update this survey, recheck released files and entry points, follow papers to their official code, inspect license changes, and record the review date. Promote a method to a tested recommendation only after recording an actual local run using the [experiment template](local-creation.md#experiment-record).
+
+## ViPE Basketball prior audit — 2026-09-06
+
+The pinned Tridi ViPE fork `de50e6ab1066e32c96d32499a282ecaa2fbf2d90`
+was used unchanged for the [blocked Basketball pilot](experiments/basketball-calibration-20260906.md).
+All listed assets were already locally cached; no model weights were downloaded
+in this task. Listed URLs are the origins encoded by the pinned loaders or model
+repositories, not independently verified historical download logs. Full cached
+file hashes, including model configurations and BERT tokenizer assets, are in
+[the evidence JSON](experiments/basketball-calibration-20260906.json).
+
+| Component | Source/weight terms and origin |
+| --- | --- |
+| ViPE | Top-level source is Apache-2.0; its bundled third-party notices have separate terms. This does not make every dependency or weight Apache-licensed. |
+| GeoCalib | [Author license statement](https://github.com/cvg/GeoCalib#license): source Apache-2.0, trained weights **CC BY 4.0**. Retain attribution for the weight asset. Used cached [pinhole v1.0](https://github.com/cvg/GeoCalib/releases/download/v1.0/geocalib-pinhole.tar), SHA-256 `86d6aeacd8bbd974c59ce39f61854e00d36911c732ad89be471476fd708722ac`. |
+| UniDepth V2 | [Source statement](https://github.com/lpiccinelli-eth/UniDepth#license) and [model card](https://huggingface.co/lpiccinelli/unidepth-v2-vitl14): **CC BY-NC 4.0**, including noncommercial restriction. Cached ViT-L snapshot `52b349b514bd8b47642f67ac78cb7b5dc5c51dd9`; model SHA-256 `ba73d3de735302ccc64a50f1e557122050c4b1893e6060b28dba05d6af3e67c6`. Import audited; inference not reached. |
+| TrackAnything | Bundled wrapper and [upstream project](https://github.com/z-x-yang/Segment-and-Track-Anything#license) are **AGPL-3.0**. Preserve applicable copyleft/source obligations when distributing derivatives or providing modified software over a network. Upstream separately addresses proprietary commercial use. No such distribution/deployment is performed here. |
+| SAM ViT-B | [Author repository](https://github.com/facebookresearch/segment-anything#license) provides Apache-2.0 code/model terms; dataset licensing is separate. Cached [author checkpoint](https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth), SHA-256 `ec2df62732614e57411cdcf32a23ffdf28910380d03139ee0f4fcbe91eb8c912`. |
+| DeAOT R50 | [AOT benchmark](https://github.com/yoxu515/aot-benchmark) provides its own source license. ViPE requests Google Drive asset `1QoChMkTVxdYZ_eBlZhK2acq9KMQZccPJ`; cached SHA-256 `7e8a8d83310739bac02817f6bf48b6bbe2bbd7d5325722f1084088eb3aee1e06`. No separate weight grant was independently established in this audit. |
+| GroundingDINO | [Author source](https://github.com/IDEA-Research/GroundingDINO) is Apache-2.0. ViPE requests [Swin-T OGC weights](https://huggingface.co/ShilongLiu/GroundingDINO/resolve/main/groundingdino_swint_ogc.pth); cached SHA-256 `3b3ca2563c77c69f651d7bd133e97139c186df06231157a64c507099c52bc799`. Keep the source grant distinct from any independently established asset terms. BERT assets are separately hashed in the evidence. |
+
+Only GeoCalib inference ran before the fixed-camera intrinsic stability gate
+failed. Cached availability/imports do not demonstrate depth or masking quality.
+No calibration-derived metric scale, shared rig, or downstream result is claimed.

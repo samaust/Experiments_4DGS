@@ -191,3 +191,12 @@ documentation links resolve, 76 Bash blocks in the training/preview guides pass
 `bash -n`, and `git diff --check` passes. Earlier integration reports retain
 camera/split/time, missing-state, evaluator and regression-test evidence; this
 final documentation-only milestone did not change the validated training adapters.
+
+## Plan 005 Basketball calibration update — 2026-09-06
+
+The [ViPE pilot](basketball-calibration-20260906.md) audited all 34 videos but
+stopped at camera 4 intrinsic instability: 20.2948% focal range relative to the
+median, above the 20% pilot threshold fixed before inference. No accepted
+estimated calibration or synchronization was produced. Basketball training and
+evaluation remain blocked; this task charged zero training seconds and left
+the existing method allocations unchanged.

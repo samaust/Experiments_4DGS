@@ -29,3 +29,14 @@ Record all four expert implementations and the router separately. Validate the
 modified appearance representation expected by the STG expert; original STG Full
 is not a substitute. Planned limits are 25 minutes per expert and 20 minutes for
 router training per scene.
+
+## Plan 005 Basketball calibration update — 2026-09-06
+
+The [ViPE pilot](basketball-calibration-20260906.md) audited all 34 videos but
+stopped at camera 4 intrinsic instability: 20.2948% focal range relative to the
+median, above the 20% pilot threshold fixed before inference. No accepted
+estimated calibration or synchronization was produced. Basketball training and
+evaluation remain blocked; this task charged zero training seconds and left
+the existing method allocations unchanged.
+The independent implementation blocker also remains; calibration does not
+authorize a substitute implementation.

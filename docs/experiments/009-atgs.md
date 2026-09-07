@@ -819,3 +819,12 @@ budget run improves on the pilot but does not resolve foreground ghosting or
 beat either final STG baseline's aggregate metrics. This is a qualified local
 result with native no-growth settings and an unfinished schedule, not a general
 claim about ATGS or permission to extend the training budget.
+
+## Plan 005 Basketball calibration update — 2026-09-06
+
+The [ViPE pilot](basketball-calibration-20260906.md) audited all 34 videos but
+stopped at camera 4 intrinsic instability: 20.2948% focal range relative to the
+median, above the 20% pilot threshold fixed before inference. No accepted
+estimated calibration or synchronization was produced. Basketball training and
+evaluation remain blocked; this task charged zero training seconds and left
+the existing method allocations unchanged.
