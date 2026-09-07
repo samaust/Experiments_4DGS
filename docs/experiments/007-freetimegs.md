@@ -6,6 +6,13 @@ Basketball synchronization remains blocked.**
 
 ## Current Basketball continuation — 2026-09-07
 
+[Plan 007 shared-trajectory investigation](basketball-shared-timing-v1.md) now
+records an admission blocker for the revised method: 16/72 fixed edges lack
+12 multiview groups in both deterministic halves. The estimator audit and
+all-camera native fitting extraction are complete; spline fitting and selection
+reevaluation did not start. The previous failed selection remains evidence.
+Final frames 200–249 and all Basketball training allocations remain untouched.
+
 [Plan 006](basketball-calibration-alternatives.md) accepted all 34 static cameras;
 [revision 2](basketball-rev2.md) verified provenance/conventions and passed the
 training-view estimated scale check (1.31506947 estimated metres per calibration

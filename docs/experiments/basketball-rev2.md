@@ -1,5 +1,13 @@
 # Basketball Plan 005 revision 2 continuation
 
+[Plan 007 shared-trajectory investigation](basketball-shared-timing-v1.md) now
+records an admission blocker for the revised method: 16/72 fixed edges lack
+12 multiview groups in both deterministic halves. The estimator audit and
+all-camera native fitting extraction are complete; spline fitting and selection
+reevaluation did not start. The previous failed selection remains evidence.
+Final frames 200–249 and all Basketball training allocations remain untouched.
+
+
 Latest continuation: [fine native fitting](basketball-cycle-refinement.md) yields
 72 independently passing edges covering all 34 cameras with maximum cycle closure
 0.25 frames. [Frozen timing selection](basketball-timing-selection.md) then passes

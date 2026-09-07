@@ -154,6 +154,13 @@ the full evidence, resource measurements and budget accounting.
 
 ## VRU Basketball DG — blocked on synchronization
 
+[Plan 007 shared-trajectory investigation](basketball-shared-timing-v1.md) now
+records an admission blocker for the revised method: 16/72 fixed edges lack
+12 multiview groups in both deterministic halves. The estimator audit and
+all-camera native fitting extraction are complete; spline fitting and selection
+reevaluation did not start. The previous failed selection remains evidence.
+Final frames 200–249 and all Basketball training allocations remain untouched.
+
 [Plan 006](basketball-calibration-alternatives.md) accepted all 34 cameras.
 [Revision 2](basketball-rev2.md) passed source/calibration/profile provenance,
 pixel/distortion conventions and estimated scale validation: frozen scale
