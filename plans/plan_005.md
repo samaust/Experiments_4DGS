@@ -1,8 +1,8 @@
 # Current continuation
 
 Continue with [plan_005_rev1.md](plan_005_rev1.md), including its latest authorized
-20% camera selection: 24 cameras, 21 training and held-outs 0, 10, 30; 1,200
-expected images (1,050 training and 150 held-out). The camera counts and 25%
+20% selection and camera 19 removal: 23 cameras, 20 training and held-outs
+0, 10, 30; 1,150 expected images (1,000 training and 150 held-out). The camera counts and 25%
 continuation below are historical and superseded by that revision.
 
 # Authorized camera-set revision

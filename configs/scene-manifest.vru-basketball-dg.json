@@ -60,10 +60,6 @@
       "role": "training"
     },
     {
-      "id": "19",
-      "role": "training"
-    },
-    {
       "id": "21",
       "role": "training"
     },
@@ -126,7 +122,7 @@
     "time_correction": "record calibration-provided offsets here"
   },
   "variant": {
-    "schema": "basketball-intrinsic20/v1",
+    "schema": "basketball-intrinsic20-no-camera19/v1",
     "excluded_cameras": [
       "4",
       "5",
@@ -136,17 +132,18 @@
       "16",
       "17",
       "18",
+      "19",
       "20",
       "23"
     ],
-    "training_camera_count": 21,
+    "training_camera_count": 20,
     "held_out_camera_count": 3,
-    "expected_images": 1200,
-    "expected_training_images": 1050,
+    "expected_images": 1150,
+    "expected_training_images": 1000,
     "expected_held_out_images": 150,
     "source_camera_ids_preserved": true,
     "training_ledger_scene": "vru-basketball-dg",
     "intrinsic_limit": 0.2
   },
-  "notes": "User restored the 20% gate and excluded its failures. Estimated calibration and synchronization must pass for all 24 retained cameras."
+  "notes": "User also removed camera 19 after independent pose instability. Validate the 23 retained cameras before preparation."
 }

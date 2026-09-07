@@ -9,10 +9,10 @@ from basketball_vipe_pilot import fitting_frame
 
 class ProtocolTests(unittest.TestCase):
     def test_excluded_camera_is_not_renumbered_or_loaded(self):
-        self.assertEqual(len(CAMERAS),24)
-        self.assertEqual(len(TRAINING),21)
+        self.assertEqual(len(CAMERAS),23)
+        self.assertEqual(len(TRAINING),20)
         self.assertEqual(HELD_OUT,(0,10,30))
-        self.assertEqual(EXCLUDED,(4,5,8,11,15,16,17,18,20,23))
+        self.assertEqual(EXCLUDED,(4,5,8,11,15,16,17,18,19,20,23))
         self.assertEqual(max(CAMERAS),33)
         for all_priors in [True,False]:
             for camera in EXCLUDED:

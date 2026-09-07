@@ -1,3 +1,20 @@
+# Authorized camera 19 removal
+
+The user explicitly removed camera 19 and instructed continuation. The active
+protocol is `basketball-intrinsic20-no-camera19/v1`: **23 cameras, 20 training,
+held-outs 0, 10, 30**. Expected preparation is **1,150 images, 1,000 training
+and 150 held-out**. Exclusions are **4, 5, 8, 11, 15, 16, 17, 18, 19, 20, 23**.
+These counts supersede earlier counts below. Preserve original IDs, the 20%
+intrinsic gate, all pose/validation gates, historical artifacts and budget charges.
+
+Rebuild the previously best fixed-principal, expanded sharp-SIFT recipe using
+initial pair 6–12 from databases containing only retained training observations;
+do not merely remove camera 19 from the previous error vector. Reuse verified
+complete retained priors and masks. If independent poses pass, continue frozen-map
+held-out localization and the remaining original validation/downstream work.
+If recovery is still needed, the same finite A/B/C configurations bound the new
+camera-set search; count the rebuilt best configuration once within that bound.
+
 # Authorized 20% camera-set revision
 
 The user restored the intrinsic-prior variation limit to **20%** and excluded
