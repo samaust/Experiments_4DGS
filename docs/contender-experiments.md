@@ -77,3 +77,11 @@ datasets, checkpoints, and compatible implementations:
 - [Comparison summary](experiments/contender-summary.md)
 
 Earlier `sear_steak` outputs remain historical evidence and are not replaced.
+
+
+The current user-authorized Basketball variant excludes physical camera 5:
+29 training cameras, four held-out cameras (0, 10, 20, 30), and 1,650 expected
+images. The raw archive still contains all 34 videos. See the
+[33-camera calibration record](experiments/basketball-no-camera5.md) for the
+current independent-window stability blocker. Training remains gated on accepted
+estimated calibration and synchronization; original allocations are unchanged.

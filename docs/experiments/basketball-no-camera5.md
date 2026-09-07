@@ -1,5 +1,8 @@
 # Basketball calibration excluding camera 5
 
+Status: **blocked by independent-window rig instability after the bounded
+SIFT/RADIAL/RoMa recovery steps**. Camera 5 is excluded and retained priors pass.
+
 The user explicitly removed physical camera 5 after its intrinsic-prior spread
 exceeded the authorized 25% limit. This creates the versioned
 `basketball-no-camera5/v1` variant: **33 cameras, 29 training cameras and four
@@ -101,3 +104,112 @@ Diagnostics:
 `.local/calibration/basketball-v1/no-camera5-pose-stability.json` and
 `.local/calibration/basketball-v1/no-camera5-radial-pose-stability.json`.
 The plan's single bounded RoMa fallback is the next permitted recovery step.
+
+## Bounded dense fallback and final blocker
+
+The fallback used the already pinned offline RoMa implementation on a fixed set
+of 49 training-camera pairs at source frames 50 and 149 (98 inferences). Pairs
+came from the verified SIFT overlap graph: a maximum-inlier spanning tree plus
+strong local overlap edges, capped at 64 pairs. Both endpoints had to lie at
+least eight pixels inside the static masks, with confidence at least 0.95.
+One match per 16-pixel source cell and at most 1,500 matches per pair bounded
+sampling. This retained 1,803 correspondences in total (median 15, maximum 105
+per pair). These settings were recorded before the pass; there was no matcher,
+weight or threshold search.
+
+The dense correspondences augmented the early/late SIFT databases and underwent
+native geometric verification. Appended locations have no SIFT descriptors;
+the augmented databases intentionally remove descriptor rows so those locations
+cannot be consumed as valid SIFT descriptors. Reconstruction continues from
+coordinates and verified matches. The original databases remain intact.
+
+Both augmented windows registered all 29 training cameras, but their initial
+pose comparison still failed (6.3669° / 4.3732%). Because the first bundle
+adjustments reached their iteration caps, each final candidate received one
+bounded refinement with at most 1,000 iterations and 120 seconds, with SOFT_L1
+loss and explicit convergence tolerances. **Both refinements reported
+CONVERGENCE.** The final independent-window comparison nevertheless failed:
+
+| Check | Required maximum | Observed maximum | Cameras failing |
+| --- | ---: | ---: | ---: |
+| Rotation disagreement | 0.5° | **7.3065°**, camera 1 | 29 of 29 |
+| Center disagreement / rig diameter | 1% | **4.1972%**, camera 12 | 25 of 29 |
+
+![Final fitting-window stability diagnostics](basketball-no-camera5-stability.png)
+
+The [final evidence JSON](basketball-no-camera5-result.json) contains every
+per-camera disagreement, the single similarity alignment, model/log hashes,
+protocol membership and complete cumulative calibration accounting. The local
+current-status artifact is `.local/calibration/basketball-v1/status.json`.
+Native COLMAP IDs are physical source IDs plus one; image names and recorded
+camera lists retain the physical IDs, including the gap at camera 5.
+
+This is the current defined blocker: **the retained training rig is unstable
+across independent fitting windows after the bounded recovery options**.
+The 33 retained intrinsic priors passed, but low fitting reprojection error and
+connected registration do not establish reliable shared calibration. No accepted
+rig was published. Held-out localization, scale estimation, selection/final
+validation, synchronization, processed scene, initialization, training and model
+evaluation remain unexecuted. All frames used in estimation are in 50–149.
+The experiment window 0–49 and both reserved later windows remain unused.
+
+Cumulative GPU calibration charge: **718.3131 / 28,800 seconds** (0.19953
+GPU-hours), leaving **28,081.6869 seconds**. This includes all original failed
+attempts, the runtime-probe allowances, the retained-prior run and the single
+RoMa fallback. GPU jobs ran sequentially. CPU SIFT, bundle adjustment and pose
+comparisons are measured separately and consume no training allocation. No
+Basketball training was started; the original training ledger is unchanged.
+
+The recovery steps are bounded and exhausted for this implementation. Further
+work requires revising the calibration strategy or acceptance requirements;
+this result does not authorize more matcher/model search or another camera
+removal automatically.
+
+## Validation and reproduction
+
+Final checks passed: 18 Basketball tests, three calibration-budget tests and four
+existing training-budget tests (25 total), Python compilation, current evidence
+hashes, local documentation links and `git diff --check`. The ViPE checkout is
+clean and the training ledger hash remains
+`d0b4daa1aee79361580af3a1bf8fbc597148db7775b26f169a0a1b2e6ac90957`.
+The expected image counts are protocol checks; no processed images or model
+reloads are claimed. Geometry-scale, distortion-selection, final reprojection,
+timing, initialization and model-evaluation tests remain gated on a reliable rig.
+
+The executed recovery commands use the existing pinned environments. Prior
+outputs are immutable; these are reproduction records, not authorization for
+an additional dense pass or model search:
+
+```bash
+.local/envs/stg-colmap/bin/python scripts/basketball_static_rig.py \
+  --priors .local/calibration/basketball-v1/no-camera5-priors \
+  --output .local/calibration/basketball-v1/no-camera5-sift
+
+# Independent windows use --fit-frames 50 75 and --fit-frames 125 149,
+# each with a separate output. The single alternative adds --camera-model RADIAL.
+
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/calibration_budget.py \
+  --ledger .local/calibration/basketball-v1/gpu-ledger.json \
+  --seconds 1800 --log .local/calibration/basketball-v1/no-camera5-dense.log \
+  -- .local/envs/roma/bin/python scripts/basketball_dense_matches.py \
+  --priors .local/calibration/basketball-v1/no-camera5-priors \
+  --sift-result .local/calibration/basketball-v1/no-camera5-sift/result.json \
+  --roma .local/RoMa-edgs --weights .local/weights/roma-edgs \
+  --output .local/calibration/basketball-v1/no-camera5-dense
+
+.local/envs/stg-colmap/bin/python scripts/basketball_dense_rig.py \
+  --sift .local/calibration/basketball-v1/no-camera5-early \
+  --dense .local/calibration/basketball-v1/no-camera5-dense --frame 50 \
+  --output .local/calibration/basketball-v1/no-camera5-dense-early
+
+# The late counterpart uses no-camera5-late, --frame 149, and its own output.
+.local/envs/stg-colmap/bin/python scripts/basketball_refine_rig.py \
+  --input .local/calibration/basketball-v1/no-camera5-dense-early \
+  --output .local/calibration/basketball-v1/no-camera5-refined-early
+
+# Repeat the bounded refinement once for the late candidate, then compare:
+.local/envs/stg-colmap/bin/python scripts/basketball_pose_stability.py \
+  --reference .local/calibration/basketball-v1/no-camera5-refined-early \
+  --other .local/calibration/basketball-v1/no-camera5-refined-late \
+  --output .local/calibration/basketball-v1/no-camera5-final-pose-stability.json
+```

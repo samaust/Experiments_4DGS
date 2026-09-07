@@ -1,8 +1,9 @@
 # Plan 005 — Basketball estimated-calibration pilot
 
-Current outcome after the authorized 25% continuation: **camera 5 fails at
-26.0539%; shared calibration and training remain blocked**. See the final
-section for current evidence and cumulative accounting.
+Current outcome: the user subsequently removed camera 5. The
+[33-camera continuation](basketball-no-camera5.md) passed retained priors but
+failed independent-window rig stability after bounded recovery. The records
+below describe the preserved earlier 34-camera attempts.
 
 Historical status of the first attempt: **blocked at the four-camera intrinsic-prior pilot**. No accepted rig,
 synchronization, processed Basketball scene, initialization or model result was

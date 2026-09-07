@@ -207,3 +207,12 @@ on the four pilot cameras. No new weights were downloaded. The all-camera
 intrinsic pass then failed at camera 5; all-camera depth/masks and downstream
 geometry remain unexecuted. This supersedes the earlier pilot-only inference
 status above, while preserving the same dependency-specific licensing audit.
+
+
+After user removal of camera 5, the
+[33-camera continuation](experiments/basketball-no-camera5.md) generated all
+retained priors and tested masked SIFT, the fixed RADIAL alternative and one
+bounded pass with the already audited RoMa pin/weights. No new dependencies or
+weights were downloaded and no third-party checkout was modified. The final
+converged training-rig candidates still failed independent-window pose stability;
+no accepted estimated calibration, metric scale or model result was produced.
