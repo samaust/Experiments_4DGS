@@ -1,6 +1,12 @@
 # Plan 006: Calibration alternatives for VRU Basketball DG
 
-Status: active. This protocol supersedes camera exclusions and the cumulative
+Status: complete. All 34 cameras pass the declared final static calibration
+validation; the finite runnable comparison matrix is complete. The
+[experiment report](../docs/experiments/basketball-calibration-alternatives.md)
+records the calibration, recommendation, failures and Plan 005 handoff.
+Synchronization and metric scale remain separate downstream gates.
+
+This protocol supersedes camera exclusions and the cumulative
 calibration GPU allowance for this investigation only. Historical experiments,
 their artifacts and training budgets remain immutable.
 

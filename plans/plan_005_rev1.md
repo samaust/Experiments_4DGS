@@ -1,3 +1,14 @@
+# Current handoff from Plan 006
+
+[Plan 006](plan_006.md) restores **all 34 cameras**, with 30 training cameras and
+held-outs **0,10,20,30**, and supplies a calibration passing its final static
+validation. Use the [full-rig profile](../configs/scene-manifest.vru-basketball-dg.full-rig.json)
+and [handoff report](../docs/experiments/basketball-calibration-alternatives.md#plan-005-handoff)
+for a future continuation. Synchronization and metric scale remain separate gates;
+no downstream training was run by Plan 006. Its 20% GeoCalib threshold controls
+trust in priors, not camera exclusion. The revisions below are historical evidence
+and do not override the restored full rig or alter existing training budgets.
+
 # Authorized camera 19 removal
 
 The user explicitly removed camera 19 and instructed continuation. The active
