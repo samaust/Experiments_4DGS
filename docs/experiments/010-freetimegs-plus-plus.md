@@ -22,3 +22,10 @@ evaluation remain blocked; this task charged zero training seconds and left
 the existing method allocations unchanged.
 The independent implementation blocker also remains; calibration does not
 authorize a substitute implementation.
+
+The subsequent user-authorized **25%** pilot passed. The
+[all-camera continuation](basketball-calibration-20260906.md#all-camera-continuation-outcome-blocked-at-camera-5)
+then stopped at camera 5 (**26.0539% > 25%**); the other 33 cameras passed the
+intrinsic check. This supersedes camera 4 as the current calibration blocker.
+Shared geometry, synchronization and Basketball training remain unexecuted.
+Cumulative calibration charge is 323.0525 seconds; training charge remains zero.

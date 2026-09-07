@@ -22,8 +22,9 @@ CONFIG = {'schema': 'basketball-vipe-pilot/v2', 'cameras': [4, 12, 21, 29],
           'depth_scale': 'uncertain estimated scale; not measured metric ground truth'}
 
 
-def fitting_frame(camera_id, frame_id):
-    if camera_id not in frame_roles()['training_cameras'] or frame_id not in frame_roles()['fit']:
+def fitting_frame(camera_id, frame_id, *, all_priors=False):
+    cameras = range(34) if all_priors else frame_roles()['training_cameras']
+    if camera_id not in cameras or frame_id not in frame_roles()['fit']:
         raise ValueError('pilot may only access training-camera fitting frames')
     return frame_id - 50
 
@@ -42,10 +43,21 @@ def main():
     parser.add_argument('--workspace', type=Path, required=True)
     parser.add_argument('--vipe', type=Path, required=True)
     parser.add_argument('--output', type=Path, help='New attempt directory; never overwritten')
+    parser.add_argument('--all-priors', type=Path, metavar='PASSED_PILOT_RESULT',
+                        help='Process all 34 cameras after a successful pilot')
     a = parser.parse_args()
+    config = dict(CONFIG)
+    if a.all_priors:
+        pilot = json.loads(a.all_priors.read_text())
+        if pilot['status'] != 'pilot-passed' or pilot['blockers']:
+            raise ValueError('all-camera priors require a successful pilot')
+        if pilot['input_audit_sha256'] != sha256(a.workspace / 'input-audit.json'):
+            raise ValueError('pilot input provenance changed')
+        config.update(schema='basketball-vipe-all-priors/v1', cameras=list(range(34)), seed=0,
+                      pilot_result_sha256=sha256(a.all_priors))
     output = a.output if a.output is not None else a.workspace / 'pilot'
     output.mkdir(exist_ok=False)
-    (output / 'config.json').write_text(json.dumps(CONFIG, indent=2) + '\n')
+    (output / 'config.json').write_text(json.dumps(config, indent=2) + '\n')
     audit = json.loads((a.workspace / 'input-audit.json').read_text())
     if audit['status'] != 'inputs-verified':
         raise ValueError('input audit blocked')
@@ -96,22 +108,28 @@ def main():
         result['runtime'] = {'python': sys.version, 'torch': torch.__version__,
                              'cuda': torch.version.cuda, 'gpu': torch.cuda.get_device_name(),
                              'extension': vipe_ext.__file__}
+        if 'seed' in config:
+            import random
+            random.seed(config['seed'])
+            np.random.seed(config['seed'])
+            torch.manual_seed(config['seed'])
+            torch.cuda.manual_seed_all(config['seed'])
         torch.cuda.reset_peak_memory_stats()
         calib = GeoCalib().to(device).eval()
         videos = {int(v['camera_id']): v for v in audit['videos']}
-        for camera in CONFIG['cameras']:
+        for camera in config['cameras']:
             source = videos[camera]
             if sha256(source['path']) != source['sha256']:
                 raise ValueError(f'changed video provenance: {camera}')
             capture = cv2.VideoCapture(source['path'])
             focals = []
             for frame_id in FRAMES:
-                stream_id = fitting_frame(camera, frame_id)
+                stream_id = fitting_frame(camera, frame_id, all_priors=bool(a.all_priors))
                 images = []
                 # Neighbor remains strictly inside fitting membership.
                 neighbor = frame_id + 1 if frame_id < 149 else frame_id - 1
                 for index in [frame_id, neighbor]:
-                    fitting_frame(camera, index)
+                    fitting_frame(camera, index, all_priors=bool(a.all_priors))
                     capture.set(cv2.CAP_PROP_POS_FRAMES, index)
                     ok, bgr = capture.read()
                     if not ok:
@@ -125,7 +143,7 @@ def main():
                 focals.append(focal)
                 stem = f'camera{camera}-frame{frame_id}'
                 cv2.imwrite(str(output / (stem + '.png')), cv2.cvtColor(images[0], cv2.COLOR_RGB2BGR))
-                motion = cv2.absdiff(cv2.cvtColor(images[0], cv2.COLOR_RGB2GRAY), cv2.cvtColor(images[1], cv2.COLOR_RGB2GRAY)) > CONFIG['motion_gray_threshold']
+                motion = cv2.absdiff(cv2.cvtColor(images[0], cv2.COLOR_RGB2GRAY), cv2.cvtColor(images[1], cv2.COLOR_RGB2GRAY)) > config['motion_gray_threshold']
                 motion = cv2.dilate(motion.astype(np.uint8), np.ones((9, 9), np.uint8)) > 0
                 np.save(output / (stem + '-motion.npy'), motion)
                 entry = {'camera_id': camera, 'source_frame_id': frame_id, 'stream_frame_id': stream_id,
@@ -154,14 +172,14 @@ def main():
                 array = predicted.metric_depth.cpu().numpy()
                 entry['positive_depth_fraction'] = float(np.mean(np.isfinite(array) & (array > 0)))
                 np.savez_compressed(output / (entry['stem'] + '-depth.npz'), depth=array, confidence=predicted.confidence.cpu().numpy())
-                if entry['positive_depth_fraction'] < CONFIG['min_positive_depth_fraction']:
+                if entry['positive_depth_fraction'] < config['min_positive_depth_fraction']:
                     result['blockers'].append(f"{entry['stem']}: invalid depth")
             del depth
             gc.collect()
             torch.cuda.empty_cache()
             for entry in result['observations']:
                 # Independent semantic detections avoid tracking across nonconsecutive pilot samples.
-                tracker = TrackAnythingPipeline(CONFIG['mask_phrases'])
+                tracker = TrackAnythingPipeline(config['mask_phrases'])
                 rgb = torch.from_numpy(cv2.cvtColor(cv2.imread(str(output / (entry['stem'] + '.png'))), cv2.COLOR_BGR2RGB)).to(device).float()/255
                 with torch.inference_mode():
                     instance, phrases = tracker.track(VideoFrame(raw_frame_idx=entry['stream_frame_id'], rgb=rgb, information=f"source_frame_id={entry['source_frame_id']}"))
@@ -171,19 +189,20 @@ def main():
                 entry['semantic_fraction'] = float(semantic.mean())
                 entry['dynamic_fraction'] = float(moving.mean())
                 entry['phrases'] = phrases
-                if not CONFIG['min_dynamic_fraction'] <= entry['semantic_fraction'] <= CONFIG['max_dynamic_fraction']:
+                if not config['min_dynamic_fraction'] <= entry['semantic_fraction'] <= config['max_dynamic_fraction']:
                     result['blockers'].append(f"{entry['stem']}: unusable semantic masking")
+                print(f"mask {entry['stem']}: {entry['dynamic_fraction']:.4f}", flush=True)
                 del tracker
                 gc.collect()
                 torch.cuda.empty_cache()
         result['peak_allocated_bytes'] = torch.cuda.max_memory_allocated()
         result['peak_reserved_bytes'] = torch.cuda.max_memory_reserved()
-    except Exception as error:
+    except BaseException as error:
         result['blockers'].append(f'{type(error).__name__}: {error}')
         raise
     finally:
         result['wall_seconds'] = time.monotonic() - started
-        result['status'] = 'blocked' if result['blockers'] else 'pilot-passed'
+        result['status'] = 'blocked' if result['blockers'] else ('priors-generated' if a.all_priors else 'pilot-passed')
         (output / 'result.json').write_text(json.dumps(result, indent=2, allow_nan=False) + '\n')
     return bool(result['blockers'])
 

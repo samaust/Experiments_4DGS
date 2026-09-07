@@ -1,5 +1,9 @@
 # Plan 005 — Basketball estimated-calibration pilot
 
+Current outcome after the authorized 25% continuation: **camera 5 fails at
+26.0539%; shared calibration and training remain blocked**. See the final
+section for current evidence and cumulative accounting.
+
 Historical status of the first attempt: **blocked at the four-camera intrinsic-prior pilot**. No accepted rig,
 synchronization, processed Basketball scene, initialization or model result was
 produced. This executes plan 005 through its section 1.6 stop condition; sections
@@ -156,3 +160,57 @@ The nonidentical repeated focal estimates are retained as observed; the two
 pilot attempts did not set random seeds. Subsequent all-camera extraction will
 record a seed. Continue with all-camera priors and shared-rig validation; no
 training is authorized until the plan's remaining gates pass.
+
+## All-camera continuation outcome: blocked at camera 5
+
+Current status: **blocked by camera 5 intrinsic instability at the authorized
+25% limit**. The four-camera retry passed, then the adapter processed all 34
+cameras at fitting frames 50, 75, 100, 125 and 149 (170 observations). Camera 5
+had `(max(fx)-min(fx))/median(fx) = 0.2605391020`, or **26.0539%**. The other
+33 cameras passed the same 25% check. No further threshold change or retry was
+made. The all-camera run recorded seed 0 for Python, NumPy and PyTorch.
+
+[All-camera evidence](basketball-all-priors-25.json) binds the full local
+configuration, source/result and log records. The local directory is
+`.local/calibration/basketball-v1/all-priors`. Its result contains all 170
+observations plus source and weight hashes. All-camera depth and semantic
+masking were skipped after the intrinsic check failed; the earlier pilot's
+four depth maps and 20 masks remain available as pilot evidence only.
+
+Cumulative calibration accounting is **323.0525 / 28,800 seconds** (0.08974
+GPU-hours), leaving **28,476.9475 seconds**. This includes the original failed
+pilot, both runtime-probe allowances, the passing 25% pilot, and the failed
+all-camera attempt. The latter charged 130.5062 seconds; its worker section was
+128.0764 seconds. No training allocation was consumed or redistributed. The
+original training ledger SHA-256 remains
+`d0b4daa1aee79361580af3a1bf8fbc597148db7775b26f169a0a1b2e6ac90957`.
+
+The all-camera command used the same host-GPU supervisor and ledger:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/calibration_budget.py \
+  --ledger .local/calibration/basketball-v1/gpu-ledger.json \
+  --seconds 3600 --log .local/calibration/basketball-v1/all-priors.log \
+  -- /home/auss/git_repos/samaust/Tridi/vipe/.venv/bin/python \
+  scripts/basketball_vipe_pilot.py \
+  --workspace .local/calibration/basketball-v1 \
+  --vipe /home/auss/git_repos/samaust/Tridi/vipe \
+  --output .local/calibration/basketball-v1/all-priors \
+  --all-priors .local/calibration/basketball-v1/pilot-25/result.json
+```
+
+The all-camera adapter requires a passed pilot bound to the same input audit.
+It permits held-out images only as fitting-window priors; the new
+`basketball_geometry.py` selector explicitly excludes them from the future
+training map. Synthetic tests verify pixel-center and anisotropic-resize ray
+invariance, pose inversion, disconnected graphs and training-only selection.
+These are preparatory helpers, not an implemented or executed shared-rig solver.
+Geometry, synchronization, processed scene and model experiments remain blocked.
+
+
+Continuation validation passed: 12 Basketball audit/geometry tests and 3
+calibration-budget tests, CLI syntax, evidence hashes, local documentation links
+and `git diff --check`. The ViPE checkout remained clean, and the global training
+ledger hash is unchanged. The executed all-camera adapter source is saved as
+`all-priors/adapter-executed.py` and matches the result's recorded adapter hash.
+The committed adapter additionally records interrupted workers as blocked.

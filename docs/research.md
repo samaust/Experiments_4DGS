@@ -199,3 +199,11 @@ file hashes, including model configurations and BERT tokenizer assets, are in
 Only GeoCalib inference ran before the fixed-camera intrinsic stability gate
 failed. Cached availability/imports do not demonstrate depth or masking quality.
 No calibration-derived metric scale, shared rig, or downstream result is claimed.
+
+
+The [authorized 25% continuation](experiments/basketball-calibration-20260906.md#authorized-25-continuation)
+subsequently exercised the cached UniDepth and TrackAnything models successfully
+on the four pilot cameras. No new weights were downloaded. The all-camera
+intrinsic pass then failed at camera 5; all-camera depth/masks and downstream
+geometry remain unexecuted. This supersedes the earlier pilot-only inference
+status above, while preserving the same dependency-specific licensing audit.

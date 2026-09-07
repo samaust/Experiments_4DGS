@@ -44,6 +44,12 @@ class AuditTests(unittest.TestCase):
         for values in [[float('nan')]*5, [float('inf')]*5, [-1]*5, []]:
             self.assertFalse(intrinsic_stability(values)['passed'])
 
+    def test_all_priors_allow_held_out_only_in_fitting_window(self):
+        self.assertEqual(fitting_frame(0, 50, all_priors=True), 0)
+        for camera, frame in [(0, 49), (0, 150), (34, 50)]:
+            with self.assertRaises(ValueError):
+                fitting_frame(camera, frame, all_priors=True)
+
     def test_frame_roles_partition(self):
         roles = frame_roles()
         groups = [set(roles[key]) for key in ['experiment', 'fit', 'selection', 'validation']]
