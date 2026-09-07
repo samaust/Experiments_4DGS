@@ -224,3 +224,11 @@ stability; expanded GeoCalib observations fail the unchanged 25% gate for camera
 4, 8 and 17. Partial automatic focus screening detects no sustained change on
 existing masked samples but is inconclusive for the planned ten-frame check.
 No new model weights, additional RoMa inference or downstream training were used.
+
+
+The [20% camera-set rerun](experiments/basketball-intrinsic20.md) retains 24 cameras,
+completes all missing masks and focus screens, and runs all 16 paired recovery
+configurations. One new pinned RoMa pass supplies both frozen confidence variants
+without new downloads or dependencies. A strong common initialization pair gives
+0.7182 degree / 1.1185% disagreement, still failing the unchanged gate at camera
+19. No downstream training or extra budget allowance was used.

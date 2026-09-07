@@ -1,7 +1,8 @@
 # Basketball calibration revision 1
 
-Status: **blocked by expanded intrinsic-prior instability and failing Stage A
-pose comparisons**. The [revised plan](../../plans/plan_005_rev1.md) is saved and
+Historical 33-camera record. **Current status:** the [20% camera-set rerun](basketball-intrinsic20.md)
+retains 24 cameras and completes all A/B/C tests, with a remaining pose blocker
+at camera 19. The historical prior and Stage A failures below are preserved. The [revised plan](../../plans/plan_005_rev1.md) is saved and
 the first implementation milestone is committed. This report supersedes the
 [previous recovery status](basketball-no-camera5.md); it does not claim the
 remaining gated implementation or experiments are complete.

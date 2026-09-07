@@ -40,6 +40,14 @@ class GeometryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             connected_components([1,2,3], [(0,1)])
 
+    def test_expanded_membership_remains_strict(self):
+        frames=[50,62,75,87,99,100,112,125,137,149]
+        result=dict(status='priors-generated',blockers=[],source_frames=frames,
+                    observations=[dict(camera_id=c,source_frame_id=f) for c in CAMERAS for f in frames])
+        self.assertEqual(len(training_prior_entries(result)),len(TRAINING)*10)
+        result['observations'].append(dict(camera_id=20,source_frame_id=50))
+        with self.assertRaises(ValueError):training_prior_entries(result)
+
 
 if __name__ == '__main__':
     unittest.main()

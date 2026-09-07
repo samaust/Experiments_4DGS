@@ -79,9 +79,8 @@ datasets, checkpoints, and compatible implementations:
 Earlier `sear_steak` outputs remain historical evidence and are not replaced.
 
 
-The current user-authorized Basketball variant excludes physical camera 5:
-29 training cameras, four held-out cameras (0, 10, 20, 30), and 1,650 expected
-images. The raw archive still contains all 34 videos. See the
-[revision-one calibration record](experiments/basketball-rev1.md) for the
-current expanded-prior and independent-window stability blockers. Training remains gated on accepted
-estimated calibration and synchronization; original allocations are unchanged.
+The current user-authorized Basketball variant uses the 20% intrinsic-prior gate:
+24 retained cameras, 21 training and held-outs 0, 10, 30; 1,200 expected images.
+The [bounded rerun](experiments/basketball-intrinsic20.md) completes 32 independent
+reconstructions but remains above the pose limits at camera 19. Training stays
+gated on accepted calibration and synchronization; original budgets are unchanged.

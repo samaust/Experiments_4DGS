@@ -28,8 +28,11 @@ def training_prior_entries(result):
     if result['status'] != 'priors-generated' or result['blockers']:
         raise ValueError('requires completed all-camera priors')
     entries = result['observations']
+    frames = result.get('source_frames', FIT_FRAMES)
+    if not frames or len(set(frames)) != len(frames) or any(f < 50 or f >= 150 for f in frames):
+        raise ValueError('invalid recorded fitting timestamps')
     keys = {(e['camera_id'], e['source_frame_id']) for e in entries}
-    expected = {(c, f) for c in CAMERAS for f in FIT_FRAMES}
+    expected = {(c, f) for c in CAMERAS for f in frames}
     if keys != expected or len(entries) != len(expected):
         raise ValueError('missing or duplicate prior observations')
     return [e for e in entries if e['camera_id'] in TRAINING]

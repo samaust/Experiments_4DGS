@@ -1,8 +1,7 @@
 # Basketball calibration excluding camera 5
 
-Historical recovery record. **Current status:** [revision-one recovery](basketball-rev1.md)
-improves pose disagreement but fails the expanded 25% prior gate for cameras
-4, 8 and 17. The five-frame prior pass and original recovery below are preserved.
+Historical recovery record. **Current status:** [the 20% camera-set rerun](basketball-intrinsic20.md)
+retains 24 cameras; its best result still fails pose stability at camera 19. The five-frame prior pass and original recovery below are preserved.
 
 The user explicitly removed physical camera 5 after its intrinsic-prior spread
 exceeded the authorized 25% limit. This creates the versioned
