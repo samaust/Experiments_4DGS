@@ -9,7 +9,7 @@ from basketball_pose_stability import similarity
 from basketball_audit import sha256
 
 
-def load_export(path, expected=TRAINING):
+def load_export(path, expected=TRAINING, *, require_positive_focal=True):
     value=json.loads(path.read_text())
     if value.get('image_size') != [960,540]:
         raise ValueError('unconverted image geometry')
@@ -29,7 +29,7 @@ def load_export(path, expected=TRAINING):
             raise ValueError('nonfinite calibration')
         if not np.allclose(R@R.T,np.eye(3),atol=1e-4) or not np.isclose(np.linalg.det(R),1,atol=1e-4):
             raise ValueError('invalid rotation')
-        if min(K[0,0],K[1,1])<=0 or not np.allclose(C,-R.T@t,rtol=1e-4,atol=1e-4):
+        if (require_positive_focal and min(K[0,0],K[1,1])<=0) or not np.allclose(C,-R.T@t,rtol=1e-4,atol=1e-4):
             raise ValueError(f'camera {c}: invalid focal or inverted pose')
         centers.append(C);rotations.append(R)
     return np.array(centers),np.array(rotations)
@@ -82,6 +82,14 @@ def main():
                                wall_seconds=sum(r['wall_seconds']+r.get('frontend_wall_seconds',0) for r in reports))
                 except ValueError as error:
                     row['error']=str(error)
+                    # Diagnostic poses are still reported for full-coverage models
+                    # with invalid K, but these rows remain ineligible to rank.
+                    try:
+                        row.update(compare(*(load_export(path,require_positive_focal=False) for path in paths)))
+                        row['passed']=False
+                        row['diagnostic_only']=True
+                    except ValueError:
+                        pass
             results.append(row)
     output=dict(schema='basketball-alternatives-screening/v1',pairs=results,ranking=rank_complete(results),
                 evidence_type='repeatability; not ground-truth calibration accuracy')

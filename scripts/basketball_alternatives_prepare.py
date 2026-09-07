@@ -6,6 +6,7 @@ Never estimates or imports fitted intrinsics or poses.
 """
 import argparse
 import gc
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -24,7 +25,18 @@ def main():
     p.add_argument('--vipe', type=Path, required=True)
     p.add_argument('--reuse', type=Path, nargs='*', default=[])
     p.add_argument('--output', type=Path, required=True)
+    p.add_argument('--role', choices=['fit','selection','validation'], default='fit')
+    p.add_argument('--frozen-winner',type=Path)
     a = p.parse_args()
+    planned={'fit':EARLY+LATE,'selection':(150,162,175,187,199),
+             'validation':(200,212,225,237,249)}[a.role]
+    role_start,role_end={'fit':(50,149),'selection':(150,199),'validation':(200,249)}[a.role]
+    if a.role=='validation':
+        if a.frozen_winner is None:
+            raise ValueError('validation requires a frozen selected winner')
+        frozen=json.loads(a.frozen_winner.read_text())
+        if frozen.get('status')!='frozen' or not frozen.get('selection_passed'):
+            raise ValueError('winner has not passed selection')
     audit = json.loads(a.audit.read_text())
     if audit['status'] != 'inputs-verified':
         raise ValueError('input audit failed')
@@ -41,7 +53,7 @@ def main():
     for folder in a.reuse:
         artifacts = json.loads((folder/'artifacts.json').read_text())
         for camera in CAMERAS:
-            for frame in EARLY+LATE:
+            for frame in planned:
                 stem = f'camera{camera}-frame{frame}'
                 names = [stem+'.png', stem+'-static.png']
                 if all(n in artifacts for n in names):
@@ -54,7 +66,10 @@ def main():
     result = dict(status='running', input_audit_sha256=sha256(a.audit),
                   adapter_sha256=sha256(__file__), vipe_revision=PIN, observations=[],
                   source_video_sha256={c: v['sha256'] for c, v in videos.items()},
-                  gpu_limit_seconds=None, failures=[])
+                  gpu_limit_seconds=None, failures=[],role=a.role,source_frames=planned,
+                  frozen_winner_sha256=sha256(a.frozen_winner) if a.frozen_winner else None)
+    lock=(a.output.parent/'gpu.lock').open('a')
+    fcntl.flock(lock,fcntl.LOCK_EX)
     started = time.monotonic()
     import cv2
     import numpy as np
@@ -71,7 +86,7 @@ def main():
     try:
         for camera in CAMERAS:
             capture = cv2.VideoCapture(videos[camera]['path'])
-            for frame in EARLY+LATE:
+            for frame in planned:
                 stem = f'camera{camera}-frame{frame}'
                 image_path, mask_path = a.output/(stem+'.png'), a.output/(stem+'-static.png')
                 entry = dict(camera_id=camera, source_frame_id=frame, stem=stem)
@@ -82,8 +97,8 @@ def main():
                     entry['reuse_source'] = str(folder)
                 else:
                     images = []
-                    for index in (frame, frame+1 if frame < 149 else frame-1):
-                        assert 50 <= index < 150
+                    for index in (frame, frame+1 if frame < role_end else frame-1):
+                        assert role_start <= index <= role_end
                         capture.set(cv2.CAP_PROP_POS_FRAMES, index)
                         ok, bgr = capture.read()
                         if not ok:
@@ -93,7 +108,7 @@ def main():
                     rgb = torch.from_numpy(cv2.cvtColor(images[0], cv2.COLOR_BGR2RGB)).to(device).float()/255
                     tracker = TrackAnythingPipeline(['person', 'basketball'])
                     with torch.inference_mode():
-                        instance, phrases = tracker.track(VideoFrame(raw_frame_idx=frame-50, rgb=rgb,
+                        instance, phrases = tracker.track(VideoFrame(raw_frame_idx=frame-role_start, rgb=rgb,
                                                            information=f'source_frame_id={frame}'))
                     semantic = instance.cpu().numpy() > 0
                     gray = [cv2.cvtColor(im, cv2.COLOR_BGR2GRAY) for im in images]

@@ -126,7 +126,7 @@ def support(model):
     return rows
 
 
-def refine(source, native, output, policy, seed):
+def refine(source, native, output, policy, seed, iterations=200, extend_from=None):
     import pycolmap as cm
     report_source=json.loads((source/'result.json').read_text())
     if report_source['status']!='matched' or sha256(source/'features.db')!=report_source['database_sha256']:
@@ -139,6 +139,17 @@ def refine(source, native, output, policy, seed):
     report=dict(protocol=PROTOCOL,policy=policy,seed=seed,frames=report_source['frames'],
                 sharp=report_source['sharp'],status='running',native_sha256=sha256(native),
                 source_database_sha256=report_source['database_sha256'],adapter_sha256=sha256(__file__))
+    if iterations!=200:
+        if iterations!=1000 or extend_from is None:
+            raise ValueError('only a logged 200 -> 1000 iteration extension is scheduled')
+        previous=json.loads((extend_from/'result.json').read_text())
+        log=extend_from.with_suffix('.log')
+        if any(previous[k]!=report[k] for k in ('policy','seed','native_sha256','source_database_sha256')):
+            raise ValueError('extension configuration changed')
+        if 'NO_CONVERGENCE' not in log.read_text().split('Termination :')[-1]:
+            raise ValueError('iteration extension requires logged early termination')
+        report['extended_from']=str(extend_from)
+        report['extension_log_sha256']=sha256(log)
     start=time.monotonic()
     try:
         model=cm.Reconstruction()
@@ -155,6 +166,9 @@ def refine(source, native, output, policy, seed):
             pose=cm.Rigid3d(cm.Rotation3d(np.array(e['R'])),np.array(e['t']))
             model.add_image_with_trivial_frame(cm.Image(image_id=c+1,camera_id=c+1,name=f'camera{c}.png'),pose)
         initial={c:cam.params.copy() for c,cam in model.cameras.items()}
+        with cm.Database.open(output/'triangulation.db') as db:
+            for camera in model.cameras.values():
+                db.update_camera(camera)
         cm.set_random_seed(seed)
         options=cm.IncrementalPipelineOptions(num_threads=8,random_seed=seed,extract_colors=False,
             ba_refine_focal_length=False,ba_refine_principal_point=False,ba_refine_extra_params=False)
@@ -165,7 +179,7 @@ def refine(source, native, output, policy, seed):
         ba.ceres.loss_function_type=cm.LossFunctionType.SOFT_L1
         ba.ceres.loss_function_scale=1.
         ba.ceres.solver_options.num_threads=8
-        ba.ceres.solver_options.max_num_iterations=200
+        ba.ceres.solver_options.max_num_iterations=iterations
         cm.bundle_adjustment(model,ba)
         if policy=='fixed' and any(not np.array_equal(initial[c],cam.params) for c,cam in model.cameras.items()):
             raise ValueError('fixed intrinsics changed')
@@ -211,9 +225,11 @@ def main():
     p.add_argument('--native',type=Path)
     p.add_argument('--policy',choices=['fixed','focal','radial'])
     p.add_argument('--seed',type=int,default=0)
+    p.add_argument('--iterations',type=int,default=200)
+    p.add_argument('--extend-from',type=Path)
     a=p.parse_args()
     if a.stage=='frontend':frontend(a.source,a.frames,a.output,a.sharp)
-    else:refine(a.source,a.native,a.output,a.policy,a.seed)
+    else:refine(a.source,a.native,a.output,a.policy,a.seed,a.iterations,a.extend_from)
 
 
 if __name__=='__main__':main()

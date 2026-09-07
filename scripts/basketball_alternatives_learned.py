@@ -5,6 +5,7 @@ This suppresses dynamic appearance but is not native correspondence masking;
 subsequent geometric support must independently exclude these regions.
 """
 import argparse
+import fcntl
 import json
 from pathlib import Path
 import resource
@@ -65,6 +66,8 @@ def main():
                   weight_sha256=sha256(a.weights/'model.safetensors'),
                   configuration=dict(dynamic_pixels='neutral RGB 127 before preprocessing',
                                      supplied_calibration=False))
+    lock=(a.inputs.parent/'gpu.lock').open('a')
+    fcntl.flock(lock,fcntl.LOCK_EX)
     start = time.monotonic()
     import torch
     from PIL import Image
@@ -108,7 +111,10 @@ def main():
             from dust3r.image_pairs import make_pairs
             model=AsymmetricMASt3R.from_pretrained(str(a.weights)).to('cuda').eval()
             imgs=load_images(paths,size=512)
-            pairs=make_pairs(imgs,scene_graph='complete',prefilter=None,symmetrize=True)
+            # Use the released logarithmic scene graph for 150-view windows to
+            # bound intermediate pair storage before considering lower resolution.
+            graph='complete' if len(frames)==1 else 'logwin-5'
+            pairs=make_pairs(imgs,scene_graph=graph,prefilter=None,symmetrize=True)
             cache=a.output/'cache'
             if a.cache_from:
                 previous=json.loads((a.cache_from/'result.json').read_text())
@@ -133,7 +139,7 @@ def main():
             if (w,h)!=(512,288):
                 raise ValueError('unexpected MASt3R crop; adapter only validated for 960x540 -> 512x288')
             K=np.stack([resize_opencv(k,(w,h),(960,540)) for k in K_native])
-            report['configuration'].update(scene_graph='complete',lr1=.07,niter1=300,lr2=.01,
+            report['configuration'].update(scene_graph=graph,lr1=.07,niter1=300,lr2=.01,
                 niter2=300,opt_depth=True,shared_intrinsics=False,native_size=[w,h],
                 rope='upstream torch fallback; no CUDA extension')
         else:
