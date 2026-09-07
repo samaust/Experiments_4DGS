@@ -13,10 +13,10 @@ import time
 from basketball_audit import PIN, frame_roles, sha256
 
 FRAMES = [50, 75, 100, 125, 149]
-CONFIG = {'schema': 'basketball-vipe-pilot/v1', 'cameras': [4, 12, 21, 29],
+CONFIG = {'schema': 'basketball-vipe-pilot/v2', 'cameras': [4, 12, 21, 29],
           'source_frames': FRAMES, 'resolution': [960, 540],
           'mask_phrases': ['person', 'basketball'],
-          'max_focal_relative_range': .20, 'min_dynamic_fraction': .001,
+          'max_focal_relative_range': .25, 'min_dynamic_fraction': .001,
           'max_dynamic_fraction': .75, 'min_positive_depth_fraction': .99,
           'motion_gray_threshold': 20, 'motion_dilation_pixels': 9,
           'depth_scale': 'uncertain estimated scale; not measured metric ground truth'}
@@ -41,8 +41,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--workspace', type=Path, required=True)
     parser.add_argument('--vipe', type=Path, required=True)
+    parser.add_argument('--output', type=Path, help='New attempt directory; never overwritten')
     a = parser.parse_args()
-    output = a.workspace / 'pilot'
+    output = a.output if a.output is not None else a.workspace / 'pilot'
     output.mkdir(exist_ok=False)
     (output / 'config.json').write_text(json.dumps(CONFIG, indent=2) + '\n')
     audit = json.loads((a.workspace / 'input-audit.json').read_text())

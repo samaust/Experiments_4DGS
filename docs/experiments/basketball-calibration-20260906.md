@@ -1,6 +1,6 @@
 # Plan 005 — Basketball estimated-calibration pilot
 
-Status: **blocked at the four-camera intrinsic-prior pilot**. No accepted rig,
+Historical status of the first attempt: **blocked at the four-camera intrinsic-prior pilot**. No accepted rig,
 synchronization, processed Basketball scene, initialization or model result was
 produced. This executes plan 005 through its section 1.6 stop condition; sections
 2–4 remain unexecuted. This is an estimated-calibration experiment, not official
@@ -138,3 +138,21 @@ Existing pilot/log outputs are deliberately protected against overwrite. Do not
 rerun or relax the pilot gate automatically. Continuing requires an explicit
 revision to the blocked pilot strategy; manual annotation, substitute cameras,
 and model search are not authorized by this result.
+
+## Authorized 25% continuation
+
+The user explicitly raised the pilot intrinsic-stability threshold to 25% after
+reviewing the initial failure. The original 20% result remains preserved above.
+The second attempt used a new `pilot-25` output directory and the same cumulative
+calibration ledger. All four cameras passed (relative ranges 20.5043%, 6.2137%,
+4.8435%, 5.0322%). All four representative depth maps had 100% finite positive
+depth, and all 20 semantic masks passed the existing fraction gates. This is a
+pilot sanity pass, not validation of shared geometry or complete mask accuracy.
+
+[Second-attempt evidence](basketball-pilot-25.json) records the configuration,
+code hash, intrinsic and mask statistics, depth validity and memory measurements.
+Source frame IDs and the original fit/selection/validation split are unchanged.
+The nonidentical repeated focal estimates are retained as observed; the two
+pilot attempts did not set random seeds. Subsequent all-camera extraction will
+record a seed. Continue with all-camera priors and shared-rig validation; no
+training is authorized until the plan's remaining gates pass.
