@@ -37,6 +37,19 @@ class SharedTimingV2Tests(unittest.TestCase):
         d,_=appearance_distances([track(0,(50,))],[track(0,(75,)),track(0,(76,))])
         self.assertEqual(d[0,0],0); self.assertTrue(np.isinf(d[0,1]))
 
+    def test_batched_checkpoint_descriptors_equal_individual(self):
+        import cv2
+        cv2.setNumThreads(1)
+        image=np.random.default_rng(0).integers(0,256,(240,320),dtype=np.uint8)
+        sift=cv2.SIFT_create(nfeatures=50)
+        keys,_=sift.detectAndCompute(image,None)
+        keys=list(keys[:8])
+        for i,key in enumerate(keys): key.class_id=i
+        returned,batch=sift.compute(image,keys)
+        individual=np.array([sift.compute(image,[key])[1][0] for key in keys])
+        np.testing.assert_array_equal(batch,individual)
+        self.assertEqual([k.class_id for k in returned],list(range(len(keys))))
+
     def test_join_branches_and_discontinuity(self):
         f,xy=join_branches((60,[0,0]),[(59,[-1,0]),(58,[-2,0])],[(61,[1,0])])
         self.assertEqual(f,[58,59,60,61]); self.assertEqual(xy.shape,(4,2))

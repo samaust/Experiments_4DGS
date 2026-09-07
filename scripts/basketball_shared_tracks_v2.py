@@ -96,7 +96,7 @@ def extract(p, audit, output, check):
             backward,bc=follow(images,seed,points,-1,p,check)
             forward,fc=follow(images,seed,points,1,p,check)
             counts.update(bc); counts.update(fc); counts['seeded_tracks']+=len(picked)
-            seed_counts=Counter(seeded=len(picked))
+            seed_counts=Counter(seeded=len(picked)); checkpoint_jobs={}
             for n,i in enumerate(picked):
                 frames,native=join_branches((seed,points[n]),backward[n],forward[n]); xy=calibration_xy(native)
                 if len(frames)<base['minimum_track_length']:
@@ -108,16 +108,21 @@ def extract(p, audit, output, check):
                 for frame in frames:
                     if frame==seed or (frame-seed)%10: continue
                     pos=native[frame-frames[0]]
-                    key=cv2.KeyPoint(float(pos[0]),float(pos[1]),kp[i].size,kp[i].angle,kp[i].response,kp[i].octave)
-                    _,d=sift.compute(images[frame],[key])
-                    if d is None: counts['descriptor_checkpoint_failure']+=1; continue
-                    checkpoints.append(dict(frame=frame,descriptor=root_descriptor(d[0]),source_track_id=sid,kind='checkpoint'))
-                checkpoints.sort(key=lambda d:d['frame'])
+                    key=cv2.KeyPoint(float(pos[0]),float(pos[1]),kp[i].size,kp[i].angle,kp[i].response,kp[i].octave,len(kept))
+                    checkpoint_jobs.setdefault(frame,[]).append(key)
                 kept.append(dict(source_track_id=sid,seed_frame=seed,keypoint_index=i,keypoint_scale=kp[i].size,
                     keypoint_orientation=kp[i].angle,keypoint_octave=kp[i].octave,frames=frames,xy=xy.tolist(),
                     normalized=undistort_points(xy,cams[c]).tolist(),descriptor_checkpoints=checkpoints))
                 seed_counts['retained']+=1
+            for frame,keys in sorted(checkpoint_jobs.items()):
+                check(); computed,descriptors=sift.compute(images[frame],keys)
+                counts['descriptor_checkpoint_failure']+=len(keys)-len(computed)
+                if descriptors is None: continue
+                for key,d in zip(computed,descriptors):
+                    target=kept[key.class_id]
+                    target['descriptor_checkpoints'].append(dict(frame=frame,descriptor=root_descriptor(d),source_track_id=target['source_track_id'],kind='checkpoint'))
             seeds.append(dict(seed_frame=seed,mask_frame=nearest,counts=dict(seed_counts),backward=dict(bc),forward=dict(fc)))
+        for t in kept: t['descriptor_checkpoints'].sort(key=lambda d:d['frame'])
         dest=folder/f'camera{c}-tracks.json'
         write(dest,dict(camera_id=c,role='fit',frames=[50,149],tracks=kept))
         counts['retained_tracks']=len(kept)
