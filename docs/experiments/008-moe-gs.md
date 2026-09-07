@@ -2,6 +2,22 @@
 
 Status: **expert training integration unresolved for both scenes**.
 
+## Current Basketball continuation — 2026-09-07
+
+[Plan 006](basketball-calibration-alternatives.md) accepted all 34 static cameras;
+[revision 2](basketball-rev2.md) verified provenance/conventions and passed the
+training-view estimated scale check (1.31506947 estimated metres per calibration
+unit, 3.13% reserved disagreement).
+Synchronization is now the shared blocker: only 24/71 dynamic timing edges pass,
+leaving 19 cameras disconnected from camera 1. No timing selection/final validation,
+1,700-image preparation, Gaussian initialization or Basketball training/evaluation
+was launched. Held-outs remain 0, 10, 20, 30, with 30 training cameras. The
+original per-method two-hour Basketball allocation is unchanged and uncharged.
+The separate modified-STG expert training/checkpoint requirement still applies.
+
+## Prior implementation and experiment evidence
+
+
 Audited 2026-09-06: official checkout `.local/MoE-GS`, revision
 `c98aa513e1d8ea06920a4395b841993ac678477c`. Its
 [recovery guide](https://github.com/cvsp-lab/MoE-GS/blob/c98aa513e1d8ea06920a4395b841993ac678477c/THIRDPARTY_RECOVERY.md)

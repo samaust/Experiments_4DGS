@@ -2,6 +2,22 @@
 
 Status: **pending source/data validation**.
 
+## Current Basketball continuation — 2026-09-07
+
+[Plan 006](basketball-calibration-alternatives.md) accepted all 34 static cameras;
+[revision 2](basketball-rev2.md) verified provenance/conventions and passed the
+training-view estimated scale check (1.31506947 estimated metres per calibration
+unit, 3.13% reserved disagreement).
+Synchronization is now the shared blocker: only 24/71 dynamic timing edges pass,
+leaving 19 cameras disconnected from camera 1. No timing selection/final validation,
+1,700-image preparation, Gaussian initialization or Basketball training/evaluation
+was launched. Held-outs remain 0, 10, 20, 30, with 30 training cameras. The
+original per-method two-hour Basketball allocation is unchanged and uncharged.
+The separate validated author implementation requirement for fixed B still applies.
+
+## Prior implementation and experiment evidence
+
+
 Release search on 2026-09-06 found no author implementation link in the
 [paper](https://arxiv.org/abs/2605.03337); its abstract promises a future release.
 Fixed B cannot currently be executed from an identified author source. This is

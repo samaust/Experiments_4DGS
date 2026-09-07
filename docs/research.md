@@ -239,3 +239,16 @@ Verified priors, masks and per-camera feature caches are reused without new GPU
 inference or dependencies. Thirty-two fresh reconstruction commands fail the
 unchanged pose gates; the best result is 5.8807 degrees / 7.1892%. No accepted
 calibration or downstream training is claimed.
+
+
+## Basketball revision 2 scale continuation — 2026-09-07
+
+The [revision 2 continuation](experiments/basketball-rev2.md) exercised the pinned
+ViPE UniDepth V2 model on freshly undistorted, training-only fitting and reserved
+selection images. Source/extension/weight hashes match the prior audit; no new
+weights or licenses were substituted. The UniDepth CC BY-NC 4.0 restriction
+recorded above remains applicable. Its wrapper forces a centered pinhole camera,
+so the adapter explicitly remaps images to that exact K. The accepted Plan 006
+radial calibration remains immutable. Estimated scale passes the frozen
+cross-view and temporal checks; common metric bias is not measured, and timing
+remains an independent gate before downstream experiments.

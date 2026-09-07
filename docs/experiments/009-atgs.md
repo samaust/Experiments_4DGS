@@ -2,7 +2,22 @@
 
 Status: **SelfCap training stopped cleanly at its budget reserve at 61,008
 microsteps; native 100,000-microstep schedule unfinished. Final evaluation complete.
-Basketball remains blocked on matching calibration.**
+Basketball remains blocked on synchronization.**
+
+## Current Basketball continuation — 2026-09-07
+
+[Plan 006](basketball-calibration-alternatives.md) accepted all 34 static cameras;
+[revision 2](basketball-rev2.md) verified provenance/conventions and passed the
+training-view estimated scale check (1.31506947 estimated metres per calibration
+unit, 3.13% reserved disagreement).
+Synchronization is now the shared blocker: only 24/71 dynamic timing edges pass,
+leaving 19 cameras disconnected from camera 1. No timing selection/final validation,
+1,700-image preparation, Gaussian initialization or Basketball training/evaluation
+was launched. Held-outs remain 0, 10, 20, 30, with 30 training cameras. The
+original per-method two-hour Basketball allocation is unchanged and uncharged.
+
+## Prior implementation and experiment evidence
+
 
 Use the selected hash encoder and exact short windows from the shared manifests.
 Record support for calibration, held-out rendering, offline reload, and required

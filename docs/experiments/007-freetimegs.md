@@ -2,7 +2,22 @@
 
 Status: **SelfCap dense-initialized training stopped cleanly at the budget reserve
 at 42,061 steps; native 70,000-step schedule unfinished. Final evaluation complete.
-Basketball calibration remains blocked.**
+Basketball synchronization remains blocked.**
+
+## Current Basketball continuation — 2026-09-07
+
+[Plan 006](basketball-calibration-alternatives.md) accepted all 34 static cameras;
+[revision 2](basketball-rev2.md) verified provenance/conventions and passed the
+training-view estimated scale check (1.31506947 estimated metres per calibration
+unit, 3.13% reserved disagreement).
+Synchronization is now the shared blocker: only 24/71 dynamic timing edges pass,
+leaving 19 cameras disconnected from camera 1. No timing selection/final validation,
+1,700-image preparation, Gaussian initialization or Basketball training/evaluation
+was launched. Held-outs remain 0, 10, 20, 30, with 30 training cameras. The
+original per-method two-hour Basketball allocation is unchanged and uncharged.
+
+## Prior implementation and experiment evidence
+
 
 The author-linked EasyVolcap framework was inspected at
 `4cb3c000a31b8764834c79792b355f110d947e75` in `.local/EasyVolcap` on

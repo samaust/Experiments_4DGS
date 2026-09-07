@@ -7,7 +7,8 @@ Lite and Full have completed their native SelfCap schedules and final evaluation
 FreeTimeGS and ATGS have completed their budget-limited runs and evaluations at
 42,061 steps and 61,008 microsteps respectively; their native schedules remain unfinished.
 MoE-GS and FreeTimeGS++ retain the source gates in their experiment reports;
-Basketball remains blocked on matching calibration.
+Basketball now has accepted static calibration and estimated scale, but remains
+blocked on synchronization; see [revision 2](basketball-rev2.md).
 
 Earlier records cover [initial execution](contender-progress-20260906.md),
 [data preparation](contender-data-20260906.md),
@@ -151,24 +152,32 @@ higher PSNR and SSIM do not translate into lower LPIPS at this stage. Do not
 recommend a final winner from these unfinished runs. The growth record links
 the full evidence, resource measurements and budget accounting.
 
-## VRU Basketball DG
+## VRU Basketball DG — blocked on synchronization
 
-No quantitative results yet: the downloaded DG archive has no calibration,
-and matching calibration remains unresolved for every method. Do not substitute
-another Basketball release's cameras or claim an evaluated result.
+[Plan 006](basketball-calibration-alternatives.md) accepted all 34 cameras.
+[Revision 2](basketball-rev2.md) passed source/calibration/profile provenance,
+pixel/distortion conventions and estimated scale validation: frozen scale
+1.31506947 estimated metres per calibration unit, with 3.13% reserved-frame
+disagreement. The full rig has 30 training cameras and held-outs 0, 10, 20, 30.
 
-| Method | PSNR / SSIM / LPIPS-Alex | Δ vs Lite / Full | Specific blocker |
-| --- | --- | --- | --- |
-| STG Lite | Not measured | Not available | Matching calibration for the exact downloaded 34-video DG release |
-| [STG Full](006-stg-full.md) | Not measured | Not available | Same matching-calibration gate |
-| [FreeTimeGS reproduction](007-freetimegs.md) | Not measured | Not available | Same matching-calibration gate; training-only temporal initialization depends on it |
-| [MoE-GS](008-moe-gs.md) | Not measured | Not available | Same calibration gate plus a validated released modified-STG expert training route or matching checkpoint |
-| [ATGS](009-atgs.md) | Not measured | Not available | Same matching-calibration gate |
-| [FreeTimeGS++](010-freetimegs-plus-plus.md) | Not measured | Not available | Same calibration gate plus an identified author implementation of fixed B |
+Dynamic timing is blocked: 24/71 candidate edges pass, leaving 19 cameras
+unreachable from reference camera 1. Forty-five edges exceed the 0.25-frame
+uncertainty limit and two lack support. Timing selection/final validation,
+preparation, initialization, training and model evaluation remain unexecuted.
 
-These six scene runs have not consumed training budget. The missing calibration
-prevents validating the prescribed frame range, held-out projections and shared
-training-only geometry; another release's cameras are not a safe substitution.
+| Method | Basketball metrics | Remaining blocker |
+| --- | --- | --- |
+| STG Lite | Not measured | Validated full-rig synchronization, then shared inputs and fresh initialization |
+| [STG Full](006-stg-full.md) | Not measured | Same synchronization/input gates |
+| [FreeTimeGS reproduction](007-freetimegs.md) | Not measured | Same gates, then training-only temporal EDGS/RoMa initialization |
+| [MoE-GS](008-moe-gs.md) | Not measured | Same gates plus a validated modified-STG expert training route or checkpoint |
+| [ATGS](009-atgs.md) | Not measured | Same synchronization/input gates |
+| [FreeTimeGS++](010-freetimegs-plus-plus.md) | Not measured | Same gates plus a validated author implementation of fixed B |
+
+Basketball training charges remain zero and each method retains its two-hour
+allocation. Revision 2 charged 24.550233 GPU seconds for scale, bringing the
+historical calibration ledger to 1,080.637553 seconds; its conditional extension
+is unused. These are input-gate results, not method-quality measurements.
 
 ## Unexecuted SelfCap methods
 
@@ -179,7 +188,7 @@ training-only geometry; another release's cameras are not a safe substitution.
 
 All twelve method/scene pairs now have a reproducible final-budget result or
 the specific blocker above, with reports 006–010 and the matched Lite record.
-The blocked pairs require external calibration or a usable released training
+The blocked pairs require validated synchronization or a usable released training
 route/implementation; they are not quality failures. Further training beyond
 the existing reserve gates requires a new budget decision. No paper-only
 implementation, calibration substitution or budget redistribution was performed.

@@ -1,7 +1,22 @@
 # Experiment 006: STG Full
 
 Status: **SelfCap native 30,000-step schedule and final evaluation complete;
-Basketball blocked on calibration**.
+Basketball blocked on synchronization**.
+
+## Current Basketball continuation — 2026-09-07
+
+[Plan 006](basketball-calibration-alternatives.md) accepted all 34 static cameras;
+[revision 2](basketball-rev2.md) verified provenance/conventions and passed the
+training-view estimated scale check (1.31506947 estimated metres per calibration
+unit, 3.13% reserved disagreement).
+Synchronization is now the shared blocker: only 24/71 dynamic timing edges pass,
+leaving 19 cameras disconnected from camera 1. No timing selection/final validation,
+1,700-image preparation, Gaussian initialization or Basketball training/evaluation
+was launched. Held-outs remain 0, 10, 20, 30, with 30 training cameras. The
+original per-method two-hour Basketball allocation is unchanged and uncharged.
+
+## Prior implementation and experiment evidence
+
 
 The [completed native STG comparison](contender-native-stg-20260906.md) records
 the final Full result: PSNR 24.496753, SSIM 0.864213, LPIPS-Alex 0.214612 and
