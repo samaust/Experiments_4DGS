@@ -6,6 +6,7 @@ import numpy as np
 import scipy
 from scipy.optimize import milp, Bounds, LinearConstraint
 from scipy.spatial.distance import cdist
+from scipy.spatial import cKDTree
 from scipy.sparse import lil_matrix, csr_matrix, vstack
 from basketball_shared_timing_v1 import Components
 from basketball_timing import undistort_points
@@ -13,13 +14,20 @@ from basketball_timing import undistort_points
 
 def merge_duplicates(tracks,camera,p,check=lambda:None):
     comp=Components(range(len(tracks))); pairs=[]
-    for i,a in enumerate(tracks):
-        check()
-        for j in range(i+1,len(tracks)):
-            b=tracks[j]
-            _,ia,ib=np.intersect1d(a['frames'],b['frames'],return_indices=True)
-            if len(ia)>=p['duplicate_overlap_samples'] and np.max(np.linalg.norm(a['xy'][ia]-b['xy'][ib],axis=1))<=p['duplicate_maximum_distance_pixels']:
-                comp.union(i,j); pairs.append([i,j])
+    # Every contiguous >=60-frame fitting track shares a central frame.
+    # Distance at that common frame is a necessary condition for the unchanged
+    # maximum-overlap distance test, so a KD-tree only removes impossible pairs.
+    common=max((int(t['frames'][0]) for t in tracks),default=0)
+    if tracks and common<=min(int(t['frames'][-1]) for t in tracks) and all(np.all(np.diff(t['frames'])==1) for t in tracks):
+        points=[t['xy'][common-int(t['frames'][0])] for t in tracks]
+        candidates=sorted(cKDTree(points).query_pairs(np.nextafter(p['duplicate_maximum_distance_pixels'],np.inf)))
+    else:
+        candidates=((i,j) for i in range(len(tracks)) for j in range(i+1,len(tracks)))
+    for i,j in candidates:
+        check(); a,b=tracks[i],tracks[j]
+        _,ia,ib=np.intersect1d(a['frames'],b['frames'],return_indices=True)
+        if len(ia)>=p['duplicate_overlap_samples'] and np.max(np.linalg.norm(a['xy'][ia]-b['xy'][ib],axis=1))<=p['duplicate_maximum_distance_pixels']:
+            comp.union(i,j); pairs.append([i,j])
     merged=[]; families=[]
     for fid,members in enumerate(comp.groups()):
         values={}; descriptors=[]
@@ -51,19 +59,24 @@ def appearance_distances(a,b,max_separation=25):
     """One minimum per trajectory pair; checkpoints never become runner-ups."""
     d=np.full((len(a),len(b)),np.inf); provenance={}
     if not a or not b: return d,provenance
-    da=[(i,k,c) for i,t in enumerate(a) for k,c in enumerate(t['descriptor_checkpoints'])]
-    db=[(j,k,c) for j,t in enumerate(b) for k,c in enumerate(t['descriptor_checkpoints'])]
-    if not da or not db: return d,provenance
-    bframes=np.array([c['frame'] for _,_,c in db]); bdesc=np.array([c['descriptor'] for _,_,c in db])
-    bj=np.array([j for j,_,_ in db])
-    for i,ka,ca in da:
-        use=np.flatnonzero(np.abs(bframes-ca['frame'])<=max_separation)
-        if not len(use): continue
-        distances=cdist([ca['descriptor']],bdesc[use])[0]
-        for j in np.unique(bj[use]):
-            ids=np.flatnonzero(bj[use]==j); index=ids[np.argmin(distances[ids])]; value=float(distances[index])
-            if value<d[i,j]:
-                d[i,j]=value; provenance[i,int(j)]=dict(a_checkpoint=ka,b_checkpoint=db[use[index]][1],a_frame=ca['frame'],b_frame=int(bframes[use[index]]),distance=value)
+    checkpoints=[t['descriptor_checkpoints'] for t in b]
+    if any(not cs for cs in checkpoints): raise ValueError('trajectory lacks checkpoint descriptors')
+    ends=np.cumsum([len(cs) for cs in checkpoints]); starts=np.r_[0,ends[:-1]]
+    db=[c for cs in checkpoints for c in cs]
+    bframes=np.array([c['frame'] for c in db]); bdesc=np.array([c['descriptor'] for c in db])
+    for i,t in enumerate(a):
+        ca=t['descriptor_checkpoints']
+        if not ca: raise ValueError('trajectory lacks checkpoint descriptors')
+        block=cdist([c['descriptor'] for c in ca],bdesc)
+        block[np.abs(np.array([c['frame'] for c in ca])[:,None]-bframes)>max_separation]=np.inf
+        d[i]=np.minimum.reduceat(np.min(block,axis=0),starts)
+        for j,(start,end) in enumerate(zip(starts,ends)):
+            if not np.isfinite(d[i,j]): continue
+            # Row-major argmin preserves the original stable checkpoint-pair
+            # tie order: A checkpoint first, then B checkpoint.
+            ka,kb=np.unravel_index(np.argmin(block[:,start:end]),(len(ca),end-start))
+            provenance[i,j]=dict(a_checkpoint=int(ka),b_checkpoint=int(kb),a_frame=ca[ka]['frame'],
+                b_frame=int(bframes[start+kb]),distance=float(d[i,j]))
     return d,provenance
 
 

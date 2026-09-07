@@ -31,6 +31,35 @@ class SharedTimingV2Tests(unittest.TestCase):
         self.assertEqual(mutual_pairs(a,b)[0],pairs)
         self.assertAlmostEqual(appearance_distances(a,b)[0][0,0],.001)
 
+    def test_vectorized_distance_and_provenance_equal_reference(self):
+        from scipy.spatial.distance import cdist
+        rng=np.random.default_rng(0)
+        def items(n):
+            return [dict(descriptor_checkpoints=[dict(frame=int(f),descriptor=rng.random(8).tolist()) for f in rng.choice(np.arange(50,150),size=9,replace=False)]) for _ in range(n)]
+        a,b=items(7),items(6)
+        d,provenance=appearance_distances(a,b)
+        for i,aa in enumerate(a):
+            for j,bb in enumerate(b):
+                candidates=[(float(cdist([ca['descriptor']],[cb['descriptor']])[0,0]),ka,kb) for ka,ca in enumerate(aa['descriptor_checkpoints']) for kb,cb in enumerate(bb['descriptor_checkpoints']) if abs(ca['frame']-cb['frame'])<=25]
+                expected,ka,kb=min(candidates)
+                self.assertEqual(d[i,j],expected)
+                self.assertEqual((provenance[i,j]['a_checkpoint'],provenance[i,j]['b_checkpoint']),(ka,kb))
+
+    def test_duplicate_candidate_filter_equal_all_pairs(self):
+        pairs,cams=synthetic_pairs('acceleration',0,n=24)
+        items=[]
+        for i,(a,_) in enumerate(pairs):
+            a=copy.deepcopy(a);a.update(source_track_id=str(i),descriptor_checkpoints=track(i)['descriptor_checkpoints']);items.append(a)
+        for i in range(4):
+            a=copy.deepcopy(items[i]);a['source_track_id']='duplicate'+str(i);a['xy']+=.25;items.append(a)
+        fast,families=merge_duplicates(items,cams[0],CONFIG)
+        from unittest.mock import Mock
+        tree=Mock();tree.query_pairs.return_value={(i,j) for i in range(len(items)) for j in range(i+1,len(items))}
+        with patch('basketball_shared_association_v2.cKDTree',return_value=tree):
+            slow,reference=merge_duplicates(items,cams[0],CONFIG)
+        self.assertEqual(families,reference)
+        for a,b in zip(fast,slow): np.testing.assert_array_equal(a['xy'],b['xy'])
+
     def test_descriptor_time_filter_and_two_sided_ratio(self):
         self.assertEqual(mutual_pairs([track(0),track(.11)],[track(.05),track(3)])[0],[])
         self.assertEqual(mutual_pairs([track(0),track(5)],[track(.01,(100,)),track(5.01,(100,))])[0],[])
@@ -126,6 +155,37 @@ class SharedTimingV2Tests(unittest.TestCase):
         with self.assertRaises(ValueError): validate_config(p)
         p=copy.deepcopy(CONFIG); p['roles']['fit']=[50,199]
         with self.assertRaises(ValueError): validate_config(p)
+
+    def test_extraction_reuse_hashes_and_roles(self):
+        from basketball_shared_timing_v2 import extraction_sources
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);(root/'tracks').mkdir()
+            write(root/'frozen.json',dict(config=CONFIG,source_sha256={'scripts/basketball_shared_tracks_v2.py':sha256('scripts/basketball_shared_tracks_v2.py')}))
+            cameras=[]
+            for c in range(34):
+                file=root/'tracks'/f'camera{c}-tracks.json';write(file,dict(role='fit',camera_id=c,tracks=[]))
+                cameras.append(dict(camera_id=c,sha256=sha256(file)))
+            write(root/'tracks/result.json',dict(status='complete',role='fit',cameras=cameras,source_sha256={}))
+            extraction_sources(root,CONFIG)
+            (root/'tracks/camera0-tracks.json').write_text('{}')
+            with self.assertRaises(ValueError): extraction_sources(root,CONFIG)
+
+    def test_external_watchdog_terminates_and_preserves_blocker(self):
+        import subprocess
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        child=Mock(pid=12345)
+        child.wait.side_effect=[subprocess.TimeoutExpired('worker',1),0]
+        with tempfile.TemporaryDirectory() as d:
+            output=Path(d)/'fresh'
+            a=SimpleNamespace(config=Path('configs/basketball-rev2/timing-shared-v2.json'),output=output,stage='associate',predecessor=None)
+            with patch('basketball_shared_timing_v2.bounded'),patch('basketball_shared_timing_v2.subprocess.Popen',return_value=child),patch('basketball_shared_timing_v2.os.killpg') as kill:
+                self.assertEqual(watchdog(a),1)
+            self.assertEqual(kill.call_args.args[0],12345)
+            result=read(output/'result.json')
+            self.assertEqual(result['terminal_kind'],'budget_exhaustion')
+            self.assertIsNone(result['candidate_offsets'])
+            self.assertFalse(result['final_validation_consumed'])
 
     def test_fresh_output_and_hash_tamper(self):
         from types import SimpleNamespace

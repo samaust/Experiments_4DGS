@@ -71,9 +71,15 @@ def load_raw(folder):
     return tracks
 
 
-def associate(p,output):
+def associate(p,output,extracted=None):
     check=lambda:bounded(p)
-    folder=extract(p,read(p['audit']),output,check); raw=load_raw(folder)
+    if extracted is None:
+        folder=extract(p,read(p['audit']),output,check)
+    else:
+        folder=extracted/'tracks'
+        (output/'tracks').symlink_to(folder.resolve(),target_is_directory=True)
+        write(output/'extraction-reused.json',dict(predecessor=str(extracted),tracks_result_sha256=sha256(folder/'result.json'),policy_unchanged=True))
+    raw=load_raw(folder)
     cameras={c['camera_id']:c for c in read(CALIBRATION)['cameras']}; tracks={}; counts=[]
     for c,items in sorted(raw.items()):
         check(); tracks[c],families=merge_duplicates(items,cameras[c],p,check)
@@ -107,6 +113,20 @@ def associate(p,output):
         partition_status=decision['status'],model_configurations_fitted=0)
 
 
+def extraction_sources(path,p):
+    frozen=read(path/'frozen.json')
+    if frozen['config']!=p: raise ValueError('extracted predecessor configuration mismatch')
+    extractor='scripts/basketball_shared_tracks_v2.py'
+    if frozen['source_sha256'][extractor]!=sha256(extractor): raise ValueError('extraction implementation changed')
+    folder=path/'tracks'; result=read(folder/'result.json')
+    if result['status']!='complete' or result['role']!='fit' or sorted(c['camera_id'] for c in result['cameras'])!=list(range(34)):
+        raise ValueError('extracted predecessor incomplete or wrong role')
+    sources={str(path/'frozen.json'):sha256(path/'frozen.json'),str(folder/'result.json'):sha256(folder/'result.json'),
+        **result['source_sha256'],**{str(folder/f"camera{c['camera_id']}-tracks.json"):c['sha256'] for c in result['cameras']}}
+    verify_hashes(sources)
+    return sources
+
+
 def stage_sources(p,config,prior_path):
     sources={str(config):sha256(config),**{s:sha256(s) for s in SCRIPTS}}
     if prior_path:
@@ -129,12 +149,15 @@ def worker(a):
     if a.stage in ['safeguard','fit','assess','select']:
         raise ValueError('production implementation deferred until Plan008 support admission; no qualifying evidence')
     sources=stage_sources(p,a.config,a.predecessor)
+    if a.extracted_predecessor:
+        if a.stage!='associate': raise ValueError('extraction reuse only applies to association')
+        sources.update(extraction_sources(a.extracted_predecessor,p))
     a.output.mkdir(parents=True,exist_ok=False)
     write(a.output/'frozen.json',dict(config=p,source_sha256=sources))
     try:
         if a.stage=='prepare':
             result=dict(status='passed',blockers=[],reused_audit=str(Path(p['prior_audit'])/'result.json'),estimator_audit_rerun=False)
-        elif a.stage=='associate': result=associate(p,a.output)
+        elif a.stage=='associate': result=associate(p,a.output,a.extracted_predecessor)
         else:
             if prior['status']!='blocked': raise ValueError('package requires an evidenced terminal blocker')
             for name in ['support.json','groups.json','membership.json','partition.json']:
@@ -188,6 +211,7 @@ if __name__=='__main__':
     parser.add_argument('--config',type=Path,required=True)
     parser.add_argument('--predecessor',type=Path)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--extracted-predecessor',type=Path,help='Reuse a complete hash-verified fitting extraction with identical config and extractor')
     parser.add_argument('--worker',action='store_true',help=argparse.SUPPRESS)
     args=parser.parse_args()
     raise SystemExit(worker(args) if args.worker else watchdog(args))
