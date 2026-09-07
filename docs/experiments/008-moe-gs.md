@@ -8,13 +8,12 @@ Status: **expert training integration unresolved for both scenes**.
 [revision 2](basketball-rev2.md) verified provenance/conventions and passed the
 training-view estimated scale check (1.31506947 estimated metres per calibration
 unit, 3.13% reserved disagreement).
-[Targeted timing recovery](basketball-advertising-recovery.md) connects all 34
-cameras and resolves all four bridges with three new passing edges. The full
-74-edge graph still fails two signed cycle closures at 0.30 frames, above the
-unchanged 0.25-frame gate. Advertising diagnostics supply no accepted timing
-event. The [clock diagnostic](basketball-clock-diagnostic.md) prefers zero
-whole-frame lag on all ten connections in the failed loops, but cannot identify
-a responsible camera or validate subframe timing. No timing selection/final validation,
+[Fine native fitting](basketball-cycle-refinement.md) yields a qualified 72-edge,
+bridge-free graph covering all 34 cameras at the unchanged 0.25-frame cycle gate.
+[Separately frozen timing selection](basketball-timing-selection.md) then passes
+only 36/72 connections on frames 150–199; the passing graph is disconnected.
+Uncertainty/ambiguity and temporal-half checks block acceptance. No final timing
+validation,
 1,700-image preparation, Gaussian initialization or Basketball training/evaluation
 was launched. Held-outs remain 0, 10, 20, 30, with 30 training cameras. The
 original per-method two-hour Basketball allocation is unchanged and uncharged.

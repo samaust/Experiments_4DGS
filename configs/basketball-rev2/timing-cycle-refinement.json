@@ -1,0 +1,93 @@
+{
+  "schema": "basketball-cycle-refinement/v1",
+  "fit_frames": [
+    50,
+    149
+  ],
+  "target_cameras": [
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    29,
+    30,
+    33
+  ],
+  "target_edges": [
+    [
+      22,
+      23
+    ],
+    [
+      22,
+      24
+    ],
+    [
+      22,
+      26
+    ],
+    [
+      23,
+      25
+    ],
+    [
+      24,
+      27
+    ],
+    [
+      25,
+      26
+    ],
+    [
+      26,
+      30
+    ],
+    [
+      27,
+      29
+    ],
+    [
+      29,
+      33
+    ],
+    [
+      30,
+      33
+    ]
+  ],
+  "base_frozen_protocol": ".local/calibration/basketball-rev2/timing-recovery/frozen/protocol.json",
+  "prior_tracks": ".local/calibration/basketball-rev2/advertising-recovery/native-fit/tracks",
+  "prior_graph": "docs/experiments/basketball-advertising-recovery/result.json",
+  "native_dimensions": [
+    1920,
+    1080
+  ],
+  "seed_frames": [
+    50,
+    60,
+    70,
+    80
+  ],
+  "sift_features": 16000,
+  "seed_spacing_native_pixels": 8,
+  "maximum_tracks_per_seed": 1000,
+  "lk_window_native_pixels": 31,
+  "maximum_forward_backward_native_pixels": 1.0,
+  "appearance_patch_native_pixels": 15,
+  "minimum_adjacent_patch_correlation": 0.7,
+  "transition_tile_pixels": 30,
+  "transition_channel_difference": 25,
+  "transition_changed_fraction": 0.5,
+  "transition_minimum_tiles": 6,
+  "transition_policy": "Diagnostic full-frame persistent tile changes only; moving people and clocks may trigger candidates. Never identify these as shared panel events or export timing without physical-panel correspondence and switch-delay validation. No manual annotations.",
+  "track_policy": "Native-resolution dynamic-mask SIFT and forward/backward LK with adjacent patch correlation; terminate on appearance discontinuity. Convert coordinates by (xy+0.5)/2-0.5 before using immutable calibration. Preserve original moving-track and full-search support gates.",
+  "fit_policy": "Replace all ten target edges with newly measured native temporal-bias estimates, never retain an older edge as fallback. Full-pair support >=12, unchanged +/-25 search and 0.25 gate; fractional refinement 0.01. Split full-search correspondences into two deterministic disjoint groups (seed0), each >=6 tracks, and require distinguishable nonboundary optima and inter-group lag agreement <=0.25. Groups are a consistency check, not substitutes for full-pair uncertainty or reserved validation.",
+  "maximum_cpu_seconds": 1800,
+  "maximum_gpu_seconds": 1800,
+  "failure_policy": "If any targeted fit/group check or the complete graph fails, retain the result and stop at the evidenced blocker before reserved timing. No threshold relaxation or cycle-dependent pruning.",
+  "fractional_step_frames": 0.01,
+  "subset_minimum_tracks": 6,
+  "subset_seed": 0
+}

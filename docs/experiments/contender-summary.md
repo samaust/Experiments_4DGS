@@ -160,17 +160,14 @@ pixel/distortion conventions and estimated scale validation: frozen scale
 1.31506947 estimated metres per calibration unit, with 3.13% reserved-frame
 disagreement. The full rig has 30 training cameras and held-outs 0, 10, 20, 30.
 
-[Targeted timing recovery](basketball-advertising-recovery.md) adds three passing
-edges: all 34 cameras are connected and all four former bridges have cycle support.
-The complete 74-edge graph remains blocked by two 0.30-frame cycle closures,
-above the unchanged 0.25-frame gate. Advertising diagnostics supply no accepted
-timing event. This recovery used 39.737675 CPU seconds and zero GPU seconds.
-The [clock diagnostic](basketball-clock-diagnostic.md) independently prefers zero
-whole-frame lag on all ten failed-loop connections. It cannot attribute the
-subframe failures to a camera or validate the 0.25-frame gate; its locator runs
-and guarded verification used 24.701799 CPU seconds and zero GPU seconds. Timing selection/final
-validation, preparation, initialization, training and model evaluation remain
-unexecuted.
+[Fine native fitting](basketball-cycle-refinement.md) yields a qualified 72-edge,
+bridge-free graph covering all 34 cameras at the unchanged 0.25-frame cycle gate.
+[Separately frozen timing selection](basketball-timing-selection.md) passes only
+36/72 connections on frames 150–199; its passing graph is disconnected. Temporal
+uncertainty/ambiguity and half-window checks are the current blocker. The fitting
+and selection workers used 252.475958 CPU wall seconds and zero GPU seconds.
+Final timing validation, shared inputs, initialization, training and model
+evaluation remain unexecuted.
 
 | Method | Basketball metrics | Remaining blocker |
 | --- | --- | --- |

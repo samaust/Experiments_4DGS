@@ -1,0 +1,127 @@
+{
+  "schema": "basketball-timing-selection/v1",
+  "fit_frames": [
+    50,
+    149
+  ],
+  "target_cameras": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33
+  ],
+  "target_edges": [
+    [
+      22,
+      23
+    ],
+    [
+      22,
+      24
+    ],
+    [
+      22,
+      26
+    ],
+    [
+      23,
+      25
+    ],
+    [
+      24,
+      27
+    ],
+    [
+      25,
+      26
+    ],
+    [
+      26,
+      30
+    ],
+    [
+      27,
+      29
+    ],
+    [
+      29,
+      33
+    ],
+    [
+      30,
+      33
+    ]
+  ],
+  "base_frozen_protocol": ".local/calibration/basketball-rev2/timing-recovery/frozen/protocol.json",
+  "prior_tracks": ".local/calibration/basketball-rev2/advertising-recovery/native-fit/tracks",
+  "prior_graph": ".local/calibration/basketball-rev2/cycle-refinement/run/result.json",
+  "native_dimensions": [
+    1920,
+    1080
+  ],
+  "seed_frames": [
+    150,
+    160
+  ],
+  "sift_features": 16000,
+  "seed_spacing_native_pixels": 8,
+  "maximum_tracks_per_seed": 1000,
+  "lk_window_native_pixels": 31,
+  "maximum_forward_backward_native_pixels": 1.0,
+  "appearance_patch_native_pixels": 15,
+  "minimum_adjacent_patch_correlation": 0.7,
+  "transition_tile_pixels": 30,
+  "transition_channel_difference": 25,
+  "transition_changed_fraction": 0.5,
+  "transition_minimum_tiles": 6,
+  "transition_policy": "Diagnostic full-frame persistent tile changes only; moving people and clocks may trigger candidates. Never identify these as shared panel events or export timing without physical-panel correspondence and switch-delay validation. No manual annotations.",
+  "track_policy": "Native-resolution dynamic-mask SIFT and forward/backward LK with adjacent patch correlation; terminate on appearance discontinuity. Convert coordinates by (xy+0.5)/2-0.5 before using immutable calibration. Preserve original moving-track and full-search support gates.",
+  "fit_policy": "Replace all ten target edges with newly measured native temporal-bias estimates, never retain an older edge as fallback. Full-pair support >=12, unchanged +/-25 search and 0.25 gate; fractional refinement 0.01. Split full-search correspondences into two deterministic disjoint groups (seed0), each >=6 tracks, and require distinguishable nonboundary optima and inter-group lag agreement <=0.25. Groups are a consistency check, not substitutes for full-pair uncertainty or reserved validation.",
+  "maximum_cpu_seconds": 1800,
+  "maximum_gpu_seconds": 1800,
+  "failure_policy": "Selection failure blocks final validation and downstream continuation. No final marker or frames200-249 unless selection passes; accepted static marker unchanged.",
+  "fractional_step_frames": 0.01,
+  "subset_minimum_tracks": 6,
+  "subset_seed": 0,
+  "role": "selection",
+  "role_frames": [
+    150,
+    199
+  ],
+  "minimum_track_length": 30,
+  "minimum_half_samples": 8,
+  "selection_search_radius": 1,
+  "selection_optimum_gap_exclusion_frames": 0.25,
+  "graph_admission": "Freeze all independently passing replacement/prior edges before reserved access; graph must contain all34 with no bridges and cycle closure <=0.25. This fitting-candidate policy supersedes the extra all-target rule, not any per-edge or graph threshold. Rejected target edges stay rejected; no fallback or cycle-based pruning.",
+  "selection_policy": "Fresh native moving tracks in150-199; use frozen fitting mask149. Preserve each edge absolute/temporal scoring family. Search +/-1 about its frozen lag at0.01 steps, full-pair bootstrap halfwidth<=0.25, new-vs-frozen lag<=0.25, and separate half-window lag agreement<=0.25. All frozen edges must validate; no graph reselection using reserved results."
+}

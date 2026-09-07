@@ -1,5 +1,10 @@
 # Basketball clock synchronization diagnostic
 
+Subsequent [fine native fitting](basketball-cycle-refinement.md) yields a
+qualified 72-edge graph at the unchanged 0.25-frame gate. [Reserved timing
+selection](basketball-timing-selection.md) then passes only 36/72 edges and is
+the current blocker. The earlier evidence below is preserved.
+
 The visible green game-clock display independently prefers **zero whole-frame
 lag on all ten connections** in the two failing timing loops. It does **not**
 identify a camera responsible for the subframe disagreement. The existing

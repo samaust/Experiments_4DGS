@@ -1,5 +1,10 @@
 # Basketball targeted motion and advertising recovery
 
+Subsequent [fine native fitting](basketball-cycle-refinement.md) yields a
+qualified 72-edge graph at the unchanged 0.25-frame gate. [Reserved timing
+selection](basketball-timing-selection.md) then passes only 36/72 edges and is
+the current blocker. The earlier evidence below is preserved.
+
 Subsequent [clock diagnostic](basketball-clock-diagnostic.md): all ten connections
 in the failed loops prefer zero whole-frame lag. This does not resolve their
 subframe disagreement or identify a responsible camera. The native-motion

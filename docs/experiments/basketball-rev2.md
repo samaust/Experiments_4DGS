@@ -1,6 +1,14 @@
 # Basketball Plan 005 revision 2 continuation
 
-Latest diagnostic: [clock-display changes](basketball-clock-diagnostic.md) prefer
+Latest continuation: [fine native fitting](basketball-cycle-refinement.md) yields
+72 independently passing edges covering all 34 cameras with maximum cycle closure
+0.25 frames. [Frozen timing selection](basketball-timing-selection.md) then passes
+only 36/72 connections on frames 150–199 and loses full-rig connectivity.
+Selection failure now blocks final timing validation and downstream execution.
+Calibration, estimated scale and all GPU/training ledgers remain unchanged.
+Earlier milestones follow.
+
+Previous diagnostic: [clock-display changes](basketball-clock-diagnostic.md) prefer
 zero whole-frame lag across all ten connections in the two failed loops. This
 independent check cannot isolate a camera or resolve the subframe cycle failures.
 Reserved timing and downstream execution remain blocked; GPU/training ledgers

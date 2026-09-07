@@ -278,3 +278,16 @@ addition. Color-only localization selected a court logo and was rejected; a
 frozen dark-background rule locates the green clock displays. Whole-frame
 agreement supplies no validated subframe timing or camera attribution, and no
 electronic display-face simultaneity is assumed.
+
+## Basketball fine native timing — 2026-09-07
+
+[Full-resolution cycle refinement](experiments/basketball-cycle-refinement.md)
+uses existing CPU OpenCV/NumPy dependencies and a 0.01-frame fractional search,
+with no new asset or model. Eight of ten target fits pass; disjoint groups expose
+unreliable connections 22–26 and 24–27. No shared-trajectory optimization or
+calibration adjustment was introduced.
+
+[Separately frozen reserved timing selection](experiments/basketball-timing-selection.md)
+uses fresh native tracks, fitting-mask support and the frozen absolute/temporal
+scoring families on frames 150–199. Only 36/72 edges validate. No final timing
+frames, new dependency or GPU workload were used.
