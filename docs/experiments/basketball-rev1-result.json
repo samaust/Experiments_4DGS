@@ -1,0 +1,1400 @@
+{
+  "schema": "basketball-revision-one-evidence/v1",
+  "status": "blocked",
+  "protocol": "basketball-no-camera5/v1",
+  "plan_sha256": "706b164e48c0076a3ef7b175caa3f89d71dabae172f91f3d81c77acbe8d9e17d",
+  "blockers": [
+    "camera 4: unusable intrinsic stability",
+    "camera 8: unusable intrinsic stability",
+    "camera 17: unusable intrinsic stability",
+    "All four Stage A configurations fail the unchanged independent-window pose gate"
+  ],
+  "observations": 330,
+  "intrinsic_stability": {
+    "0": {
+      "passed": true,
+      "relative_range": 0.09451467040468711
+    },
+    "1": {
+      "passed": true,
+      "relative_range": 0.14639487133806833
+    },
+    "2": {
+      "passed": true,
+      "relative_range": 0.16750621096153656
+    },
+    "3": {
+      "passed": true,
+      "relative_range": 0.18546613406723192
+    },
+    "4": {
+      "passed": false,
+      "relative_range": 0.2524136661400093
+    },
+    "6": {
+      "passed": true,
+      "relative_range": 0.12479570313268731
+    },
+    "7": {
+      "passed": true,
+      "relative_range": 0.16321783469149376
+    },
+    "8": {
+      "passed": false,
+      "relative_range": 0.26582754058286695
+    },
+    "9": {
+      "passed": true,
+      "relative_range": 0.12257378469783396
+    },
+    "10": {
+      "passed": true,
+      "relative_range": 0.15843603253324848
+    },
+    "11": {
+      "passed": true,
+      "relative_range": 0.2374690637339962
+    },
+    "12": {
+      "passed": true,
+      "relative_range": 0.13823860669675248
+    },
+    "13": {
+      "passed": true,
+      "relative_range": 0.10623221292628834
+    },
+    "14": {
+      "passed": true,
+      "relative_range": 0.19813013850135497
+    },
+    "15": {
+      "passed": true,
+      "relative_range": 0.21645747376165467
+    },
+    "16": {
+      "passed": true,
+      "relative_range": 0.2484108263223024
+    },
+    "17": {
+      "passed": false,
+      "relative_range": 0.411881774075742
+    },
+    "18": {
+      "passed": true,
+      "relative_range": 0.21122402076431954
+    },
+    "19": {
+      "passed": true,
+      "relative_range": 0.11627819882724094
+    },
+    "20": {
+      "passed": true,
+      "relative_range": 0.23024915667281637
+    },
+    "21": {
+      "passed": true,
+      "relative_range": 0.029616354867878666
+    },
+    "22": {
+      "passed": true,
+      "relative_range": 0.14290542715784968
+    },
+    "23": {
+      "passed": true,
+      "relative_range": 0.2261017152523908
+    },
+    "24": {
+      "passed": true,
+      "relative_range": 0.1532799005861757
+    },
+    "25": {
+      "passed": true,
+      "relative_range": 0.14405344651864552
+    },
+    "26": {
+      "passed": true,
+      "relative_range": 0.09230837663506174
+    },
+    "27": {
+      "passed": true,
+      "relative_range": 0.04856587201802326
+    },
+    "28": {
+      "passed": true,
+      "relative_range": 0.13622105181267863
+    },
+    "29": {
+      "passed": true,
+      "relative_range": 0.054825747902052545
+    },
+    "30": {
+      "passed": true,
+      "relative_range": 0.1359968718802561
+    },
+    "31": {
+      "passed": true,
+      "relative_range": 0.06873419173602463
+    },
+    "32": {
+      "passed": true,
+      "relative_range": 0.05776977937450245
+    },
+    "33": {
+      "passed": true,
+      "relative_range": 0.05341265811319817
+    }
+  },
+  "stage_A": [
+    {
+      "config": {
+        "id": "A-fixed-principal-sift",
+        "policy": "fixed-principal",
+        "recipe": "sift"
+      },
+      "runs": [
+        {
+          "window": "early",
+          "command": [
+            "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+            "scripts/basketball_recovery.py",
+            "--source",
+            ".local/calibration/basketball-v1/no-camera5-early",
+            "--priors",
+            ".local/calibration/basketball-v1/no-camera5-priors/result.json",
+            "--output",
+            ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-early",
+            "--frames",
+            "50",
+            "75",
+            "--policy",
+            "fixed-principal"
+          ],
+          "exit_code": 0,
+          "wall_seconds": 23.716297811974073,
+          "log_sha256": "b5923c8e4ca5d502ac6cc38202a1d67f22142558943cce9852c3ca74d700baea"
+        },
+        {
+          "window": "late",
+          "command": [
+            "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+            "scripts/basketball_recovery.py",
+            "--source",
+            ".local/calibration/basketball-v1/no-camera5-late",
+            "--priors",
+            ".local/calibration/basketball-v1/no-camera5-priors/result.json",
+            "--output",
+            ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-late",
+            "--frames",
+            "125",
+            "149",
+            "--policy",
+            "fixed-principal"
+          ],
+          "exit_code": 0,
+          "wall_seconds": 17.348150963982334,
+          "log_sha256": "56a38c11257af6598322d1260bb392097c3f7e9a423e3731a09f0f2e789acd89"
+        }
+      ],
+      "stability": {
+        "scale": 0.9889776551051547,
+        "rotation": [
+          [
+            -0.14146242242890786,
+            -0.915988259357465,
+            0.37543826624336746
+          ],
+          [
+            0.7955272149621273,
+            0.12052727804819399,
+            0.5938094185013338
+          ],
+          [
+            -0.5891730079485525,
+            0.38267307713709625,
+            0.7116435081831912
+          ]
+        ],
+        "translation": [
+          -0.07781172382842819,
+          0.06453951564065137,
+          -0.04297794846170146
+        ],
+        "rig_diameter": 10.920667957647787,
+        "rotation_degrees": [
+          2.340377075897323,
+          2.3505488133779817,
+          2.324763598844865,
+          2.3181730597409453,
+          2.2378416538608503,
+          2.1938768779815603,
+          2.1381472385128104,
+          2.087255218471582,
+          1.8921349283217541,
+          2.7715576075110637,
+          1.8896849767740271,
+          1.7733721940170994,
+          1.6711949129940726,
+          1.5838771226071469,
+          1.478693686322031,
+          1.4020657883715746,
+          1.3403610526493923,
+          1.0340713066104938,
+          1.1180233971335567,
+          1.0486665886753723,
+          0.9604078486843819,
+          0.9065755369790242,
+          0.854730496695931,
+          0.8172936626446494,
+          0.8028923140954822,
+          0.7979829327622429,
+          0.79904408340669,
+          0.8249105380289152,
+          0.8395584761023955
+        ],
+        "center_fraction_of_diameter": [
+          0.014474537096923284,
+          0.011746498672273273,
+          0.008685496443514892,
+          0.006590319628299164,
+          0.0034627464609374267,
+          0.0033151905599316618,
+          0.004344881070827977,
+          0.005932282874373146,
+          0.010868159239784686,
+          0.02206291944638459,
+          0.0031640900373920873,
+          0.0028630189527198355,
+          0.003356967605112484,
+          0.003447252748890572,
+          0.0035187064923911694,
+          0.004380899355436545,
+          0.004378398200977647,
+          0.0031774161188428958,
+          0.00942742311118696,
+          0.007387267987832503,
+          0.005316817119012691,
+          0.0037717958719280307,
+          0.002198341851724585,
+          0.002356689868801015,
+          0.003635931066223866,
+          0.005385206438200189,
+          0.007843389110185114,
+          0.009840107532122146,
+          0.011488885807155973
+        ],
+        "passed": false
+      },
+      "result_hashes": [
+        "1d5154cc29ab45ad298d2febbd9ad369f9f467c09fc484555e2b70ac22c8747d",
+        "91de22f27f5e2aca7dc60efa08820912fc342ac4ee04ad7cd284e2a73781d705"
+      ]
+    },
+    {
+      "config": {
+        "id": "A-fixed-principal-dense",
+        "policy": "fixed-principal",
+        "recipe": "dense"
+      },
+      "runs": [
+        {
+          "window": "early",
+          "command": [
+            "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+            "scripts/basketball_recovery.py",
+            "--source",
+            ".local/calibration/basketball-v1/no-camera5-dense-early",
+            "--priors",
+            ".local/calibration/basketball-v1/no-camera5-priors/result.json",
+            "--output",
+            ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-early",
+            "--frames",
+            "50",
+            "75",
+            "--policy",
+            "fixed-principal"
+          ],
+          "exit_code": 0,
+          "wall_seconds": 21.85367175299325,
+          "log_sha256": "0807b073a7959d04e5bd24aa84ff7bdfd4e6ab3302599b43135908231fe30d02"
+        },
+        {
+          "window": "late",
+          "command": [
+            "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+            "scripts/basketball_recovery.py",
+            "--source",
+            ".local/calibration/basketball-v1/no-camera5-dense-late",
+            "--priors",
+            ".local/calibration/basketball-v1/no-camera5-priors/result.json",
+            "--output",
+            ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-late",
+            "--frames",
+            "125",
+            "149",
+            "--policy",
+            "fixed-principal"
+          ],
+          "exit_code": 0,
+          "wall_seconds": 14.345816954999464,
+          "log_sha256": "0c29a1a958eba00a74559d20238f6bfa24d8946b439f103be3272d6e7c94d561"
+        }
+      ],
+      "stability": {
+        "scale": 0.987406693254791,
+        "rotation": [
+          [
+            0.2552054400494389,
+            -0.9580797742062743,
+            0.1302049523867137
+          ],
+          [
+            0.750375866246032,
+            0.28117908546475934,
+            0.5982260285650552
+          ],
+          [
+            -0.6097591678070032,
+            -0.05496788293226929,
+            0.7906783727415687
+          ]
+        ],
+        "translation": [
+          0.021649174557940812,
+          0.056637428125551295,
+          -0.02340909241611988
+        ],
+        "rig_diameter": 10.949709682203263,
+        "rotation_degrees": [
+          3.3290038124931063,
+          3.3454482597497406,
+          3.3280677237113467,
+          3.347351313063061,
+          3.3007434479976525,
+          3.287356861990218,
+          3.264189926233725,
+          3.247983245078486,
+          3.127808626838035,
+          2.4364441139045505,
+          2.3735121769196805,
+          2.3100822163447603,
+          2.2295101535010784,
+          2.1705124799709625,
+          2.100974954920925,
+          2.0703801102202837,
+          2.0360956439507434,
+          2.3365038211762297,
+          2.3707560686344937,
+          2.4280227022750824,
+          2.397452624394167,
+          2.3751069707917773,
+          2.348630199176723,
+          2.31739179827244,
+          2.3109497537431167,
+          2.295004586277474,
+          2.2848109846135274,
+          2.292260338481405,
+          2.283012871173739
+        ],
+        "center_fraction_of_diameter": [
+          0.010277085869225478,
+          0.007076219808144254,
+          0.004072977241371421,
+          0.002637904339969505,
+          0.004471193447885466,
+          0.006402047930840322,
+          0.008082248127066958,
+          0.009612768238962403,
+          0.013602657028216416,
+          0.0055494094150627124,
+          0.004340430868844858,
+          0.0036403306917332802,
+          0.002885408496779745,
+          0.003506398756413825,
+          0.0034940905620461375,
+          0.0034695304003591137,
+          0.003708583640880295,
+          0.004946172292135886,
+          0.005968731409227055,
+          0.00889462132753695,
+          0.007972397145403204,
+          0.005942296110431759,
+          0.0034484669387720396,
+          0.001591246025458321,
+          0.000693146835640286,
+          0.0026546158531798674,
+          0.005760223065812919,
+          0.007943483864784894,
+          0.01010260877377398
+        ],
+        "passed": false
+      },
+      "result_hashes": [
+        "18cf1420b0147c33df2d9e1fea80bd624e00ce60b7193dde67a97249a033a452",
+        "7b0a0532f0e5dc0d9704dc623e29cbf3a509dece79249c98bf49fab8371575cc"
+      ]
+    },
+    {
+      "config": {
+        "id": "A-fixed-intrinsics-sift",
+        "policy": "fixed-intrinsics",
+        "recipe": "sift"
+      },
+      "runs": [
+        {
+          "window": "early",
+          "command": [
+            "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+            "scripts/basketball_recovery.py",
+            "--source",
+            ".local/calibration/basketball-v1/no-camera5-early",
+            "--priors",
+            ".local/calibration/basketball-v1/no-camera5-priors/result.json",
+            "--output",
+            ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-early",
+            "--frames",
+            "50",
+            "75",
+            "--policy",
+            "fixed-intrinsics"
+          ],
+          "exit_code": 0,
+          "wall_seconds": 10.533046790020308,
+          "log_sha256": "c7d5f85f3c9a8ed1dcc2a1f0b964604da0d6cc76c19c1265f543d3d5de91d11d"
+        },
+        {
+          "window": "late",
+          "command": [
+            "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+            "scripts/basketball_recovery.py",
+            "--source",
+            ".local/calibration/basketball-v1/no-camera5-late",
+            "--priors",
+            ".local/calibration/basketball-v1/no-camera5-priors/result.json",
+            "--output",
+            ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-late",
+            "--frames",
+            "125",
+            "149",
+            "--policy",
+            "fixed-intrinsics"
+          ],
+          "exit_code": 0,
+          "wall_seconds": 11.039763045992004,
+          "log_sha256": "2c00e58e9e518ba17b51d05149276cad68d560e62d3155342d6128e6069ff77d"
+        }
+      ],
+      "stability": {
+        "scale": 0.9380952174262299,
+        "rotation": [
+          [
+            0.23819590476411043,
+            -0.9530616300085026,
+            0.18691238685315573
+          ],
+          [
+            0.7319037202389203,
+            0.3026536905219628,
+            0.6105060916271564
+          ],
+          [
+            -0.6384196545016737,
+            -0.008618179562570409,
+            0.7696402222642681
+          ]
+        ],
+        "translation": [
+          -0.0219296595488097,
+          0.043730316618293644,
+          0.054793687406166386
+        ],
+        "rig_diameter": 11.087487731448325,
+        "rotation_degrees": [
+          7.027997586693442,
+          6.818788245684492,
+          6.7257013776015935,
+          6.640675199230994,
+          6.813409020811419,
+          6.894468166976176,
+          7.032562783293171,
+          7.119434482494577,
+          91.06019355367152,
+          6.42693900025209,
+          6.905584089208331,
+          6.725889888998474,
+          5.819955431376059,
+          7.33926740729198,
+          5.818723069714219,
+          7.660579968566196,
+          6.262016343884827,
+          6.99075858240474,
+          7.1399678698383635,
+          7.187520380533128,
+          7.564342523803861,
+          7.967524846318767,
+          8.237414924867503,
+          9.309815060827576,
+          9.696234637342936,
+          10.500436604026621,
+          10.704340586572213,
+          10.74150131364195,
+          11.361241130269171
+        ],
+        "center_fraction_of_diameter": [
+          0.06681887355347796,
+          0.07915770376716293,
+          0.05179974848325009,
+          0.07432294527283803,
+          0.033540049051688364,
+          0.02060666750179569,
+          0.05046163085684672,
+          0.05609526198989114,
+          0.3079107170329934,
+          0.01123169259223814,
+          0.043459098081141026,
+          0.047675831309592236,
+          0.013757177602982501,
+          0.046761736482441765,
+          0.02320497350092732,
+          0.062174774380731,
+          0.006317564097866388,
+          0.010332913141017037,
+          0.01596536297415471,
+          0.0037892142622264176,
+          0.002716021364968561,
+          0.006412722663056391,
+          0.007326951787363551,
+          0.020690807335421408,
+          0.022989233679222867,
+          0.038424645317689785,
+          0.021366534369580904,
+          0.03133197340630974,
+          0.028427951272625217
+        ],
+        "passed": false
+      },
+      "result_hashes": [
+        "7b079c5d110bbf740155ebcc8c094a91363d766c8955b3ccddf7873dadef9572",
+        "b8f23f85f9c3bda7bf67c05c936d4bbe0f779256f2c5033b15c61e0ee5354f6b"
+      ]
+    },
+    {
+      "config": {
+        "id": "A-fixed-intrinsics-dense",
+        "policy": "fixed-intrinsics",
+        "recipe": "dense"
+      },
+      "runs": [
+        {
+          "window": "early",
+          "command": [
+            "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+            "scripts/basketball_recovery.py",
+            "--source",
+            ".local/calibration/basketball-v1/no-camera5-dense-early",
+            "--priors",
+            ".local/calibration/basketball-v1/no-camera5-priors/result.json",
+            "--output",
+            ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-early",
+            "--frames",
+            "50",
+            "75",
+            "--policy",
+            "fixed-intrinsics"
+          ],
+          "exit_code": 0,
+          "wall_seconds": 11.887328513985267,
+          "log_sha256": "933f4838736522f113269d06dbba328dbe886a0fb4d12d276da44106305b8a98"
+        },
+        {
+          "window": "late",
+          "command": [
+            "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+            "scripts/basketball_recovery.py",
+            "--source",
+            ".local/calibration/basketball-v1/no-camera5-dense-late",
+            "--priors",
+            ".local/calibration/basketball-v1/no-camera5-priors/result.json",
+            "--output",
+            ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-late",
+            "--frames",
+            "125",
+            "149",
+            "--policy",
+            "fixed-intrinsics"
+          ],
+          "exit_code": 0,
+          "wall_seconds": 11.637212036992423,
+          "log_sha256": "032c5cff39273f2cc8b76fafa78131301e4fa9cf17e8d06f31b730701e0c4737"
+        }
+      ],
+      "stability": {
+        "scale": 0.9315310158629029,
+        "rotation": [
+          [
+            0.19698757163216565,
+            -0.9486700571474602,
+            0.247428816620654
+          ],
+          [
+            0.6708616843427311,
+            0.3144677090412444,
+            0.6716060306840504
+          ],
+          [
+            -0.7149409046231002,
+            0.03369247159509169,
+            0.6983726227842252
+          ]
+        ],
+        "translation": [
+          -0.02315741766625008,
+          0.057298197031056694,
+          0.04865502316569739
+        ],
+        "rig_diameter": 11.050463127761258,
+        "rotation_degrees": [
+          7.215370537433245,
+          6.998571583567843,
+          6.921161104662229,
+          6.774050503072361,
+          6.998398471977979,
+          7.065455122390774,
+          7.247542203072685,
+          7.318001797358228,
+          90.85511890063829,
+          6.42167494119226,
+          7.0416535578324,
+          6.873555728392001,
+          6.304318456726834,
+          7.872741510163212,
+          5.9670697684595355,
+          7.9715035676599975,
+          6.612494550495435,
+          7.299224876585721,
+          7.27469817020679,
+          7.233326539997073,
+          8.088659721109776,
+          8.513923079034333,
+          8.814733679114612,
+          9.838005588753425,
+          10.18538594066474,
+          11.053669815149629,
+          11.061211720770462,
+          11.019889588322654,
+          11.569976648360155
+        ],
+        "center_fraction_of_diameter": [
+          0.06702554304746501,
+          0.07802772564701888,
+          0.051447451144830805,
+          0.0747433593566469,
+          0.03317091490092592,
+          0.02139211078164023,
+          0.05250705038145331,
+          0.05709419641633191,
+          0.29752649344388765,
+          0.011450259006502367,
+          0.042149860113128435,
+          0.04899686415777071,
+          0.011090412239487717,
+          0.03754230044470384,
+          0.02078042455844056,
+          0.061525468495690946,
+          0.005277435422499829,
+          0.011337664768706731,
+          0.02036635801335627,
+          0.008088967123601885,
+          0.004193821944349052,
+          0.006543452450891374,
+          0.008172346456070982,
+          0.021094906608270167,
+          0.023302725296049657,
+          0.03923975117682424,
+          0.021581231647068502,
+          0.030155593980493833,
+          0.0263997481775905
+        ],
+        "passed": false
+      },
+      "result_hashes": [
+        "c44b3b67315a1a785db2aff9962336a2a48842bcff1cfc75c7d2d4755aa70cdc",
+        "1758c639898ff3262290131f049a4072857b8b517f6e9cf5a88eda8b348479c3"
+      ]
+    }
+  ],
+  "focus_summary": [
+    {
+      "camera": 0,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 1,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 2,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 3,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 4,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 6,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 7,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 8,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 9,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 10,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 11,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 12,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 13,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 14,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 15,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 16,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 17,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 18,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 19,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 20,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 21,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 22,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 23,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 24,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 25,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 26,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 27,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 28,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 29,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 30,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 31,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 32,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    },
+    {
+      "camera": 33,
+      "status": "inconclusive",
+      "focus_flag": false,
+      "scale_flag": false,
+      "missing_frames": [
+        62,
+        87,
+        99,
+        112,
+        137
+      ]
+    }
+  ],
+  "unexecuted": [
+    "Stage B matching",
+    "new RoMa pass",
+    "Stage C initialization search",
+    "held-out localization",
+    "selection and final validation",
+    "synchronization",
+    "scene preparation",
+    "initialization",
+    "training",
+    "evaluation"
+  ],
+  "gpu_ledger": {
+    "schema": "basketball-calibration-budget/v1",
+    "limit_seconds": 28800.0,
+    "attempts": [
+      {
+        "command": [
+          "/home/auss/git_repos/samaust/Tridi/vipe/.venv/bin/python",
+          "scripts/basketball_vipe_pilot.py",
+          "--workspace",
+          ".local/calibration/basketball-v1",
+          "--vipe",
+          "/home/auss/git_repos/samaust/Tridi/vipe"
+        ],
+        "started_unix_seconds": 1788749481.529675,
+        "status": "failed",
+        "reserved_seconds": 1800.0,
+        "charged_seconds": 21.042357030004496,
+        "exit_code": 1,
+        "stop_requested": false,
+        "forced_kill": false,
+        "wall_seconds": 21.042273472994566
+      },
+      {
+        "audit_id": "sandbox-runtime-import-audit",
+        "status": "failed",
+        "charged_seconds": 60.0,
+        "reserved_seconds": 60.0,
+        "accounting": "Conservative 60-second upper bound for short runtime import/device probe; no model inference. Recorded after probe, before any further GPU work."
+      },
+      {
+        "audit_id": "host-runtime-import-audit",
+        "status": "completed",
+        "charged_seconds": 60.0,
+        "reserved_seconds": 60.0,
+        "accounting": "Conservative 60-second upper bound for short runtime import/device probe; no model inference. Recorded after probe, before any further GPU work."
+      },
+      {
+        "command": [
+          "/home/auss/git_repos/samaust/Tridi/vipe/.venv/bin/python",
+          "scripts/basketball_vipe_pilot.py",
+          "--workspace",
+          ".local/calibration/basketball-v1",
+          "--vipe",
+          "/home/auss/git_repos/samaust/Tridi/vipe",
+          "--output",
+          ".local/calibration/basketball-v1/pilot-25"
+        ],
+        "started_unix_seconds": 1788749947.5232778,
+        "status": "completed",
+        "reserved_seconds": 1800.0,
+        "charged_seconds": 51.50389103000634,
+        "exit_code": 0,
+        "stop_requested": false,
+        "forced_kill": false,
+        "wall_seconds": 51.50381125201238
+      },
+      {
+        "command": [
+          "/home/auss/git_repos/samaust/Tridi/vipe/.venv/bin/python",
+          "scripts/basketball_vipe_pilot.py",
+          "--workspace",
+          ".local/calibration/basketball-v1",
+          "--vipe",
+          "/home/auss/git_repos/samaust/Tridi/vipe",
+          "--output",
+          ".local/calibration/basketball-v1/all-priors",
+          "--all-priors",
+          ".local/calibration/basketball-v1/pilot-25/result.json"
+        ],
+        "started_unix_seconds": 1788750141.3766806,
+        "status": "failed",
+        "reserved_seconds": 3600.0,
+        "charged_seconds": 130.5062382609758,
+        "exit_code": 1,
+        "stop_requested": false,
+        "forced_kill": false,
+        "wall_seconds": 130.50614838302135
+      },
+      {
+        "command": [
+          "/home/auss/git_repos/samaust/Tridi/vipe/.venv/bin/python",
+          "scripts/basketball_vipe_pilot.py",
+          "--workspace",
+          ".local/calibration/basketball-v1",
+          "--vipe",
+          "/home/auss/git_repos/samaust/Tridi/vipe",
+          "--output",
+          ".local/calibration/basketball-v1/no-camera5-priors",
+          "--all-priors",
+          ".local/calibration/basketball-v1/pilot-25/result.json",
+          "--intrinsics-from",
+          ".local/calibration/basketball-v1/all-priors/result.json"
+        ],
+        "started_unix_seconds": 1788750674.0602643,
+        "status": "completed",
+        "reserved_seconds": 3600.0,
+        "charged_seconds": 375.9741895199986,
+        "exit_code": 0,
+        "stop_requested": false,
+        "forced_kill": false,
+        "wall_seconds": 375.9741128300084
+      },
+      {
+        "command": [
+          ".local/envs/roma/bin/python",
+          "scripts/basketball_dense_matches.py",
+          "--priors",
+          ".local/calibration/basketball-v1/no-camera5-priors",
+          "--sift-result",
+          ".local/calibration/basketball-v1/no-camera5-sift/result.json",
+          "--roma",
+          ".local/RoMa-edgs",
+          "--weights",
+          ".local/weights/roma-edgs",
+          "--output",
+          ".local/calibration/basketball-v1/no-camera5-dense"
+        ],
+        "started_unix_seconds": 1788751591.0259323,
+        "status": "completed",
+        "reserved_seconds": 1800.0,
+        "charged_seconds": 19.286393249989487,
+        "exit_code": 0,
+        "stop_requested": false,
+        "forced_kill": false,
+        "wall_seconds": 19.286316577985417
+      },
+      {
+        "command": [
+          "/home/auss/git_repos/samaust/Tridi/vipe/.venv/bin/python",
+          "scripts/basketball_vipe_pilot.py",
+          "--workspace",
+          ".local/calibration/basketball-v1",
+          "--vipe",
+          "/home/auss/git_repos/samaust/Tridi/vipe",
+          "--output",
+          ".local/calibration/basketball-v1/rev1/expanded-priors",
+          "--all-priors",
+          ".local/calibration/basketball-v1/pilot-25/result.json",
+          "--expand-from",
+          ".local/calibration/basketball-v1/no-camera5-priors"
+        ],
+        "started_unix_seconds": 1788755405.4786398,
+        "status": "failed",
+        "reserved_seconds": 3600.0,
+        "charged_seconds": 135.3704097860027,
+        "exit_code": 1,
+        "stop_requested": false,
+        "forced_kill": false,
+        "wall_seconds": 135.37030923197744
+      }
+    ]
+  },
+  "gpu_seconds": 853.6834788769775,
+  "artifact_sha256": {
+    ".local/calibration/basketball-v1/rev1/search.json": "76c1ec432aa00d69cecaf421b8cc18b0ded70f71e7ca41dcdde5bfadf6f07fab",
+    ".local/calibration/basketball-v1/rev1/stage-A.json": "67e8a27a6c2b8acf373c5749ab2c0bec52334019ac6235492417621b96ac3595",
+    ".local/calibration/basketball-v1/rev1/focus-screen.json": "dc097e2625dac62b40d0e313be681afe0039775e9a43fb91dc1414acb60d614c",
+    ".local/calibration/basketball-v1/rev1/expanded-priors.log": "ad8e627223533564596bf8dd4b0238b3e2481a7584e761452b6a5f6ee41db033",
+    ".local/calibration/basketball-v1/rev1/expanded-priors/result.json": "5ddabb9f2a4eacc43e72285fdb408b49d02ad56ec76865074f89d9429524872b",
+    ".local/calibration/basketball-v1/rev1/expanded-priors/artifacts.json": "051597e9ceaae1c10610c07411f605937dd74a7e5c9819b2c591f94d9f24105b",
+    ".local/calibration/basketball-v1/gpu-ledger.json": "c7649dc5b94c45d2af2af597f2a16533a627a06751b85c168e926292f37c0b63",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-early/config.json": "cce987d692b46bc424fdc2df05eb85a61f4c1fd3ce1d0cfe918d06730e4c2fb5",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-early/result.json": "1d5154cc29ab45ad298d2febbd9ad369f9f467c09fc484555e2b70ac22c8747d",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-early.log": "b5923c8e4ca5d502ac6cc38202a1d67f22142558943cce9852c3ca74d700baea",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-early/sparse/0/cameras.bin": "1aa9dd78c9d5e49719ea0a4c503d2796bc4d01d47aaf6bbfae25e2bbffa4dc67",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-early/sparse/0/frames.bin": "e716d2de62abe6642f81ed2fe77e6c724495544f4d2b0cfe7cd97d09e4f18b09",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-early/sparse/0/images.bin": "b6a8f0c14018ba3f58ef6fac3099d3f161ee7193c8e20f031d953cb2f0732e24",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-early/sparse/0/points3D.bin": "57135d023dcb29f663b44d6f0ce6a273a482dda73ca7151ca86dfbf0974fe246",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-early/sparse/0/rigs.bin": "ef2fd07ef3463bfa3c2d3cc26cb2115265fd03eb21a5049d9616c9fc9c8cb0c6",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-late/config.json": "d0298bd284fc84fff87699132dac31df345c5fd6972a018806b5194eca30bb4d",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-late/result.json": "91de22f27f5e2aca7dc60efa08820912fc342ac4ee04ad7cd284e2a73781d705",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-late.log": "56a38c11257af6598322d1260bb392097c3f7e9a423e3731a09f0f2e789acd89",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-late/sparse/0/cameras.bin": "780dea7a202798d6c36616259b5af714f4edcc4a5631f41b79231b4a7c6259ec",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-late/sparse/0/frames.bin": "415ce024d80f9a43c5f399ea8117e84e3bbc36e352c17c31470cf07cb8773e46",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-late/sparse/0/images.bin": "a6560c5aaf4570a3504eab710abf839a1e55317487d6edc59f3ff6e500ba2c43",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-late/sparse/0/points3D.bin": "a7222034c1d6f49b19585e8675e48aefdb0952b983112b48afc7a3f489422f34",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-sift-late/sparse/0/rigs.bin": "ef2fd07ef3463bfa3c2d3cc26cb2115265fd03eb21a5049d9616c9fc9c8cb0c6",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-early/config.json": "83786b16b44dd24633237e97592e52e453f7f58c80260435d60c0ce0d0034de8",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-early/result.json": "18cf1420b0147c33df2d9e1fea80bd624e00ce60b7193dde67a97249a033a452",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-early.log": "0807b073a7959d04e5bd24aa84ff7bdfd4e6ab3302599b43135908231fe30d02",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-early/sparse/0/cameras.bin": "05b71bb65aa9e2980123796d9da3545188b4d8c96a7143aa57d1359ae9d80865",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-early/sparse/0/frames.bin": "4ba669191f619388369496e64098436e4ef99a4436ad6023ced51c2adf0fe2bc",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-early/sparse/0/images.bin": "7dcde87b52b6602a9c847e53b8c0dd6212ff8738101a6dc66ca7035b47e7c1e1",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-early/sparse/0/points3D.bin": "5effd0453b8208898e862d6d01a9ee397b9b89520110a5b18d2234cb95ad574e",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-early/sparse/0/rigs.bin": "ef2fd07ef3463bfa3c2d3cc26cb2115265fd03eb21a5049d9616c9fc9c8cb0c6",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-late/config.json": "d737b3d41db64372ce1036f402ebc6a2f4b47017c65db855dd16db6c27538e4b",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-late/result.json": "7b0a0532f0e5dc0d9704dc623e29cbf3a509dece79249c98bf49fab8371575cc",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-late.log": "0c29a1a958eba00a74559d20238f6bfa24d8946b439f103be3272d6e7c94d561",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-late/sparse/0/cameras.bin": "cabe7627076f0ae10f917aabc639ec7b583ca688864595a6f5601c2bfda81c19",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-late/sparse/0/frames.bin": "8b1a6a5664fc77cae33e13cb7c72ad4ab71cf468bc4d261dfee64572a73f1e6a",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-late/sparse/0/images.bin": "ea4c6299a3f3040746b02d4317d15669fe685afebb9aaae0cc75a9385af10b45",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-late/sparse/0/points3D.bin": "4a43a31a5f3d2085a4cdffa8eefe381350641442f61494a43db0ea5522da175e",
+    ".local/calibration/basketball-v1/rev1/A-fixed-principal-dense-late/sparse/0/rigs.bin": "ef2fd07ef3463bfa3c2d3cc26cb2115265fd03eb21a5049d9616c9fc9c8cb0c6",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-early/config.json": "899c8adcc17f525f8b6342b20e7d19ecab60cc4713e476ed7ec039bb179e0161",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-early/result.json": "7b079c5d110bbf740155ebcc8c094a91363d766c8955b3ccddf7873dadef9572",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-early.log": "c7d5f85f3c9a8ed1dcc2a1f0b964604da0d6cc76c19c1265f543d3d5de91d11d",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-early/sparse/0/cameras.bin": "6bb9a052d832120c42884392d9c5ac58f9321a5b4baf40e0082959f70885bed2",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-early/sparse/0/frames.bin": "f6a2a426e831052a7c928607d25c069bed36f2d2d56f35e3d52d53fad099e080",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-early/sparse/0/images.bin": "0282e7d5cec4611367a285a5809c07cd9b750a85e7dbbbfa49c23939cad7525e",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-early/sparse/0/points3D.bin": "85ccee7459fc7d1f6836c2567f483656b6c394f604c910affa1458824c93117a",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-early/sparse/0/rigs.bin": "ef2fd07ef3463bfa3c2d3cc26cb2115265fd03eb21a5049d9616c9fc9c8cb0c6",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-late/config.json": "8af385ab35f60b5e8acbed25883e30a2626ba2f417fa02d70091759711fde8b7",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-late/result.json": "b8f23f85f9c3bda7bf67c05c936d4bbe0f779256f2c5033b15c61e0ee5354f6b",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-late.log": "2c00e58e9e518ba17b51d05149276cad68d560e62d3155342d6128e6069ff77d",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-late/sparse/0/cameras.bin": "0ebd50e89607d7e7c8ec1cc6bf06813fb21628e06ecf320ac32fdf42beb04790",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-late/sparse/0/frames.bin": "7cc5209b1b26ae75a7774021fd1cb6b98ab4a2e276051a35b68a7b4b58305c64",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-late/sparse/0/images.bin": "65cc31fabf0d39c43dd032577f4b13cc1e07fa6b5fb915739524cefe1de9ec6c",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-late/sparse/0/points3D.bin": "6929e05c7c62202a7d88ddd7a57dedfdf90d33db18e35cda5445162fea9ee8eb",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-sift-late/sparse/0/rigs.bin": "ef2fd07ef3463bfa3c2d3cc26cb2115265fd03eb21a5049d9616c9fc9c8cb0c6",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-early/config.json": "839902645d15fcce78132bc08d85ffc83cf7295747be4b2efb6ca02cd0887e3c",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-early/result.json": "c44b3b67315a1a785db2aff9962336a2a48842bcff1cfc75c7d2d4755aa70cdc",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-early.log": "933f4838736522f113269d06dbba328dbe886a0fb4d12d276da44106305b8a98",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-early/sparse/0/cameras.bin": "6bb9a052d832120c42884392d9c5ac58f9321a5b4baf40e0082959f70885bed2",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-early/sparse/0/frames.bin": "716995495d699e016c734a509b2d39f0e6c02a3d377246475a670d3965e7b0f9",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-early/sparse/0/images.bin": "0845dc8ef4fc5d4df31e7715db94869dcafdf023087397690bb77d764556993e",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-early/sparse/0/points3D.bin": "d14a7e001c44e09445301832fe86001dfbcb54223b3059f7afc1e2fae4bd8ca5",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-early/sparse/0/rigs.bin": "ef2fd07ef3463bfa3c2d3cc26cb2115265fd03eb21a5049d9616c9fc9c8cb0c6",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-late/config.json": "b920af0ef6f40c0f18cbc19db9227924bda0072139a22bf9ccc0bf9e7dfcc683",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-late/result.json": "1758c639898ff3262290131f049a4072857b8b517f6e9cf5a88eda8b348479c3",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-late.log": "032c5cff39273f2cc8b76fafa78131301e4fa9cf17e8d06f31b730701e0c4737",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-late/sparse/0/cameras.bin": "0ebd50e89607d7e7c8ec1cc6bf06813fb21628e06ecf320ac32fdf42beb04790",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-late/sparse/0/frames.bin": "a24d901b0fa84eda237d234bbc59e1c7b1c3dbe07968446c0f67d39481139c5d",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-late/sparse/0/images.bin": "b6cc9b1d9832e592b180c30dd939d7c2d76a8d9963ad311e8857730aabd57483",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-late/sparse/0/points3D.bin": "4fe5936fd27f39feeacce06e18962c452450d1f9a965b699888f935e784dfb22",
+    ".local/calibration/basketball-v1/rev1/A-fixed-intrinsics-dense-late/sparse/0/rigs.bin": "ef2fd07ef3463bfa3c2d3cc26cb2115265fd03eb21a5049d9616c9fc9c8cb0c6"
+  },
+  "source_sha256": {
+    "scripts/basketball_recovery.py": "2407d60f07936c3b812b8d111149ec89a23f89f4a8b9985f08ebab056921ccef",
+    "scripts/basketball_vipe_pilot.py": "9a356b6e20301cbafb147d8c541cff7a11e05c3d57a435ff2ae090404d3be3c8",
+    "scripts/basketball_focus.py": "81a69518f7de764131715b0c4d4e5dd6d3c893cc355c153bf98a1bae82207a0b"
+  },
+  "training_ledger_sha256": "d0b4daa1aee79361580af3a1bf8fbc597148db7775b26f169a0a1b2e6ac90957"
+}

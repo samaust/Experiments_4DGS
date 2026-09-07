@@ -216,3 +216,11 @@ bounded pass with the already audited RoMa pin/weights. No new dependencies or
 weights were downloaded and no third-party checkout was modified. The final
 converged training-rig candidates still failed independent-window pose stability;
 no accepted estimated calibration, metric scale or model result was produced.
+
+
+[Revision-one recovery](experiments/basketball-rev1.md) reuses the same pinned
+models and environments. Fixed principal points improve, but do not pass, rig
+stability; expanded GeoCalib observations fail the unchanged 25% gate for cameras
+4, 8 and 17. Partial automatic focus screening detects no sustained change on
+existing masked samples but is inconclusive for the planned ten-frame check.
+No new model weights, additional RoMa inference or downstream training were used.

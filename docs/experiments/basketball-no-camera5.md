@@ -1,7 +1,8 @@
 # Basketball calibration excluding camera 5
 
-Status: **blocked by independent-window rig instability after the bounded
-SIFT/RADIAL/RoMa recovery steps**. Camera 5 is excluded and retained priors pass.
+Historical recovery record. **Current status:** [revision-one recovery](basketball-rev1.md)
+improves pose disagreement but fails the expanded 25% prior gate for cameras
+4, 8 and 17. The five-frame prior pass and original recovery below are preserved.
 
 The user explicitly removed physical camera 5 after its intrinsic-prior spread
 exceeded the authorized 25% limit. This creates the versioned

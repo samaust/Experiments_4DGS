@@ -65,13 +65,11 @@ Cumulative calibration charge is 323.0525 seconds; training charge remains zero.
 
 ### Current 33-camera variant after camera 5 removal
 
-The user removed physical camera 5. The active split is 29 training cameras and
-four held-out cameras, with 1,650 expected images (200 held-out). The
-[retained-camera continuation](basketball-no-camera5.md) passed all retained
-priors and registered all training cameras, but failed independent-window pose
-stability after PINHOLE, the single radial alternative and bounded RoMa matching.
-Converged final candidates disagree by up to **7.3065°** and **4.1972% of rig
-diameter**, above the unchanged 0.5°/1% limits. Shared calibration and
-synchronization remain unaccepted; Basketball training/evaluation did not start.
-Calibration charge is 718.3131 seconds cumulatively; training allocations and
-SelfCap results are unchanged. This supersedes camera 5 as the current blocker.
+The active split excludes camera 5: 29 training cameras and four held-out,
+with 1,650 expected images (200 held-out). [Revision-one recovery](basketball-rev1.md)
+completed eight constrained-intrinsic reconstructions. Fixed principal points
+improved disagreement, but none passed the unchanged 0.5 degree / 1% limits.
+Expanded ten-frame priors fail the unchanged 25% variation gate for cameras 4,
+8 and 17 (25.24%, 26.58%, 41.19%). Later recovery and downstream stages are
+blocked; Basketball training/evaluation did not start. Cumulative calibration
+charge is 853.6835 seconds; training allocations and SelfCap results are unchanged.
