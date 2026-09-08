@@ -1,0 +1,11 @@
+{
+  "schema": "sync-pivot-global-training-admission/v1",
+  "prior_central_ledger_sha256": "d0b4daa1aee79361580af3a1bf8fbc597148db7775b26f169a0a1b2e6ac90957",
+  "prior_attempts": 22,
+  "prior_charged_seconds": 22523.41725398203,
+  "new_training_ceiling_seconds": 25200,
+  "maximum_combined_training_seconds": 47723.41725398203,
+  "global_ceiling_seconds": 86400,
+  "interpretation": "Count Sync-NeRF fitting as training too. Its charge remains in the campaign GPU ledger; reconstruction charges both ledgers. Combined global usage is central reconstruction ledger plus campaign Sync-NeRF charges, without double counting reconstruction.",
+  "proof": "Even consuming every allowed Sync-NeRF, STG Full and FreeTimeGS allocation, including unused benchmark and corrected-condition slots, fits the remaining global training ceiling. Per-allocation watchdogs and immutable historical consumption enforce this bound; no allocation is transferred."
+}

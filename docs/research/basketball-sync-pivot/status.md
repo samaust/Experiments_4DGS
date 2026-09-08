@@ -9,15 +9,26 @@ retains its hash. The historical HTTP refusal below is resolved through the
 user-provided file. Continue remaining authorized work; no additional download
 of this paper is needed.
 
-## First scientific pilot completed
+## First two scientific pilots completed
 
-Sync-NeRF seed 0 completed at 43,049 updates in approximately 2312 seconds, with
-finite offsets for the prescribed eight cameras and saved native model state.
-The schedule remains budget-limited versus 90,001 native updates. Seed1 is active;
-seed 2 and all reconstruction controls/evaluations remain pending.
+Sync-NeRF seeds 0 and 1 completed at 43,049 and 42,944 updates, respectively,
+using approximately 2,312 seconds each. Both exported finite offsets for the
+prescribed eight cameras. The native 90,001-step schedule remains unreproduced.
+Seed 2 is active; all reconstruction controls and evaluations remain pending.
 [Partial seed results](syncnerf-results.json) and the durable GPU ledger retain
-completed versus reserved/unrun attempts. No accuracy or full-rig claim follows
-from the small first-seed offsets.
+completed versus reserved attempts. Seed 0's fresh CPU reload passed; the
+three-seed matched-checkpoint comparison remains pending.
+
+The [evaluation protocol v3](evaluation-protocol-v3.json) preserves its earlier
+versions and binds the final pre-prediction reporting implementation. The
+[metric interface check](metric-interface-check.json) verifies cached offline
+LPIPS and minimum crop size on synthetic CPU tensors. The [global training
+admission](global-training-admission.json) counts Sync-NeRF fitting too and shows
+that even every allowed training allocation fits the remaining 24-hour ceiling.
+[Benchmark/code status](benchmark-code-matrix.md) preserves unavailable releases
+separately from scientific failure. The [graph figure](graph-support.svg) shows
+reference-connected coverage and the selected subset. Downloaded PDF copies are
+retained with [hashes](retained-paper-files.json) in `.local/sync-pivot/papers/`.
 
 ## Training protocol checkpoint
 

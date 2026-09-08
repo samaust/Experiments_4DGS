@@ -84,9 +84,9 @@
     {
       "allocation": "sync-nerf",
       "role": "syncnerf-basketball-seed1",
-      "status": "reserved",
+      "status": "completed",
       "reserved_seconds": 2400.0,
-      "charged_seconds": 2400.0,
+      "charged_seconds": 2311.9261198610184,
       "started_unix_seconds": 1788903920.5833082,
       "runner_pid": 985032,
       "container": "plan024-syncnerf-basketball-seed1",
@@ -122,7 +122,51 @@
         "--seed",
         "1"
       ],
-      "output": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/syncnerf-seed1"
+      "output": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/syncnerf-seed1",
+      "wall_seconds": 2311.9261198610184
+    },
+    {
+      "allocation": "sync-nerf",
+      "role": "syncnerf-basketball-seed2",
+      "status": "reserved",
+      "reserved_seconds": 2400.0,
+      "charged_seconds": 2400.0,
+      "started_unix_seconds": 1788906255.7830834,
+      "runner_pid": 988603,
+      "container": "plan024-syncnerf-basketball-seed2",
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "--name",
+        "plan024-syncnerf-basketball-seed2",
+        "--network",
+        "none",
+        "--gpus",
+        "all",
+        "--user",
+        "1000:1000",
+        "-e",
+        "TRAINING_STOP_MONOTONIC",
+        "-e",
+        "MPLCONFIGDIR=/tmp/matplotlib",
+        "--entrypoint",
+        "python",
+        "-v",
+        "/home/auss/git_repos/samaust/Experiments_4DGS:/home/auss/git_repos/samaust/Experiments_4DGS",
+        "-w",
+        "/home/auss/git_repos/samaust/Experiments_4DGS",
+        "plan024-syncnerf",
+        "scripts/syncnerf_basketball.py",
+        "train",
+        "--inputs",
+        ".local/sync-pivot/basketball-syncnerf-inputs/inputs.json",
+        "--output",
+        ".local/sync-pivot/runs/syncnerf-seed2/worker",
+        "--seed",
+        "2"
+      ],
+      "output": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/syncnerf-seed2"
     }
   ]
 }

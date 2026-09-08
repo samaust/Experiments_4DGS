@@ -104,11 +104,12 @@ def render(a):
             if time.monotonic()>deadline-40:break
             prediction=pixels(key)
             if prediction.shape!=(3,540,960) or not torch.isfinite(prediction).all():raise ValueError('invalid native image')
-            array=prediction.clamp(0,1).permute(1,2,0).cpu().numpy()
+            raw=prediction.permute(1,2,0).cpu().numpy()
+            array=np.clip(raw,0,1)
             path=a.output/f'{key[0]}-{key[1]:06d}.png'
             quantized=np.round(array*255).astype(np.uint8);Image.fromarray(quantized).save(path)
             row=dict(camera=key[0],frame_id=key[1],normalized_time=scene.frames[key]['normalized_time'],
-                     path=path.name,sha256=digest(path),float_sha256=hashlib.sha256(array.tobytes()).hexdigest())
+                     path=path.name,sha256=digest(path),float_sha256=hashlib.sha256(raw.tobytes()).hexdigest())
             if not a.repeat:
                 row['split']='heldout-camera' if key[0] in ['0','10','20','30'] else 'temporal-interpolation'
                 row['bbox']=regions[key]['bbox']
