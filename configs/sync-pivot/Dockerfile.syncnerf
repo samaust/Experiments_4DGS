@@ -1,0 +1,7 @@
+FROM plan024-sync-runtime
+# Context is the pinned .local/sync-pivot/tiny-cuda-nn checkout only.
+COPY . /opt/tiny-cuda-nn
+ENV TCNN_CUDA_ARCHITECTURES=89 MAX_JOBS=4
+RUN python -m pip install --no-build-isolation /opt/tiny-cuda-nn/bindings/torch
+RUN python -m pip install scikit-image==0.24.0
+RUN python -m pip freeze > /opt/sync-pivot-requirements.lock

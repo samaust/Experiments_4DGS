@@ -1,0 +1,41 @@
+{
+  "schema": "sync-pivot-gpu-budget/v1",
+  "limit_seconds": 43200,
+  "allocation_limits_seconds": {
+    "visualsync": 14400,
+    "sync-nerf": 10800,
+    "stg-full": 7200,
+    "freetimegs": 7200,
+    "evaluation": 3600
+  },
+  "attempts": [
+    {
+      "allocation": "visualsync",
+      "role": "historical-preflight-checks",
+      "status": "conservatively-accounted",
+      "charged_seconds": 121.13570702903057,
+      "evidence": "setup-accounting.json"
+    },
+    {
+      "allocation": "visualsync",
+      "role": "syncnerf-gpu-import-check",
+      "status": "failed-import",
+      "charged_seconds": 60,
+      "reserved_seconds": 60,
+      "started_unix_seconds": 1788899089.7181687,
+      "container": "plan024-syncnerf-check",
+      "error": "ModuleNotFoundError: No module named 'skimage'",
+      "accounting": "Retain entire 60-second reservation; exact completion time not retained."
+    },
+    {
+      "allocation": "visualsync",
+      "role": "syncnerf-gpu-import-check-setup-2",
+      "status": "entrypoint-passed",
+      "charged_seconds": 60,
+      "reserved_seconds": 60,
+      "started_unix_seconds": 1788899392.9828644,
+      "container": "plan024-syncnerf-check-2",
+      "accounting": "Full 60-second reservation retained conservatively; no scientific training occurred."
+    }
+  ]
+}

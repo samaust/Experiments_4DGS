@@ -18,7 +18,14 @@
     "visualsync": {
       "limit_seconds": 7200,
       "attempt_limit": 2,
-      "attempts": []
+      "attempts": [
+        {
+          "number": 1,
+          "operation": "original global-estimator CPU import/control",
+          "status": "component-passed-full-pipeline-incomplete",
+          "charged_seconds_upper_bound": 60
+        }
+      ]
     },
     "sync-nerf": {
       "limit_seconds": 7200,
@@ -27,16 +34,37 @@
         {
           "number": 1,
           "started_unix_seconds": 1788898897.100308,
-          "status": "running",
+          "status": "build-passed-entrypoint-failed",
           "operation": "compile tiny-cuda-nn architecture 89 in isolated container",
-          "timeout_seconds": 1800
+          "timeout_seconds": 1800,
+          "elapsed_seconds_upper_bound": 192.6177134513855,
+          "image_id": "sha256:7040fcd1ad21de154e2d491d7a7dbcf12a8a81570632f6069e7168f3c7c093a6",
+          "error": "ModuleNotFoundError: No module named 'skimage'"
+        },
+        {
+          "number": 2,
+          "started_unix_seconds": 1788899360.817516,
+          "status": "entrypoint-passed",
+          "operation": "add author-required scikit-image and repeat entrypoint check",
+          "timeout_seconds": 600,
+          "accounting": "Start conservatively backdated 20 seconds after missing host python alias prevented initial ledger write; build is CPU-only.",
+          "elapsed_seconds_upper_bound": 77.1761372089386,
+          "image_id": "sha256:3d5ec3a7baad17cbbc2b8022f56a5752ab8624439bcb7691f0fd07db2c8027cf",
+          "validation": "Offline GPU-enabled plenoxels/main.py --help exited 0; training and numerical CUDA execution remain unverified."
         }
       ]
     },
     "mvus": {
       "limit_seconds": 7200,
       "attempt_limit": 2,
-      "attempts": []
+      "attempts": [
+        {
+          "number": 1,
+          "operation": "offline core import",
+          "status": "passed",
+          "charged_seconds_upper_bound": 60
+        }
+      ]
     }
   },
   "gpu_checks": {

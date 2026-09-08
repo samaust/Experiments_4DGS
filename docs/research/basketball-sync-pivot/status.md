@@ -6,15 +6,17 @@ This campaign does not activate or resume the continuous improvement loop.
 ## Current handoff
 
 The isolated runtime is built; the timing interface and independent analytic
-controls pass 13 CPU tests. See [implementation validation](implementation-validation.md)
-and [setup accounting](setup-accounting.json). Sync-NeRF compatibility attempt 1
-is compiling tiny-cuda-nn via a bounded Docker build (exec session 40723, timeout
-1800 seconds). No research GPU job is running. The official project-page UDBD
-index resolves to Box image folders and camera metadata, but timing-label
-provenance is still being audited. All eight VisualSync original scripts are now
-downloaded and hash-pinned. `img_match_v4.py` imports a missing `match_utils.py`
-helper; `process_image` is absent from the provided `match_utils_v2.py`. This is
-an additional completeness issue to assess before full-pipeline execution.
+controls pass 13 CPU tests. Sync-NeRF setup attempt 1 compiled tiny-cuda-nn but
+its entrypoint failed because scikit-image was absent. Attempt 2 adds the author
+required dependency and passes the offline GPU-enabled CLI import check.
+Both compatibility attempts are consumed; training remains unverified.
+See [setup accounting](setup-accounting.json), [GPU accounting](gpu-budget.json),
+and [dependency lock](syncnerf-requirements.lock). No GPU job is running.
+UDBD Box metadata and image folders resolve, but timing-label provenance remains
+under audit. SyncTrack4D's dataset reference is Dynamic Gaussian Marbles;
+exact release identifiers remain unresolved. VisualSync's original archive has
+unfinished pair-script assignments and missing matching helpers; full pipeline
+availability remains under audit. No final-window images have been opened.
 
 The user resolved host group membership, supplied successful non-sudo Docker/GPU
 output, and explicitly resumed Plan 024. Docker now works through approved
