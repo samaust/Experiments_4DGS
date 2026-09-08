@@ -29,6 +29,30 @@ Sync-NeRF setup milestone is committed as `4ac6f1c`. Training, benchmark runs,
 Basketball integration and final reporting remain incomplete. See the
 [audit checkpoint](audit-checkpoint.md) for findings retained before this stop.
 
+## Basketball preparation milestone
+
+The [literature matrix](literature.md) and [citation map](citation-map.md) are
+committed in `d63c693`. Source and benchmark limitations remain explicit.
+The [frozen rig/cadence audit](basketball-freeze.json) preserves the accepted
+calibration/scale hashes and selects Sync-NeRF cameras 1, 2, 4, 5, 6, 7, 9, 11
+by the specified shared-track expansion. All 8,500 source PTS values match 25 fps.
+[Preparation evidence](basketball-preparation.json) records 1,700 undistorted
+reconstruction images, 1,350 training keys, zero adjacent exact duplicates in
+frames 0–49, and a 5,093-point static initialization recolored on 30 training
+cameras at frame 25. This prior does not contain reconstructed player motion.
+
+The [saved SIFT/LK common-estimator diagnostic](sift-common-graph.json) records
+all 561 pairs, retains 67 passing saved edges and covers eight cameras from
+reference 1. Two bridges remain in the whole graph. The empty learned graph is
+labeled unavailable, not a failed learned scientific run. No diagnostic timing
+is approved for reconstruction. Final-window images remain unopened.
+
+Eighteen timing/analytic/scene tests and ten campaign/central-budget tests pass.
+No scientific GPU runs have started. Backend trainer integration, Sync-NeRF
+pilots, zero controls, reload/render evaluation and the final recommendation
+remain unfinished. Budget reservations now support per-run caps while preserving
+the central 24-hour ceiling. No historical GPU or training charge was reset.
+
 ## Current handoff
 
 The isolated runtime is built; the timing interface and independent analytic

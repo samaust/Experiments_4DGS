@@ -73,6 +73,8 @@ class TrainingBudget:
                     raise ValueError('invalid recorded budget charge')
             self.available = self.limit-sum(a['charged_seconds'] for a in self.ledger['attempts']
                                              if a['key'] == self.key)
+            self.available = min(self.available, 86400.-sum(
+                a['charged_seconds'] for a in self.ledger['attempts']))
             if self.available <= 0:
                 raise RuntimeError('training allocation exhausted (including unfinished reservations)')
             return self
@@ -81,14 +83,17 @@ class TrainingBudget:
             self.lock = None
             raise
 
-    def start(self, *, command, provenance):
+    def start(self, *, command, provenance, seconds=None):
         if self.lock is None or self.active is not None:
             raise RuntimeError('start requires a locked, unused attempt')
+        if seconds is not None and (not math.isfinite(seconds) or not 0 < seconds <= self.available):
+            raise ValueError('requested reservation exceeds remaining training allocation')
+        self.reserved = self.available if seconds is None else seconds
         self.started = self.clock()
-        self.deadline = self.started+self.available
+        self.deadline = self.started+self.reserved
         self.active = dict(key=self.key, command=command, provenance=provenance,
                            started_unix_seconds=time.time(), status='reserved',
-                           reserved_seconds=self.available, charged_seconds=self.available)
+                           reserved_seconds=self.reserved, charged_seconds=self.reserved)
         self.ledger['attempts'].append(self.active)
         atomic_json(self.path, self.ledger)
 
@@ -104,10 +109,10 @@ class TrainingBudget:
             raise ValueError('invalid completion status')
         elapsed = max(0., self.clock()-self.started)
         self.active.update(status=status, wall_seconds=elapsed,
-                           charged_seconds=min(elapsed, self.available),
-                           overrun_seconds=max(0., elapsed-self.available))
+                           charged_seconds=min(elapsed, self.reserved),
+                           overrun_seconds=max(0., elapsed-self.reserved))
         atomic_json(self.path, self.ledger)
-        if elapsed > self.available:
+        if elapsed > self.reserved:
             raise RuntimeError('training exceeded its allocation; overrun recorded')
 
     def __exit__(self, exc_type, exc_value, traceback):

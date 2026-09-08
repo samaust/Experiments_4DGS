@@ -11,6 +11,20 @@ spec.loader.exec_module(module)
 
 
 class BudgetTests(unittest.TestCase):
+    def test_bounded_plan_reservation_preserves_later_seeds(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'budget.json'
+            now = [0.]
+            with module.TrainingBudget(path, method='stg-full', scene='vru-basketball-dg',
+                                       clock=lambda: now[0]) as b:
+                with self.assertRaises(ValueError):
+                    b.start(command=[], provenance={}, seconds=7201)
+                b.start(command=['seed0'], provenance={}, seconds=1200)
+                self.assertEqual(b.remaining_seconds(),1200)
+                # An unfinalized bounded run consumes its complete reservation.
+            with module.TrainingBudget(path, method='stg-full', scene='vru-basketball-dg') as b:
+                self.assertEqual(b.available,6000)
+
     def test_failed_attempt_counts_and_crash_reservation_persists(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)/'budget.json'
