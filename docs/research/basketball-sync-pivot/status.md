@@ -1,9 +1,15 @@
 # Plan 024 execution status
 
-2026-09-08: **Stopped: Stage A required paper access. Plan 024 is incomplete.**
+2026-09-08: **Active: Stage A literature and source audit. Plan 024 is incomplete.**
 This campaign does not activate or resume the continuous improvement loop.
 
-## Current blocker
+The user supplied `/tmp/plan024-sync4drf.pdf` and explicitly resumed. Its title
+and text extraction are verified; [source provenance](sync4drf-source.json)
+retains its hash. The historical HTTP refusal below is resolved through the
+user-provided file. Continue remaining authorized work; no additional download
+of this paper is needed.
+
+## Resolved paper-access blocker
 
 The required Sync-4DRF full-paper download was attempted outside the sandbox:
 
