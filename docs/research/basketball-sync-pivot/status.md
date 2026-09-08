@@ -1,7 +1,42 @@
 # Plan 024 execution status
 
-2026-09-08: **Blocked during Stage A Docker daemon access on explicit resume. Plan 024 is incomplete.**
+2026-09-08: **Active: Stage A source/benchmark audit. Plan 024 is incomplete.**
 This campaign does not activate or resume the continuous improvement loop.
+
+## Current handoff
+
+The user resolved host group membership, supplied successful non-sudo Docker/GPU
+output, and explicitly resumed Plan 024. Docker now works through approved
+outside-sandbox execution. [Runtime evidence](runtime-check.json) retains the
+failed sandbox check and successful retry. No research GPU workload has started.
+The user's no-sudo instruction still applies. A subsequent user interruption was
+explicitly resumed; `docker ps` confirmed no containers remained running.
+
+The execution specification is [Plan 025](../../../plans/plan_025.md).
+[Source pins](source-pins.json) identify cloned official VisualSync, Sync-NeRF
+and MultiViewUnsynch revisions plus four original VisualSync scripts. Downloaded
+original code is retained at `.local/sync-pivot/visualsync-original/`. The original
+archive contains pairwise and global synchronization implementations omitted from
+the main checkout; tracking/matching subdirectory audit is next. Do not conclude
+VisualSync is unavailable based solely on its GitHub checkout.
+
+[Syntax audit](source-syntax-audit.json) found an upstream `SyntaxError` at line
+1081 of `shaowei_sync_v6.py` (`video1_len =`); the following `end_idx` assignment
+is also unfinished. The other three downloaded original scripts parse. This is
+a demonstrated release defect, not a scientific failure. Compatibility work must
+preserve original hashes and validate any repair before claiming runnable status.
+
+The original Sync-NeRF README's UDBD URL
+`https://drive.google.com/drive/folders/1wvLtucVrmFf7fj-kWr-HMk3boaI46cIX`
+returned HTTP 404 to outside-sandbox `curl -fL --max-time 45` (exit 22,
+`curl: (22) The requested URL returned error: 404`). This is a release-link
+availability result, not a demonstrated sandbox denial. No retry of that link
+is authorized by the permission-retry rule. Exact benchmark availability remains
+under audit using the separately linked project-page dataset index.
+
+The checkpoint sections below retain historical evidence. Superseded socket
+blockers and historical statements that the next plan is not created do not
+describe the current handoff. Leave the user's untracked `.codex/` untouched.
 
 ## Resume checkpoint
 
