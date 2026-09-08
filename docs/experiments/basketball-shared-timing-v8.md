@@ -29,4 +29,26 @@ Scalar search fixes camera 3 at all 51 integer offsets for all 48 problems, with
 
 The combined pilot requires both independent screens to pass and starts with fresh caches and problems. Accepted timing, production candidate and final protocol remain null. Selection and final-validation consumption markers remain unchanged.
 
-Implementation and validation are in progress. Final experiment decisions and verification will be linked here when packaged.
+## Conditioning decision
+
+The [conditioning screen](basketball-shared-timing-v8/condition/conditioning-decision.json) completed all 144 attempts and **rejected** the adapter. It qualified 116 attempts, preserved 93 of the 94 previously qualified attempts, and recovered 23 of the 50 previous failures across all three groups. The median new/old original-coordinate KKT ratio was 0.2500454, exceeding the required 0.1. The required recovery count was 25. Group 11, weight 1, outer lag −19, descending path was the previously qualified attempt that was not preserved.
+
+No observable-growth issue was detected by the inherited threshold. The local records retain original costs, KKT vectors, transform bytes, physical and internal states, initialization sanitation and distinct-state ledgers. The largest recorded distinct-state count was 193 and the largest iteration count was 196; neither 200 limit was increased. Per-attempt elapsed times are recorded. Stage `cpu_seconds` and maximum RSS describe the controller process, not aggregate worker usage.
+
+## Scalar-search decision and terminal outcome
+
+The [scalar screen](basketball-shared-timing-v8/basins/basin-decision.json) completed all 48 profiles and **rejected** scalar search. Its 7,344 initial path attempts plus 4,782 refinement attempts produced 12,126 scheduled records. Of these, 10,596 invoked a conditional fit and 8,485 qualified. Another 1,530 required directional attempts had no valid seed and were retained without retry. The 3,641 failed required attempts include those missing fits. Costs disagreed across paths at 835 points.
+
+All nine historical basins were recovered within 0.05 frames at qualifying detected minima and acceptable original costs. The [independent coverage verifier](basketball-shared-timing-v8/coverage-verification.json) checks actual minima and complete hundredth-frame flat intervals, rather than accepting an arbitrary nearby sampled point. Basin recovery does not override the all-fits and path-agreement requirements.
+
+The [development verifier](basketball-shared-timing-v8/development-verification.json) independently recomputes physical objectives, depths, original-coordinate KKT values and omitted offset derivatives. It also verifies the refinement schedule and conditioning transform/state ledgers, and retains comparative runtimes, three-start disagreements, historical reference costs and required transfers.
+
+The terminal outcome is a **completed scientific rejection**, documented in the [package](basketball-shared-timing-v8/package/result.json), [development decisions](basketball-shared-timing-v8/package/development-decisions.json), and [search ledgers](basketball-shared-timing-v8/package/search-ledgers.json). The combined pilot remains **unassessed** because neither independent screen passed. There were no historical replays, joint releases or complete combined searches. No arithmetic/provenance failure or deadline exhaustion was needed to reach this outcome.
+
+## Validation and provenance
+
+The final suite passed 217 Basketball tests (including 14 v8 regressions), seven budget tests and three SelfCap tests. The immutable v7 runner preserves the scoped historical v6 test-clock harness; no inherited tests were edited or skipped. Additional regressions cover rejected-state ownership, stale barrier rejection, conditional versus joint derivatives, changing support, cross-problem seeds and unknown execution counts when no worker artifact exists.
+
+The [final verification](basketball-shared-timing-v8/verification-final.json) checks stage hashes, inherited v7 evidence and consumption-marker hashes. The [evidence manifest](basketball-shared-timing-v8/evidence.json) binds all v8 sources, tests, decisions and artifacts. All work, verification and local commits completed within the fresh four-hour budget. Accepted timing, production candidate and final-validation protocol remain null; selection and final-validation consumption markers are unchanged.
+
+Run the workflow with the installed offline interpreter `.local/envs/calibration-global/bin/python` and `scripts/basketball_shared_workflow_v8.py`. Stages are `prepare`, `recover`, `diagnose`, `condition`, `basins`, `pilot`, and `package`, each with `--config`, a fresh `--output`, and a hashed `--predecessor` after preparation. Frozen absolute deadlines apply to every stage.
