@@ -1,0 +1,89 @@
+{
+  "passed": true,
+  "escape_verified": true,
+  "source_sha256": {
+    "scripts/basketball_shared_solver_v6.py": "351db9e1a209260d78f5c4d783aa6116c4bbe9efca46197dce7b6f238fc386cf",
+    "scripts/basketball_shared_profiles_v6.py": "f2eba61c7e8b1165f729f95b7527ae44be52b3a6929c21892fd06389e19b18c7",
+    "scripts/basketball_shared_pilot_v6.py": "dd0a6a67e3eb28576b6988a3a5689438609291c47deb4070a9cfed6845fde2bf",
+    "scripts/basketball_shared_validate_hessian_v6.py": "8422cf5bba9d88a7bff9d6e872eef6dc0a8874b7677c8438520ae03a12510ddb",
+    "tests/test_basketball_shared_hessian_v6.py": "a06ed438457cf94fcc9b802068ce3a6f65c1811181aa14ac396d105a55bf852b",
+    "tests/test_basketball_shared_inherited_v6.py": "6203d323faa5d5eccb53e3802d6756c7c2a9d759a9332ebd7fb83ddcb152ebe4",
+    "docs/experiments/basketball-shared-timing-v6/exact-hessian-tests.log": "1892c89b2e4e0056a04e4fc555348cec3af096c83a638bffbd0fb2a773b0df9a",
+    "docs/experiments/basketball-shared-timing-v6/inherited-v6-tests.log": "00421a73b209264438a8a01138460d03ba346a97414d7171ccca948791c990a7",
+    "docs/experiments/basketball-shared-timing-v6/v5-reuse-verification.json": "395fbaef80a775fc04a42cc7a107aa02ed796cc3ed89ca8fc26ec25d20080712"
+  },
+  "installed_solver_sha256": {
+    "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/calibration-global/lib/python3.14/site-packages/scipy/optimize/_trustregion_constr/minimize_trustregion_constr.py": "f2ff03e7de8f8cec594c70655a1d59441ce05a1f18fa815f9a31fd581e04a46b",
+    "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/calibration-global/lib/python3.14/site-packages/scipy/optimize/_trustregion_constr/tr_interior_point.py": "4630c0eb07798b78feaf1031e6f06e09fe1076094e1e7c6b6fbcbc9d34e62b4e"
+  },
+  "solver": {
+    "method": "trust-constr",
+    "policy": {
+      "gtol": 1e-06,
+      "xtol": 1e-06,
+      "barrier_tol": 1e-06,
+      "maxiter": 200,
+      "sparse_jacobian": true,
+      "factorization_method": "AugmentedSystem",
+      "initial_constr_penalty": 1.0,
+      "initial_tr_radius": 1.0,
+      "initial_barrier_parameter": 0.1,
+      "initial_barrier_tolerance": 0.1,
+      "verbose": 0,
+      "disp": false,
+      "finite_diff_rel_step": null,
+      "workers": null
+    },
+    "scipy": "1.18.1",
+    "installed_defaults": {
+      "xtol": 1e-08,
+      "gtol": 1e-08,
+      "barrier_tol": 1e-08,
+      "sparse_jacobian": null,
+      "callback": null,
+      "maxiter": 1000,
+      "verbose": 0,
+      "finite_diff_rel_step": null,
+      "initial_constr_penalty": 1.0,
+      "initial_tr_radius": 1.0,
+      "initial_barrier_parameter": 0.1,
+      "initial_barrier_tolerance": 0.1,
+      "factorization_method": null,
+      "disp": false,
+      "workers": null
+    },
+    "scaling": {
+      "offset_frames": 25.0,
+      "coefficients": "existing rig-diameter units"
+    },
+    "depth_margin": 1e-08,
+    "qualification_depth": 1e-07,
+    "keep_feasible": true,
+    "max_objective_evaluations": 200,
+    "objective": "sum(original_v2_residual**2)",
+    "transfer": "source sampled weak blocks reset to destination cold; blends 2**-k k=0..20 then 0",
+    "constraint_hessian": "full sparse chain rule including coefficient outer products",
+    "transformation": "s/hypot(1,s)",
+    "transformation_scale": 1.0,
+    "cache_version": "v6",
+    "objective_hessian": "exact direct soft-L1 loss, perspective, distortion and spline chain rule",
+    "objective_hessian_version": "v6-exact-1"
+  },
+  "actions": {
+    "path": "exact-hessian-actions.json.gz",
+    "sha256": "043b3cab15331bbe3c5d6e32b8feb83c9b247c39e8984d68bbb0cf206d7f6cf5",
+    "bytes": 47451,
+    "serialization_seconds": 0.011745224008336663
+  },
+  "stable_actions_checked": 2769,
+  "maximum_action_error": 1.483332016505301e-05,
+  "diagnostic_decision_sha256": "4a5f428a242d33e790be5c6c94842e0b066d64caf50ca82fe3032b6e0d897af0",
+  "escape_rays": 172,
+  "escape_probes": 3956,
+  "escape_grid_rerun": false,
+  "escape_scope": "identical objectives and feasible sets; unchanged 12 v3 records; finite upper bounds are not qualified minima",
+  "solver_hessian_treatment": "Installed LagrangianHessian adds objective Hessian and multiplier-weighted constraint Hessian; barrier is internal. Objective callable adds neither.",
+  "tests": "fixed synthetic derivative tests and inherited unit-test solves, separate from the scientific cohort",
+  "initial_regression_corrections": "coarse 1e-4 truncation error resolved by required stable 1e-5/1e-6 checks; inherited prepare test mock moved to v6 owner. No fitting outcome or solver policy tuning.",
+  "elapsed_seconds": 924.0455720424652
+}

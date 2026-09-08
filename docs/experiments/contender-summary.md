@@ -1,5 +1,7 @@
 # Contender comparison summary
 
+[Plan 012 exact-Hessian pilot](basketball-shared-timing-v6.md) ends at `numerical_failure`: the curvature diagnostic passed, but only 94/144 pilot attempts qualified (72 regularized, 22 data-only). No later scientific stage or new selection/final-frame consumption ran; accepted timing remains null.
+
 [Plan 011 bounded-depth pilot](basketball-shared-timing-v5.md) stops at `numerical_failure`: 93/144 attempts qualified, with 51 data-only failures. No real fitting or new selection/final-frame consumption occurred; accepted timing remains null.
 
 Status: **plan's result-or-specific-blocker coverage complete: four evaluated
