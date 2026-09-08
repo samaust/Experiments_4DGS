@@ -93,8 +93,9 @@ authorization, or resolution of a blocker; do not expand scope to keep looping.
 ### Stop and resume
 
 Stop on user interruption, an explicit stop request, the existing Sandbox and
-permission failures stop conditions, or verified attainment of the main
-objective. Monitor these conditions during stages as well as at handoffs.
+permission failures stop conditions, failure of git staging (`git add`) or
+`git commit`, or verified attainment of the main objective. Monitor these
+conditions during stages as well as at handoffs.
 Verify attainment against the saved success criteria and validation evidence;
 completion of a stage alone is not evidence of attainment.
 
