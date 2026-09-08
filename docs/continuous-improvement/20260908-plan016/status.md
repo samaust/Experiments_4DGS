@@ -1,24 +1,17 @@
 # Run status
 
-- State: stopped — awaiting concrete Plan 018 execution authorization
+- State: active — explicitly resumed under standing approval
 - Iteration: 002
-- Stage: iteration 002 review and planning complete; implementation not dispatched
+- Stage: Plan 018 implementation dispatch
 - Objective: [objective.md](objective.md)
-- Latest assessment: [iteration 002 post-plan assessment and budget request](iteration-002-assessment-02-plan.md)
-- Starting implementation: [Plan 016 results](../../experiments/basketball-shared-timing-v10.md)
-- Recommendations: [iteration 002 review](iteration-002-recommendations.md); [iteration 001 review](iteration-001-recommendations.md) retained
-- Plan: [Plan 018 handoff](iteration-002-plan-link.md); [Plan 017 handoff](iteration-001-plan-link.md) retained
-- Implementation results: iteration 002 not started pending approval; [iteration 001 results](iteration-001-implementation.md), [validation](iteration-001-validation.md)
-- Stop reason: Plan 018 proposes new diagnostic resources; approve 30 minutes overall including 120 numerical seconds, zero optimizer attempts, and fixed probe/verification caps in the assessment
-- No experiments, training, or new numerical attempts dispatched by this run.
-- Startup context commit: `332ffc7`
-- Review commit: `4a1a8fb`
-- Plan commit: `bb6d594`
-- Implementation commit: `aade3fabdda415680ec39213a9de43ee0097db15`
-- Criteria: SC-01 not met; SC-02 met; SC-03 not met; SC-04 met; SC-05 met, with evidence limits in the assessment
+- Latest assessment: [resume assessment](iteration-002-assessment-03-resume.md)
+- Recommendations: [iteration 002 review](iteration-002-recommendations.md)
+- Plan: [Plan 018](../../../plans/plan_018.md); [handoff](iteration-002-plan-link.md)
+- Approved limits and clocks: [authorization](iteration-002-plan018-authorization.json)
+- Approval basis: AGENTS.md commit `b62f2ea` plus user's explicit same-objective resume. Historical budget-approval requests no longer block this plan.
+- Implementation results: pending; [iteration 001 results](iteration-001-implementation.md) and [validation](iteration-001-validation.md) retained
+- Criteria: SC-01 not met; SC-02 met; SC-03 not met; SC-04 met; SC-05 met with historical evidence limits
 - Main objective: not attained
-- Resume authorization: user explicitly resumed the same objective after AGENTS.md clarification `fd43f19`; no new numerical budget supplied
-- Iteration 002 resume commit: `42f238d`
-- Iteration 002 review commit: `b33be0a`
-- Resume point: fresh medium Plan 018 implementation after explicit execution approval; clocks and slots not started
-- Active subagents/jobs: none; both iteration 002 subagents completed
+- Stop reason: none
+- Active work: fresh medium implementation subagent for Plan 018; no parent scientific jobs
+- Historical stage/commit records: retained in iteration assessments and artifacts

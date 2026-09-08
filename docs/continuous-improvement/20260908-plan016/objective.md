@@ -69,3 +69,10 @@ record any user-directed changes here and reassess affected evidence.
 - 2026-09-08: User explicitly resumed the same objective after AGENTS.md commit
   `fd43f19` clarified budget scope. Objective and criterion definitions unchanged;
   iteration 002 review/planning may proceed without renewing Plan 016 execution.
+
+- 2026-09-08: User explicitly resumed the same objective after standing-approval
+  commit `b62f2ea`. The earlier budget-request statements above are historical:
+  AGENTS.md now approves Review-recommended, Plan-finalized plan-specific limits,
+  explicitly including Plan 018. Overall and method/scene ceilings, historical
+  consumption, scientific gates and all criterion definitions remain unchanged.
+  Subsequent eligible plans receive the same standing approval.

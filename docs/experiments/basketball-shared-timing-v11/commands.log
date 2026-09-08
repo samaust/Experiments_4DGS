@@ -1,0 +1,15 @@
+Admission (stdlib only):
+python3 scripts/basketball_shared_trajectory_diagnostic_v11.py admit
+
+Focused toy checks (initial two runs 10 tests; final run 12 tests):
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 .local/envs/calibration-global/bin/python -m unittest discover -s tests -p test_basketball_shared_trajectory_v11.py -v
+Retained outputs: tests.log, tests-02.log, tests-03.log. No scientific fixture loaded.
+
+Single scientific invocation (supervisor supplies thread environment):
+.local/envs/calibration-global/bin/python scripts/basketball_shared_trajectory_diagnostic_v11.py run
+Supervisor tool session: 70939. PIDs 2/3 are sandbox namespace values, not host PIDs.
+
+JSON-only package:
+.local/envs/calibration-global/bin/python scripts/basketball_shared_trajectory_diagnostic_v11.py package
+
+Failure component extraction read retained primary/independent JSON only; no derivative evaluation.
