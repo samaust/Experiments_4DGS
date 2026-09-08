@@ -2,7 +2,7 @@
 
 - State: active
 - Iteration: 004
-- Stage: Plan 020 finalized; implementation authorization/clock next
+- Stage: Plan 020 implementation dispatch
 - Objective: [objective.md](objective.md)
 - Latest assessment: [post-plan assessment](iteration-004-assessment-02-plan.md)
 - Previous plan: [Plan 019](../../../plans/plan_019.md), [handoff](iteration-003-plan-link.md)
@@ -13,6 +13,7 @@
 - Main objective: not attained
 - Approval basis: AGENTS.md `b62f2ea` and explicit same-objective resume; eligible subsequent planned limits receive standing approval
 - Stop reason: none
-- Active jobs: none from completed implementation; fresh implementation agent next
+- Active jobs: none from completed implementation; fresh medium implementation agent; no scientific jobs yet
 - Current recommendations: [iteration 004 review](iteration-004-recommendations.md)
 - Current plan: [Plan 020](../../../plans/plan_020.md), [handoff](iteration-004-plan-link.md)
+- Current approved limits and T0: [Plan 020 authorization](iteration-004-plan020-authorization.json)
