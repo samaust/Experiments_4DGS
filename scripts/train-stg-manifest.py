@@ -39,16 +39,24 @@ def worker(a):
     sys.path[:0] = [str(a.checkout), str(a.checkout/'thirdparty/gaussian_splatting')]
     from arguments import OptimizationParams, PipelineParams
     from utils.graphics_utils import BasicPointCloud
-    source = adapt_train((a.checkout/'train.py').read_text())
+    basketball = json.loads(a.manifest.read_text()).get('schema') == 'basketball-processed/v1'
+    if basketball:
+        from basketball_scene import BasketballScene
+        manifest = BasketballScene(a.manifest)
+    else:
+        manifest = SelfCapScene(a.manifest)
+    source_frames = sorted({k[1] for k in manifest.training_keys()})
+    source = adapt_train((a.checkout/'train.py').read_text(),
+                         source_frames=source_frames if basketball else None)
     (a.output/'adapted_train.py').write_text(source)
     namespace = {'__name__': '_manifest_stg', '__file__': str(a.checkout/'train.py')}
     exec(compile(source, str(a.output/'adapted_train.py'), 'exec'), namespace)
-    random.seed(0)
-    np.random.seed(0)
-    torch.manual_seed(0)
-    torch.cuda.manual_seed_all(0)
+    seed = getattr(a, 'seed', 0)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
     torch.cuda.reset_peak_memory_stats()
-    manifest = SelfCapScene(a.manifest)
     parser = argparse.ArgumentParser()
     opt_group = OptimizationParams(parser)
     pipe_group = PipelineParams(parser)
@@ -56,7 +64,7 @@ def worker(a):
     opt, pipe = opt_group.extract(defaults), pipe_group.extract(defaults)
     # Use the upstream Techni-style densifier (3), avoiding N3D's world-z=4.5
     # floor cutoff, which has no meaning in the supplied SelfCap coordinates.
-    config = dict(optimization=vars(opt), densify=3, seed=0, duration=60,
+    config = dict(optimization=vars(opt), densify=3, seed=seed, duration=len(source_frames),
                   rgbfunction='sandwich' if a.model == 'full' else 'rgbv1',
                   initialization='training-only midpoint, mean corrected training time',
                   image_loading='two-entry CPU image and GPU camera caches',
@@ -98,7 +106,8 @@ def worker(a):
             ply = PlyData.read(str(a.initialization/'initialization.ply'))['vertex']
             xyz = np.column_stack([ply[k] for k in ('x', 'y', 'z')]).astype(np.float32)
             colors = np.column_stack([ply[k] for k in ('red', 'green', 'blue')]).astype(np.float32)/255
-            midpoint = np.mean([manifest.frames[k]['normalized_time'] for k in manifest.training_keys(4150)])
+            midpoint_frame = manifest.manifest.get('initialization_frame', 4150)
+            midpoint = np.mean([manifest.frames[k]['normalized_time'] for k in manifest.training_keys(midpoint_frame)])
             model.create_from_pcd(BasicPointCloud(xyz, colors, np.zeros_like(xyz),
                 np.full((len(xyz), 1), midpoint, dtype=np.float32)), self.cameras_extent)
             if a.model == 'full':
@@ -128,6 +137,9 @@ def worker(a):
             save_checkpoint(a.output/'checkpoint.pt', model, variant=a.model,
                 training_args=opt, iteration=iteration, loop_state=self.loop_state(local),
                 provenance=provenance)
+            if basketball and iteration in (1000, 2000, 5000):
+                import shutil
+                shutil.copyfile(a.output/'checkpoint.pt', a.output/f'checkpoint-{iteration:06d}.pt')
             self.last_save = time.monotonic()
 
         def before_loop(self, model, opt, local):
@@ -152,7 +164,8 @@ def worker(a):
                 raise RuntimeError('nonfinite training loss')
             stop = stopping[0] or time.monotonic() >= stop_at or (
                 a.max_steps is not None and iteration-self.start_iteration >= a.max_steps)
-            if stop or iteration == opt.iterations or time.monotonic()-self.last_save >= 60:
+            if (stop or iteration == opt.iterations or time.monotonic()-self.last_save >= 60
+                    or basketball and iteration in (1000, 2000, 5000)):
                 self.save(model, opt, iteration, local)
                 if stop or iteration == opt.iterations:
                     model.save_ply(str(a.output/'final/point_cloud.ply'))
@@ -164,7 +177,7 @@ def worker(a):
     hooks = Hooks()
     namespace.update(Scene=Scene, hooks=hooks, args=argparse.Namespace(model_path=str(a.output), **config))
     dataset = argparse.Namespace(model='ours_'+a.model, sh_degree=3, loader='manifest', white_background=False)
-    namespace['train'](dataset, opt, pipe, [], -1, densify=3, duration=60,
+    namespace['train'](dataset, opt, pipe, [], -1, densify=3, duration=len(source_frames),
                        rgbfunction=config['rgbfunction'], rdpip='train_ours_'+a.model)
     atomic_json(a.output/'worker-result.json', dict(iteration=hooks.final_iteration,
         incomplete=hooks.final_iteration < opt.iterations,

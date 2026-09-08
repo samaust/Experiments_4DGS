@@ -27,3 +27,16 @@ class UpstreamHookTests(unittest.TestCase):
         self.assertIn('cam.source_frame == 4120+i', adapted)
         self.assertIn('hooks.before_loop(gaussians, opt, locals())', adapted)
         self.assertIn('hooks.after_iteration(gaussians, opt, iteration, locals())', adapted)
+
+    def test_physical_frame_buckets_preserve_temporal_hole(self):
+        path = ROOT/'.local/SpacetimeGaussians/train.py'
+        if not path.exists():
+            self.skipTest('requires pinned upstream checkout')
+        frames = list(range(20)) + list(range(25,50))
+        adapted = module.adapt_train(path.read_text(), source_frames=frames)
+        compile(adapted, 'basketball_train.py', 'exec')
+        self.assertIn('cam.source_frame == '+repr(frames)+'[i]', adapted)
+        self.assertNotIn('cam.timestamp == i/duration', adapted)
+        for invalid in ([0,0], [1,0], [-1], [], [False]):
+            with self.assertRaises(ValueError):
+                module.adapt_train(path.read_text(), source_frames=invalid)

@@ -12,7 +12,7 @@ LOOP_KEYS = ('flag', 'flagtwo', 'ema_loss_for_log', 'flagems', 'emscnt',
              'selectviews', 'selectviewslist', 'maxbounds', 'minbounds')
 
 
-def adapt_train(source):
+def adapt_train(source, *, source_frames=None):
     if hashlib.sha256(source.encode()).hexdigest() != TRAIN_SHA256:
         raise ValueError('upstream train.py hash differs; audit required')
 
@@ -23,7 +23,12 @@ def adapt_train(source):
         source = source.replace(old, new)
 
     replace('numchannel = 9', 'numchannel = 3 if dataset.model == "ours_lite" else 9')
-    replace('cam.timestamp == i/duration', 'cam.source_frame == 4120+i')
+    if source_frames is not None:
+        if (not source_frames or any(type(f) is not int or f < 0 for f in source_frames)
+                or source_frames != sorted(set(source_frames))):
+            raise ValueError('source frames must be sorted unique nonnegative integers')
+    target = '4120+i' if source_frames is None else repr(source_frames)+'[i]'
+    replace('cam.timestamp == i/duration', 'cam.source_frame == '+target)
     loop = '    for iteration in range(first_iter, opt.iterations + 1):'
     restore = ('    selectviews, selectviewslist = {}, []\n'
                '    first_iter, restored_loop = hooks.before_loop(gaussians, opt, locals())\n')

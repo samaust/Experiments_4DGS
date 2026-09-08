@@ -1,6 +1,6 @@
 # Plan 024 execution status
 
-2026-09-08: **Active: Stage A literature and source audit. Plan 024 is incomplete.**
+2026-09-08: **Active: Basketball pilot execution. Plan 024 is incomplete.**
 This campaign does not activate or resume the continuous improvement loop.
 
 The user supplied `/tmp/plan024-sync4drf.pdf` and explicitly resumed. Its title
@@ -8,6 +8,19 @@ and text extraction are verified; [source provenance](sync4drf-source.json)
 retains its hash. The historical HTTP refusal below is resolved through the
 user-provided file. Continue remaining authorized work; no additional download
 of this paper is needed.
+
+## Training protocol checkpoint
+
+[Training settings](training-protocol.json) are frozen before scientific GPU execution.
+Eight-camera inputs contain 800 fit-window images; no new final-window images
+were opened. Native adapters pass CPU ray/time/bucket checks (15 targeted tests).
+FreeTimeGS CPU initialization produces 45,828 local static points. Exact benchmark
+timing labels and VisualSync core preprocessing remain unavailable as documented
+in the protocol. Proceed with three Sync-NeRF seeds and three zero controls for
+each reconstruction method; no unsupported full-rig correction is applied.
+
+The sections below preserve earlier checkpoints; current execution and remaining
+GPU allocations are authoritative in gpu-budget.json.
 
 ## Resolved paper-access blocker
 

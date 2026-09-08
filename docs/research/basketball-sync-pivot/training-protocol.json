@@ -1,0 +1,132 @@
+{
+  "schema": "sync-pivot-training-protocol/v1",
+  "frozen_unix_seconds": 1788901551.803371,
+  "plan": 24,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "files": {
+    "scripts/syncnerf_basketball.py": "fe7f81b8f1546a6c9f8d3bfaf708560cc55e65ffba11b5423bb3e9fb150c2e9d",
+    "scripts/basketball_native_train.py": "149eefbddac421010aae65a649660a4195e1473e572ee4003dc8d6dfc1f50317",
+    "scripts/basketball_scene.py": "dcb3ad959769008dd551f0ad638adc469f3281cbd5c61f5008471d9508596e2d",
+    "scripts/stg_train_source.py": "51be7b4ef655f0ccea1c05fd5c08f4a22969db32c403f8b63ed5f1cccf9d9fd5",
+    "scripts/train-stg-manifest.py": "47c14434f04a3a4f1e8b2fcb03d6439da572c6060169ff74b38b2c01d7ab775f",
+    "scripts/freetimegs_training.py": "d2f50b83bccf348081a42d309fcce5d7b3012ea2bd4b5dd79a70b3a549288d75",
+    "scripts/freetimegs_source.py": "9d007cb4d8807cf49b65036000f9a464791257bb964e9f59ce32cf0a0247022a",
+    "scripts/freetimegs_model.py": "57b0c435ec62fd61390361f959b130c78c4d6f7cf3dbbc9c5c6bb0e09879882c",
+    "scripts/freetimegs_normalization.py": "c65f95362eccba786c8b25e7b9a1e091fa6502eb8d65f5004f8320466430558e",
+    "scripts/stg_checkpoint.py": "41f5a248743df9eab703fefb0df0babec4ccd116fdb4a1763021cec5005a6651",
+    "scripts/freetimegs_checkpoint.py": "74c7874041b104ab5ec3fd602afdfdcf3e788602521998d358d575974dfb1e99",
+    "scripts/run-sync-pivot.py": "32eae7e9820c6ba7192a9969bfd53d1ece3c8bede52ccab358e25189d5f2b933",
+    "docs/research/basketball-sync-pivot/basketball-freeze.json": "db46f4d5baa13e199729575298f5e0f474ae13ad78e688482f64d8d38af05fe8",
+    ".local/sync-pivot/basketball-zero/manifest.json": "02006f379925cbb599ed071df48b7985e40cd3995b2d24293d92ecb736c26f94",
+    ".local/sync-pivot/basketball-static-init/result.json": "de54b6bc59155dba920295adb387f3146441044dc5d1d6fbc25330562ca547b7",
+    ".local/sync-pivot/basketball-syncnerf-inputs/inputs.json": "900e2dbb2e689c494db8f397ecfcd8479e95aa027b5db264eba6d888f6143ba7",
+    ".local/sync-pivot/Sync-NeRF/Sync-K-Planes/plenoxels/configs/blender/hybrid/box.py": "4cf30e9789657e85e430d87b0cbd2eca727a26b0cbea42a383bb32c9168f7d90",
+    ".local/SpacetimeGaussians/train.py": "2e38ed71ff2e292983adde7d26a3dd0f62dbcf8c8db560b092c227032d1f9523"
+  },
+  "benchmarks": {
+    "box": {
+      "status": "unavailable-for-reproduction",
+      "reason": "Official project images and transforms resolve, but supplied offset labels and exact timing convention were not located; no synthetic truth will be invented from filenames."
+    },
+    "panoptic": {
+      "status": "unavailable-for-reproduction",
+      "reason": "Exact SyncTrack4D basketball release, camera split and offset labels unresolved; similarly named scenes are not substituted."
+    }
+  },
+  "visualsync": {
+    "status": "unavailable-full-pipeline",
+    "reason": "Original archive has unfinished pair-script assignments and missing matching process_image helper with crop-to-original mapping. Global estimator alone runs. Missing core preprocessing will not be reconstructed as an author baseline."
+  },
+  "syncnerf": {
+    "camera_ids": [
+      1,
+      2,
+      4,
+      5,
+      6,
+      7,
+      9,
+      11
+    ],
+    "fit_frames": [
+      50,
+      149
+    ],
+    "reference_camera": 1,
+    "test_optim": false,
+    "maximum_seconds_per_seed": 2400,
+    "native_target_steps": 90001,
+    "schedule": "released Box hybrid, unchanged optimizer/loss/plane resolutions; calibrated uniform rays",
+    "near": 0.01,
+    "far": "maximum static bbox corner distance from selected camera centers times 1.1",
+    "normalization": {
+      "origin_seconds": 2.0,
+      "duration_seconds": 3.96,
+      "scale": 0.8
+    },
+    "report": "pilot only if author schedule incomplete; eight-camera result cannot authorize full-rig correction; raw per-seed offsets and spread reported without ground-truth accuracy claim"
+  },
+  "reconstruction": {
+    "methods": [
+      "stg-full",
+      "freetimegs"
+    ],
+    "conditions": [
+      "zero"
+    ],
+    "reason": "No supported full-rig timing correction; Sync-NeRF cross-check covers only eight cameras. No incomplete correction or disconnected SIFT graph is filled with zeros and called estimated.",
+    "source_frames": [
+      0,
+      49
+    ],
+    "resolution": [
+      960,
+      540
+    ],
+    "heldout_camera_ids": [
+      0,
+      10,
+      20,
+      30
+    ],
+    "temporal_holdout_seconds": [
+      0.8,
+      1.0
+    ],
+    "training_images": 1350,
+    "target_steps": 5000,
+    "checkpoint_steps": [
+      1000,
+      2000,
+      5000
+    ],
+    "maximum_seconds_per_run": 1200,
+    "initialization": "5093 accepted static map points recolored at training frame 25, no held-out-camera colors; no reconstructed player motion",
+    "freetimegs_initialization": "native normalization, reject beyond five scene scales, 45828 zero-velocity local static copies, retained every fifth frame, duration .2 normalized units",
+    "optimizer": "existing hash-checked native STG Full/FreeTimeGsVanilla ordinary-Adam reproduction; preserve native 30000-step schedules and densification, truncate at 5000 or deadline",
+    "report": "zero is an operational assumption, not synchronization ground truth; no paired benefit claim without correction"
+  },
+  "final_timing_window": {
+    "frames": [
+      200,
+      249
+    ],
+    "status": "not opened by this campaign",
+    "rule": "Separate final timing protocol must freeze actual candidate offsets before any final images are opened; no full-rig candidate currently eligible."
+  },
+  "validation": {
+    "cpu_tests": "15 passed: STG source hooks, calibrated ray projection, offset sign/gauge, campaign and central budgets",
+    "free_initialization": "CPU normalization verified 45828 float32 points and 1350 keys excluding source frames20\u201324; no GPU execution"
+  },
+  "limits": {
+    "campaign_seconds": 43200,
+    "one_gpu_job": true,
+    "replacement_scientific_attempts": false,
+    "central_training_seconds": 86400,
+    "unused_allocations_transfer": false
+  }
+}
