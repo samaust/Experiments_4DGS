@@ -1,5 +1,7 @@
 # Contender experiments 006–010
 
+[Plan 011 bounded-depth pilot](experiments/basketball-shared-timing-v5.md) stops at `numerical_failure`: 93/144 attempts qualified, with 51 data-only failures. No real fitting or new selection/final-frame consumption occurred; accepted timing remains null.
+
 Basketball timing remains blocked by the
 [Plan 010 constrained-evaluator investigation](experiments/basketball-shared-timing-v4.md).
 No contender's Basketball training allocation is released by this result.

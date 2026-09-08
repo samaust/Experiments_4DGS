@@ -1,5 +1,7 @@
 # Basketball Plan 005 revision 2 continuation
 
+[Plan 011 bounded-depth pilot](basketball-shared-timing-v5.md) stops at `numerical_failure`: 93/144 attempts qualified, with 51 data-only failures. No real fitting or new selection/final-frame consumption occurred; accepted timing remains null.
+
 [Plan 010](basketball-shared-timing-v4.md) adds a separately versioned
 positive-depth constrained evaluator and deterministic weak-column seed repair.
 The exact control remains numerically unqualified: both integer

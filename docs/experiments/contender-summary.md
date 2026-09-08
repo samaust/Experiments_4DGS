@@ -1,5 +1,7 @@
 # Contender comparison summary
 
+[Plan 011 bounded-depth pilot](basketball-shared-timing-v5.md) stops at `numerical_failure`: 93/144 attempts qualified, with 51 data-only failures. No real fitting or new selection/final-frame consumption occurred; accepted timing remains null.
+
 Status: **plan's result-or-specific-blocker coverage complete: four evaluated
 SelfCap pairs and eight blocked pairs. A full six-method/two-scene ranking is unavailable.**
 

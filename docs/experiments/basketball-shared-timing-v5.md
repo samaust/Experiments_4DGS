@@ -60,5 +60,77 @@ that a worse ray limit cannot beat that available value. Infeasible rays are ide
 negative depth slopes. Any unresolved ray blocks continuation. This finite audit is not a
 global minimum certificate.
 
-Results and unexecuted conditional stages will be recorded after the preregistered gate.
-No timing candidate is currently qualified; `accepted_timing` is null.
+## Result: numerical failure at the fixed pilot gate
+
+The single pilot decision completed 807.96 seconds (13.47 minutes) after the conservative
+clock start. **93/144 attempts qualified; 51/144 failed**, all on the data-only objective.
+All 72 regularized attempts qualified. The unchanged all-attempts gate therefore stops
+continuation. Five of 48 problems also failed three-start objective agreement, nine failed
+the no-worse-than-qualified-v4 comparison, and all three required data-only directional
+transfers lacked qualifying evidence. The regularized transfers passed. No unexplained
+large observable growth was flagged; that finding does not certify global optimality.
+
+| Objective | Group 2 | Group 9 | Group 11 | Total qualified |
+| --- | ---: | ---: | ---: | ---: |
+| Regularized, weight 1 | 24/24 | 24/24 | 24/24 | 72/72 |
+| Data-only, weight 0 | 7/24 | 8/24 | 6/24 | 21/72 |
+
+SciPy reports “maximum number of function evaluations” on the 51 failed returns; the
+saved iteration and distinct-objective counts in [resources](basketball-shared-timing-v5/resources.json)
+show that every failed return reached 200 iterations with only 192–197 distinct objective
+evaluations (median 196). Thus these were iteration-limit stops, not exhaustion of the
+independent 200-objective ceiling. The minimum failed original depth was 3.21545 rig
+diameters.
+No cap, tolerance, solver, transformation scale or scientific prior was changed after
+observing these results. The full exact retest, independent control matrix, benchmark,
+production fitting, assessment and selection were not executed. Their results, bootstrap
+intervals, workload projections, candidate and final-validation protocol remain null.
+`accepted_timing` remains null. Selection frames 150–199 were not read by this investigation;
+final frames 200–249 remain untouched.
+
+The corrected finite audit resolves 172 rays: 64 exactly unsupported invariant rays,
+78 observable rays with limits worse than available feasible finite states, and 30
+analytically infeasible rays. It contains 3,956 fixed-amplitude probes. Large-amplitude
+regularized probes exhibit finite-precision acceleration effects; their enormous arithmetic
+costs do not contradict the exact constant-translation argument. Eight feasible saved-block
+rays have not reached their analytical image limit even at 10^44: individual near-knot
+samples have extremely small depth slopes. Verification records the finite endpoint gaps
+and the analytically derived depth-transition amplitude rather than claiming those finite
+probes already equal their limits.
+
+Preparation recomputed the v4 baseline: 1,774/1,836 data-only attempts failed, median
+197 distinct objective evaluations, and every failed state had normalized depth above
+3.59. V4 optimization was not rerun as a baseline. The required regression suite includes
+unit tests of the historical implementations.
+
+Before the first pilot, verification corrected an audit-reference bug: the initial audit
+omitted feasible stalled v4 states and falsely flagged 24 directions. Feasible stalled
+states provide finite objective comparisons even though they are not certified minima.
+All 24 flagged limits were worse than these already-saved feasible values. The initial
+records and source-inspection/configuration-hash corrections are preserved in
+[corrections](basketball-shared-timing-v5/corrections.json). The same prescribed rays were
+reanalyzed before the first and only pilot; no extra optimization starts were introduced.
+
+## Evidence and validation
+
+- [Terminal result](basketball-shared-timing-v5/result.json),
+  [pilot decision](basketball-shared-timing-v5/pilot/pilot-decision.json),
+  [fixed manifest](basketball-shared-timing-v5/diagnose-final/pilot-manifest.json).
+- [Escape decision](basketball-shared-timing-v5/diagnose-final/escape-decision.json),
+  [compressed analytical limits and probes](basketball-shared-timing-v5/diagnose-final/escape-audit.json.gz).
+- [Separate sparse directional costs](basketball-shared-timing-v5/pilot-profiles.json),
+  [v4 comparison states](basketball-shared-timing-v5/v4-comparisons.json),
+  [baseline and installed SciPy source hash](basketball-shared-timing-v5/prepare-final/baseline.json).
+- [Evidence hashes and portable references](basketball-shared-timing-v5/evidence.json).
+  Full attempt records, original/transformed multipliers and complementarity, original
+  depth and KKT checks, coefficient/support diagnostics, observable first/intermediate/final
+  coordinates, warnings and seed provenance are stored once per attempt in six compressed
+  group files under `pilot/`.
+
+Validation runs 166 Basketball, 7 budget and 3 SelfCap regressions. Independent verification
+reconstructs the 667/667 partition and 72 edges, checks 1,890 immutable production recipes,
+recomputes saved physical objectives/depths and original-unit stationarity, verifies seed
+provenance, historical hashes, documentation links and unchanged consumption markers.
+The [verification record](basketball-shared-timing-v5/verification-final.json) reports the completed
+checks and elapsed budget. Production remains immutable v2. Earlier v2/v3/v4 failures are
+preserved; the bounded barrier is a numerical change, not timing qualification.
