@@ -1,7 +1,27 @@
 # Plan 024 execution status
 
-2026-09-08: **Active: Stage A source/benchmark audit. Plan 024 is incomplete.**
+2026-09-08: **Stopped: Stage A required paper access. Plan 024 is incomplete.**
 This campaign does not activate or resume the continuous improvement loop.
+
+## Current blocker
+
+The required Sync-4DRF full-paper download was attempted outside the sandbox:
+
+```sh
+curl -fL --max-time 45 https://openreview.net/pdf/2adf84139e687f06c457b0f1817efab3f4159c0e.pdf -o /tmp/plan024-sync4drf.pdf
+```
+
+It exited 22 with `curl: (22) The requested URL returned error: 403`.
+This is a remote HTTP access refusal; it is not a demonstrated Codex sandbox
+or automatic approval denial. No missing Codex allow rule was established;
+an allow rule would not resolve the remote response. The command was already
+outside the sandbox and receives no further permission retry. Required paper
+access is stopped under the repository permission-failure instructions, pending
+user resolution and explicit resume. No GPU job remains active.
+
+Sync-NeRF setup milestone is committed as `4ac6f1c`. Training, benchmark runs,
+Basketball integration and final reporting remain incomplete. See the
+[audit checkpoint](audit-checkpoint.md) for findings retained before this stop.
 
 ## Current handoff
 
