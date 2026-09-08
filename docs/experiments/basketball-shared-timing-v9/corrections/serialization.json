@@ -1,0 +1,38 @@
+{
+  "reason": "Baseline rows contained NumPy arrays in problem metadata; immutable v5 compressed_write rejected them. All 18 group artifacts are empty gzip streams; full fitted states are unrecoverable.",
+  "error": "TypeError: Object of type ndarray is not JSON serializable (accounting.problem.observations[].observations[].frames)",
+  "scientific_runs_stopped": true,
+  "scientific_retries": 0,
+  "candidate_arms_executed": 0,
+  "final_benchmark_executed": 0,
+  "classification": "computational_blocker_with_missing_provenance",
+  "source_replacements": [
+    {
+      "path": "scripts/basketball_shared_accounting_v9.py",
+      "original_sha256": "8ddf22a99cdd89b6a89180860346a18a5acb54d9aaa96e8266538fe5eae7413e",
+      "archive": "docs/experiments/basketball-shared-timing-v9/corrections/before-serialization-fix/basketball_shared_accounting_v9.py",
+      "corrected_sha256": "153d65de9861f4ead773cc8e5a15590b59070c466f11c81a422fceb4e185993c"
+    },
+    {
+      "path": "scripts/basketball_shared_benchmark_v9.py",
+      "original_sha256": "6e3824b809d286418848ae7d86d79fbef07eb17339131d00f3e52e9585a64263",
+      "archive": "docs/experiments/basketball-shared-timing-v9/corrections/before-serialization-fix/basketball_shared_benchmark_v9.py",
+      "corrected_sha256": "e3927c57b06a1ee8fa0eebd8ce804eaeb39b74dfe8feb41bb3475d6c471992d9"
+    },
+    {
+      "path": "scripts/basketball_shared_workflow_v9.py",
+      "original_sha256": "21c2630a39ddf4e0a6cc26f6804e75b371a4b3c140efc9eef8f8fe6460451ab7",
+      "archive": "docs/experiments/basketball-shared-timing-v9/corrections/before-serialization-fix/basketball_shared_workflow_v9.py",
+      "corrected_sha256": "571d2d01bee69be2d7f7acffcfa9441544be6effe74bc3f2c5e6113f95fd18dd"
+    },
+    {
+      "path": "scripts/basketball_shared_verify_v9.py",
+      "original_sha256": "2f9a5b72369365efff92764b0a75bf52625bf34d1b6d91f7571847ae573f19be",
+      "archive": "docs/experiments/basketball-shared-timing-v9/corrections/before-serialization-fix/basketball_shared_verify_v9.py",
+      "corrected_sha256": "0a4ce6a5a4536ac81b612bf2e47c86a74cf608952e1581e567304809ab058e6a"
+    }
+  ],
+  "new_serialization_source": "scripts/basketball_shared_serialization_v9.py",
+  "new_serialization_sha256": "4a2da1a32a92cb7773452a8979f8ba00521c2eb8cc03afc1346dd7741f273ffe",
+  "fix_scope": "Metadata normalization plus finite NumPy-aware atomic serialization; original experimental sources archived exactly. No numerical policy change and no scientific rerun."
+}
