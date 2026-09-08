@@ -1,0 +1,163 @@
+{
+  "schema": "sync-analytic-fixtures/v1",
+  "ground_truth": "independent continuous analytic 3D motion and pinhole projection",
+  "sample_rate_hz": 100,
+  "units": "seconds",
+  "seed": null,
+  "scope": "CPU interface/identifiability controls; not VisualSync or Sync-NeRF benchmark results",
+  "cases": {
+    "fractional": {
+      "truth_offset_at_zero_seconds": 0.013,
+      "clock_rate": 1.0,
+      "early": {
+        "offset_seconds": 0.013000077988637119,
+        "median_epipolar_squared_pixels": 1.7008491710910315e-11,
+        "reason": "estimated"
+      },
+      "late": {
+        "offset_seconds": 0.013000030741561228,
+        "median_epipolar_squared_pixels": 2.855088538003111e-12,
+        "reason": "estimated"
+      },
+      "window_disagreement_seconds": 4.724707589054411e-08,
+      "absolute_errors_seconds": [
+        7.798863711945547e-08,
+        3.074156122891136e-08
+      ]
+    },
+    "stationary": {
+      "truth_offset_at_zero_seconds": 0.013,
+      "clock_rate": 1.0,
+      "early": {
+        "offset_seconds": null,
+        "reason": "stationary-unidentifiable"
+      },
+      "late": {
+        "offset_seconds": null,
+        "reason": "stationary-unidentifiable"
+      }
+    },
+    "occlusion": {
+      "truth_offset_at_zero_seconds": 0.013,
+      "clock_rate": 1.0,
+      "early": {
+        "offset_seconds": 0.013000081105547907,
+        "median_epipolar_squared_pixels": 1.826889954424405e-11,
+        "reason": "estimated"
+      },
+      "late": {
+        "offset_seconds": 0.013000030741561228,
+        "median_epipolar_squared_pixels": 2.855088538003111e-12,
+        "reason": "estimated"
+      },
+      "window_disagreement_seconds": 5.036398667904174e-08,
+      "absolute_errors_seconds": [
+        8.11055479079531e-08,
+        3.074156122891136e-08
+      ]
+    },
+    "incorrect-correspondence": {
+      "truth_offset_at_zero_seconds": 0.013,
+      "clock_rate": 1.0,
+      "early": {
+        "offset_seconds": 0.013000097751511775,
+        "median_epipolar_squared_pixels": 3.632868908819483e-11,
+        "reason": "estimated"
+      },
+      "late": {
+        "offset_seconds": 0.013000030891366464,
+        "median_epipolar_squared_pixels": 3.6175774494829945e-12,
+        "reason": "estimated"
+      },
+      "window_disagreement_seconds": 6.686014531083473e-08,
+      "absolute_errors_seconds": [
+        9.775151177567054e-08,
+        3.089136646483581e-08
+      ]
+    },
+    "dropped-frames": {
+      "truth_offset_at_zero_seconds": 0.013,
+      "clock_rate": 1.0,
+      "early": {
+        "offset_seconds": 0.01299991580367019,
+        "median_epipolar_squared_pixels": 9.354954776815572e-09,
+        "reason": "estimated"
+      },
+      "late": {
+        "offset_seconds": 0.013000107456539468,
+        "median_epipolar_squared_pixels": 8.53986962726713e-09,
+        "reason": "estimated"
+      },
+      "window_disagreement_seconds": 1.9165286927781688e-07,
+      "absolute_errors_seconds": [
+        8.419632980920244e-08,
+        1.0745653946861444e-07
+      ]
+    },
+    "clock-rate-mismatch": {
+      "truth_offset_at_zero_seconds": 0.013,
+      "clock_rate": 1.02,
+      "early": {
+        "offset_seconds": 0.03700222822689243,
+        "median_epipolar_squared_pixels": 0.13544081297187632,
+        "reason": "estimated"
+      },
+      "late": {
+        "offset_seconds": 0.07227852224494755,
+        "median_epipolar_squared_pixels": 0.663972218562012,
+        "reason": "estimated"
+      },
+      "window_disagreement_seconds": 0.03527629401805512
+    },
+    "epipolar-direction-ambiguity": {
+      "offset_seconds": null,
+      "reason": "stationary-unidentifiable"
+    },
+    "disconnected-graph": {
+      "offset_seconds": {
+        "1": 0.0,
+        "2": 0.013,
+        "3": null,
+        "4": null
+      },
+      "coverage": [
+        "1",
+        "2"
+      ],
+      "components": [
+        [
+          "1",
+          "2"
+        ],
+        [
+          "3",
+          "4"
+        ]
+      ],
+      "bridges": [
+        [
+          "1",
+          "2"
+        ],
+        [
+          "3",
+          "4"
+        ]
+      ],
+      "edge_residuals": [
+        {
+          "i": "1",
+          "j": "2",
+          "delta_seconds": -0.013,
+          "residual_seconds": 0.0
+        }
+      ],
+      "uncertainty_seconds": {
+        "1": 0.0,
+        "2": null,
+        "3": null,
+        "4": null
+      }
+    }
+  }
+}

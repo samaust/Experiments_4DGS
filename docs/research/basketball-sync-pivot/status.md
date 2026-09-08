@@ -5,6 +5,17 @@ This campaign does not activate or resume the continuous improvement loop.
 
 ## Current handoff
 
+The isolated runtime is built; the timing interface and independent analytic
+controls pass 13 CPU tests. See [implementation validation](implementation-validation.md)
+and [setup accounting](setup-accounting.json). Sync-NeRF compatibility attempt 1
+is compiling tiny-cuda-nn via a bounded Docker build (exec session 40723, timeout
+1800 seconds). No research GPU job is running. The official project-page UDBD
+index resolves to Box image folders and camera metadata, but timing-label
+provenance is still being audited. All eight VisualSync original scripts are now
+downloaded and hash-pinned. `img_match_v4.py` imports a missing `match_utils.py`
+helper; `process_image` is absent from the provided `match_utils_v2.py`. This is
+an additional completeness issue to assess before full-pipeline execution.
+
 The user resolved host group membership, supplied successful non-sudo Docker/GPU
 output, and explicitly resumed Plan 024. Docker now works through approved
 outside-sandbox execution. [Runtime evidence](runtime-check.json) retains the

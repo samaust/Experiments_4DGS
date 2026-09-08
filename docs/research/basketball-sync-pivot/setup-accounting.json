@@ -1,0 +1,48 @@
+{
+  "runtime": {
+    "limit_seconds": 7200,
+    "prior_active_seconds_reserved": 1800,
+    "prior_accounting": "Conservative reservation for preflight and resumed runtime work before exact setup clock; user intervention idle time excluded.",
+    "started_unix_seconds": 1788898378.9060905,
+    "operation": "build pinned common compatibility image",
+    "status": "completed",
+    "base_pull_elapsed_upper_bound_seconds": 163.9818570613861,
+    "base_digest": "sha256:14611869895df612b7b07227d5925f30ec3cd6673bad58ce3d84ed107950e014",
+    "build_started_unix_seconds": 1788898542.8879483,
+    "completed_observed_unix_seconds": 1788898732.5232153,
+    "charged_seconds_upper_bound": 2153.6171250343323,
+    "image_id": "sha256:d338675d51d3a7e281caa34db2c809274c4b572e5595b1bb914489adf17448a9",
+    "validation": "12 timing CPU tests passed in isolated offline container"
+  },
+  "baseline_compatibility": {
+    "visualsync": {
+      "limit_seconds": 7200,
+      "attempt_limit": 2,
+      "attempts": []
+    },
+    "sync-nerf": {
+      "limit_seconds": 7200,
+      "attempt_limit": 2,
+      "attempts": [
+        {
+          "number": 1,
+          "started_unix_seconds": 1788898897.100308,
+          "status": "running",
+          "operation": "compile tiny-cuda-nn architecture 89 in isolated container",
+          "timeout_seconds": 1800
+        }
+      ]
+    },
+    "mvus": {
+      "limit_seconds": 7200,
+      "attempt_limit": 2,
+      "attempts": []
+    }
+  },
+  "gpu_checks": {
+    "prior_host_check_reserved_seconds": 1,
+    "user_checks_reserved_seconds": 120,
+    "user_check_accounting": "Two pasted container nvidia-smi checks have unmeasured durations; reserve 60 seconds each conservatively, not a claim of measured consumption.",
+    "agent_container_check_seconds": 0.13570702903057036
+  }
+}
