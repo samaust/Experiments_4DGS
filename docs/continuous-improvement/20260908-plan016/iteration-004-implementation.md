@@ -41,3 +41,12 @@ applicable evaluator gate. Do not integrate or launch fits under this allocation
 
 Commit checkpoint identifiers and phase consumption including commits are appended
 in the final handoff record after the validated evidence milestone is committed.
+
+## Validated local checkpoint
+
+Evidence/source/report milestone: `f78afee`. Staged diff and whitespace passed;
+45 explicit task-related files were committed, including parent authorization and
+status as permitted. Measured phase time after that commit is 870.2752234200016
+seconds (monotonic 273221.31220477), under 1800 seconds. Final handoff
+commit and its post-commit elapsed time are reported to the parent for the next
+assessment, avoiding a self-referential commit hash. A4 is passed. No jobs remain.

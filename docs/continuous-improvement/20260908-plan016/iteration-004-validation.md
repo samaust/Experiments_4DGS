@@ -36,3 +36,8 @@ at the evidence checkpoint; final elapsed time and commit identifiers are retain
 in the implementation handoff. Supervisor recorded normal exit/reap; no tool session
 or numerical job remains. Reproduction requires a new authorized allocation and
 namespace, preserving these immutable consumed records.
+
+The evidence checkpoint `f78afee` passed staged diff/whitespace inspection and
+committed successfully. All 46 report/handoff links resolved, and all retained JSON
+parsed. Final handoff records the measured phase consumption including that commit;
+the parent receives the final handoff commit ID and post-commit elapsed time.
