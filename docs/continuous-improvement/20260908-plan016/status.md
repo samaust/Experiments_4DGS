@@ -2,11 +2,11 @@
 
 - State: active — explicitly resumed under clarified budget-scope instructions
 - Iteration: 002
-- Stage: review active (`/root/iteration002_review`); iteration 001 implementation complete
+- Stage: planning active (`/root/iteration002_plan`); iteration 002 review completed
 - Objective: [objective.md](objective.md)
-- Latest assessment: [iteration 002 resume assessment](iteration-002-assessment-00-resume.md)
+- Latest assessment: [iteration 002 post-review assessment](iteration-002-assessment-01-review.md)
 - Starting implementation: [Plan 016 results](../../experiments/basketball-shared-timing-v10.md)
-- Recommendations: iteration 002 pending; [iteration 001 review](iteration-001-recommendations.md) retained
+- Recommendations: [iteration 002 review](iteration-002-recommendations.md); [iteration 001 review](iteration-001-recommendations.md) retained
 - Plan: iteration 002 pending; [Plan 017 handoff](iteration-001-plan-link.md) retained
 - Implementation results: iteration 002 pending; [iteration 001 results](iteration-001-implementation.md), [validation](iteration-001-validation.md)
 - Stop reason: none for review/planning; check concrete next plan's execution budget before dispatch
