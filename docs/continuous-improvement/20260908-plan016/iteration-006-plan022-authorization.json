@@ -1,0 +1,110 @@
+{
+  "run_id": "20260908-plan016",
+  "iteration": 6,
+  "plan": "plans/plan_022.md",
+  "plan_sha256": "030ac6bc28ce8fc85c571886dca3d60482f805c9ab50bea1aa9df7a06ef95321",
+  "objective": "docs/continuous-improvement/20260908-plan016/objective.md",
+  "objective_sha256": "4cb8c6adfa7c5b04f26f958fa2c1b9d1c5c4488f2b216e9c9e6ffe5e73a33006",
+  "approval_basis": "AGENTS.md b62f2ea standing approval; Review-recommended Plan-finalized new allocation; explicit user same-objective resume",
+  "scope": "New Plan022 v15 implementation/evaluator allocation only; historical clocks never reset",
+  "t0_monotonic": 278029.757826149,
+  "t0_utc": "2026-09-08T11:12:33.978383+00:00",
+  "deadlines": {
+    "admission": {
+      "monotonic": 278929.757826149,
+      "utc": "2026-09-08T11:27:33.978383+00:00"
+    },
+    "readiness": {
+      "monotonic": 282829.757826149,
+      "utc": "2026-09-08T12:32:33.978383+00:00"
+    },
+    "scientific_cleanup": {
+      "monotonic": 284329.757826149,
+      "utc": "2026-09-08T12:57:33.978383+00:00"
+    },
+    "phase": {
+      "monotonic": 285229.757826149,
+      "utc": "2026-09-08T13:12:33.978383+00:00"
+    }
+  },
+  "phase_seconds": 7200,
+  "scientific_seconds": 1500,
+  "scientific_invocations": 1,
+  "candidate_choices": 1,
+  "reference_methods": 1,
+  "cases": 16,
+  "case_state_slots": 32,
+  "candidate_complete_bundles": 96,
+  "candidate_transform_contexts": 16,
+  "candidate_svd": 16,
+  "reference_complete_bundles": 32,
+  "candidate_setup_keys": 2,
+  "reference_setup_keys": 2,
+  "toy_suite_invocations": 2,
+  "toy_suite_seconds": 120,
+  "toy_groups": 20,
+  "toy_second_suite_condition": "documented implementation correction after suite1 failure; frozen test bytes unchanged",
+  "numerical_workers": 1,
+  "numerical_threads": 1,
+  "threads": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1"
+  },
+  "max_states_per_adapter": 200,
+  "max_iterations_per_adapter": 200,
+  "forbidden_work": [
+    "optimizer",
+    "local_fit",
+    "initialization_fit",
+    "restoration",
+    "training",
+    "rendering",
+    "GPU",
+    "device",
+    "network",
+    "download",
+    "installation",
+    "new_scientific_states",
+    "finite_differences",
+    "rays",
+    "screens"
+  ],
+  "initial_consumption": {
+    "scientific_invocations": 0,
+    "toy_suites": 0,
+    "scientific_entries": 0,
+    "training_seconds": 0
+  },
+  "historical": {
+    "training_charged_seconds": 22523.417254,
+    "training_total_ceiling_seconds": 86400,
+    "method_scene_ceiling_seconds": 7200,
+    "plan016_attempts": 405,
+    "plan016_preflights": 6,
+    "plan018_scientific_seconds": 7.84522387,
+    "plan018_phase_seconds": 1498.589622,
+    "plan019_scientific_seconds": 1.026992965,
+    "plan019_phase_seconds": 1125.515842279,
+    "plan020_scientific_seconds": 0.12248898699181154,
+    "plan020_phase_seconds": 914.2315437420039,
+    "all_consumed_allocations_preserved": true
+  },
+  "historical_plan021": {
+    "terminal": true,
+    "scientific_invocations": 0,
+    "scientific_entries": 0,
+    "scientific_seconds": 0,
+    "toy_suites": 2,
+    "toy_seconds": 2.87343034,
+    "final_phase_seconds": 1653.358525463,
+    "commits": [
+      "147e0cb",
+      "0c5100b"
+    ],
+    "unused_allowance_reusable": false
+  },
+  "exact_scientific_table": " Reference count |\n| --- | ---: | ---: |\n| Setup keys | 2 | 2 |\n| Complete bundles | 96 (16 cold +80 returned) | 32 |\n| Transform-only contexts | 16 | 0 |\n| Observation preparations | 112 (96 full,16 first-order only) | 32 |\n| Objective/data-G and residual/J | 96 | 32 |\n| Additional residual/J-only | 16 | 0 |\n| Data H / full sum / raw depth-J / bounded values / weighted Hz / bounded Hg | 96 each | 32 each |\n| Returned reports / cold reports | 80 /16 | 16 /16 |\n| SVD and Pnew/inverse | 16 | 0 |\n| Saved inverse | 80 | 16 |\n| Public replay probes | 80 (64 saved-y,16 new-y) | 0 |\n| Extra saved-P report transports | 16 | 0 |\n| Active acceleration traversals | 49 (42 full +7 transform) | 14 |\n| Component / new-P comparison contexts, driver only | 32 /16 | 0 |",
+  "exact_toy_inventory": "\n\nThese are planned entries, not a pool to spend on other tests. Every attempted\nentry is counted even if it throws. Maximum actual work fits Review's 20 Candidate,\n6 Reference, 2 transform/metric and 2 SVD ceilings:\n\n| Work | Frozen count and owner |\n| --- | --- |\n| Successful complete Candidate bundles | 14: group 12 two, group 14 ten, group 16 two; seven each weight |\n| Failed Candidate complete entries | Two group 18; wrong-decoder before preparation and interrupted preparation before geometry math; total complete attempts 16 |\n| Successful complete Reference bundles | Two group 12; one each weight |\n| Failed Reference complete entries | Two group 18 as above; total complete attempts four |\n| Integrated Candidate geometry/acceleration setups | Two shared immutable keys weight 0 then 1; one active four-column map/H construction |\n| Integrated Reference setups | Two keys weight 0 then 1; active setup three scalar order-2 basis rows and one 4x4 rational H construction |\n| Real cold residual/J-only, metric and SVD | Two each, group 14 only; two TransformCache repeats, zero repeated numerical work |\n| Rejected undersized metric | One group 14, no residual provider/setup/SVD entered |\n| Complete Candidate preparation/residual/data-H/full-sum/raw-depth/bounded-values/weighted-Hz/bounded-Hg | 14 each; plus the two transform first-order preparation/residual paths; one additional failed pre-math preparation in group 18 |\n| Complete Reference preparation/data/residual/data-H/full-sum/raw-depth/bounded-values/weighted-Hz/bounded-Hg | Two each; one additional failed pre-math preparation in group 18 |\n| Integrated active acceleration traversals | Candidate eight (seven complete, one transform); Reference one; weight-zero paths never enter active acceleration |\n| Kernel-only dc.setup attempts, groups 01\u201309 | 13: 11 successful (10 active, one inactive), two group 07 rejections before mapping |\n| Kernel-only dc.bundle calls, groups 01\u201309 | 11: 10 active, one inactive; these are additional to integrated acceleration traversals |\n| Kernel setup mapping calls | 57 unit-column mappings: 20 in groups 01\u201305, 18 in 06, 11 in 07, eight in 09; integrated active setup adds four, total 61 |\n| Kernel-only direct Reference.basis | Seven: five group 06 order-2 and two group 07 endpoints; no hidden setup/bundle |\n| Integrated Reference basis | Three active setup rows plus 72 observation calls (two complete bundles x12 observations x3 derivative orders); oracle uses closed polynomials instead |\n| Standalone spatial/projection/residual helpers | Group 11: two spatial, three projection-second, two robust-residual/J; integrated oracle: 12 spatial once. Real Reference adds 24 spatial; Candidate complete adds 28 two-camera projection/residual batches and transforms add four first-order batches |\n| Bounded helper outside full bundles | One group 13 underflow rejection; no other standalone bound experiment |\n| Report/transport assembly | 14 real Candidate primary reports (12 saved-P and two Pnew), two additional sequence-5 saved-P reports, and two real Reference saved reports. Two new-P independent algebra contexts using retained q oracle/reference; one dummy authoritative report in group 15. Other callbacks/reports are cache-only |\n\nKernel setup totals therefore are 15 Candidate setup attempts including integrated\nkeys (13 successful, two rejected), separately from two Reference setups and\nzero-math setup-identity rejections. Direct group 10 Jet operations and analytic\noracle array arithmetic are exactly the fixed expressions above, not complete\nbundles. Low-level count assertions bind real call entry; assigning expected\nintegers to counters does not qualify. Keep full numerical inventory separate\nfrom fixed byte-only guard/mutation/ledger cases.\n\nToy analytic comparisons keep atol `1e-12`, rtol `1e-11`, Decimal internal\nabsolute `1e-65`, and exact byte/zero/identity contracts. The production comparison\ndriver is also applied once to each of the 14 retained Candidate reports against\nthe corresponding already retained independent full Reference report (sequence\n5's saved-P report), and once per weight for new-P; no recalculation. Preserve\nall actual passing/failing entries and hashes, not only aggregate maxima.\n\n"
+}
