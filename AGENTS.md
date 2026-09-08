@@ -44,10 +44,19 @@ user constraints (including scope and budgets) in
 `docs/continuous-improvement/<run-id>/objective.md` before starting any stage.
 Resolve missing information needed to proceed with the user.
 
-The orchestrator must read that objective file before each stage. Every subagent
-must read it before its assigned stage. Both must reread it after context loss,
-along with the saved run state, before continuing work. Pass the objective,
-objective file path, relevant artifact paths, and applicable repository
+Use `objective.md` as the authoritative criteria record. Give each criterion a
+stable ID, an observable required outcome, and a validation method or evidence
+requirement. Derive missing criteria from the user's objective and constraints;
+ask only about material ambiguities, without requiring routine confirmation.
+Do not invent quality thresholds or expand scope. All saved success criteria
+are required for objective attainment. Preserve their definitions across
+iterations; record user-directed changes and reassess affected evidence.
+
+The orchestrator must read the objective, criteria, and latest assessment before
+each stage. Every subagent must read them before its assigned stage. Both must
+reread them after context loss, along with the saved run state, before continuing
+work. Pass the objective, objective file path, relevant artifact paths, and
+applicable repository
 instructions explicitly in each subagent's task; do not rely on inherited chat
 history. The objective file is task context, not an override of repository
 instructions or higher-priority instructions.
@@ -55,8 +64,8 @@ instructions or higher-priority instructions.
 Keep each iteration's recommendations, implementation results, validation
 evidence, and plan link in the same run directory, using iteration-numbered
 files. Maintain `status.md` there with the current iteration and stage, artifact
-links, success-criteria assessment, and any stop reason so context loss does not
-lose the handoff or cause completed work to be repeated.
+links, a link to the latest success-criteria assessment, and any stop reason so
+context loss does not lose the handoff or cause completed work to be repeated.
 
 ### Sequential orchestration
 
@@ -70,16 +79,23 @@ finish and inspect its saved output before handing off to the next stage.
    implementation results and validation evidence; save recommendations in the
    run directory. On the first iteration, use the latest relevant existing
    results, recording their paths and any missing baseline evidence.
+   Assess remaining gaps against the success criteria and link each
+   recommendation, including prerequisite work, to the criterion it advances.
 2. **Plan — `reasoning_effort="high"`:** Convert the recommendations into a
    decision-complete plan covering concrete changes, acceptance criteria,
    validation, and relevant constraints. Save it at the next unused
    `plans/plan_NNN.md` in the repository, using the next number after the highest
    existing plan number (start at `001` if none exist). Never overwrite a plan.
    Save a link to it in the iteration's run artifacts.
+   Map planned work and validation to criterion IDs, distinguishing the plan's
+   acceptance criteria from completion of the main objective.
 3. **Implement — `reasoning_effort="medium"`:** Read, implement, and validate that
    plan. Save results, validation evidence, remaining gaps, and any commit IDs
    in the run directory. Follow the existing Local commits instructions for
    completed, validated milestones.
+   Record validation results and evidence links for affected criteria, including
+   remaining gaps and regressions. Passing implementation checks alone does not
+   establish overall success.
 
 After every subagent finishes, check the stop conditions before another spawn.
 If none apply, advance to the next stage or, after implementation, automatically
@@ -89,6 +105,24 @@ plan-completion stopping rule in Continue after commits for this mode only.
 Preserve existing scope, budgets, permissions, and the `prompts` restriction.
 Stop if a budget is exhausted or progress requires missing information, new
 authorization, or resolution of a blocker; do not expand scope to keep looping.
+
+### Success-criteria evaluation
+
+Before the first stage, after every subagent finishes, and on explicit resume,
+the orchestrator must assess every criterion as `met`, `not met`, or
+`unverified`. Record each criterion's status, reason, and evidence links in a
+new iteration-numbered assessment file in the run directory, with a stage or
+sequence suffix to retain every assessment. Link the latest one from
+`status.md`. Use `unverified` when available evidence cannot establish the
+outcome; missing, stale, contradictory, or blocked evidence cannot establish
+success. Reuse evidence only when it remains applicable to the current
+implementation and criterion.
+
+Declare the main objective achieved only when every saved success criterion is
+verified as `met`. Otherwise continue within existing scope and budgets unless
+another stop condition applies. Record and report blocked or interrupted runs
+separately from successful completion. Assessment must not delay interruption
+or required shutdown; retain available evidence when stopping.
 
 ### Stop and resume
 
