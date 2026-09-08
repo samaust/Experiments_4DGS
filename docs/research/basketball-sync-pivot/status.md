@@ -1,7 +1,39 @@
 # Plan 024 execution status
 
-2026-09-08: **Blocked during Stage A host-administration preflight. Plan 024 is incomplete.**
+2026-09-08: **Blocked during Stage A Docker daemon access on explicit resume. Plan 024 is incomplete.**
 This campaign does not activate or resume the continuous improvement loop.
+
+## Resume checkpoint
+
+The user installed the runtime and explicitly requested continuation. Installed
+packages now verified by `dpkg-query -W docker-ce docker-ce-cli containerd.io
+nvidia-container-toolkit`:
+
+- Docker Engine and CLI: `5:29.8.0-1~ubuntu.24.04~noble`.
+- containerd.io: `2.3.5-1~ubuntu.24.04~noble`.
+- NVIDIA Container Toolkit: `1.20.0-1`.
+
+The user explicitly declined granting sudo access. Privileged commands must be
+provided for the user to run locally; no sudo invocation was made on resume.
+`docker version` failed inside the sandbox and on its one required
+`require_escalated` retry (prefix `["docker", "version"]), both with exit code 1:
+
+```text
+permission denied while trying to connect to the docker API at unix:///var/run/docker.sock
+```
+
+The client reports version 29.8.0, API 1.56, context `default`. Server and GPU
+container access remain unverified. No automatic approval rejection occurred;
+host socket permissions are the apparent cause, rather than a demonstrated
+Codex sandbox denial. No missing allow rule was established; a Codex allow rule
+does not grant Unix socket access. No alternative socket or privilege route was
+attempted. Container work is stopped, with no new GPU charge or active jobs.
+
+The user can run `sudo docker version` and the previously supplied GPU container
+check locally and return their output. Subsequent privileged workload commands
+must likewise be prepared for user execution unless the user explicitly chooses
+another access arrangement. Do not grant Docker group membership or change socket
+permissions on the user's behalf. The original preflight record below is historical.
 
 The user authorized implementation of [plan 024](../../../plans/plan_024.md).
 Repository instructions require stopping affected work when an outside-sandbox
@@ -54,10 +86,10 @@ Historical consumed allocations are not reset by this checkpoint.
 
 ## Remaining work and resume prerequisite
 
-Host administration must be made available for the authorized Docker Engine and
-NVIDIA Container Toolkit provisioning, followed by an explicit instruction to
-continue. Do not ask for or record a sudo password in repository artifacts or chat.
-Recheck actual installed state on resume before performing any installation.
+Runtime installation is now verified; the current prerequisite is user-operated
+Docker execution as described in the resume checkpoint. Do not ask for or record
+a sudo password in repository artifacts or chat. Preserve the user's refusal to
+grant sudo access on subsequent resumes.
 
 The next numbered execution specification has not been created. The literature
 study, verified citation map, code/benchmark matrix, protocol freeze, timing
