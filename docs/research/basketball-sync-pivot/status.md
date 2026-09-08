@@ -9,6 +9,16 @@ retains its hash. The historical HTTP refusal below is resolved through the
 user-provided file. Continue remaining authorized work; no additional download
 of this paper is needed.
 
+## First scientific pilot completed
+
+Sync-NeRF seed 0 completed at 43,049 updates in approximately 2312 seconds, with
+finite offsets for the prescribed eight cameras and saved native model state.
+The schedule remains budget-limited versus 90,001 native updates. Seed1 is active;
+seed 2 and all reconstruction controls/evaluations remain pending.
+[Partial seed results](syncnerf-results.json) and the durable GPU ledger retain
+completed versus reserved/unrun attempts. No accuracy or full-rig claim follows
+from the small first-seed offsets.
+
 ## Training protocol checkpoint
 
 [Training settings](training-protocol.json) are frozen before scientific GPU execution.
