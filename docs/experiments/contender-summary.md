@@ -1,8 +1,8 @@
 # Contender comparison summary
 
-[Plan 012 exact-Hessian pilot](basketball-shared-timing-v6.md) ends at `numerical_failure`: the curvature diagnostic passed, but only 94/144 pilot attempts qualified (72 regularized, 22 data-only). No later scientific stage or new selection/final-frame consumption ran; accepted timing remains null.
+Current as of **2026-09-08**: [Plan 016/v10](basketball-shared-timing-v10.md) ends in scientific rejection, with [accepted timing null](basketball-shared-timing-v10/package/terminal-decision.json). Accepted static calibration covers all 34 Basketball cameras, estimated scale is 1.31506947 metres per calibration unit, and held-outs remain 0/10/20/30. Reconstruction remains gated on timing. The [v4](basketball-shared-timing-v4.md), [v5](basketball-shared-timing-v5.md) and [v6](basketball-shared-timing-v6.md) pilot results below are historical.
 
-[Plan 011 bounded-depth pilot](basketball-shared-timing-v5.md) stops at `numerical_failure`: 93/144 attempts qualified, with 51 data-only failures. No real fitting or new selection/final-frame consumption occurred; accepted timing remains null.
+The [qualified workflow guide](../selfcap-workflow.md) recommends STG Full as the compact completed-schedule SelfCap default, FreeTimeGS reproduction when measured aggregate quality justifies its cost, and Lite for highest measured throughput. [Retained-file audit](selfcap-evidence-20260908/audit-02.md) and [actual adjacent-frame/crop/sweep inspection](selfcap-evidence-20260908/inspection.md) support this choice. All retain excess fast-motion blur; no flicker ranking or unqualified motion-fidelity winner is established.
 
 Status: **plan's result-or-specific-blocker coverage complete: four evaluated
 SelfCap pairs and eight blocked pairs. A full six-method/two-scene ranking is unavailable.**
@@ -93,13 +93,7 @@ initialization and evaluation are separate; unused scene/method budgets were not
 redistributed. The small remaining ATGS/FreeTimeGS allowances are below their
 restart/reserve gates.
 
-For further **inspection**, prioritize the dense-initialized FreeTimeGS
-reproduction: sampled foreground/background coherence and aggregate metrics
-improved substantially. Its severe fast-motion blur still prevents an
-unqualified quality recommendation. Keep STG Full as the completed native
-comparison and Lite as the faster measured renderer. This conclusion is based
-on the local artifacts, not paper scores or an invented combined artifact score.
-No measured flicker ranking or long-sequence claim is established.
+The [completed shared inspection](selfcap-evidence-20260908/inspection.md) covers every adjacent transition in 4120–4122, 4148–4152 and 4177–4179, four fixed crops and poses 0/10/19. FreeTimeGS retains clearer face/body structure in several midpoint/end samples, but fast hair remains diffuse and ending shelves show haze. ATGS preserves some local lettering more clearly despite worse aggregate/foreground performance. Full’s recommendation rests on compact complete state, completed schedule and measured tradeoffs, not sharp-motion recovery. No combined score, equal-compute claim, long-sequence conclusion or full-sequence playback claim is made.
 
 ## SelfCap dance1 — provisional 5,000-step checkpoints
 
@@ -157,6 +151,11 @@ recommend a final winner from these unfinished runs. The growth record links
 the full evidence, resource measurements and budget accounting.
 
 ## VRU Basketball DG — blocked on synchronization
+
+Current blocker: v10 scientific rejection and null accepted timing, as linked above. A new numerical phase needs user-approved concrete scope, elapsed-time and attempt caps. Plan 016’s five 81-attempt policies and six preflight allocations are consumed; its 90-minute window cannot restart. Unspent training/calibration allocations do not authorize timing work. Full screens and final validation still require their scientific gates.
+
+The following v4/v3/v2 and earlier descriptions are historical investigations, not current stage status.
+
 
 [Plan 010](basketball-shared-timing-v4.md) adds a separately versioned
 positive-depth constrained evaluator and deterministic weak-column seed repair.
@@ -225,19 +224,21 @@ method-quality measurements.
 
 ## Unexecuted SelfCap methods
 
+Availability audits are retained from **2026-09-06**, with no online refresh on 2026-09-08.
+
 | Method | Specific blocker | Training charged | Decision |
 | --- | --- | ---: | --- |
 | [MoE-GS](008-moe-gs.md) | Modified SH-based STG model/rasterizer source exists, but its standalone released expert-training route or matching pretrained state is unvalidated; router trainers expect pretrained experts | 0 s | Defer until that route or asset is available; original STG Full is not equivalent |
 | [FreeTimeGS++](010-freetimegs-plus-plus.md) | No author implementation of fixed B was identified in the recorded source audit | 0 s | Defer until a usable release is identified; paper-only reimplementation is outside scope |
 
-All twelve method/scene pairs now have a reproducible final-budget result or
+All twelve method/scene pairs have a retained final-schedule/budget-stop result or
 the specific blocker above, with reports 006–010 and the matched Lite record.
 The blocked pairs require validated synchronization or a usable released training
 route/implementation; they are not quality failures. Further training beyond
 the existing reserve gates requires a new budget decision. No paper-only
 implementation, calibration substitution or budget redistribution was performed.
 
-Final validation rechecked both budget-stop evaluations, 80 exact offline views
+Historical final validation rechecked both budget-stop evaluations, 80 exact offline views
 per method, retained PNG/video/crop evidence, complete 60-frame comparison
 records and the ledger's absence of overruns/live reservations. All 167 local
 documentation links resolve, 76 Bash blocks in the training/preview guides pass
@@ -245,7 +246,9 @@ documentation links resolve, 76 Bash blocks in the training/preview guides pass
 camera/split/time, missing-state, evaluator and regression-test evidence; this
 final documentation-only milestone did not change the validated training adapters.
 
-## Plan 005 Basketball calibration update — 2026-09-06
+## Historical Plan 005 Basketball calibration update — 2026-09-06
+
+The following calibration failures predate the accepted 34-camera calibration; they do not describe the current calibration blocker.
 
 The [ViPE pilot](basketball-calibration-20260906.md) audited all 34 videos but
 stopped at camera 4 intrinsic instability: 20.2948% focal range relative to the
@@ -257,14 +260,14 @@ the existing method allocations unchanged.
 The subsequent user-authorized **25%** pilot passed. The
 [all-camera continuation](basketball-calibration-20260906.md#all-camera-continuation-outcome-blocked-at-camera-5)
 then stopped at camera 5 (**26.0539% > 25%**); the other 33 cameras passed the
-intrinsic check. This supersedes camera 4 as the current calibration blocker.
+intrinsic check. At that historical stage this superseded camera 4 as the calibration blocker.
 Shared geometry, synchronization and Basketball training remain unexecuted.
 Cumulative calibration charge is 323.0525 seconds; training charge remains zero.
 
 
-### Current 23-camera variant after camera 19 removal
+### Historical 23-camera variant after camera 19 removal
 
-The user also removed camera 19. The current variant has 23 cameras: 20
+The user also removed camera 19. That historical variant had 23 cameras: 20
 training and held-outs 0, 10, 30; 1,150 expected images (150 held-out).
 [The rebuilt 23-camera search](basketball-no-camera19.md) completed 32 independent
 reconstruction commands. Its best result is **5.8807 degrees / 7.1892% of rig

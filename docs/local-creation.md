@@ -7,6 +7,8 @@ conditional. The plan-004 STG integration commands have executed locally; see
 the [growth and offline evaluation record](experiments/contender-growth-20260906.md)
 for measured results and remaining limitations.
 
+Current retained SelfCap models, qualified recommendation and exact-model reload procedures are in the [2026-09-08 workflow guide](selfcap-workflow.md). Its evidence supersedes older pending-schedule statements below.
+
 ## Environment and workspace
 
 For plan 004, prepare the shared SelfCap input with:

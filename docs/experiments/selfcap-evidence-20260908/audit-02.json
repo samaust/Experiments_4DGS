@@ -1,0 +1,592 @@
+{
+  "schema": "selfcap-evidence-recheck/v1",
+  "previous": "audit.json",
+  "previous_sha256": "3356af4d99a04abb4c8d3efa2fd1aab3724328b3b9b01e246961dff46749c94a",
+  "auditor_sha256": "b0c22e947f46c76207650510981fab62a507400ded3205440cd762156cf04497",
+  "recheck_script": "import ast\nfrom collections import Counter\nimport importlib.util\nimport json\nfrom pathlib import Path\nspec=importlib.util.spec_from_file_location('audit','scripts/audit-selfcap-evidence.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)\nroot=Path('.').resolve();a=module.Audit(root);out=root/'docs/experiments/selfcap-evidence-20260908';previous=json.loads((out/'audit.json').read_text());a.manifest=json.loads((root/module.PROFILE/'manifest.json').read_text())\nfor method in module.METHODS:\n ev=Path(module.RUNS)/f'{method}-selfcap-final-evaluation-20260906'\n evaluation=a.read(ev/'evaluation.json');commands=a.read(ev/'commands.json')\n a.check(method+':stages',module.completed_reload_stages(evaluation,commands,method),reason='Completed render commands; STG uses offline wrapper, FreeTimeGS/ATGS renderers invoke restrict_network internally. Saved isolation probes already passed in audit.json.')\n for reload in ('reload-a','reload-b'):\n  render=a.read(ev/reload/'render.json');a.check(method+':'+reload+':fixed-sweep',module.validate_sweep(render['sweep'],a.manifest['sweep']))\n if method=='atgs':\n  config=a.read(Path(module.RUNS)/'atgs-selfcap-final-20260906/training-config.json')\n  tree=ast.parse((root/'.local/ATGS/utils/loss_utils.py').read_text());names=('l1_loss','gaussian','create_window','ssim','_ssim');functions={n.name:n for n in tree.body if isinstance(n,ast.FunctionDef)}\n  sha=module.hashlib.sha256(ast.dump(ast.Module(body=[functions[n] for n in names],type_ignores=[])).encode()).hexdigest();a.check('atgs:loss-AST',sha==config['loss_helper_ast_sha256'],config['loss_helper_ast_sha256'],sha)\n if method=='freetimegs':\n  config=a.read(Path(module.RUNS)/'freetimegs-selfcap-final-20260906/training-config.json');a.check('freetimegs:runtime-training-binaries',evaluation['runtime']['binaries']==config['binaries'])\n# Preserve all first-pass records; supersede exactly the two false argv-only failures.\nreplaced=['freetimegs:stages','atgs:stages'];effective=[c for c in previous['checks'] if c['id'] not in replaced]+a.checks\nresult=dict(schema='selfcap-evidence-recheck/v1',previous='audit.json',previous_sha256=module.digest(out/'audit.json'),auditor_sha256=module.digest(root/'scripts/audit-selfcap-evidence.py'),recheck_script=Path('/tmp/selfcap-recheck.py').read_text(),supersedes=replaced,checks=a.checks,files=list(a.files.values()),effective_counts=dict(Counter(c['status'] for c in effective)),scope='Only corrected command-stage predicates, strengthened sweep predicates and additional file/AST checks rerun. Prior image/model hashes remain first-pass evidence; nothing was freshly rendered.')\nfor path in (out/'audit-02.json',out/'audit-02.md'):\n if path.exists():raise FileExistsError(path)\n(out/'audit-02.json').write_text(json.dumps(result,indent=2)+'\\n')\n(out/'audit-02.md').write_text('''# Final retained-evidence audit assessment\n\nThe [first audit](audit.json) hashed **1,440 processed inputs**, **640 reload PNGs**, all four final models (including ATGS\u2019s 11 components), 24 dense initialization clouds, source/configuration records and installed indexed binaries. All those required file checks passed. No current source discrepancy was found.\n\nThe first invocation returned 1: its two stage predicates wrongly required the literal offline wrapper in FreeTimeGS/ATGS command arguments. Both renderers call `restrict_network` internally before model loading; their saved IPv4/IPv6 isolation probes passed. The corrected production predicate and focused tests establish completed commands separately from isolation. [The targeted recheck](audit-02.json) supersedes exactly those two failures; it retains the original report and embeds its reproducible stdlib-only recheck script.\n\nEffective result: **'''+str(result['effective_counts'])+'''**. Two unavailable items remain: historical STG Lite/Full native-binary attestations were never recorded. This cannot establish a fully attested historical runtime or a new reload. No source restoration, dependency installation, training, numerical evaluation or GPU execution occurred.\n\nAll 60 held-out times and 20 common fixed-time poses agree across saved metadata; all a/b PNG bytes agree. FreeTimeGS/ATGS historical raw-float hashes also agree, but raw arrays were not recomputed. STG establishes PNG equality only. Model bytes and loader requirements support complete retained state, not a newly exercised restore.\n\nSaved metric means and aggregate deltas reconcile at 1e-9 tolerance; benchmark FPS equals 100/sum(duration), with 10 warmups and 100 samples at camera 0015/frame 4150, 1890\u00d71061. Loading, camera setup, image saving and encoding are excluded. The ledger remains 22,523.417254 charged seconds, zero overruns and no live reservations. Final continuation wall time, sampled device baseline/peak and allocator peaks remain distinct in the machine report. Source-video hashes are recorded provenance with presence checks only; source videos were not rehashed.\n\nThe [inspection report](inspection.md), [offline image selector](inspection.html) and [workflow guide](../../selfcap-workflow.md) interpret this retained evidence. Basketball and unsupported-method blockers remain; this milestone does not attain the two-profile objective.\n''')\nprint(result['effective_counts'])\n",
+  "supersedes": [
+    "freetimegs:stages",
+    "atgs:stages"
+  ],
+  "checks": [
+    {
+      "id": "file:.local/runs/stg-lite-selfcap-final-evaluation-20260906/evaluation.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/stg-lite-selfcap-final-evaluation-20260906/evaluation.json",
+        "present": true,
+        "sha256": "16d8661c5de91bb1b54ce0475096a1ef999ee7a57dee507aab5e7705149a84ad",
+        "bytes": 12513
+      },
+      "reason": ""
+    },
+    {
+      "id": "file:.local/runs/stg-lite-selfcap-final-evaluation-20260906/commands.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/stg-lite-selfcap-final-evaluation-20260906/commands.json",
+        "present": true,
+        "sha256": "85ce20aad3927c5467df88e272c8dd8d2141123ac604180117329fc295c4e437",
+        "bytes": 6573
+      },
+      "reason": ""
+    },
+    {
+      "id": "stg-lite:stages",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": null,
+      "observed": null,
+      "reason": "Completed render commands; STG uses offline wrapper, FreeTimeGS/ATGS renderers invoke restrict_network internally. Saved isolation probes already passed in audit.json."
+    },
+    {
+      "id": "file:.local/runs/stg-lite-selfcap-final-evaluation-20260906/reload-a/render.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/stg-lite-selfcap-final-evaluation-20260906/reload-a/render.json",
+        "present": true,
+        "sha256": "d938b5ecadf11dc7dd89c5987a2df0febb676dde682cf94e4bb3a227a6a30a0f",
+        "bytes": 28937
+      },
+      "reason": ""
+    },
+    {
+      "id": "stg-lite:reload-a:fixed-sweep",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": null,
+      "observed": null,
+      "reason": ""
+    },
+    {
+      "id": "file:.local/runs/stg-lite-selfcap-final-evaluation-20260906/reload-b/render.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/stg-lite-selfcap-final-evaluation-20260906/reload-b/render.json",
+        "present": true,
+        "sha256": "5325646f9ea7fe024631cfaaac6362e48f874d525084d96456bb119fecff18c7",
+        "bytes": 25832
+      },
+      "reason": ""
+    },
+    {
+      "id": "stg-lite:reload-b:fixed-sweep",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": null,
+      "observed": null,
+      "reason": ""
+    },
+    {
+      "id": "file:.local/runs/stg-full-selfcap-final-evaluation-20260906/evaluation.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/stg-full-selfcap-final-evaluation-20260906/evaluation.json",
+        "present": true,
+        "sha256": "b102e57d60e3a285a416532c76e4f588c52b6e1f0176fa975953092f604390d8",
+        "bytes": 12467
+      },
+      "reason": ""
+    },
+    {
+      "id": "file:.local/runs/stg-full-selfcap-final-evaluation-20260906/commands.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/stg-full-selfcap-final-evaluation-20260906/commands.json",
+        "present": true,
+        "sha256": "f55c58a405f283888f3cb7671bb667a880edfef6f89b4def5f64bfa57c6a1c23",
+        "bytes": 6575
+      },
+      "reason": ""
+    },
+    {
+      "id": "stg-full:stages",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": null,
+      "observed": null,
+      "reason": "Completed render commands; STG uses offline wrapper, FreeTimeGS/ATGS renderers invoke restrict_network internally. Saved isolation probes already passed in audit.json."
+    },
+    {
+      "id": "file:.local/runs/stg-full-selfcap-final-evaluation-20260906/reload-a/render.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/stg-full-selfcap-final-evaluation-20260906/reload-a/render.json",
+        "present": true,
+        "sha256": "b0e6c75e7300fd3c803d3ce9a4b5a5e30a37255e06897ff2670243513a9ac309",
+        "bytes": 28888
+      },
+      "reason": ""
+    },
+    {
+      "id": "stg-full:reload-a:fixed-sweep",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": null,
+      "observed": null,
+      "reason": ""
+    },
+    {
+      "id": "file:.local/runs/stg-full-selfcap-final-evaluation-20260906/reload-b/render.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/stg-full-selfcap-final-evaluation-20260906/reload-b/render.json",
+        "present": true,
+        "sha256": "d4d619562512fe574deb33bfbd1ce586d11b19b2e72ec240767fe008d85cb608",
+        "bytes": 25832
+      },
+      "reason": ""
+    },
+    {
+      "id": "stg-full:reload-b:fixed-sweep",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": null,
+      "observed": null,
+      "reason": ""
+    },
+    {
+      "id": "file:.local/runs/freetimegs-selfcap-final-evaluation-20260906/evaluation.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/freetimegs-selfcap-final-evaluation-20260906/evaluation.json",
+        "present": true,
+        "sha256": "c095008f5125e9a3570657f22c3bc241c3fbf8bce39fe3271f3052f39ebf2e8d",
+        "bytes": 11782
+      },
+      "reason": ""
+    },
+    {
+      "id": "file:.local/runs/freetimegs-selfcap-final-evaluation-20260906/commands.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/freetimegs-selfcap-final-evaluation-20260906/commands.json",
+        "present": true,
+        "sha256": "9f1ef6ae7866921d834b4b89b8ef28f4a53104495aadf609d624018fc537a8bb",
+        "bytes": 5615
+      },
+      "reason": ""
+    },
+    {
+      "id": "freetimegs:stages",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": null,
+      "observed": null,
+      "reason": "Completed render commands; STG uses offline wrapper, FreeTimeGS/ATGS renderers invoke restrict_network internally. Saved isolation probes already passed in audit.json."
+    },
+    {
+      "id": "file:.local/runs/freetimegs-selfcap-final-evaluation-20260906/reload-a/render.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/freetimegs-selfcap-final-evaluation-20260906/reload-a/render.json",
+        "present": true,
+        "sha256": "c3533550d55cb091cd0afb3fbffe55dee246549b38c4d6da8b2af8925adf1e8d",
+        "bytes": 45782
+      },
+      "reason": ""
+    },
+    {
+      "id": "freetimegs:reload-a:fixed-sweep",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": null,
+      "observed": null,
+      "reason": ""
+    },
+    {
+      "id": "file:.local/runs/freetimegs-selfcap-final-evaluation-20260906/reload-b/render.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/freetimegs-selfcap-final-evaluation-20260906/reload-b/render.json",
+        "present": true,
+        "sha256": "06acd29c347278bd99c00d902b0863e508461fc7025d8d352f7928034c4e3484",
+        "bytes": 42701
+      },
+      "reason": ""
+    },
+    {
+      "id": "freetimegs:reload-b:fixed-sweep",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": null,
+      "observed": null,
+      "reason": ""
+    },
+    {
+      "id": "file:.local/runs/freetimegs-selfcap-final-20260906/training-config.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/freetimegs-selfcap-final-20260906/training-config.json",
+        "present": true,
+        "sha256": "3759b50606f72c16a2ed3b3cd2ce303549a403f4b180f8310a7619f94a50f106",
+        "bytes": 6737
+      },
+      "reason": ""
+    },
+    {
+      "id": "freetimegs:runtime-training-binaries",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": null,
+      "observed": null,
+      "reason": ""
+    },
+    {
+      "id": "file:.local/runs/atgs-selfcap-final-evaluation-20260906/evaluation.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/atgs-selfcap-final-evaluation-20260906/evaluation.json",
+        "present": true,
+        "sha256": "99d80e0bce39b18324814e709ee2f8013a7257f8559047b8d17c9e5a01cb14cc",
+        "bytes": 14921
+      },
+      "reason": ""
+    },
+    {
+      "id": "file:.local/runs/atgs-selfcap-final-evaluation-20260906/commands.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/atgs-selfcap-final-evaluation-20260906/commands.json",
+        "present": true,
+        "sha256": "b777d8ed0e4c6c7f9fbe72af7d24a41909ce8bf3c5e7672e9af16f0fd9a42e86",
+        "bytes": 5461
+      },
+      "reason": ""
+    },
+    {
+      "id": "atgs:stages",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": null,
+      "observed": null,
+      "reason": "Completed render commands; STG uses offline wrapper, FreeTimeGS/ATGS renderers invoke restrict_network internally. Saved isolation probes already passed in audit.json."
+    },
+    {
+      "id": "file:.local/runs/atgs-selfcap-final-evaluation-20260906/reload-a/render.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/atgs-selfcap-final-evaluation-20260906/reload-a/render.json",
+        "present": true,
+        "sha256": "da9e843d5c64f72506bbdc20b4e3fb16b104a2ec36d3a3e5049582b505a768e7",
+        "bytes": 49074
+      },
+      "reason": ""
+    },
+    {
+      "id": "atgs:reload-a:fixed-sweep",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": null,
+      "observed": null,
+      "reason": ""
+    },
+    {
+      "id": "file:.local/runs/atgs-selfcap-final-evaluation-20260906/reload-b/render.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/atgs-selfcap-final-evaluation-20260906/reload-b/render.json",
+        "present": true,
+        "sha256": "23c94567308b0d0259a40811f7a5e9c2c37926979821f5e6e79d02de826aef16",
+        "bytes": 45964
+      },
+      "reason": ""
+    },
+    {
+      "id": "atgs:reload-b:fixed-sweep",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": null,
+      "observed": null,
+      "reason": ""
+    },
+    {
+      "id": "file:.local/runs/atgs-selfcap-final-20260906/training-config.json",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": {
+        "sha256": null,
+        "bytes": null
+      },
+      "observed": {
+        "path": ".local/runs/atgs-selfcap-final-20260906/training-config.json",
+        "present": true,
+        "sha256": "eba5f6ab554a29d57fba535847a3de9ac1dcf65ca1d2e9805845dc5eeafbf91a",
+        "bytes": 11865
+      },
+      "reason": ""
+    },
+    {
+      "id": "atgs:loss-AST",
+      "criteria": [
+        "SC-05"
+      ],
+      "status": "passed",
+      "expected": "faafee3fdcf5a90065fbda709a99e27da182dbb21b7ee856f4e127f41c27a476",
+      "observed": "faafee3fdcf5a90065fbda709a99e27da182dbb21b7ee856f4e127f41c27a476",
+      "reason": ""
+    }
+  ],
+  "files": [
+    {
+      "path": ".local/runs/stg-lite-selfcap-final-evaluation-20260906/evaluation.json",
+      "present": true,
+      "sha256": "16d8661c5de91bb1b54ce0475096a1ef999ee7a57dee507aab5e7705149a84ad",
+      "bytes": 12513
+    },
+    {
+      "path": ".local/runs/stg-lite-selfcap-final-evaluation-20260906/commands.json",
+      "present": true,
+      "sha256": "85ce20aad3927c5467df88e272c8dd8d2141123ac604180117329fc295c4e437",
+      "bytes": 6573
+    },
+    {
+      "path": ".local/runs/stg-lite-selfcap-final-evaluation-20260906/reload-a/render.json",
+      "present": true,
+      "sha256": "d938b5ecadf11dc7dd89c5987a2df0febb676dde682cf94e4bb3a227a6a30a0f",
+      "bytes": 28937
+    },
+    {
+      "path": ".local/runs/stg-lite-selfcap-final-evaluation-20260906/reload-b/render.json",
+      "present": true,
+      "sha256": "5325646f9ea7fe024631cfaaac6362e48f874d525084d96456bb119fecff18c7",
+      "bytes": 25832
+    },
+    {
+      "path": ".local/runs/stg-full-selfcap-final-evaluation-20260906/evaluation.json",
+      "present": true,
+      "sha256": "b102e57d60e3a285a416532c76e4f588c52b6e1f0176fa975953092f604390d8",
+      "bytes": 12467
+    },
+    {
+      "path": ".local/runs/stg-full-selfcap-final-evaluation-20260906/commands.json",
+      "present": true,
+      "sha256": "f55c58a405f283888f3cb7671bb667a880edfef6f89b4def5f64bfa57c6a1c23",
+      "bytes": 6575
+    },
+    {
+      "path": ".local/runs/stg-full-selfcap-final-evaluation-20260906/reload-a/render.json",
+      "present": true,
+      "sha256": "b0e6c75e7300fd3c803d3ce9a4b5a5e30a37255e06897ff2670243513a9ac309",
+      "bytes": 28888
+    },
+    {
+      "path": ".local/runs/stg-full-selfcap-final-evaluation-20260906/reload-b/render.json",
+      "present": true,
+      "sha256": "d4d619562512fe574deb33bfbd1ce586d11b19b2e72ec240767fe008d85cb608",
+      "bytes": 25832
+    },
+    {
+      "path": ".local/runs/freetimegs-selfcap-final-evaluation-20260906/evaluation.json",
+      "present": true,
+      "sha256": "c095008f5125e9a3570657f22c3bc241c3fbf8bce39fe3271f3052f39ebf2e8d",
+      "bytes": 11782
+    },
+    {
+      "path": ".local/runs/freetimegs-selfcap-final-evaluation-20260906/commands.json",
+      "present": true,
+      "sha256": "9f1ef6ae7866921d834b4b89b8ef28f4a53104495aadf609d624018fc537a8bb",
+      "bytes": 5615
+    },
+    {
+      "path": ".local/runs/freetimegs-selfcap-final-evaluation-20260906/reload-a/render.json",
+      "present": true,
+      "sha256": "c3533550d55cb091cd0afb3fbffe55dee246549b38c4d6da8b2af8925adf1e8d",
+      "bytes": 45782
+    },
+    {
+      "path": ".local/runs/freetimegs-selfcap-final-evaluation-20260906/reload-b/render.json",
+      "present": true,
+      "sha256": "06acd29c347278bd99c00d902b0863e508461fc7025d8d352f7928034c4e3484",
+      "bytes": 42701
+    },
+    {
+      "path": ".local/runs/freetimegs-selfcap-final-20260906/training-config.json",
+      "present": true,
+      "sha256": "3759b50606f72c16a2ed3b3cd2ce303549a403f4b180f8310a7619f94a50f106",
+      "bytes": 6737
+    },
+    {
+      "path": ".local/runs/atgs-selfcap-final-evaluation-20260906/evaluation.json",
+      "present": true,
+      "sha256": "99d80e0bce39b18324814e709ee2f8013a7257f8559047b8d17c9e5a01cb14cc",
+      "bytes": 14921
+    },
+    {
+      "path": ".local/runs/atgs-selfcap-final-evaluation-20260906/commands.json",
+      "present": true,
+      "sha256": "b777d8ed0e4c6c7f9fbe72af7d24a41909ce8bf3c5e7672e9af16f0fd9a42e86",
+      "bytes": 5461
+    },
+    {
+      "path": ".local/runs/atgs-selfcap-final-evaluation-20260906/reload-a/render.json",
+      "present": true,
+      "sha256": "da9e843d5c64f72506bbdc20b4e3fb16b104a2ec36d3a3e5049582b505a768e7",
+      "bytes": 49074
+    },
+    {
+      "path": ".local/runs/atgs-selfcap-final-evaluation-20260906/reload-b/render.json",
+      "present": true,
+      "sha256": "23c94567308b0d0259a40811f7a5e9c2c37926979821f5e6e79d02de826aef16",
+      "bytes": 45964
+    },
+    {
+      "path": ".local/runs/atgs-selfcap-final-20260906/training-config.json",
+      "present": true,
+      "sha256": "eba5f6ab554a29d57fba535847a3de9ac1dcf65ca1d2e9805845dc5eeafbf91a",
+      "bytes": 11865
+    }
+  ],
+  "effective_counts": {
+    "passed": 6701,
+    "unavailable": 2
+  },
+  "scope": "Only corrected command-stage predicates, strengthened sweep predicates and additional file/AST checks rerun. Prior image/model hashes remain first-pass evidence; nothing was freshly rendered."
+}
