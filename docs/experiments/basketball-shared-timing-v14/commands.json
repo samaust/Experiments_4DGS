@@ -1,0 +1,41 @@
+{
+  "interpreter": ".local/envs/calibration-global/bin/python",
+  "threads": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1"
+  },
+  "commands": [
+    {
+      "command": ".local/envs/calibration-global/bin/python scripts/basketball_shared_evaluator_v14.py admit",
+      "attempt": 1,
+      "outcome": "AssertionError from mistyped joint03 cold hash; no output root or scientific state changed"
+    },
+    {
+      "command": ".local/envs/calibration-global/bin/python scripts/basketball_shared_evaluator_v14.py admit",
+      "attempt": 2,
+      "outcome": "passed; original planned pin corrected exactly"
+    },
+    {
+      "command": "OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 .local/envs/calibration-global/bin/python tests/test_basketball_shared_evaluator_v14.py",
+      "invocations": 2,
+      "outcome": "all20 assertions passed both times; required coverage missing"
+    },
+    {
+      "command": ".local/envs/calibration-global/bin/python scripts/basketball_shared_evaluator_v14.py ready",
+      "outcome": "incomplete; science prohibited"
+    },
+    {
+      "command": ".local/envs/calibration-global/bin/python scripts/basketball_shared_evaluator_v14.py package",
+      "outcome": "package integrity passed; implementation/readiness/science incomplete"
+    }
+  ],
+  "ordinary_read_failures": [
+    "python: command not found; subsequently used required existing calibration-global interpreter",
+    "cat scripts/basketball_shared_hessian_v6.py: No such file or directory; actual curvature source is basketball_shared_solver_v6.py"
+  ],
+  "permission_failures": 0,
+  "git_failures": 0,
+  "scientific_run_command_invoked": false
+}

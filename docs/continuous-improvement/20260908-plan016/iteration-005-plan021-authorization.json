@@ -1,0 +1,82 @@
+{
+  "plan": "plans/plan_021.md",
+  "plan_sha256": "9b25e928c58f31349bee495d13db86554d151ebfbc90fc4d231b0ade3fc03342",
+  "approval_basis": "AGENTS.md b62f2ea standing approval for Review-recommended Plan-finalized allocations; explicit same-objective user resume",
+  "scope": "New Plan 021 implementation/evaluator phase only; no historical clock reset",
+  "t0_monotonic": 274928.954980593,
+  "t0_utc": "2026-09-08T10:20:53.175537+00:00",
+  "deadlines": {
+    "admission": {
+      "monotonic": 275828.954980593,
+      "utc": "2026-09-08T10:35:53.175537+00:00"
+    },
+    "readiness": {
+      "monotonic": 278528.954980593,
+      "utc": "2026-09-08T11:20:53.175537+00:00"
+    },
+    "scientific_cleanup": {
+      "monotonic": 279428.954980593,
+      "utc": "2026-09-08T11:35:53.175537+00:00"
+    },
+    "phase": {
+      "monotonic": 280328.954980593,
+      "utc": "2026-09-08T11:50:53.175537+00:00"
+    }
+  },
+  "phase_seconds": 5400,
+  "scientific_seconds": 900,
+  "scientific_invocations": 1,
+  "candidate_choices": 1,
+  "reference_methods": 1,
+  "cases": 16,
+  "case_state_slots": 32,
+  "candidate_complete_bundles": 96,
+  "candidate_transform_contexts": 16,
+  "candidate_svd": 16,
+  "reference_complete_bundles": 32,
+  "candidate_setup_keys": 2,
+  "reference_setup_keys": 2,
+  "toy_suite_invocations": 2,
+  "toy_cases": 20,
+  "numerical_workers": 1,
+  "numerical_threads": 1,
+  "max_states_per_adapter": 200,
+  "max_iterations_per_adapter": 200,
+  "forbidden_work": [
+    "optimizer",
+    "local_fit",
+    "initialization_fit",
+    "restoration",
+    "training",
+    "rendering",
+    "GPU",
+    "network",
+    "download",
+    "installation",
+    "new_scientific_states",
+    "finite_differences",
+    "rays",
+    "screens"
+  ],
+  "initial_consumption": {
+    "scientific_invocations": 0,
+    "toy_suites": 0,
+    "scientific_entries": 0,
+    "training_seconds": 0
+  },
+  "historical": {
+    "training_charged_seconds": 22523.417254,
+    "training_total_ceiling_seconds": 86400,
+    "method_scene_ceiling_seconds": 7200,
+    "plan016_attempts": 405,
+    "plan016_preflights": 6,
+    "plan018_scientific_seconds": 7.84522387,
+    "plan018_phase_seconds": 1498.589622,
+    "plan019_scientific_seconds": 1.026992965,
+    "plan019_phase_seconds": 1125.515842279,
+    "plan020_scientific_seconds": 0.12248898699181154,
+    "plan020_phase_seconds": 914.2315437420039,
+    "all_consumed_allocations_preserved": true
+  },
+  "exact_entry_table": " Candidate maximum | Reference maximum | Ownership/detail |\n| --- | ---: | ---: | --- |\n| Geometry setup keys, weight 0 then 1 | 2 | 2 | Weight zero is explicit inactive metadata; weight one constructs acceleration map/Hessian once |\n| Complete state contexts | 96 | 32 | Candidate: 16 cold + 80 returns; reference: 16 cold + 16 returns |\n| Transform-only contexts | 16 | 0 | Only sequence 5 cold; no other cold cache-cold replay |\n| Observation basis/trajectory/projection preparations | 112 | 32 | One per context; up to 300 rows, 18 B/B'/B'' entries per row; no repeated preparation in component calls |\n| Objective/data-gradient plus residual/J evaluations | 96 | 32 | Full split arrays; reference jets include all data G/H in this same preparation |\n| Additional residual/J-only evaluations | 16 | 0 | Cold transform; thus total residual/J boundaries 112 / 32 |\n| Data objective-Hessian assembly | 96 | 32 | Reference reuses its jet results; candidate excludes old acceleration Hessian |\n| Full objective-Hessian sum | 96 | 32 | One sum of owned data plus setup acceleration H; no residual call |\n| Raw depth/J assembly | 96 | 32 | One per complete context |\n| Weighted raw-depth Hessian assembly, weight vd | 96 | 32 | One traversal of retained B'/B'' geometry; no second raw_depth evaluation |\n| Bounded-depth value/J/weighted Hessian chain assembly | 96 | 32 | Reuses z/Jz/weighted Hz and one gp/gpp calculation |\n| Report assembly with actual returned multipliers | 80 | 16 | Cold reports contain components only, no synthetic KKT |\n| Cold component packaging/coordinate assembly | 16 | 16 | No cold KKT |\n| Coefficient SVD and Pnew/inverse construction | 16 | 0 | One SVD exactly per transform context, no retry/fallback |\n| Saved transform inverse construction | 80 | 16 | Once per candidate returned adapter; reference once per returned case; cold component uses identity |\n| Public-y coordinate probes | 80 | 0 | 64 saved-y forward probes, 16 new-y inverse-plus-forward probes; no objective entries on mismatch |\n| Extra sequence-5 saved-transform report transport | 16 | 0 | Same cached q components/forces, actual saved P/vby; no new components |\n| Independent new-P algebra transport/comparison contexts | 16 | 0 | After both calculators finish; reference q outputs transported using retained Pnew as explicit test operand |\n| Saved/cold component comparison contexts | 32 | 0 | Compare five returned results against one independent returned result; no reevaluation |"
+}

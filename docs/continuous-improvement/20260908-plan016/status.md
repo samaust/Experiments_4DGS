@@ -2,7 +2,7 @@
 
 - State: active
 - Iteration: 005
-- Stage: Implementation allocation pending for Plan 021
+- Stage: Implement active: admission and readiness before one numerical pass
 - Objective: [objective.md](objective.md)
 - Latest assessment: [post-plan assessment](iteration-005-assessment-02-plan.md)
 - Previous plan: [Plan 020](../../../plans/plan_020.md)
@@ -13,7 +13,8 @@
 - Main objective: not attained
 - Approval basis: AGENTS.md `b62f2ea` and explicit same-objective resume; eligible subsequent planned limits receive standing approval
 - Stop reason: none
-- Active jobs: none from completed implementation; fresh Implement agent next
+- Active jobs: none from completed implementation; fresh Implement agent dispatched; numerical work awaits readiness
 
 - Current Review: [recommendations](iteration-005-recommendations.md)
 - Current plan: [Plan 021](../../../plans/plan_021.md), [handoff](iteration-005-plan-link.md)
+- Current approved allocation: [Plan 021 authorization](iteration-005-plan021-authorization.json)
