@@ -2,9 +2,9 @@
 
 - State: active
 - Iteration: 007
-- Stage: Plan pending fresh dispatch
+- Stage: Implement pending authorization and fresh dispatch
 - Objective: [objective.md](objective.md)
-- Latest assessment: [post-review](iteration-007-assessment-01-review.md)
+- Latest assessment: [post-plan](iteration-007-assessment-02-plan.md)
 - Previous plan: [Plan022](../../../plans/plan_022.md)
 - Previous implementation: [results](iteration-006-implementation.md), [validation](iteration-006-validation.md), [checkpoint](iteration-006-checkpoint.md), [report](../../experiments/basketball-shared-timing-v15.md)
 - Previous authorization: [Plan022](iteration-006-plan022-authorization.json); terminal allocation
@@ -16,6 +16,7 @@
 - Approval basis: AGENTS.md b62f2ea and explicit same-objective resume; eligible Review-recommended/Plan-finalized new limits receive standing approval
 - Training:22523.417254 historical seconds, unchanged overall24-hour and7200-second method/scene ceilings
 - Stop reason: none
-- Active jobs: none at Review handoff; fresh Plan next
+- Active jobs: none at Plan handoff; fresh Implement next
 
 - Current Review: [recommendations](iteration-007-recommendations.md); centered residual and analytical symmetry repair, original cases12/13 only; legacy replay failures retained
+- Current plan: [Plan023](../../../plans/plan_023.md), [handoff](iteration-007-plan-link.md)
