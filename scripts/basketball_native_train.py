@@ -118,6 +118,19 @@ def main():
     socket.create_connection=deny;socket.socket.connect=deny;socket.socket.connect_ex=deny
     a.output.mkdir(parents=True,exist_ok=False)
     files=[a.manifest,a.initialization/'result.json',Path(__file__),Path(__file__).with_name('basketball_scene.py')]
+    helpers=['stg_scene.py','sync_timing.py','training_rng.py']
+    if a.method=='stg-full':
+        helpers+=['stg_checkpoint.py','stg_train_source.py','train-stg-manifest.py']
+        files += [a.checkout/p for p in ['train.py','helper_train.py',
+            'thirdparty/gaussian_splatting/arguments/__init__.py',
+            'thirdparty/gaussian_splatting/scene/oursfull.py',
+            'thirdparty/gaussian_splatting/renderer/__init__.py']]
+    else:
+        helpers+=['freetimegs_checkpoint.py','freetimegs_training.py','freetimegs_source.py',
+                  'freetimegs_model.py','freetimegs_normalization.py','freetimegs_scene.py','atgs_sampler.py']
+        files += [a.checkout/'src/simple_trainer_freetime_4d_pure_relocation.py',
+                  a.checkout/'datasets/normalize.py']
+    files += [Path(__file__).with_name(p) for p in helpers]
     atomic_json(a.output/'provenance.json',dict(plan=24,method=a.method,seed=a.seed,files={str(f):digest(f) for f in files}))
     if a.method=='freetimegs':return train_free(a)
     spec=importlib.util.spec_from_file_location('stg_worker',Path(__file__).with_name('train-stg-manifest.py'))

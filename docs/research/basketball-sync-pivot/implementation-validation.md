@@ -49,3 +49,20 @@ its setup is tracked separately in [setup accounting](setup-accounting.json).
 
 Basketball adapters, full model reloads, rendering/metric validation, paper/code
 matrix and real-data pilots remain unfinished. No final timing window was opened.
+
+## Reconstruction evaluation preparation
+
+Native training adapters and initial frozen protocol are committed in `79b2cf0`.
+A prelaunch provenance supplement pins the consumed native model/optimizer files.
+The [evaluation protocol v2](evaluation-protocol-v2.json) retains the earlier
+protocol and explains the pre-prediction addition of foreground-pixel PSNR/MAE.
+Mask preparation covers all 350 evaluation images; no motion region is empty.
+The median bounding rectangle covers 81.37% of the image while the median motion
+mask covers 3.37%, so the crop and foreground-only results must remain distinct.
+The held-out camera0/10/20/30 frame22 overlay was visually inspected; it largely
+follows people and includes some display/sideline motion. It is not semantic truth.
+
+CPU validation: 20 scene/timing/fixture/mask tests passed, and four seed/block
+summary tests passed including exact paired effects and mismatched-checkpoint
+rejection. Native environment package inventories and source-license identities
+are retained. Fresh GPU model reload and rendered metrics are still pending.

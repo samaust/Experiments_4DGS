@@ -1,0 +1,29 @@
+{
+  "schema": "sync-pivot-evaluation-protocol/v1",
+  "plan": 24,
+  "files": {
+    "scripts/evaluate-basketball-sync.py": "c8523a8610a7d45e332877b4d40698bd93e0041ddb5316d93a6b339f31420fac",
+    "scripts/basketball_reconstruction_metrics.py": "1df63277719c472ecc26b147b4ffba8f0ee205b2c765e1aaef9819b33429ce15",
+    "scripts/basketball_eval_masks.py": "22978cfde88a5ba1c4ed7bf0026dc85c5aace9ebcd3be0b59b2761a41f210dd6",
+    "scripts/basketball_native_train.py": "2aa9435fa7687c0337f5cfa07c47fcd1eaa50c6540a447169a090d33fea4c72a",
+    ".local/sync-pivot/basketball-evaluation-regions/regions.json": "c9a4b4c506823ca2e87cba07889639ae959c66947d0af7f12e15bdbe37fc3f1d",
+    ".local/SpacetimeGaussians/thirdparty/gaussian_splatting/arguments/__init__.py": "b3dd7acad8efb19b99d00339af1b47b072eeba91320ed69dd9d0454800ac3017",
+    ".local/FreeTimeGsVanilla/src/simple_trainer_freetime_4d_pure_relocation.py": "fc3e4320da73a470d0a16bcb5803f84d1bda5bdeafb000fcc39e022fbcfaaeb4"
+  },
+  "protocol_supplement": "Native reconstruction worker now pins all consumed model, optimizer, scene and checkpoint sources before its first scientific launch. This strengthens provenance; no scientific parameter or input is changed from training-protocol.json.",
+  "evaluation_keys": 350,
+  "heldout_camera_keys": 200,
+  "temporal_interpolation_keys": 150,
+  "region_policy": "evaluation-only temporal median over nine non-reserved source times per camera; max channel uint8 difference >25, 5x5 opening, components >=64 pixels; motion bounding rectangle padded 8 pixels, minimum 32x32; no predicted image used",
+  "region_caveat": "motion proxy, not person/ball segmentation ground truth; lighting, compression and display changes may be included; held-out-camera reference images used only to define evaluation regions",
+  "empty_motion_regions": 0,
+  "rendering_seconds_per_seed": 300,
+  "shared_metric_seconds": 1800,
+  "maximum_total_seconds": 3600,
+  "repeat_reload_probes": "held-out cameras0/10/20/30 at source0/22/49 plus training camera1 at temporal holdout22; distinct fresh processes; compare raw float and PNG hashes",
+  "checkpoint_selection": "largest of1000/2000/5000 common to completed runs; no mismatched paired checkpoint inference; explicitly report missing trained runs",
+  "metrics": "identical plan024-syncnerf image for all metric evaluation: uint8RGB/255, PSNR, skimageSSIM window7 sample covariance, TorchMetrics1.6LPIPS Alex normalizeTrue; full image and frozen motion bounding rectangle",
+  "uncertainty": "2000 bootstrap resamples of three matched seeds and aligned five-frame temporal blocks, seed0; single temporal-holdout block cannot quantify between-block temporal uncertainty",
+  "benefit_policy": "No correction benefit is computed when only zero controls exist. Cross-method zero comparisons are labeled separately.",
+  "validation": "20 timing/scene/mask CPU tests and5 mask/bootstrap tests passed; GPU reload/metrics still unverified"
+}
