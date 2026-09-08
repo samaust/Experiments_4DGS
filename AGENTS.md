@@ -81,9 +81,13 @@ finish and inspect its saved output before handing off to the next stage.
    results, recording their paths and any missing baseline evidence.
    Assess remaining gaps against the success criteria and link each
    recommendation, including prerequisite work, to the criterion it advances.
+   Recommend a concrete next step and its required resources and execution
+   limits within applicable user constraints.
 2. **Plan — `reasoning_effort="high"`:** Convert the recommendations into a
    decision-complete plan covering concrete changes, acceptance criteria,
-   validation, and relevant constraints. Save it at the next unused
+   validation, and relevant constraints. Finalize the recommended resources and
+   execution limits, including time, attempts, evaluations, concurrency, and
+   each allocation's scope. Save it at the next unused
    `plans/plan_NNN.md` in the repository, using the next number after the highest
    existing plan number (start at `001` if none exist). Never overwrite a plan.
    Save a link to it in the iteration's run artifacts.
@@ -106,7 +110,7 @@ Preserve existing scope, budgets, permissions, and the `prompts` restriction.
 Apply budget and authorization stops to the work they govern, as described
 below; do not expand scope to keep looping.
 
-### Budget scope and planning before an execution stop
+### Budget scope and standing approval for planned execution
 
 Distinguish limits for the whole loop from limits for an individual plan,
 experiment, stage, method or scene. Record each limit's scope and consumption
@@ -114,22 +118,40 @@ in the run artifacts. Track elapsed time and attempt allocations separately:
 using every allocated attempt does not mean the time allowance was exhausted,
 and unused time does not authorize extra attempts.
 
-A completed or exhausted experiment allocation prevents further execution under
-that allocation. It does not, by itself, stop an active loop's next review and
-planning stages. When the objective remains unmet, the review subagent should
-recommend a concrete next step from the results, and the planning subagent
-should save a decision-complete plan with its required resources, elapsed-time
-and attempt limits, and how those fit existing authorizations. Any additional
-budget must be clearly identified as proposed, not approved. Do not stop with
-an unspecified request for the user to supply the next scope and budget when
-authorized review and planning can make that request concrete.
+The user gives standing approval for new plan-specific time, attempt, evaluation,
+and concurrency allocations recommended by Review and finalized by Plan in its
+saved, decision-complete plan. Do not ask for routine execution-budget approval
+for allocations covered by this instruction. Existing user-imposed overall and
+method/scene ceilings and other user constraints remain binding; a plan cannot
+silently override them. This approval does not change objective or success
+criteria, relax scientific gates, or override sandbox permissions or tool-level
+approval controls. The sequential stage orchestration above remains binding.
 
-Before dispatching implementation, compare the new plan with remaining
-applicable authorizations. Proceed if it fits; otherwise save the plan and
-assessment, stop before unauthorized execution, and present the precise scope
-or budget decision needed from the user. Never reset a historical clock, reuse
-consumed attempts, redistribute restricted allocations, or relax scientific
-gates without authorization. A new plan does not itself authorize new resources.
+Enforce each running plan's recorded limits. A completed or exhausted individual
+plan or experiment allocation prevents further execution under that allocation.
+Preserve its results and consumption records, then continue authorized review
+and planning when the objective remains unmet. Review must recommend a concrete
+next step from the results with required resources and limits; Plan must finalize
+them and explain how they fit remaining applicable constraints. A subsequent
+plan's new allocations receive the same standing approval. Never reset historical
+clocks, erase consumed work, reuse consumed attempts, or redistribute restricted
+allocations. Unused time does not authorize attempts beyond a plan's limit.
+
+Before dispatching implementation, compare the new plan with remaining applicable
+user ceilings, constraints, and authorizations. If it fits, record the saved plan
+link, approved limits, budget scope, consumption, and this standing-approval basis
+in the run artifacts, then automatically dispatch implementation in an active
+loop, subject to the other stop conditions. Otherwise save the plan and assessment,
+stop affected work before unauthorized execution, and present the precise scope
+or budget decision needed from the user. Do not stop with an unspecified request
+for scope and budget when authorized review and planning can make it concrete.
+
+Older artifacts saying "awaiting budget approval" or describing limits as
+"proposed" do not require another confirmation when this standing approval
+applies. Plan 018's proposed execution limits are covered by the user's current
+instruction, subject to the same applicable ceilings and constraints. Record the
+approval basis in current run artifacts when continuing; do not rewrite historical
+evidence. Budget approval alone does not launch or resume a loop.
 
 Stop immediately if an exhausted limit covers the whole loop or the review or
 planning work itself, or if that work cannot proceed without missing information,
