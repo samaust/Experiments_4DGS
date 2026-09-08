@@ -1,0 +1,57 @@
+{
+  "source_sha256": {
+    "scripts/basketball_shared_profiles_v4.py": "b092cb803865aa0462a880287a0b7d800da0214d6fb4c7a2262949d3752a6637",
+    "scripts/basketball_shared_solver_v4.py": "487cb9413822c60bd00343214370e948fef11398c92b5dd997b85cb7ee1699b9"
+  },
+  "solver": {
+    "method": "trust-constr",
+    "policy": {
+      "gtol": 1e-06,
+      "xtol": 1e-06,
+      "barrier_tol": 1e-06,
+      "maxiter": 200,
+      "sparse_jacobian": true,
+      "factorization_method": "AugmentedSystem",
+      "initial_constr_penalty": 1.0,
+      "initial_tr_radius": 1.0,
+      "initial_barrier_parameter": 0.1,
+      "initial_barrier_tolerance": 0.1,
+      "verbose": 0,
+      "disp": false,
+      "finite_diff_rel_step": null,
+      "workers": null
+    },
+    "scipy": "1.18.1",
+    "installed_defaults": {
+      "xtol": 1e-08,
+      "gtol": 1e-08,
+      "barrier_tol": 1e-08,
+      "sparse_jacobian": null,
+      "callback": null,
+      "maxiter": 1000,
+      "verbose": 0,
+      "finite_diff_rel_step": null,
+      "initial_constr_penalty": 1.0,
+      "initial_tr_radius": 1.0,
+      "initial_barrier_parameter": 0.1,
+      "initial_barrier_tolerance": 0.1,
+      "factorization_method": null,
+      "disp": false,
+      "workers": null
+    },
+    "scaling": {
+      "offset_frames": 25.0,
+      "coefficients": "existing rig-diameter units"
+    },
+    "depth_margin": 1e-08,
+    "qualification_depth": 1e-07,
+    "keep_feasible": true,
+    "max_objective_evaluations": 200,
+    "objective": "sum(original_v2_residual**2)",
+    "transfer": "source sampled weak blocks reset to destination cold; blends 2**-k k=0..20 then 0",
+    "constraint_hessian": "analytic sparse",
+    "objective_hessian": "2 J.T J sparse Gauss-Newton"
+  },
+  "frozen_unix": 1788824251.8844502,
+  "policy": "integer cold then ascending then descending; refinement cold/lower ascending/upper descending; no tuning"
+}

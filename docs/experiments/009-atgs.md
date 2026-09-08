@@ -6,6 +6,16 @@ Basketball remains blocked on synchronization.**
 
 ## Current Basketball continuation — 2026-09-07
 
+[Plan 010](basketball-shared-timing-v4.md) adds a separately versioned
+positive-depth constrained evaluator and deterministic weak-column seed repair.
+The exact control remains numerically unqualified: both integer
+searches retain all 12 groups but have no complete qualified group profile
+in either sweep direction.
+The saved v3 failures and amplitude probes also leave observable escape
+unresolved. Real fitting and the later independent controls remain gated;
+selection, final validation and Basketball training are untouched. The 1,890
+production controls and unchanged admission were verified for reuse.
+
 [Plan 009](basketball-shared-timing-v3.md) repairs the independent solver's
 previous evaluation-cap failures, but timing remains blocked: the exact noiseless
 control has only 11/12 complete ascending and 10/12 complete descending data-only

@@ -1,5 +1,9 @@
 # Contender experiments 006–010
 
+Basketball timing remains blocked by the
+[Plan 010 constrained-evaluator investigation](experiments/basketball-shared-timing-v4.md).
+No contender's Basketball training allocation is released by this result.
+
 This is the execution guide for the matched comparison in [plan 004](../plans/plan_004.md).
 The two checked-in JSON files under `configs/` are metadata starting points, not
 method configurations. SelfCap has 24 verified camera IDs. The downloaded DG

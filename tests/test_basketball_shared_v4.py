@@ -58,6 +58,8 @@ class V4Tests(unittest.TestCase):
         p=self.fixture(lag=-19,gid=2);a=ConstrainedProblem(p)
         self.assertGreater(min(a.depth(np.asarray(row['initial_x'])/a.scale)[0]),0)
         self.assertLess(min(a.depth(np.asarray(row['x'])/a.scale)[0]),0)
+        p.x0[1:]=np.tile([0.,0.,-10.],p.nc)
+        x,trace=sanitize(p);self.assertIsNone(x);self.assertFalse(trace['cold_valid'])
         p.x0[:]=np.nan;x,trace=sanitize(p);self.assertIsNone(x)
 
     def test_no_fourth_attempt_deadline_and_cache_isolation(self):
@@ -67,11 +69,17 @@ class V4Tests(unittest.TestCase):
         with patch('basketball_shared_profiles_v4.attempt',side_effect=fake):
             state=group_job(payload);state=group_job((*payload[:8],state,None))
             self.assertTrue(all(len(v)==3 for v in state['attempts'].values()))
+            refined=group_job((*payload[:7],[-1.,-.5,0.,.5,1.],state,None))
+            self.assertTrue(all(len(v)==3 for v in refined['attempts'].values()))
         with patch('basketball_shared_profiles_v4.solve') as solver:
             with self.assertRaises(TimeoutError):group_job((*payload[:-1],0.))
             solver.assert_not_called()
         from basketball_shared_profiles_v3 import problem_key as old_key
         self.assertNotEqual(problem_key(*payload[:7]),old_key(*payload[:7]))
+        base=problem_key(*payload[:7])
+        self.assertNotEqual(base,problem_key(*payload[:6],'selection'))
+        self.assertNotEqual(base,problem_key(*payload[:5],1.,payload[6]))
+        self.assertNotEqual(base,problem_key(payload[0],payload[1],dict(a=2,b=1),*payload[3:7]))
 
     def test_each_direction_fixed_membership_and_missing_noisy_evidence(self):
         grid=np.arange(-25,26,dtype=float);states=[]
@@ -81,6 +89,12 @@ class V4Tests(unittest.TestCase):
             states.append(dict(group_id=i,ascending=asc,descending=desc,attempts={l:[asc[l],desc[l]] for l in grid}))
         row=summaries(states,grid,12,.05,list(range(13)))
         self.assertFalse(row['passed']);self.assertIn('ascending fixed group support lost',row['blockers'])
+        for state in states:
+            for lag in grid:
+                state['ascending'][lag].update(valid=True)
+                state['descending'][lag].update(valid=True,objective=(lag-1)**2)
+        disagreement=summaries(states,grid,12,.05,list(range(13)))
+        self.assertFalse(disagreement['passed']);self.assertEqual(disagreement['sweep_disagreement_frames'],1.)
         row['support']=0
         self.assertFalse(decision('acceleration',100,.25,0.,dict(passed=False,profiles=dict(regularized=row,data_only=row)))['safeguard_passed'])
 
@@ -116,8 +130,44 @@ class V4Tests(unittest.TestCase):
         from basketball_shared_workflow_v4 import main,bounded
         with tempfile.TemporaryDirectory() as folder:
             with self.assertRaises(FileExistsError):main(SimpleNamespace(output=Path(folder)))
+            from basketball_shared_workflow_v4 import prepare
+            from basketball_scale import read
+            original=read
+            def changed(path):
+                value=original(path)
+                if str(path).endswith('optimizer-controls/case0000.json'):value['known_offset_frames']=123.
+                return value
+            with patch('basketball_shared_workflow_v4.read',side_effect=changed),patch('basketball_shared_workflow_v4.verify_hashes'):
+                with self.assertRaisesRegex(ValueError,'recipe mismatch'):prepare(read('configs/basketball-rev2/timing-shared-v4.json'),Path(folder))
         with patch('basketball_shared_workflow_v4.time.time',return_value=5400.):
             with self.assertRaises(TimeoutError):bounded(dict(investigation_started_unix=0.),early=True)
+
+    def test_acceleration_prevents_unsupported_replacement(self):
+        p=self.fixture(weight=1.,lag=-6.)
+        records=support(p,p.x0)
+        self.assertEqual(records[0]['unsupported'],[])
+        p.weight=0.
+        self.assertIn(16,support(p,p.x0)[0]['unsupported'])
+
+    def test_boundary_dependent_confidence_rejected(self):
+        with patch('basketball_shared_solver_v4.QUALIFICATION_DEPTH',10.):
+            row=solve(self.fixture(weight=1.,lag=0.))
+        self.assertTrue(row['converged'])
+        self.assertFalse(row['valid']);self.assertTrue(row['constraint_boundary_dependent'])
+
+    def test_fractional_sign_group_bootstrap_competing_basins_and_cycles(self):
+        from basketball_shared_spline_v2 import curve_summary,independent_cycles
+        groups,cameras,_,window=synthetic('constant_velocity',0.,-.25,100,groups=1)
+        state=group_job((groups[0],cameras,dict(a=1,b=2),window,10,0.,'synthetic',[-.3,-.25,-.2],None,None))
+        self.assertEqual(min(state['cold'],key=lambda lag:state['cold'][lag]['objective']),-.25)
+        grid=np.arange(-25,26,dtype=float)
+        curve=np.minimum((grid+3)**2,(grid-4)**2)
+        summary=curve_summary([curve]*12,grid)
+        self.assertEqual(summary['bootstrap_unit'],'whole multiview group');self.assertFalse(summary['passed'])
+        summary['sweeps']={}
+        refined=basin_grid(summary,grid,.05)
+        self.assertTrue(np.any(np.isclose(refined,-3.05)));self.assertTrue(np.any(np.isclose(refined,4.05)))
+        self.assertFalse(independent_cycles([dict(a=1,b=2,lag=0.),dict(a=2,b=3,lag=0.),dict(a=1,b=3,lag=1.)],[1,2,3])['passed'])
 
 
 if __name__=='__main__':unittest.main()
