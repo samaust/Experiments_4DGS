@@ -1,0 +1,40 @@
+{
+  "authorization": "docs/continuous-improvement/20260908-plan016/iteration-003-plan019-authorization.json",
+  "admission_attempts": [
+    {
+      "command": ".local/envs/calibration-global/bin/python scripts/basketball_acceleration_reference_v12.py admit",
+      "exit_code": 1,
+      "error": "ValueError: chain integrity",
+      "cause": "New checker included trailing newline in canonical v10 event digest; historical canonical encoding excludes it.",
+      "partial_state": "No output root created; no scientific or toy entry.",
+      "correction": "Strip the serialization newline before verifying existing v10 chain digest; do not change historical evidence."
+    },
+    {
+      "command": ".local/envs/calibration-global/bin/python scripts/basketball_acceleration_reference_v12.py admit",
+      "exit_code": 0,
+      "log": "Admission passed: six states; zero scientific entries",
+      "admitted_monotonic": 270236.06420132
+    }
+  ],
+  "toy_commands": [
+    {
+      "command": ".local/envs/calibration-global/bin/python tests/test_basketball_acceleration_reference_v12.py > docs/experiments/basketball-shared-timing-v12/toy-suite-01.log 2>&1",
+      "invocation": 1,
+      "exit_code": 0,
+      "cases": 12
+    },
+    {
+      "command": ".local/envs/calibration-global/bin/python tests/test_basketball_acceleration_reference_v12.py > docs/experiments/basketball-shared-timing-v12/toy-suite-02.log 2>&1",
+      "invocation": 2,
+      "exit_code": 0,
+      "cases": 12
+    }
+  ],
+  "run_command": "OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 .local/envs/calibration-global/bin/python scripts/basketball_acceleration_reference_v12.py run > docs/experiments/basketball-shared-timing-v12/run-command.log 2>&1",
+  "run_exit_code": 0,
+  "package_command": ".local/envs/calibration-global/bin/python scripts/basketball_acceleration_reference_v12.py package > docs/experiments/basketball-shared-timing-v12/package-command.log 2>&1",
+  "package_exit_code": 0,
+  "additional_scientific_invocations": 0,
+  "reproduction": "Requires fresh planned allocation and namespace; no free rerun",
+  "recorded_monotonic": 270927.275539702
+}
