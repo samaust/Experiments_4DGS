@@ -1,19 +1,16 @@
 # Run status
 
 - State: active
-- Iteration: 004
-- Stage: Plan 020 implementation dispatch
+- Iteration: 005
+- Stage: Review dispatch after Plan 020 candidate qualification
 - Objective: [objective.md](objective.md)
-- Latest assessment: [post-plan assessment](iteration-004-assessment-02-plan.md)
-- Previous plan: [Plan 019](../../../plans/plan_019.md), [handoff](iteration-003-plan-link.md)
-- Previous implementation: [results](iteration-003-implementation.md), [validation](iteration-003-validation.md), [v12 report](../../experiments/basketball-shared-timing-v12.md)
-- Previous authorization: [Plan 019](iteration-003-plan019-authorization.json); single reference pass/two toy suites consumed, 1.026992965 numerical seconds, 1125.515842279 final phase seconds
-- Commits: `105c888` implementation/evidence; `d23541a` handoff
+- Latest assessment: [post-implementation assessment](iteration-004-assessment-03-implementation.md)
+- Previous plan: [Plan 020](../../../plans/plan_020.md)
+- Previous implementation: [results](iteration-004-implementation.md), [validation](iteration-004-validation.md), [report](../../experiments/basketball-shared-timing-v13.md), [integration map](../../experiments/basketball-shared-timing-v13-integration.md)
+- Previous authorization: [Plan 020](iteration-004-plan020-authorization.json); one setup/six bundles/two toy suites consumed, 0.122488987 numerical seconds, 914.231543742 final phase seconds
+- Commits: `f78afee` implementation/evidence; `38ffef8` checkpoint/handoff
 - Criteria: SC-01 not met; SC-02 met; SC-03 not met; SC-04 met; SC-05 met with recorded historical limitations
 - Main objective: not attained
 - Approval basis: AGENTS.md `b62f2ea` and explicit same-objective resume; eligible subsequent planned limits receive standing approval
 - Stop reason: none
-- Active jobs: none from completed implementation; fresh medium implementation agent; no scientific jobs yet
-- Current recommendations: [iteration 004 review](iteration-004-recommendations.md)
-- Current plan: [Plan 020](../../../plans/plan_020.md), [handoff](iteration-004-plan-link.md)
-- Current approved limits and T0: [Plan 020 authorization](iteration-004-plan020-authorization.json)
+- Active jobs: none from completed implementation; fresh Review agent next
