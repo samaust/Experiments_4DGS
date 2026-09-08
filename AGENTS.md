@@ -103,8 +103,40 @@ begin the next iteration with a fresh review subagent. Finishing an individual
 plan or creating a commit does not end an active loop; this qualifies the
 plan-completion stopping rule in Continue after commits for this mode only.
 Preserve existing scope, budgets, permissions, and the `prompts` restriction.
-Stop if a budget is exhausted or progress requires missing information, new
-authorization, or resolution of a blocker; do not expand scope to keep looping.
+Apply budget and authorization stops to the work they govern, as described
+below; do not expand scope to keep looping.
+
+### Budget scope and planning before an execution stop
+
+Distinguish limits for the whole loop from limits for an individual plan,
+experiment, stage, method or scene. Record each limit's scope and consumption
+in the run artifacts. Track elapsed time and attempt allocations separately:
+using every allocated attempt does not mean the time allowance was exhausted,
+and unused time does not authorize extra attempts.
+
+A completed or exhausted experiment allocation prevents further execution under
+that allocation. It does not, by itself, stop an active loop's next review and
+planning stages. When the objective remains unmet, the review subagent should
+recommend a concrete next step from the results, and the planning subagent
+should save a decision-complete plan with its required resources, elapsed-time
+and attempt limits, and how those fit existing authorizations. Any additional
+budget must be clearly identified as proposed, not approved. Do not stop with
+an unspecified request for the user to supply the next scope and budget when
+authorized review and planning can make that request concrete.
+
+Before dispatching implementation, compare the new plan with remaining
+applicable authorizations. Proceed if it fits; otherwise save the plan and
+assessment, stop before unauthorized execution, and present the precise scope
+or budget decision needed from the user. Never reset a historical clock, reuse
+consumed attempts, redistribute restricted allocations, or relax scientific
+gates without authorization. A new plan does not itself authorize new resources.
+
+Stop immediately if an exhausted limit covers the whole loop or the review or
+planning work itself, or if that work cannot proceed without missing information,
+new authorization or resolution of a blocker. This distinction does not delay
+user interruption, explicit stop, git failure, or existing sandbox/permission
+stops. Editing these rules does not resume a stopped run; explicit user resume
+is still required.
 
 ### Success-criteria evaluation
 
