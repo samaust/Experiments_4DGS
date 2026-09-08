@@ -1,0 +1,132 @@
+{
+  "run_id": "20260908-plan016",
+  "iteration": 7,
+  "plan": "plans/plan_023.md",
+  "plan_sha256": "e1d202a92cb8eae0e50ac3120f38974e486bd7661c4a7f0b48263bc0da0917ae",
+  "objective": "docs/continuous-improvement/20260908-plan016/objective.md",
+  "objective_sha256": "4cb8c6adfa7c5b04f26f958fa2c1b9d1c5c4488f2b216e9c9e6ffe5e73a33006",
+  "approval_basis": "AGENTS.md b62f2ea standing approval; Review-recommended Plan-finalized new allocation; explicit user same-objective resume",
+  "scope": "New Plan023 v16 arithmetic implementation on original cases12/13 cold and returned only; historical allocations terminal",
+  "t0_monotonic": 283451.459205427,
+  "t0_utc": "2026-09-08T12:42:55.679762+00:00",
+  "deadlines": {
+    "admission": {
+      "monotonic": 284051.459205427,
+      "utc": "2026-09-08T12:52:55.679762+00:00"
+    },
+    "readiness": {
+      "monotonic": 287051.459205427,
+      "utc": "2026-09-08T13:42:55.679762+00:00"
+    },
+    "scientific_cleanup": {
+      "monotonic": 287951.459205427,
+      "utc": "2026-09-08T13:57:55.679762+00:00"
+    },
+    "phase": {
+      "monotonic": 288851.459205427,
+      "utc": "2026-09-08T14:12:55.679762+00:00"
+    }
+  },
+  "phase_seconds": 5400,
+  "scientific_seconds": 600,
+  "scientific_invocations": 1,
+  "candidate_choices": 1,
+  "reference_methods": 1,
+  "cases": 2,
+  "case_state_slots": 4,
+  "candidate_complete_bundles": 12,
+  "candidate_transform_contexts": 2,
+  "candidate_svd": 2,
+  "reference_complete_bundles": 4,
+  "candidate_setup_keys": 2,
+  "reference_setup_keys": 2,
+  "toy_suite_invocations": 2,
+  "toy_suite_seconds": 120,
+  "toy_groups": 22,
+  "toy_second_suite_condition": "documented implementation correction after suite1 failure; frozen test bytes unchanged",
+  "numerical_workers": 1,
+  "numerical_threads": 1,
+  "threads": {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1"
+  },
+  "max_states_per_adapter": 200,
+  "max_iterations_per_adapter": 200,
+  "forbidden_work": [
+    "optimizer",
+    "local_fit",
+    "initialization_fit",
+    "restoration",
+    "training",
+    "rendering",
+    "GPU",
+    "device",
+    "network",
+    "download",
+    "installation",
+    "new_scientific_states",
+    "finite_differences",
+    "rays",
+    "screens"
+  ],
+  "initial_consumption": {
+    "scientific_invocations": 0,
+    "toy_suites": 0,
+    "scientific_entries": 0,
+    "training_seconds": 0
+  },
+  "historical": {
+    "training_charged_seconds": 22523.417254,
+    "training_total_ceiling_seconds": 86400,
+    "method_scene_ceiling_seconds": 7200,
+    "plan016_attempts": 405,
+    "plan016_preflights": 6,
+    "plan018_scientific_seconds": 7.84522387,
+    "plan018_phase_seconds": 1498.589622,
+    "plan019_scientific_seconds": 1.026992965,
+    "plan019_phase_seconds": 1125.515842279,
+    "plan020_scientific_seconds": 0.12248898699181154,
+    "plan020_phase_seconds": 914.2315437420039,
+    "all_consumed_allocations_preserved": true
+  },
+  "historical_plan021": {
+    "terminal": true,
+    "scientific_invocations": 0,
+    "scientific_entries": 0,
+    "scientific_seconds": 0,
+    "toy_suites": 2,
+    "toy_seconds": 2.87343034,
+    "final_phase_seconds": 1653.358525463,
+    "commits": [
+      "147e0cb",
+      "0c5100b"
+    ],
+    "unused_allowance_reusable": false
+  },
+  "exact_scientific_table": " original indices 12 then 13\n\nKeep [Plan 022 sections 4, 6 and 7](plan_022.md)'s immutable contexts, actual\noperand observations, wrappers, original multiplier ownership, 200 state and\niteration caps, repeat/cache contracts and complete per-case schedule. Only the\nselected case list and arithmetic above change.\n\n1. Candidate setups weight 0 then 1, separately owned immutable keys. For case\n   12 then 13: cold complete/report, then returned sequences 1..5. Orders are\n   `[O,G,H,C,CH,R]`, `[G,O,H,C,CH,R]`, `[H,O,G,C,CH,R]`,\n   `[C,O,G,H,CH,R]`, `[O,G,H,C,CH,R]`. Sequence 5 first calls the actual cold\n   residual/J-only transform/SVD once; its repeat is cached. Each returned\n   sequence owns saved inverse, one public probe, the six actual callbacks or\n   explicitly rejected replay with canonical fallback, and identical traversal\n   repeat without new low-level work. Sequence 5 adds one saved-P report.\n2. Close Candidate. Reference setups weight 0 then 1, then each original case's\n   cold/returned complete reports; saved inverse only for returned. Reference\n   never sees Candidate outputs or new P while evaluating. Close Reference.\n3. Driver consumes four component contexts in case/cold-returned order. Each\n   cold yields one canonical comparison, each returned five; total 12. Compare\n   actual retained wrappers and every independent component inside those contexts.\n   Include one historical corroboration per returned context, two total.\n4. Consume two new-P contexts in original case order before transport/rational\n   checks; use retained reference q and candidate Pnew, original bound multipliers,\n   all norms/remap/contracts and sequence-5 admitted wrapper outputs.\n\n| Boundary | Candidate | Reference |\n| --- | ---: | ---: |\n| Setup | 2 | 2 |\n| Complete | 12 | 4 |\n| Transform-only context | 2 | 0 |\n| Preparation | 14 | 4 |\n| Objective/residual | 12 | 4 |\n| Residual-only | 2 | 0 |\n| Data H / full sum / raw depth / bounded values / weighted Hz / bounded Hg | 12 each | 4 each |\n| Returned report / cold report | 10 / 2 | 2 / 2 |\n| Metric/SVD | 2 | 0 |\n| Saved inverse | 10 | 2 |\n| Public probe | 10 | 0 |\n| Extra saved-P transport | 2 | 0 |\n| Active acceleration | 7 | 2 |\n\nExactly **159 Candidate + 46 Reference + four driver component + two new-P =\n211 entries** for complete execution, with 12 canonical comparisons, 10 public\nprobe results, two new-P comparisons and two historical corroborations. No\nfailure-driven extra case, evaluation, report or rerun. Retain actual entered/\nobserved/completed/interrupted records, deterministic original-index identities,\ninput/state/vg/vby/transform/setup/source hashes, wrapper results and all repeated\noutput bytes. Exact ordered identities and receipts are required, not merely\ncounts below caps. Each numerical inner helper is nested under its allocated\ncomponent entry and cannot consume an unrecorded evaluation allowance.\n\nCandidate science full geometry has 36 camera batches and first-order has six;\nprojection-second 36, projection-first six, robust-residual 42, focal/centered\n42 each, full spatial pair batches 36, data/full sums 12 each. Objective q->x\nscaling has 24 matrix calls. Fourteen candidate reports (12 primary + two extra)\ngive 28 q scaling and 28 congruences. Reference has 1200 spatial observations,\n3600 observation basis calls plus 150 active setup basis rows; four assembly/\nfull/report calls, eight q scaling and eight report objective congruences.\nTwo driver new-P transports add four reference congruences. These helper counts\nexclude only nonnumerical guard callbacks and unchanged nested Jet primitives,\nwhose expression-derived per-spatial counts remain frozen in the source map.\nNo added standalone scientific congruence/oracle fixture is permitted.\n\nActual public replay remains `product=P@y; q=origin+product; x=q*scale`, exact\nadmitted byte equality. Keep original saved P/origin/y and actual bound inverse;\nsequence 5 inverse/forward arithmetic may still reject. Do not search nearby y,\nsnap/reanchor, preload caches, replace admitted q/x, reinterpret fallback as\npublic success or modify the API. New P changes due to the centered J are saved\nas new results, never substituted for original saved transforms.\n\n",
+  "exact_toy_inventory": "\n\nBefore suite 1 publish `toy-definitions.json`, `readiness-coverage.json`,\n`coverage-source-review.md`, `comparison-schema.json`, `expected-schedule.json`\nand `arithmetic-contract.json` (formulae, pair/reduction order, call-site map and\ninner-work count expressions). Source-only review includes all six modules,\ntest, worker, admission/launcher, actual wrappers/calculators/observers and\nretained decision reducer. Parent can inspect these files during Implementation;\nno extra agent or routine user approval is required. Every row binds stable\nassertion IDs, actual boundaries, expected count and source/test hashes. Numerical\ncounts must be independently incremented at actual entry, never assigned.\n\nPer suite retain every Plan 022 inventory entry, with these exact totals/deltas:\n\n| Work | v16 fixed count |\n| --- | --- |\n| Candidate complete attempts | 17: 15 successful (14 prior + group 21), two prescribed group 18 rejections |\n| Reference complete attempts | Five: three successful, two group 18 rejections |\n| Candidate evaluate entries including transforms | 19 = 17 complete attempts + two transform-only |\n| Candidate successful full prepare/component paths | 15 each; plus two first-order prepare/residual paths and original failed pre-math preparation |\n| Reference successful full prepare/component paths | Three each; plus original failed pre-math preparation |\n| Real metric/SVD; undersized metric rejection | Two/two; one rejection before SVD |\n| Candidate setup/bundle/map | 15/19/61, unchanged; Reference setup two, unchanged |\n| Reference basis calls | 91 = prior 82 + three observations x three orders |\n| Reference spatial calls | 41 = prior 38 + three group 21 observations |\n| Candidate projection-second / projection-first / robust-residual helpers | 32 / four / 35 |\n| Candidate full/first preparation boundaries | 15 / two |\n| Candidate B'' / normalized-depth / objective-geometry batches | 29 each |\n| Candidate focal output / centered-error batches | 36 / 33 |\n| Candidate HP, HT, Hcam and rig curvature pair batches | 32 each, including three unchanged group 11 helper calls |\n| Candidate spatial curvature pair batches / data assembly / full sums | 29 / 15 / 15 |\n| Candidate q->x objective matrix scaling | 30 matrix calls |\n| Candidate real primary reports / extra saved-P reports | 15 / two; also unchanged one dummy authoritative report = 18 total report calls |\n| Candidate report q objective scaling / y congruences | 36 / 36 matrix calls |\n| Reference data assembly / full sum / primary reports | Three / three / three |\n| Reference report q objective scaling / y congruences | Six / six matrix calls |\n| Driver toy reference transports | Four: two group 14 and two group 19 (5/6), two objective congruences each |\n| Standalone successful/rejected congruences | One success and one rejection per method, group 22 |\n| Total candidate congruence validation / contraction | 38 / 37 |\n| Total reference congruence validation / contraction | 16 / 15 (six report + eight driver + one standalone successful) |\n| Added group 21 oracle | One constant projection/soft-L1 oracle, three closed Bernstein rows, one full physical/report oracle, one retained production comparison |\n| Added group 22 oracle | Nine Fraction double sums of nine terms, 81 terms total |\n\nKernel-only groups 01\u201309, seven direct basis calls, Jet group 10, group 11 helper\nfixtures, 12 original integrated oracle spatial calls, eight mock solve calls,\n200-state/iteration byte fixtures, ownership/guard/mutation/comparator/process\nsubcases and all inactive/active acceleration counts remain Plan 022's exact\ninventory. Reference Jet operations receive counted boundaries; before freeze\nexpand their counts from the unchanged group 10 expressions plus exactly 41\n`spatial` invocations and the fixed scalar expressions, recording a source-only\nexpression/call graph rather than discovering counts through a numerical run.\nPair work is deterministically `d*(d+1)/2` per d-dimensional family/batch and\nits formula's frozen contraction dimensions; retain formulas by batch size\n(13/12 toy, 55 science; spatial 3, distorted 2). This is execution bookkeeping,\nnot discretion to add helper calls. Group 21 uses no production Jet oracle.\n\nAdd all new curvature/contraction boundaries to transform-only throwing\nsentinels; focal/centered/first derivative/residual boundaries remain allowed.\nReuse existing output objects for every later assertion; no hidden evaluator.\nReadiness requires the entire 22-group suite, exact inventory, source coverage,\ncomparison schema and successful guard/process evidence from the current source\nversion. Missing assertions cannot pass through an aggregate `passed` flag.\n\n",
+  "original_case_indices": [
+    12,
+    13
+  ],
+  "scientific_entries": 211,
+  "historical_plan022": {
+    "terminal": true,
+    "scientific_invocations": 1,
+    "scientific_entries": 1651,
+    "scientific_seconds": 893.13813958,
+    "toy_suites": 1,
+    "toy_seconds": 2.557443101,
+    "final_phase_seconds": 3878.114624024,
+    "commits": [
+      "fda79c9",
+      "6592cba",
+      "63a1c59"
+    ],
+    "unused_allowance_reusable": false
+  },
+  "applicable_ceiling_comparison": "Zero training/fits/device/network preserves overall24-hour training and7200-second method/scene ceilings; no overall loop/review/plan ceiling supplied; all historical clocks/attempts remain preserved. Scope and scientific gates unchanged.",
+  "training_ledger_sha256": "d0b4daa1aee79361580af3a1bf8fbc597148db7775b26f169a0a1b2e6ac90957"
+}
