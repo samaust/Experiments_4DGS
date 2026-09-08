@@ -2,9 +2,9 @@
 
 - State: active
 - Iteration: 005
-- Stage: Review dispatch after Plan 020 candidate qualification
+- Stage: Plan dispatch after full evaluator Review
 - Objective: [objective.md](objective.md)
-- Latest assessment: [post-implementation assessment](iteration-004-assessment-03-implementation.md)
+- Latest assessment: [post-review assessment](iteration-005-assessment-01-review.md)
 - Previous plan: [Plan 020](../../../plans/plan_020.md)
 - Previous implementation: [results](iteration-004-implementation.md), [validation](iteration-004-validation.md), [report](../../experiments/basketball-shared-timing-v13.md), [integration map](../../experiments/basketball-shared-timing-v13-integration.md)
 - Previous authorization: [Plan 020](iteration-004-plan020-authorization.json); one setup/six bundles/two toy suites consumed, 0.122488987 numerical seconds, 914.231543742 final phase seconds
@@ -13,4 +13,6 @@
 - Main objective: not attained
 - Approval basis: AGENTS.md `b62f2ea` and explicit same-objective resume; eligible subsequent planned limits receive standing approval
 - Stop reason: none
-- Active jobs: none from completed implementation; fresh Review agent next
+- Active jobs: none from completed implementation; fresh Plan agent next
+
+- Current Review: [recommendations](iteration-005-recommendations.md)
