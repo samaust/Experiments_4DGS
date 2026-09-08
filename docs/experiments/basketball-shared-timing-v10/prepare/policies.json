@@ -1,0 +1,85 @@
+{
+  "frozen_unix": 1788843242.222187,
+  "manifest": "docs/experiments/basketball-shared-timing-v10/prepare/benchmark-manifest.json",
+  "manifest_sha256": "d7efa76eda186583e25dfd9cebebc0b3e7abd52f02576354749cc27497b60753",
+  "implementation_sha256": {
+    "scripts/basketball_shared_diagnose_v9.py": "4371881a3980287b5fbf9327785a077e7cc356c909878de0e6fe167df90fad9e",
+    "scripts/basketball_shared_audit_v9.py": "2587900184c15fc23fe67b16c9b187186d661d513d2332fd6618e2b29740b436",
+    "scripts/basketball_shared_benchmark_v9.py": "6e3824b809d286418848ae7d86d79fbef07eb17339131d00f3e52e9585a64263",
+    "scripts/basketball_shared_verify_v9.py": "2f9a5b72369365efff92764b0a75bf52625bf34d1b6d91f7571847ae573f19be",
+    "scripts/basketball_shared_regressions_v9.py": "a48effe9d805a49fd234bcc8adc0d5bd97c773ea0776c8a8d8a4a4e6c74c0fff",
+    "scripts/basketball_shared_accounting_v9.py": "8ddf22a99cdd89b6a89180860346a18a5acb54d9aaa96e8266538fe5eae7413e",
+    "scripts/basketball_shared_initialization_v9.py": "a1355a9b327ead3969d422dbd43979f06a808a7b4e4729f7879c10a9424320fc",
+    "scripts/basketball_shared_stopping_v9.py": "ea355253b86725918d700fbdeaefc6daca93a5ab9382c05e197ca52495c08c40",
+    "scripts/basketball_shared_solver_v9.py": "20c507a98aa1926be23b32dd5fdde401e5b14fba56669b1956b553d8a0b7389a",
+    "scripts/basketball_shared_workflow_v9.py": "21c2630a39ddf4e0a6cc26f6804e75b371a4b3c140efc9eef8f8fe6460451ab7"
+  },
+  "policies": [
+    {
+      "name": "baseline",
+      "conditioned_conditional": false,
+      "repair": false,
+      "disable_xtol": false
+    },
+    {
+      "name": "metric",
+      "conditioned_conditional": true,
+      "repair": false,
+      "disable_xtol": false
+    },
+    {
+      "name": "initialization",
+      "conditioned_conditional": false,
+      "repair": true,
+      "disable_xtol": false
+    },
+    {
+      "name": "stopping",
+      "conditioned_conditional": false,
+      "repair": false,
+      "disable_xtol": true
+    }
+  ],
+  "joint_conditioning_common": true,
+  "initialization_minimum_target_depth": 1e-06,
+  "stopping_xtol": 0.0,
+  "numerical_metric": {
+    "scale_bounds": [
+      0.001,
+      1000.0
+    ],
+    "null_scale": 1.0,
+    "origin": "destination cold q",
+    "coefficient_transform": "symmetric V diag(t) V.T",
+    "offset_block": "identity",
+    "gtol": "1e-6/max(1,norm(inv(P).T,inf))"
+  },
+  "numerical_screen": {
+    "minimum_iteration_recovery_fraction": 0.5,
+    "required_recovery_groups": [
+      2,
+      9,
+      11
+    ],
+    "maximum_median_KKT_ratio": 0.1,
+    "all_xtol_targets_required": true,
+    "all_infeasible_initializations_required": true
+  },
+  "iteration_screen_targets": [
+    "conditional-00/cold",
+    "conditional-01/ascending",
+    "conditional-07/cold",
+    "conditional-08/ascending",
+    "conditional-13/cold",
+    "conditional-14/ascending"
+  ],
+  "all_policies_use_full_manifest": true,
+  "maximum_policies": 5,
+  "maximum_attempts": 405,
+  "baseline_denominators": "freeze independently recomputed positive baseline KKT after baseline completes and before candidate fits",
+  "standalone_preservation": "all archived qualified controls must qualify without cost deterioration",
+  "final_union": "only standalone arms passing all their screens may enter a single fresh final benchmark; if none pass, final benchmark remains unassessed",
+  "no_retuning": true,
+  "full_screens_authorized": false,
+  "maximum_preflight_attempts": 6
+}
