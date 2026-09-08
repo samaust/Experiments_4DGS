@@ -45,6 +45,11 @@ record any user-directed changes here and reassess affected evidence.
 - Initial review may inspect existing artifacts and identify feasible next work
   and concrete budget needs. Do not treat historical per-plan exclusions as
   permission to abandon the broader objective or as a reset of spent budgets.
+- On explicit resume for iteration 002, apply the clarified AGENTS.md budget
+  rule: consumed Plan 016 attempts restrict that experiment's execution, not
+  subsequent authorized review and planning. Prepare a concrete next plan and
+  proposed resource limits before requesting any additional execution budget.
+  The user has not renewed or added numerical attempt/time allocations.
 - Sequential fresh gpt-6-astra subagents: xhigh review, high planning, medium
   implementation; fork_turns=none; no further delegation. Reread this file and
   the latest assessment before every stage and after context loss.
@@ -61,3 +66,6 @@ record any user-directed changes here and reassess affected evidence.
 ## Changes
 
 - 2026-09-08: Initial objective and derived criteria saved before stage dispatch.
+- 2026-09-08: User explicitly resumed the same objective after AGENTS.md commit
+  `fd43f19` clarified budget scope. Objective and criterion definitions unchanged;
+  iteration 002 review/planning may proceed without renewing Plan 016 execution.
