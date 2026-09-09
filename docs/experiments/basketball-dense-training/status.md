@@ -17,7 +17,7 @@ defects. The historical Plan 026 visual rejection remains unchanged.
   remaining production retention, with approximately 432 GB available after validation.
   The user freed additional disk space before qualification.
 
-Current stage: fixed initialization diagnostics, then all six 5,000-update endpoints
+Current stage: initialization diagnostics complete; starting all six 5,000-update endpoints
 in seed order, coarse then cropped. Production consumption: zero updates. Authorized
 production remains six trajectories of 50,000 updates each (300,000 total), one GPU
 job at a time, with no time or GPU-hour ceiling. Validation is charged separately.
@@ -29,3 +29,6 @@ per-job logs, the linked append-only ledger, and live state are under
 
 Milestones: `669cdde` fusion/training adapters; `80f7a75` execution and four-arm
 analysis; `54773cb` trajectory and GPU-accounting audit.
+
+Full initializer/native qualification milestone: `9f54536`.
+[Initialization diagnostics](initial-diagnostics.json) retain all twelve fixed views per recipe.

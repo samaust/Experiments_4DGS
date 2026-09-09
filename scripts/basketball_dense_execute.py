@@ -71,16 +71,24 @@ def production():
     for arm, seed in ORDER:
         folder = ARTIFACTS/f'training/{arm}-seed{seed}/005000'
         train(arm, seed, 5000, folder)
+        state(stage='evaluation', active_arm=arm, active_seed=seed, active_iteration=5000,
+            active_segment=str(ARTIFACTS/f'segments/evaluate-{arm}-seed{seed}-5000'))
         invoke(evaluate, ['--arm', arm, '--seed', str(seed), '--iteration', '5000', '--training', str(folder)])
     for arm in ARMS:
+        state(stage='metrics', active_arm=arm, active_iteration=5000,
+            active_segment=str(ARTIFACTS/f'segments/metrics-{arm}-5000'))
         invoke(metrics, ['--arm', arm, '--iteration', '5000'])
     for arm, seed in ORDER:
         base = ARTIFACTS/f'training/{arm}-seed{seed}'
         train(arm, seed, 50000, base/'050000', resume=base/'005000/checkpoint-005000.pt')
         for step in CURVE[1:]:
+            state(stage='evaluation', active_arm=arm, active_seed=seed, active_iteration=step,
+                active_segment=str(ARTIFACTS/f'segments/evaluate-{arm}-seed{seed}-{step}'))
             invoke(evaluate, ['--arm', arm, '--seed', str(seed), '--iteration', str(step), '--training', str(base/'050000')])
     for step in CURVE[1:]:
         for arm in ARMS:
+            state(stage='metrics', active_arm=arm, active_iteration=step,
+                active_segment=str(ARTIFACTS/f'segments/metrics-{arm}-{step}'))
             invoke(metrics, ['--arm', arm, '--iteration', str(step)])
     state(stage='training-and-metrics-completed', production_updates=300000,
         remaining='endpoint visuals, training-view diagnostic inspection, resource curves, final report and audit', complete=False)
