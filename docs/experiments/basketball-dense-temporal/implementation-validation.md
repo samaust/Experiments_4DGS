@@ -60,8 +60,8 @@ recoveries are removed. Pre-save disk checks reserve both generations.
 
 [Storage projection](storage-001.json) reserves about 28 GiB for the six sparse
 trajectories and their evaluation/visual artifacts. This is a resource estimate,
-not a new point-count or quality constraint. Production results, their complete
-curve reloads and evaluations, and the final report remain outstanding.
+not a new point-count or quality constraint. Production results, curve reloads, evaluations, and the final report are now
+complete for all six available sparse trajectories; the dense arm remains blocked.
 
 The existing camera/timing/sampler/normalization suite also passed 21 tests in
 the pinned CPU container. A first attempt in the RoMa environment could not
@@ -87,3 +87,32 @@ and motion-pixel bootstrap summaries exactly (means and both confidence limits):
 [bootstrap validation](baseline-bootstrap-validation.json). The metric container
 is pinned by immutable image ID and package versions in
 [metric runtime](metric-runtime.json).
+
+
+Final production validation covers all six 45,000-update continuations:
+270,000 contiguous updates, finite losses and point counts, monotonic timings,
+and all 24 required new checkpoint hashes in
+[resource evidence](resources-final/trajectories.json). All new curve snapshots
+have complete 350-target renders and 13 exact fresh-process PNG/raw-float
+comparisons each, totaling 312 probes in
+[render evidence](curve-render-validation.json).
+
+[Final independent audit](final-validation.json) verifies all 30 available curve
+results, 10,500 finite metric rows, exact target coverage, arm/seed/checkpoint
+pairing, file hashes, and unchanged historical protocol sources. All 49 GPU
+ledger segments have successful finishes and no overlap. The serial queue
+completed all six trajectories and 24 new evaluations. No dense trajectory is
+counted as complete.
+
+An initial read-only final audit encountered `KeyError: 'method'`: historical
+baseline index entries lack the optional method alias used by new entries.
+The retained standalone audit derives that alias from the arm and verifies it
+against the actual render and metric metadata. It then passed on all results;
+no historical entry was modified and no GPU work was repeated.
+
+Both endpoint visual bundles pass file-hash, count, and video-cadence checks:
+48 comparison PNGs and 12 videos per endpoint, each video containing 50 frames
+at 25 fps. [Visual assessment](visual-assessment.md) records the manual inspection
+scope and remaining player failures. [Final statistics](analysis-final/statistics.json)
+and [report](report.md) distinguish measured sparse duration effects from the
+unavailable dense effects. Full Plan 026 attainment is not established.

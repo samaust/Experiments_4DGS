@@ -1,78 +1,39 @@
-# Plan 026 execution state
+# Plan 026 final execution state
 
-The fixed study is in progress; the continuous-improvement loop is inactive.
-Authoritative specification: [plan 026](../../../plans/plan_026.md).
+The fixed study has stopped with all available sparse-arm work complete.
+**The full study is incomplete:** the dense initialization prerequisite failed,
+so three of nine planned trajectories and the dense comparisons remain blocked.
+The continuous-improvement loop is inactive. No study job remains running.
 
-Completed preflight: all six historical 5,000-update checkpoints and their
-recorded input/source hashes match. The training split contains exactly 1,350
-unique allowed images. See [preflight evidence](preflight-001.json).
-Historical scores have not been opened or reused for recipe selection.
+Specification: [plan 026](../../../plans/plan_026.md).
+Results and limitations: [final report](report.md).
+Browse outputs: [artifacts](artifacts.md).
 
-ViPE's pinned environment imported successfully. CUDA availability was false
-in the sandbox and true on the single required host retry. These two runtime
-checks took 2.658 and 2.564 seconds, respectively; retain these startup costs
-separately from subsequent ledger segments. `nvidia-smi` succeeded and showed
-no running compute job. These checks preceded new initialization and training.
+- All six historical 5,000-update parents were verified and preserved.
+- All six sparse trajectories reached 50,000, totaling 270,000 new updates.
+- All 30 available curve results contain exactly 350 targets and finite metrics.
+- All 24 new curve snapshots pass all 13 fresh-process PNG/raw-float probes.
+- Both endpoint bundles contain 48 comparison PNGs and 12 videos at 25 fps.
+- All 49 recorded GPU segments completed successfully; peak concurrency was one.
+- Both dense pilots executed successfully but failed scientific acceptance.
+  No dense production initializer was frozen or trained.
 
-Validation: `python3 -m unittest discover -s tests -p test_basketball_study.py -v`
-passed both split/provenance tests. The preflight CLI completed successfully.
+[Final independent audit](final-validation.json),
+[training audit](resources-final/trajectories.json),
+[render validation](curve-render-validation.json),
+[visual validation](visual-validation.json), and
+[implementation validation](implementation-validation.md) retain the evidence.
+Exact state restoration is verified; bitwise GPU training reproducibility is
+not established. The failed comparisons remain recorded.
 
-Preflight milestone committed as `8657f61`.
+Validated local milestones: preflight `8657f61`, pilot/adapters `94a498f`,
+evaluation pipeline `f55805d`, first endpoint `9f098ec`, both seed-0 endpoints
+`2400649`, STG seed 1 `739c134`, FreeTimeGS seed 1 `1f5e764`, STG seed 2
+`8737232`, all six endpoints `53f1c4c`, and endpoint visual validation `8e6fa3e`.
+Earlier partial analyses and audits remain historical evidence; final conclusions
+use `analysis-final/` and `resources-final/`.
 
-The coarse and person-cropped initialization pilots have completed. The dense
-arm is stopped because the cropped fallback still fails the foreground-floater
-gate; see [pilot review](pilot-review.md) and [evidence](pilot-evidence.json).
-No dense production initialization or training has started.
-
-Native continuation and fresh reload validation are complete; see
-[implementation validation](implementation-validation.md). Restored state is
-exact, while both backends exhibit native GPU training variability in repeated
-and split runs. All 13 raw-float/PNG repeat probes pass for both backends.
-Adapter/pilot milestone committed as `94a498f`. STG Full seed 0 reached 50,000 updates; all four new curve snapshots are retained.
-Sparse FreeTimeGS seed 0 also reached 50,000 updates. The serial queue is
-evaluating all four new curve snapshots for each of the six completed trajectories.
-Sparse FreeTimeGS seed 2 has also reached 50,000 updates.
-All three STG seeds have reached 50,000 updates.
-Sparse FreeTimeGS seed 1 has also reached 50,000 updates.
-STG seed 1 has also reached 50,000 updates. Current process and
-handoff state are saved in `.local/basketball-dense-temporal/run-state.json`.
-Next: complete the six sparse-arm continuations and their curve evaluations,
-then retain the report and visual artifacts.
-
-The sparse-arm production storage projection fits the available space.
-No unrelated files will be removed. Six of the nine planned 50,000 endpoints are complete.
-New curve evaluations, endpoint visuals, and final interpretation remain
-outstanding; three dense trajectories are blocked by the initialization gate. There is no study time/GPU-hour ceiling; concurrency is one GPU job.
-
-Evaluation/reporting milestone committed as `f55805d`. The first completed
-trajectory passes the contiguous-update, finite-loss, timing, and checkpoint
-audit in [resource evidence](resources-first-endpoint/trajectories.json).
-
-Both seed-0 continuations pass the full trajectory audit: 45,000 contiguous
-updates, finite losses and point counts, monotonic timings, and all four
-retained checkpoint hashes. See [seed-0 resource evidence](resources-seed0/trajectories.json).
-Their measured optimizer-loop times are 1,982.016 seconds (STG) and
-5,835.064 seconds (sparse FreeTimeGS), excluding historical 5,000-update
-training and this continuation segment's startup. Quality evaluation is pending.
-
-All three completed endpoints pass the [trajectory audit](resources-three-endpoints/trajectories.json).
-Seed-0 endpoint evidence was committed as `2400649`.
-
-All four completed endpoints pass the [trajectory audit](resources-four-endpoints/trajectories.json).
-STG seed-1 endpoint evidence was committed as `739c134`.
-
-All five completed endpoints pass the [trajectory audit](resources-five-endpoints/trajectories.json).
-Sparse FreeTimeGS seed-1 endpoint evidence was committed as `1f5e764`.
-
-All six available endpoints pass the [complete trajectory audit](resources-final/trajectories.json):
-270,000 contiguous new updates in total, finite losses and point counts,
-monotonic timings, and all 24 required new curve checkpoint hashes.
-STG seed-2 endpoint evidence was committed as `8737232`.
-
-Training milestone committed as `53f1c4c`. All 24 new curve snapshots have
-350 target renders and pass 13 fresh-process PNG/raw-float comparisons each
-([render evidence](curve-render-validation.json)). Both endpoint visual
-bundles are complete and hash/cadence-verified
-([visual evidence](visual-validation.json), [assessment](visual-assessment.md)).
-The 10,000-update metric cohort is complete; remaining metric cohorts and
-final statistics/report are in progress.
+The stop reason is the failed dense prerequisite after completing all remaining
+authorized work. Further dense recipe variants or synchronization changes are
+outside this plan. Local machine handoff state is retained in
+`.local/basketball-dense-temporal/run-state.json`.
