@@ -9,26 +9,24 @@ retains its hash. The historical HTTP refusal below is resolved through the
 user-provided file. Continue remaining authorized work; no additional download
 of this paper is needed.
 
-## First two scientific pilots completed
+## Synchronization pilots completed; reconstruction active
 
-Sync-NeRF seeds 0 and 1 completed at 43,049 and 42,944 updates, respectively,
-using approximately 2,312 seconds each. Both exported finite offsets for the
-prescribed eight cameras. The native 90,001-step schedule remains unreproduced.
-Seed 2 is active; all reconstruction controls and evaluations remain pending.
-[Partial seed results](syncnerf-results.json) and the durable GPU ledger retain
-completed versus reserved attempts. Seed 0's fresh CPU reload passed; the
-three-seed matched-checkpoint comparison remains pending.
+All three Sync-NeRF pilots exited successfully within their caps at 43,049,
+42,944 and 42,999 updates. The [matched-checkpoint analysis](syncnerf-matched-checkpoint.json)
+uses update 42,000 for all seeds; non-reference seed ranges are 3.28–5.42 ms.
+These describe optimizer repeatability, not physical accuracy. [Final exports](syncnerf-results.json)
+retain each actual endpoint; the native 90,001-step schedule remains unreproduced.
+The [offset plot](syncnerf-offsets.svg) shows the selected-camera estimates.
 
-The [evaluation protocol v3](evaluation-protocol-v3.json) preserves its earlier
-versions and binds the final pre-prediction reporting implementation. The
-[metric interface check](metric-interface-check.json) verifies cached offline
-LPIPS and minimum crop size on synthetic CPU tensors. The [global training
-admission](global-training-admission.json) counts Sync-NeRF fitting too and shows
-that even every allowed training allocation fits the remaining 24-hour ceiling.
-[Benchmark/code status](benchmark-code-matrix.md) preserves unavailable releases
-separately from scientific failure. The [graph figure](graph-support.svg) shows
-reference-connected coverage and the selected subset. Downloaded PDF copies are
-retained with [hashes](retained-paper-files.json) in `.local/sync-pivot/papers/`.
+The [timing decision](timing-decision.json) freezes no eligible full-rig correction.
+Final-window images remain unopened. STG Full zero seed 0 completed 5,000 updates
+in 222.49 charged seconds; seed 1 is active. Four further zero controls,
+fresh reload/render evaluation and final reporting are pending.
+Use [evaluation protocol v3](evaluation-protocol-v3.json), [benchmark/code status](benchmark-code-matrix.md),
+[metric interface evidence](metric-interface-check.json) and [global training admission](global-training-admission.json).
+The original central ledger was copied byte-for-byte to
+`.local/sync-pivot/central-training-before.json` before reconstruction charges.
+No consumed allocation or historical attempt was reset.
 
 ## Training protocol checkpoint
 

@@ -32,7 +32,7 @@ def main():
             ax.scatter(x,y,s=100,c='#0072b2' if str(i) in covered else '#bbbbbb',zorder=3)
             if i in selected:ax.scatter(x,y,s=180,facecolors='none',edgecolors='#009e73',linewidths=1.7,zorder=4)
             ax.annotate(str(i),(x,y),xytext=(5,5),textcoords='offset points',fontsize=9,zorder=5)
-        ax.set(title='Saved SIFT/LK graph: reference 1 covers 8 of 34 cameras',xlabel='Camera-center principal axis 1 (estimated scale)',ylabel='Camera-center principal axis 2 (estimated scale)')
+        ax.set(title='Saved SIFT/LK graph: reference 1 covers 8 of 34 cameras',xlabel='Principal axis 1 (estimated scale)',ylabel='Principal axis 2 (estimated scale)')
         ax.set_aspect('equal');ax.grid(alpha=.15)
         fig.text(.08,.035,'Blue: reference-connected. Gray: unanchored. Green ring: Sync-NeRF subset. Orange: graph bridge.\nSaved fit-window evidence only; connectivity is not timing accuracy.',fontsize=9)
         filename='graph-support.svg'

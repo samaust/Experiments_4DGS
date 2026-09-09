@@ -1,0 +1,57 @@
+{
+  "schema": "sync-pivot-timing-decision/v1",
+  "accepted_full_rig_correction": null,
+  "evidence": {
+    "sift-common-graph.json": "c0a11e22cb5798997abf3c7633595d0fdf68d82a1915d2eea54b53ede60b0442",
+    "syncnerf-results.json": "7a3f89656c635023e96fbd0024bb1ab068c8b7a48f4c87d50816cc5e47f58594",
+    "syncnerf-matched-checkpoint.json": "bef3bc06e34784f5f369f87a6a6377440a3365b58800a42f968a9aea82ebd443",
+    "training-protocol.json": "ab0aa6728ebd24859662a66a46af0840614c10fd9aef20cdac4ad6bc8dca0d33",
+    "evaluation-protocol-v3.json": "cc247ce12b119993daae16cc346d07c23cbccbfcf048ae31ef72b80efd7faa3d"
+  },
+  "reasons": [
+    "VisualSync full preprocessing/pair pipeline unavailable from the audited release",
+    "Saved SIFT graph covers only cameras0\u20137 from reference1 and lacks accepted uncertainty/repeatability qualification",
+    "Sync-NeRF completed three budget-limited pilots on cameras1,2,4,5,6,7,9,11 only; no held-out-camera timing is supplied",
+    "No independent benchmark truth or cross-window validation establishes physical timing accuracy"
+  ],
+  "final_window": {
+    "source_frames": [
+      200,
+      249
+    ],
+    "images_opened_by_campaign": false,
+    "evaluation": "not performed: no eligible full-rig candidate or runnable learned evidence pipeline; do not extrapolate the four-second Sync-NeRF field outside its fit window"
+  },
+  "reconstruction": {
+    "conditions": [
+      "zero"
+    ],
+    "kind": "operational-assumption",
+    "methods": [
+      "stg-full",
+      "freetimegs"
+    ],
+    "seeds": [
+      0,
+      1,
+      2
+    ],
+    "target_steps": 5000,
+    "seconds_per_run": 1200,
+    "source_frames": [
+      0,
+      49
+    ],
+    "heldout_camera_ids": [
+      0,
+      10,
+      20,
+      30
+    ],
+    "temporal_holdout_seconds": [
+      0.8,
+      1.0
+    ]
+  },
+  "recommendation_gate": "No learned correction recommendation or paired correction benefit claim is possible without full-rig support and repeatable held-out improvement. Continue mandatory zero controls."
+}
