@@ -130,3 +130,9 @@ The new ledger totals **7.279 GPU-job wall hours**, plus 5.222 seconds of pre-le
 The [artifact browser](artifacts.md) provides direct video links. The [artifact index](analysis-final/artifact-index.json) links every checkpoint, render, metric file, hash, and measured curve time. [Visual validation](visual-validation.json) links both complete endpoint bundles and their checked hashes/cadence. Large files remain under `.local/basketball-dense-temporal/`; historical files remain under `.local/sync-pivot/`. Provisional baseline plots and earlier audit milestones are retained as historical progress evidence and are superseded by `analysis-final/` and `resources-final/` for final conclusions.
 
 The study covers one scene, fixed cameras, and three seeds. Temporal interpolation has only one block, and zero offsets remain an operational assumption rather than independent proof of physical synchronization. Even a successful dense comparison would jointly change point count, geometry, and initial velocity, rather than isolate each contribution. Here, initialization, interaction, and STG-versus-dense effects remain unmeasured. Six of nine planned endpoints are complete; the three dense trajectories and their comparisons are blocked by the failed prerequisite. No claim of full Plan 026 attainment is made.
+
+## Follow-up: native-loss extrapolation
+
+[Smoothed losses, fitted equations, and asymptote estimates](loss-extrapolation/report.md)
+analyze the existing logs without extending training. Long-run floors are
+model-dependent and do not establish future player-quality improvement.
