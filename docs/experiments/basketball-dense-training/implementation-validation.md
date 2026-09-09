@@ -35,3 +35,8 @@ output paths, verify checkpoint/recipe bindings, and support all 30 dense
 checkpoint reloads and ten recipe/checkpoint metric cohorts. The fixed visual
 adapter requires twelve trajectories and five panels (ground truth plus four
 arms). End-to-end GPU evaluation and visual generation remain pending.
+
+Two additional job-accounting tests pass. They verify that failed attempts stay
+charged and that overlapping, unpaired, unclosed, or cleanup-failed GPU jobs
+cannot pass the final audit. The new native trajectory auditor also requires
+exactly updates 1–50,000 per dense trajectory and fixed initializer point counts.
