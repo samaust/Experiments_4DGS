@@ -1,0 +1,34 @@
+{
+  "schema": "sync-pivot-schedule-erratum/v1",
+  "classification": "documentation correction; executed settings unchanged",
+  "incorrect_text": "training-protocol.json groups STG Full and FreeTimeGsVanilla under native30000-step schedules",
+  "corrected_text": "STG Full native30000; FreeTimeGsVanilla native70000; both campaign targets5000",
+  "frozen_protocol_sha256": "ab0aa6728ebd24859662a66a46af0840614c10fd9aef20cdac4ad6bc8dca0d33",
+  "evidence": [
+    {
+      "seed": 0,
+      "path": ".local/sync-pivot/runs/freetimegs-zero-seed0/worker/training-config.json",
+      "sha256": "50b9c33a43056f0b2b1c0b7331b34a71d1e8f7115eccd6b1f7938a03a13bbe3b",
+      "native_max_steps": 70000,
+      "campaign_target_steps": 5000,
+      "initial_points": 45828
+    },
+    {
+      "seed": 1,
+      "path": ".local/sync-pivot/runs/freetimegs-zero-seed1/worker/training-config.json",
+      "sha256": "2f153a086b3352d0f3295e4795e159819ea54e5d9dd56063ca6959fd3808632d",
+      "native_max_steps": 70000,
+      "campaign_target_steps": 5000,
+      "initial_points": 45828
+    },
+    {
+      "seed": 2,
+      "path": ".local/sync-pivot/runs/freetimegs-zero-seed2/worker/training-config.json",
+      "sha256": "e4d1c7f39362d2cc068c14124b957a622e2da930bf33479a0c07c54073e6f810",
+      "native_max_steps": 70000,
+      "campaign_target_steps": 5000,
+      "initial_points": 45828
+    }
+  ],
+  "explanation": "The pinned native loader retained the70000-step default_keyframe preset in all three FreeTimeGS runs. No configuration or checkpoint is modified. Preserve the original frozen protocol and its hashes; this erratum corrects the prose."
+}

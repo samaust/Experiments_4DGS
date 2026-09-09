@@ -122,8 +122,11 @@ and temporal holdout [0.8,1.0) seconds (source frames 20–24). Each seed has th
 same 1,350 training keys and 350 evaluation keys. Continuous timestamps preserve
 source IDs and share normalization. Only the zero condition runs. Each run
 has a 5,000-update target and a 1,200-second cap, while retaining the native
-30,000-step optimizer/densification schedules. Reaching the campaign target
-does not reproduce the full author schedule.
+30,000-step STG Full and 70,000-step FreeTimeGsVanilla schedules. Reaching the campaign target
+does not reproduce the full author schedule. The frozen training-protocol prose
+incorrectly described both schedules as 30,000 steps; the
+[schedule erratum](schedule-erratum.json) records the actual saved configuration.
+The executed settings and frozen records are unchanged.
 
 Initialization uses 5,093 accepted static-map points, colored from training
 cameras at frame 25. FreeTimeGS applies its native normalization/filtering and
@@ -246,6 +249,47 @@ For CPU revalidation, run `python3 scripts/validate-sync-pivot-results.py`
 from the repository root. `python3 scripts/summarize-basketball-controls.py`
 regenerates compact result summaries from those retained local records.
 Neither command launches new training or GPU evaluation.
+
+## Interpreting the comparison with dance1
+
+The later dance1 result favored FreeTimeGsVanilla, but its 5,000-update result
+favored STG Full too. The observed ranking therefore does not establish a
+Basketball-versus-dance1 method preference independent of training progress.
+
+| Retained comparison | STG Full updates / PSNR | FreeTimeGsVanilla updates / PSNR |
+| --- | ---: | ---: |
+| Basketball pilot | 5,000 / 23.52 dB | 5,000 / 19.22 dB |
+| dance1 pilot | 5,000 / 23.45 dB | 5,000 / 19.15 dB |
+| dance1 later run | 30,000 / 24.50 dB | 42,061 / 25.50 dB |
+
+[dance1 checkpoint comparisons](../../experiments/contender-summary.md) use a
+different resolution, scene and evaluation split, so absolute scores are not
+cross-scene quality equivalences. Within each pilot the ranking is clear.
+The incomplete dance1 FreeTimeGS run nevertheless had 8.4 times as many updates
+as the Basketball pilot; incomplete does not imply similarly early training.
+
+The [dance1 FreeTimeGS setup](../../experiments/007-freetimegs.md) retained
+4,101,912 dense temporal EDGS/RoMa-initialized Gaussians with estimated velocities.
+Basketball starts with 45,828 static local copies and zero velocity. Both use
+the native relocation preset with ordinary point-count growth disabled; a
+sparse initialization does not automatically become a dense model through that
+training schedule. STG has native densification. These differences make
+initialization coverage and training progress concrete competing explanations
+for the Basketball blur. Their individual contributions have not been isolated.
+
+Blur of fixed court markings particularly argues against attributing all
+FreeTimeGS softness to camera time offsets. Time shifts primarily affect changing
+content; static appearance can instead expose geometry, calibration, sampling,
+initialization or optimization limitations. The display's changing digits are
+not a static control. Player blur remains compatible with several causes,
+including motion representation, training, calibration, timing and exposure.
+
+The supported conclusion is that STG Full learns a better baseline early in
+both saved scenes, while the much longer, densely initialized dance1 FreeTimeGS
+run eventually leads its image-quality comparison. Whether Basketball would
+follow that trajectory is untested. A future experiment should test initialization
+and convergence explicitly before attributing this result to scene preference
+or synchronization; no additional training is authorized by this interpretation.
 
 ## Ranked follow-up
 

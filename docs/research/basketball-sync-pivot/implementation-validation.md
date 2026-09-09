@@ -75,7 +75,8 @@ are retained. Fresh GPU model reload and rendered metrics are still pending.
 ## Completed reconstruction checkpoint validation
 
 All six zero controls completed the 5,000-update campaign target and saved
-1,000/2,000/5,000 checkpoints. This does not complete native 30,000-step schedules.
+1,000/2,000/5,000 checkpoints. This does not complete the native 30,000-step STG or 70,000-step FreeTimeGS
+schedules; see the [schedule documentation correction](schedule-erratum.json).
 The [frozen evaluation manifest](evaluation-inputs.json) selects update 5,000 for
 both methods and all seeds. Every native fresh-process reload completed all 350
 images and all 13 repeated probes; PNG and raw float hashes match exactly on
