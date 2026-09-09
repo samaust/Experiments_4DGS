@@ -63,3 +63,10 @@ was not timed independently; its separately charged CPU repeat took 26.59 second
 The cropped record includes original assembly and validation-repeat timings.
 
 Four existing temporal-geometry tests and one person-crop mapping test pass.
+
+The reusable visual verifier passed on all 48 first-phase full/crop PNGs and all
+12 videos; see [all-panel evidence](visual-validation-all-panels-005000.json).
+Every image column matches its original source pixels exactly. A temporary copy
+with one changed image pixel and a refreshed artifact hash was rejected with
+`panel source pixels differ`, confirming the comparison is independent of the
+panel's own hash. The temporary test did not alter retained visual artifacts.
