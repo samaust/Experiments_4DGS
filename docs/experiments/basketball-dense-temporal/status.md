@@ -68,3 +68,11 @@ All six available endpoints pass the [complete trajectory audit](resources-final
 270,000 contiguous new updates in total, finite losses and point counts,
 monotonic timings, and all 24 required new curve checkpoint hashes.
 STG seed-2 endpoint evidence was committed as `8737232`.
+
+Training milestone committed as `53f1c4c`. All 24 new curve snapshots have
+350 target renders and pass 13 fresh-process PNG/raw-float comparisons each
+([render evidence](curve-render-validation.json)). Both endpoint visual
+bundles are complete and hash/cadence-verified
+([visual evidence](visual-validation.json), [assessment](visual-assessment.md)).
+The 10,000-update metric cohort is complete; remaining metric cohorts and
+final statistics/report are in progress.
