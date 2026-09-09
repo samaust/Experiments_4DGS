@@ -1,0 +1,23 @@
+# Plan 027 initial implementation validation
+
+The historical Plan 026 adapters and evidence remain unchanged. New adapters use
+`.local/basketball-dense-training/` and a separate ledger with hash links to
+historical accounting and the saved specification.
+
+- All 30 historical checkpoint, render-index, and metric-file hashes passed;
+  see [baseline reuse](baseline-reuse.json).
+- Shared pinned ViPE masks completed for 30 training cameras and all nine
+  keyframe/successor pairs (540 masks), with fresh tracker state per pair.
+- The common normalized voxel width is `0.0060388131825168485`, calculated from
+  unique historical sparse static points before constructing either initializer.
+  The immutable machine record is `.local/basketball-dense-training/voxel-width.json`.
+- Six fusion unit/integration tests pass, covering deterministic medians,
+  observation mappings, foreground temporal separation, zero unsupported/static
+  velocities, excluded times, corrupted archives, and cross-recipe rejection.
+- Four historical study training tests and three split/supervisor tests pass.
+- New adapters compile. Full native save/reload and production resource checks
+  remain pending full cloud generation; production training has not started.
+
+Commands use `.local/envs/freetimegs/bin/python -m unittest discover -s tests -p`
+with `test_basketball_dense_fusion.py`, `test_basketball_study_train.py`, and
+`test_basketball_study.py` respectively.
