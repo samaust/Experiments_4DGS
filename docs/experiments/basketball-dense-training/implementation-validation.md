@@ -21,3 +21,17 @@ historical accounting and the saved specification.
 Commands use `.local/envs/freetimegs/bin/python -m unittest discover -s tests -p`
 with `test_basketball_dense_fusion.py`, `test_basketball_study_train.py`, and
 `test_basketball_study.py` respectively.
+
+## Evaluation and execution adapters
+
+Thirteen dense-related tests pass, including the new serial-order/resource-gate
+tests and a synthetic 60-result report integration test. The latter verifies
+four distinct cohorts despite the shared native `freetimegs` method, matched
+coarse/cropped contrasts, and initialization-duration interactions. Synthetic
+test outcomes are not experiment quality evidence.
+
+New adapters retain the frozen renderer and metric worker, separate recipe
+output paths, verify checkpoint/recipe bindings, and support all 30 dense
+checkpoint reloads and ten recipe/checkpoint metric cohorts. The fixed visual
+adapter requires twelve trajectories and five panels (ground truth plus four
+arms). End-to-end GPU evaluation and visual generation remain pending.
