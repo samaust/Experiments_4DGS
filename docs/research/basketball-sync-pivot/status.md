@@ -22,7 +22,8 @@ The [timing decision](timing-decision.json) freezes no eligible full-rig correct
 Final-window images remain unopened. All three STG Full zero controls completed 5,000 updates
 in 222.49, 221.99 and 225.85 charged seconds. All three FreeTimeGS seeds also reached 5,000 updates (136.50, 136.21,
 137.04 charged seconds). The shared checkpoint is frozen at update 5,000.
-Fresh reload/render evaluation is active; metrics and final reporting remain pending.
+All six fresh reload/render evaluations passed: 2,100 images and 78 exact
+raw-float/PNG repeat probes. Shared metrics are active; final reporting remains pending.
 Use [evaluation protocol v3](evaluation-protocol-v3.json), [benchmark/code status](benchmark-code-matrix.md),
 [metric interface evidence](metric-interface-check.json) and [global training admission](global-training-admission.json).
 The original central ledger was copied byte-for-byte to

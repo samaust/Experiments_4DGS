@@ -66,3 +66,22 @@ CPU validation: 20 scene/timing/fixture/mask tests passed, and four seed/block
 summary tests passed including exact paired effects and mismatched-checkpoint
 rejection. Native environment package inventories and source-license identities
 are retained. Fresh GPU model reload and rendered metrics are still pending.
+
+## Completed reconstruction checkpoint validation
+
+All six zero controls completed the 5,000-update campaign target and saved
+1,000/2,000/5,000 checkpoints. This does not complete native 30,000-step schedules.
+The [frozen evaluation manifest](evaluation-inputs.json) selects update 5,000 for
+both methods and all seeds. Every native fresh-process reload completed all 350
+images and all 13 repeated probes; PNG and raw float hashes match exactly on
+all 78 comparisons. Checkpoint source/configuration checks and full model-state
+restoration passed for both backends. Metrics use a separate identical container.
+[Retained results](reconstruction-results.json) include individual hashes,
+throughput, memory and supervision outcomes. No final timing-window image was
+opened and no test-view offset was fitted.
+
+A fixed contact sheet uses seed 0, source frame 22 and held-out cameras
+0/10/20/30. Visual inspection finds substantial player blur in both methods;
+STG Full retains sharper court/background detail in these views. No parameters
+were changed after inspection. This is reconstruction evidence, not an isolated
+diagnosis of camera timing.
