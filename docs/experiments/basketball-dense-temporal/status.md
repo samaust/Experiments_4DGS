@@ -28,13 +28,17 @@ Native continuation and fresh reload validation are complete; see
 [implementation validation](implementation-validation.md). Restored state is
 exact, while both backends exhibit native GPU training variability in repeated
 and split runs. All 13 raw-float/PNG repeat probes pass for both backends.
-Adapter/pilot milestone committed as `94a498f`. STG Full seed 0 is now running
-from 5,000 toward 50,000; its 10,000 snapshot is retained. Current process and
+Adapter/pilot milestone committed as `94a498f`. STG Full seed 0 reached 50,000 updates; all four new curve snapshots are retained.
+The serial queue is continuing the remaining five sparse trajectories. Current process and
 handoff state are saved in `.local/basketball-dense-temporal/run-state.json`.
 Next: complete the six sparse-arm continuations and their curve evaluations,
 then retain the report and visual artifacts.
 
 The sparse-arm production storage projection fits the available space.
-No unrelated files will be removed. All nine 50,000
-endpoints, curve evaluations, visual artifacts, and scientific conclusions remain
-outstanding. There is no study time/GPU-hour ceiling; concurrency is one GPU job.
+No unrelated files will be removed. One of the nine planned 50,000 endpoints is complete. Five sparse endpoints,
+new curve evaluations, endpoint visuals, and final interpretation remain
+outstanding; three dense trajectories are blocked by the initialization gate. There is no study time/GPU-hour ceiling; concurrency is one GPU job.
+
+Evaluation/reporting milestone committed as `f55805d`. The first completed
+trajectory passes the contiguous-update, finite-loss, timing, and checkpoint
+audit in [resource evidence](resources-first-endpoint/trajectories.json).
