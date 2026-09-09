@@ -11,6 +11,21 @@ from basketball_study import CURVE, digest, write_new
 
 
 class ReportTests(unittest.TestCase):
+    def test_endpoint_cost_includes_save_and_reload_overhead(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); arm='freetimegs-dense-coarse'
+            for endpoint,charged,origin,start,rows in ((5000,1000,110,100,[(5000,850)]),
+                    (50000,5200,2010,2000,[(10000,500),(50000,5000)])):
+                segment=root/f'segments/train-{arm}-seed0-{endpoint}'
+                folder=root/f'training/{arm}-seed0/{endpoint:06d}'
+                write_new(segment/'segment.json',dict(charged_seconds=charged))
+                write_new(segment/'process.json',dict(started_monotonic=start))
+                write_new(folder/'timing.json',dict(optimizer_loop_start_monotonic=origin))
+                (folder/'loss.jsonl').write_text(''.join(json.dumps(dict(iteration=i,elapsed_seconds=t))+'\n' for i,t in rows))
+            with patch.object(report,'ARTIFACTS',root):
+                for step,expected in ((5000,1000),(10000,1510),(50000,6200)):
+                    self.assertEqual(report.training_time(dict(arm=arm,seed=0,iteration=step),{}),expected)
+
     def test_complete_native_method_shared_but_arm_distinct_cohorts(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); docs=root/'docs'; artifacts=root/'artifacts'

@@ -51,11 +51,14 @@ def training_time(record, history):
         folder = ARTIFACTS/f"training/{record['arm']}-seed{record['seed']}/{endpoint:06d}"
         if endpoint == 50000 and record['iteration'] == 5000:
             break
-        origin = json.loads((folder/'timing.json').read_text())['optimizer_loop_start_monotonic']
         segment = ARTIFACTS/f"segments/train-{record['arm']}-seed{record['seed']}-{endpoint}"
+        if record['iteration'] >= endpoint:
+            total += json.loads((segment/'segment.json').read_text())['charged_seconds']
+            continue
+        origin = json.loads((folder/'timing.json').read_text())['optimizer_loop_start_monotonic']
         start = json.loads((segment/'process.json').read_text())['started_monotonic']
-        target = min(record['iteration'], endpoint)
-        row = next(json.loads(line) for line in (folder/'loss.jsonl').open() if json.loads(line)['iteration'] == target)
+        with (folder/'loss.jsonl').open() as stream:
+            row = next(json.loads(line) for line in stream if json.loads(line)['iteration'] == record['iteration'])
         total += origin-start+row['elapsed_seconds']
     return total
 

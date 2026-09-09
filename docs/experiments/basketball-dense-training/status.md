@@ -17,8 +17,14 @@ defects. The historical Plan 026 visual rejection remains unchanged.
   remaining production retention, with approximately 432 GB available after validation.
   The user freed additional disk space before qualification.
 
-Current stage: initialization diagnostics complete; starting all six 5,000-update endpoints
-in seed order, coarse then cropped. All six first endpoints are complete (30,000 production updates), each with all 350 targets and 13 reload probes passing. The two three-seed metric cohorts are running before 50,000-update continuation; live consumption is recorded in loss logs. Authorized
+Current stage: all six 5,000-update endpoints and both metric cohorts are complete
+(30,000 first-phase production updates and 2,100 new metric rows). Each endpoint
+passed all 350 targets and 13 reload probes. The [partial analysis](analysis-005000/artifact-index.json)
+contains 36 combined curve results; the remaining 24 dense curves are pending.
+The [held-out visual validation](visual-validation-005000.json) passed for 48 PNGs
+and 12 videos. Coarse seed 0 is continuing from 5,000 to the absolute 50,000 target;
+its complete saved-state restoration passed with no differences. Live consumption
+is recorded in loss logs. Authorized
 production remains six trajectories of 50,000 updates each (300,000 total), one GPU
 job at a time, with no time or GPU-hour ceiling. Validation is charged separately.
 
