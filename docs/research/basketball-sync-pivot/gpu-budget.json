@@ -256,9 +256,9 @@
     {
       "allocation": "freetimegs",
       "role": "freetimegs-basketball-zero-seed0",
-      "status": "reserved",
+      "status": "completed",
       "reserved_seconds": 1200.0,
-      "charged_seconds": 1200.0,
+      "charged_seconds": 136.49961860699113,
       "started_unix_seconds": 1788916886.976893,
       "runner_pid": 1001379,
       "container": null,
@@ -278,7 +278,92 @@
         "--seed",
         "0"
       ],
-      "output": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed0"
+      "output": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed0",
+      "wall_seconds": 136.49961860699113
+    },
+    {
+      "allocation": "freetimegs",
+      "role": "freetimegs-basketball-zero-seed1",
+      "status": "completed",
+      "reserved_seconds": 1200.0,
+      "charged_seconds": 136.20922555198194,
+      "started_unix_seconds": 1788917054.143098,
+      "runner_pid": 1001915,
+      "container": null,
+      "command": [
+        ".local/envs/freetimegs/bin/python",
+        "scripts/basketball_native_train.py",
+        "--method",
+        "freetimegs",
+        "--manifest",
+        ".local/sync-pivot/basketball-zero/manifest.json",
+        "--initialization",
+        ".local/sync-pivot/basketball-static-init",
+        "--checkout",
+        ".local/FreeTimeGsVanilla",
+        "--output",
+        ".local/sync-pivot/runs/freetimegs-zero-seed1/worker",
+        "--seed",
+        "1"
+      ],
+      "output": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed1",
+      "wall_seconds": 136.20922555198194
+    },
+    {
+      "allocation": "freetimegs",
+      "role": "freetimegs-basketball-zero-seed2",
+      "status": "completed",
+      "reserved_seconds": 1200.0,
+      "charged_seconds": 137.03925598500064,
+      "started_unix_seconds": 1788917209.0688806,
+      "runner_pid": 1002226,
+      "container": null,
+      "command": [
+        ".local/envs/freetimegs/bin/python",
+        "scripts/basketball_native_train.py",
+        "--method",
+        "freetimegs",
+        "--manifest",
+        ".local/sync-pivot/basketball-zero/manifest.json",
+        "--initialization",
+        ".local/sync-pivot/basketball-static-init",
+        "--checkout",
+        ".local/FreeTimeGsVanilla",
+        "--output",
+        ".local/sync-pivot/runs/freetimegs-zero-seed2/worker",
+        "--seed",
+        "2"
+      ],
+      "output": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed2",
+      "wall_seconds": 137.03925598500064
+    },
+    {
+      "allocation": "evaluation",
+      "role": "render-stg-full-seed0",
+      "status": "reserved",
+      "reserved_seconds": 300.0,
+      "charged_seconds": 300.0,
+      "started_unix_seconds": 1788917397.565969,
+      "runner_pid": 1002633,
+      "container": null,
+      "command": [
+        ".local/envs/stg-render/bin/python",
+        "scripts/evaluate-basketball-sync.py",
+        "evaluate",
+        "--method",
+        "stg-full",
+        "--checkout",
+        ".local/SpacetimeGaussians",
+        "--manifest",
+        ".local/sync-pivot/basketball-zero/manifest.json",
+        "--checkpoint",
+        ".local/sync-pivot/runs/stg-full-zero-seed0/worker/checkpoint-005000.pt",
+        "--regions",
+        ".local/sync-pivot/basketball-evaluation-regions/regions.json",
+        "--output",
+        ".local/sync-pivot/evaluation/stg-full-seed0/worker"
+      ],
+      "output": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/evaluation/stg-full-seed0"
     }
   ]
 }

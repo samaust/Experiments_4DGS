@@ -1,6 +1,6 @@
 {
-  "central_training_seconds": 24393.73737600002,
-  "combined_training_seconds": 31329.711179840015,
+  "central_training_seconds": 23603.474304416028,
+  "combined_training_seconds": 30539.448108256023,
   "schema": "basketball-zero-controls/v1",
   "runs": [
     {
@@ -206,13 +206,13 @@
       "seed": 0,
       "condition": "zero",
       "path": ".local/sync-pivot/runs/freetimegs-zero-seed0",
-      "status": "not completed",
+      "status": "retained worker result",
       "accounting": {
         "allocation": "freetimegs",
         "role": "freetimegs-basketball-zero-seed0",
-        "status": "reserved",
+        "status": "completed",
         "reserved_seconds": 1200.0,
-        "charged_seconds": 1200.0,
+        "charged_seconds": 136.49961860699113,
         "started_unix_seconds": 1788916886.976893,
         "runner_pid": 1001379,
         "container": null,
@@ -232,7 +232,56 @@
           "--seed",
           "0"
         ],
-        "output": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed0"
+        "output": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed0",
+        "wall_seconds": 136.49961860699113
+      },
+      "worker": {
+        "iteration": 5000,
+        "target_steps": 5000,
+        "budget_limited": false,
+        "checkpoints": [
+          {
+            "iteration": 1000,
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed0/worker/checkpoint-001000.pt",
+            "sha256": "cdc6d1cf41eb4eda3468dbeccdfb8f5afa89b06114ab5229b4914db8f35983dd"
+          },
+          {
+            "iteration": 2000,
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed0/worker/checkpoint-002000.pt",
+            "sha256": "814b86184f81252d0640246946c9df61ee744681080978c0d6c75c9d0d1a6f04"
+          },
+          {
+            "iteration": 5000,
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed0/worker/checkpoint-005000.pt",
+            "sha256": "71ead62dee8dbae0ee004c2fd6103ddd4e5b1049ef1e5d6cc34a5c2647fb5eda"
+          }
+        ],
+        "peak_allocated_bytes": 282961920,
+        "peak_reserved_bytes": 299892736
+      },
+      "worker_sha256": "69be6d7628ccb9908535d51a4572e569326222f8924d49114661b3a4a8b0097b",
+      "checkpoints": [
+        {
+          "path": ".local/sync-pivot/runs/freetimegs-zero-seed0/worker/checkpoint-001000.pt",
+          "bytes": 35788834,
+          "sha256": "cdc6d1cf41eb4eda3468dbeccdfb8f5afa89b06114ab5229b4914db8f35983dd"
+        },
+        {
+          "path": ".local/sync-pivot/runs/freetimegs-zero-seed0/worker/checkpoint-002000.pt",
+          "bytes": 35788834,
+          "sha256": "814b86184f81252d0640246946c9df61ee744681080978c0d6c75c9d0d1a6f04"
+        },
+        {
+          "path": ".local/sync-pivot/runs/freetimegs-zero-seed0/worker/checkpoint-005000.pt",
+          "bytes": 35788834,
+          "sha256": "71ead62dee8dbae0ee004c2fd6103ddd4e5b1049ef1e5d6cc34a5c2647fb5eda"
+        }
+      ],
+      "supervisor": {
+        "exit_code": 0,
+        "stop_requested": false,
+        "forced_kill": false,
+        "wall_seconds": 136.49441425601253
       }
     },
     {
@@ -240,26 +289,178 @@
       "seed": 1,
       "condition": "zero",
       "path": ".local/sync-pivot/runs/freetimegs-zero-seed1",
-      "status": "not completed"
+      "status": "retained worker result",
+      "accounting": {
+        "allocation": "freetimegs",
+        "role": "freetimegs-basketball-zero-seed1",
+        "status": "completed",
+        "reserved_seconds": 1200.0,
+        "charged_seconds": 136.20922555198194,
+        "started_unix_seconds": 1788917054.143098,
+        "runner_pid": 1001915,
+        "container": null,
+        "command": [
+          ".local/envs/freetimegs/bin/python",
+          "scripts/basketball_native_train.py",
+          "--method",
+          "freetimegs",
+          "--manifest",
+          ".local/sync-pivot/basketball-zero/manifest.json",
+          "--initialization",
+          ".local/sync-pivot/basketball-static-init",
+          "--checkout",
+          ".local/FreeTimeGsVanilla",
+          "--output",
+          ".local/sync-pivot/runs/freetimegs-zero-seed1/worker",
+          "--seed",
+          "1"
+        ],
+        "output": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed1",
+        "wall_seconds": 136.20922555198194
+      },
+      "worker": {
+        "iteration": 5000,
+        "target_steps": 5000,
+        "budget_limited": false,
+        "checkpoints": [
+          {
+            "iteration": 1000,
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed1/worker/checkpoint-001000.pt",
+            "sha256": "75da37a0b11425f2afd7571612169756f0f4e3ad3772a5235bceffb7a74c49cd"
+          },
+          {
+            "iteration": 2000,
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed1/worker/checkpoint-002000.pt",
+            "sha256": "36cd302581b5563da86136c054453de092fe53f98c282e19f84cbe5b87d47b57"
+          },
+          {
+            "iteration": 5000,
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed1/worker/checkpoint-005000.pt",
+            "sha256": "f8e340d07c8626e4cea7224d219cd4c046c4ebb05165250859dbfde9bf9cb881"
+          }
+        ],
+        "peak_allocated_bytes": 283453440,
+        "peak_reserved_bytes": 299892736
+      },
+      "worker_sha256": "0c7f4d0f30ac3340c70ad08e209709a0bbab5aea3894a69b064b27ef37e93945",
+      "checkpoints": [
+        {
+          "path": ".local/sync-pivot/runs/freetimegs-zero-seed1/worker/checkpoint-001000.pt",
+          "bytes": 35788770,
+          "sha256": "75da37a0b11425f2afd7571612169756f0f4e3ad3772a5235bceffb7a74c49cd"
+        },
+        {
+          "path": ".local/sync-pivot/runs/freetimegs-zero-seed1/worker/checkpoint-002000.pt",
+          "bytes": 35788770,
+          "sha256": "36cd302581b5563da86136c054453de092fe53f98c282e19f84cbe5b87d47b57"
+        },
+        {
+          "path": ".local/sync-pivot/runs/freetimegs-zero-seed1/worker/checkpoint-005000.pt",
+          "bytes": 35788770,
+          "sha256": "f8e340d07c8626e4cea7224d219cd4c046c4ebb05165250859dbfde9bf9cb881"
+        }
+      ],
+      "supervisor": {
+        "exit_code": 0,
+        "stop_requested": false,
+        "forced_kill": false,
+        "wall_seconds": 136.2041720909765
+      }
     },
     {
       "method": "freetimegs",
       "seed": 2,
       "condition": "zero",
       "path": ".local/sync-pivot/runs/freetimegs-zero-seed2",
-      "status": "not completed"
+      "status": "retained worker result",
+      "accounting": {
+        "allocation": "freetimegs",
+        "role": "freetimegs-basketball-zero-seed2",
+        "status": "completed",
+        "reserved_seconds": 1200.0,
+        "charged_seconds": 137.03925598500064,
+        "started_unix_seconds": 1788917209.0688806,
+        "runner_pid": 1002226,
+        "container": null,
+        "command": [
+          ".local/envs/freetimegs/bin/python",
+          "scripts/basketball_native_train.py",
+          "--method",
+          "freetimegs",
+          "--manifest",
+          ".local/sync-pivot/basketball-zero/manifest.json",
+          "--initialization",
+          ".local/sync-pivot/basketball-static-init",
+          "--checkout",
+          ".local/FreeTimeGsVanilla",
+          "--output",
+          ".local/sync-pivot/runs/freetimegs-zero-seed2/worker",
+          "--seed",
+          "2"
+        ],
+        "output": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed2",
+        "wall_seconds": 137.03925598500064
+      },
+      "worker": {
+        "iteration": 5000,
+        "target_steps": 5000,
+        "budget_limited": false,
+        "checkpoints": [
+          {
+            "iteration": 1000,
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed2/worker/checkpoint-001000.pt",
+            "sha256": "329608a8200c863fa15e0003ced75171c4aa38cea9df8d68b61db8a46e55b056"
+          },
+          {
+            "iteration": 2000,
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed2/worker/checkpoint-002000.pt",
+            "sha256": "222d32d8a2f5bfbb3186e9e575a5d63921fb6b22d5ef6c2b6644afe155ae0274"
+          },
+          {
+            "iteration": 5000,
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed2/worker/checkpoint-005000.pt",
+            "sha256": "58697f32effe440416a4520240871286c91349814aa5aa4e7ec53aebf5019192"
+          }
+        ],
+        "peak_allocated_bytes": 283646976,
+        "peak_reserved_bytes": 299892736
+      },
+      "worker_sha256": "1d98c912cbd84098157771d91a67c223092f0099b752a037c3405130cfda5cfb",
+      "checkpoints": [
+        {
+          "path": ".local/sync-pivot/runs/freetimegs-zero-seed2/worker/checkpoint-001000.pt",
+          "bytes": 35788770,
+          "sha256": "329608a8200c863fa15e0003ced75171c4aa38cea9df8d68b61db8a46e55b056"
+        },
+        {
+          "path": ".local/sync-pivot/runs/freetimegs-zero-seed2/worker/checkpoint-002000.pt",
+          "bytes": 35788770,
+          "sha256": "222d32d8a2f5bfbb3186e9e575a5d63921fb6b22d5ef6c2b6644afe155ae0274"
+        },
+        {
+          "path": ".local/sync-pivot/runs/freetimegs-zero-seed2/worker/checkpoint-005000.pt",
+          "bytes": 35788770,
+          "sha256": "58697f32effe440416a4520240871286c91349814aa5aa4e7ec53aebf5019192"
+        }
+      ],
+      "supervisor": {
+        "exit_code": 0,
+        "stop_requested": false,
+        "forced_kill": false,
+        "wall_seconds": 137.03339058201527
+      }
     }
   ],
   "gpu_charged_seconds": {
     "visualsync": 241.13570702903058,
     "sync-nerf": 6935.9738038399955,
     "stg-full": 670.3309466950013,
-    "freetimegs": 1200.0
+    "freetimegs": 409.7481001439737
   },
-  "gpu_total_seconds": 9047.440457564027,
+  "gpu_total_seconds": 8257.188557708001,
   "historical_training_records_preserved": true,
   "historical_record_count": 22,
   "historical_snapshot_sha256": "d0b4daa1aee79361580af3a1bf8fbc597148db7775b26f169a0a1b2e6ac90957",
-  "central_training_ledger_sha256": "a8e6aa4e8edee515db35ebf20d9951db9dbd5c465d5bc5e09a79c9f5bb6b987e",
+  "central_training_ledger_sha256": "fbe29c69483740afb1c63646451a4df6d8358e6f48bad2855b137b1e8be90036",
   "limitation": "Zero is an operational assumption. No corrected condition exists; no timing correction benefit can be estimated."
 }
