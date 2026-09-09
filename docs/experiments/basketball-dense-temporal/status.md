@@ -29,16 +29,24 @@ Native continuation and fresh reload validation are complete; see
 exact, while both backends exhibit native GPU training variability in repeated
 and split runs. All 13 raw-float/PNG repeat probes pass for both backends.
 Adapter/pilot milestone committed as `94a498f`. STG Full seed 0 reached 50,000 updates; all four new curve snapshots are retained.
-The serial queue is continuing the remaining five sparse trajectories. Current process and
+Sparse FreeTimeGS seed 0 also reached 50,000 updates. The serial queue is
+training STG seed 1, followed by the remaining three sparse trajectories. Current process and
 handoff state are saved in `.local/basketball-dense-temporal/run-state.json`.
 Next: complete the six sparse-arm continuations and their curve evaluations,
 then retain the report and visual artifacts.
 
 The sparse-arm production storage projection fits the available space.
-No unrelated files will be removed. One of the nine planned 50,000 endpoints is complete. Five sparse endpoints,
+No unrelated files will be removed. Two of the nine planned 50,000 endpoints are complete. Four sparse endpoints,
 new curve evaluations, endpoint visuals, and final interpretation remain
 outstanding; three dense trajectories are blocked by the initialization gate. There is no study time/GPU-hour ceiling; concurrency is one GPU job.
 
 Evaluation/reporting milestone committed as `f55805d`. The first completed
 trajectory passes the contiguous-update, finite-loss, timing, and checkpoint
 audit in [resource evidence](resources-first-endpoint/trajectories.json).
+
+Both seed-0 continuations pass the full trajectory audit: 45,000 contiguous
+updates, finite losses and point counts, monotonic timings, and all four
+retained checkpoint hashes. See [seed-0 resource evidence](resources-seed0/trajectories.json).
+Their measured optimizer-loop times are 1,982.016 seconds (STG) and
+5,835.064 seconds (sparse FreeTimeGS), excluding historical 5,000-update
+training and this continuation segment's startup. Quality evaluation is pending.
