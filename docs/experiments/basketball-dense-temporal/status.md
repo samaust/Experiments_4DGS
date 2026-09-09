@@ -30,7 +30,8 @@ exact, while both backends exhibit native GPU training variability in repeated
 and split runs. All 13 raw-float/PNG repeat probes pass for both backends.
 Adapter/pilot milestone committed as `94a498f`. STG Full seed 0 reached 50,000 updates; all four new curve snapshots are retained.
 Sparse FreeTimeGS seed 0 also reached 50,000 updates. The serial queue is
-training sparse FreeTimeGS seed 2, the last available training trajectory.
+evaluating all four new curve snapshots for each of the six completed trajectories.
+Sparse FreeTimeGS seed 2 has also reached 50,000 updates.
 All three STG seeds have reached 50,000 updates.
 Sparse FreeTimeGS seed 1 has also reached 50,000 updates.
 STG seed 1 has also reached 50,000 updates. Current process and
@@ -39,8 +40,8 @@ Next: complete the six sparse-arm continuations and their curve evaluations,
 then retain the report and visual artifacts.
 
 The sparse-arm production storage projection fits the available space.
-No unrelated files will be removed. Five of the nine planned 50,000 endpoints are complete. One sparse endpoint,
-new curve evaluations, endpoint visuals, and final interpretation remain
+No unrelated files will be removed. Six of the nine planned 50,000 endpoints are complete.
+New curve evaluations, endpoint visuals, and final interpretation remain
 outstanding; three dense trajectories are blocked by the initialization gate. There is no study time/GPU-hour ceiling; concurrency is one GPU job.
 
 Evaluation/reporting milestone committed as `f55805d`. The first completed
@@ -62,3 +63,8 @@ STG seed-1 endpoint evidence was committed as `739c134`.
 
 All five completed endpoints pass the [trajectory audit](resources-five-endpoints/trajectories.json).
 Sparse FreeTimeGS seed-1 endpoint evidence was committed as `1f5e764`.
+
+All six available endpoints pass the [complete trajectory audit](resources-final/trajectories.json):
+270,000 contiguous new updates in total, finite losses and point counts,
+monotonic timings, and all 24 required new curve checkpoint hashes.
+STG seed-2 endpoint evidence was committed as `8737232`.
