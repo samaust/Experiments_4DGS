@@ -1,22 +1,31 @@
 # Plan 027 execution state
 
-Implementation in progress under [plan 027](../../../plans/plan_027.md).
-This is a fixed experiment; the continuous-improvement loop is inactive.
+[Plan 027](../../../plans/plan_027.md) is active as a fixed experiment; the
+continuous-improvement loop is inactive.
 
-Authorized production allocation: six dense trajectories, 50,000 updates each
-(300,000 updates total), one GPU job at a time, no time or GPU-hour ceiling.
-Validation is charged separately. Production consumption: zero updates.
+Both full initializers are frozen for experimental training with known visual
+defects. The historical Plan 026 visual rejection remains unchanged.
 
-Current stage: full person-cropped geometry generation. Shared full-keyframe masks
-and the full coarse initializer are complete; see [preparation evidence](preparation-001.json).
-Coarse geometry has 7,568,463 temporal Gaussians after deterministic static fusion. Historical Plan
-026 visual rejection remains unchanged. Both recipes are authorized for
-experimental training with known visual defects, subject to technical validity.
+- Coarse: 684,967 physical static points, 6,164,703 temporal static copies,
+  1,403,760 foreground observations; 7,568,463 total Gaussians.
+- Cropped: 686,740 physical static points, 6,180,660 temporal static copies,
+  1,452,616 foreground observations; 7,633,276 total Gaussians.
+- Both full-data fusion repeats have identical archive, mapping, and source-index hashes.
+- Both native two-update saves and resumes to update three passed complete saved-state
+  restoration checks. GPU training is not claimed to be bitwise reproducible.
+- [Qualified resource projection](resources-qualified.json): approximately 253 GB
+  remaining production retention, with approximately 432 GB available after validation.
+  The user freed additional disk space before qualification.
 
-Large artifacts and the new append-only ledger are under
-`.local/basketball-dense-training/`. GPU host access passed after the prescribed
-outside-sandbox retry. Initial free disk space was approximately 247 GB; full
-initializer save/reload validation must establish production resource requirements.
+Current stage: fixed initialization diagnostics, then all six 5,000-update endpoints
+in seed order, coarse then cropped. Production consumption: zero updates. Authorized
+production remains six trajectories of 50,000 updates each (300,000 total), one GPU
+job at a time, with no time or GPU-hour ceiling. Validation is charged separately.
 
-Validated milestone: `669cdde` (fusion, recipe-aware training, historical hash verification).
-Native full-initializer save/reload and resource qualification remain pending.
+[Preparation evidence](preparation-002.json), [implementation validation](implementation-validation.md),
+and [historical reuse](baseline-reuse.json) retain compact evidence. Large artifacts,
+per-job logs, the linked append-only ledger, and live state are under
+`.local/basketball-dense-training/`.
+
+Milestones: `669cdde` fusion/training adapters; `80f7a75` execution and four-arm
+analysis; `54773cb` trajectory and GPU-accounting audit.

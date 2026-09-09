@@ -33,6 +33,7 @@ def main():
         spec.loader.exec_module(renderer)
         scene, model, iteration, pixels = renderer.load_model(a)
         source_hash = digest(a.checkpoint)
+        seed = state['provenance']['seed']
     else:
         from basketball_dense_fusion import load_frozen, NATIVE
         from basketball_native_train import prepare_free
@@ -46,6 +47,7 @@ def main():
         model = NativeFreeTimeModel(a.checkout, cfg, {k: torch.from_numpy(arrays[k]) for k in NATIVE}, scene_scale=norm['scene_scale'], device='cuda')
         del arrays
         iteration, source_hash = 0, frozen['archive_sha256']
+        seed = 0
         def pixels(key):
             return model.render(scene.camera(key, device='cuda'), sh_degree=0)[0][0].permute(2,0,1)
     a.output.mkdir(parents=True, exist_ok=False)
@@ -59,7 +61,7 @@ def main():
                 path = a.output/f'camera{camera}-frame{frame}.png'
                 Image.fromarray((np.clip(raw,0,1)*255).round().astype(np.uint8)).save(path)
                 rows.append(dict(camera=camera,frame=frame,path=path.name,sha256=digest(path)))
-    write_new(a.output/'result.json',dict(arm=a.arm,iteration=iteration,source_sha256=source_hash,
+    write_new(a.output/'result.json',dict(arm=a.arm,seed=seed,iteration=iteration,source_sha256=source_hash,
         scope='training-view diagnostics; not held-out quality evidence', records=rows,
         wall_seconds=time.monotonic()-started,peak_allocated_bytes=torch.cuda.max_memory_allocated()))
 

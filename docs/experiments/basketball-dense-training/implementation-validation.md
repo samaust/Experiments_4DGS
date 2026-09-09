@@ -40,3 +40,26 @@ Two additional job-accounting tests pass. They verify that failed attempts stay
 charged and that overlapping, unpaired, unclosed, or cleanup-failed GPU jobs
 cannot pass the final audit. The new native trajectory auditor also requires
 exactly updates 1–50,000 per dense trajectory and fixed initializer point counts.
+
+## Full native qualification
+
+Both frozen initializers completed two native updates, saved complete state,
+reloaded in fresh worker processes, and advanced to exactly update three. Both
+`restore-validation.json` records pass with no differences across saved native
+parameters, optimizers, schedulers, sampler, RNG, and method state. These six
+updates total are validation work, not production consumption.
+
+A resource-summary property-access error occurred after all four GPU jobs had
+completed successfully. It was corrected and the CPU-only projection rerun;
+no GPU validation was repeated. A regression test now exercises the measured
+filesystem projection and checkpoint corruption rejection. The qualified
+projection also includes later native strategy buffers and the larger memory
+peak from each save/reload pair.
+
+Full-data deterministic fusion checks pass for both recipes; see
+[fusion coarse](fusion-determinism-coarse.json) and
+[fusion cropped](fusion-determinism-cropped.json). The original coarse assembly
+was not timed independently; its separately charged CPU repeat took 26.59 seconds.
+The cropped record includes original assembly and validation-repeat timings.
+
+Four existing temporal-geometry tests and one person-crop mapping test pass.
