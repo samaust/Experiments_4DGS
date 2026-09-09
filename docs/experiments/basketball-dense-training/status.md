@@ -18,7 +18,7 @@ defects. The historical Plan 026 visual rejection remains unchanged.
   The user freed additional disk space before qualification.
 
 Current stage: initialization diagnostics complete; starting all six 5,000-update endpoints
-in seed order, coarse then cropped. Verified completed production milestone: coarse seed 0 at 5,000 updates, with all 350 targets and 13 reload probes passing. Cropped seed 0 is running; live consumption is recorded in loss logs. Authorized
+in seed order, coarse then cropped. Verified completed production milestones: both seed-0 recipes at 5,000 updates (10,000 completed updates), each with all 350 targets and 13 reload probes passing. Coarse seed 1 is running; live consumption is recorded in loss logs. Authorized
 production remains six trajectories of 50,000 updates each (300,000 total), one GPU
 job at a time, with no time or GPU-hour ceiling. Validation is charged separately.
 
@@ -34,3 +34,5 @@ Full initializer/native qualification milestone: `9f54536`.
 [Initialization diagnostics](initial-diagnostics.json) retain all twelve fixed views per recipe.
 
 [First completed dense endpoint](endpoint-coarse-seed0-005000.json).
+
+[Cropped seed-0 first endpoint](endpoint-cropped-seed0-005000.json).
