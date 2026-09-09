@@ -28,8 +28,11 @@ Native continuation and fresh reload validation are complete; see
 [implementation validation](implementation-validation.md). Restored state is
 exact, while both backends exhibit native GPU training variability in repeated
 and split runs. All 13 raw-float/PNG repeat probes pass for both backends.
-Next: execute the six sparse-arm continuations to 50,000 and their curve
-evaluations, then retain the report and visual artifacts.
+Adapter/pilot milestone committed as `94a498f`. STG Full seed 0 is now running
+from 5,000 toward 50,000; its 10,000 snapshot is retained. Current process and
+handoff state are saved in `.local/basketball-dense-temporal/run-state.json`.
+Next: complete the six sparse-arm continuations and their curve evaluations,
+then retain the report and visual artifacts.
 
 The sparse-arm production storage projection fits the available space.
 No unrelated files will be removed. All nine 50,000

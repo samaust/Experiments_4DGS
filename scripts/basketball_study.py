@@ -108,6 +108,11 @@ def supervise(command, stage, output):
     output = Path(output)
     with ledger_lock():
         output.mkdir(parents=True, exist_ok=False)
+        command = list(command)
+        container_file = None
+        if command[:2] == ['docker', 'run']:
+            container_file = output.resolve() / 'container.id'
+            command[2:2] = ['--cidfile', str(container_file)]
         started = time.monotonic()
         append_event(dict(event='start', stage=stage, output=str(output), command=command, started_monotonic=started))
         interrupted = [False]
@@ -139,6 +144,12 @@ def supervise(command, stage, output):
             append_event(result)
             write_new(output / 'segment.json', result)
             return result
+        except BaseException as error:
+            failure = dict(event='failure', stage=stage, output=str(output),
+                           error=f'{type(error).__name__}: {error}', charged_seconds=time.monotonic()-started)
+            append_event(failure)
+            write_new(output / 'failure.json', failure)
+            raise
         finally:
             if process is not None:
                 try:
@@ -148,6 +159,16 @@ def supervise(command, stage, output):
                 process.wait()
             for sig, handler in handlers.items():
                 signal.signal(sig, handler)
+            if container_file is not None and container_file.exists() and (
+                    interrupted[0] or process is None or process.returncode):
+                container = container_file.read_text().strip()
+                if len(container) != 64 or any(c not in '0123456789abcdef' for c in container):
+                    raise RuntimeError('invalid study container ID; cleanup cannot be confirmed')
+                cleanup = subprocess.run(['docker', 'stop', '--time', '20', container],
+                                         capture_output=True, text=True, timeout=30)
+                if cleanup.returncode and 'no such container' not in cleanup.stderr.lower():
+                    append_event(dict(event='cleanup-failed', container=container, error=cleanup.stderr))
+                    raise RuntimeError('study container cleanup failed: '+cleanup.stderr)
 
 
 def main():

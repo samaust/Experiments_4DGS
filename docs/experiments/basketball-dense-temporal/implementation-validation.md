@@ -62,3 +62,28 @@ recoveries are removed. Pre-save disk checks reserve both generations.
 trajectories and their evaluation/visual artifacts. This is a resource estimate,
 not a new point-count or quality constraint. Production results, their complete
 curve reloads and evaluations, and the final report remain outstanding.
+
+The existing camera/timing/sampler/normalization suite also passed 21 tests in
+the pinned CPU container. A first attempt in the RoMa environment could not
+import pytest; no training environment was changed. The native normalization
+projection/motion-invariance test passed separately in the RoMa environment.
+Two matched-block reporting tests pass, including missing seed/block rejection.
+
+Actual production evidence now supplements the optimizer-guard fixture:
+[the 35,000 recovery](stg-production-post30000.json) has changed positions and
+optimizer counters above 30,000. No schedule configuration was changed.
+
+The baseline visual export contains 12 videos, each verified as exactly 50
+frames at 25 fps. Fixed court/display/player crops use ground-truth-selected
+rectangles in [visual protocol](visual-protocol.json). The retained first export
+had overlapping crop headers; `visuals-005000-v2/` corrects only those labels.
+Neither version interpolates source frames. Large exports stay under the study's
+`.local` directory. The partial baseline statistics and plots in
+`analysis-baseline/` validate the reporting pipeline and explicitly mark all new
+curve results as missing.
+
+The new reporting path reproduces all 32 historical full-image, motion-crop,
+and motion-pixel bootstrap summaries exactly (means and both confidence limits):
+[bootstrap validation](baseline-bootstrap-validation.json). The metric container
+is pinned by immutable image ID and package versions in
+[metric runtime](metric-runtime.json).
