@@ -200,9 +200,9 @@
     {
       "allocation": "stg-full",
       "role": "stg-full-basketball-zero-seed1",
-      "status": "reserved",
+      "status": "completed",
       "reserved_seconds": 1200.0,
-      "charged_seconds": 1200.0,
+      "charged_seconds": 221.98878219199833,
       "started_unix_seconds": 1788916357.1136382,
       "runner_pid": 999968,
       "container": null,
@@ -222,7 +222,63 @@
         "--seed",
         "1"
       ],
-      "output": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/stg-full-zero-seed1"
+      "output": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/stg-full-zero-seed1",
+      "wall_seconds": 221.98878219199833
+    },
+    {
+      "allocation": "stg-full",
+      "role": "stg-full-basketball-zero-seed2",
+      "status": "completed",
+      "reserved_seconds": 1200.0,
+      "charged_seconds": 225.85195960098645,
+      "started_unix_seconds": 1788916631.414569,
+      "runner_pid": 1000762,
+      "container": null,
+      "command": [
+        ".local/envs/stg-render/bin/python",
+        "scripts/basketball_native_train.py",
+        "--method",
+        "stg-full",
+        "--manifest",
+        ".local/sync-pivot/basketball-zero/manifest.json",
+        "--initialization",
+        ".local/sync-pivot/basketball-static-init",
+        "--checkout",
+        ".local/SpacetimeGaussians",
+        "--output",
+        ".local/sync-pivot/runs/stg-full-zero-seed2/worker",
+        "--seed",
+        "2"
+      ],
+      "output": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/stg-full-zero-seed2",
+      "wall_seconds": 225.85195960098645
+    },
+    {
+      "allocation": "freetimegs",
+      "role": "freetimegs-basketball-zero-seed0",
+      "status": "reserved",
+      "reserved_seconds": 1200.0,
+      "charged_seconds": 1200.0,
+      "started_unix_seconds": 1788916886.976893,
+      "runner_pid": 1001379,
+      "container": null,
+      "command": [
+        ".local/envs/freetimegs/bin/python",
+        "scripts/basketball_native_train.py",
+        "--method",
+        "freetimegs",
+        "--manifest",
+        ".local/sync-pivot/basketball-zero/manifest.json",
+        "--initialization",
+        ".local/sync-pivot/basketball-static-init",
+        "--checkout",
+        ".local/FreeTimeGsVanilla",
+        "--output",
+        ".local/sync-pivot/runs/freetimegs-zero-seed0/worker",
+        "--seed",
+        "0"
+      ],
+      "output": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/sync-pivot/runs/freetimegs-zero-seed0"
     }
   ]
 }

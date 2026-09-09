@@ -19,9 +19,9 @@ retain each actual endpoint; the native 90,001-step schedule remains unreproduce
 The [offset plot](syncnerf-offsets.svg) shows the selected-camera estimates.
 
 The [timing decision](timing-decision.json) freezes no eligible full-rig correction.
-Final-window images remain unopened. STG Full zero seed 0 completed 5,000 updates
-in 222.49 charged seconds; seed 1 is active. Four further zero controls,
-fresh reload/render evaluation and final reporting are pending.
+Final-window images remain unopened. All three STG Full zero controls completed 5,000 updates
+in 222.49, 221.99 and 225.85 charged seconds. FreeTimeGS seed 0 is active;
+its remaining seeds, fresh reload/render evaluation and final reporting are pending.
 Use [evaluation protocol v3](evaluation-protocol-v3.json), [benchmark/code status](benchmark-code-matrix.md),
 [metric interface evidence](metric-interface-check.json) and [global training admission](global-training-admission.json).
 The original central ledger was copied byte-for-byte to
