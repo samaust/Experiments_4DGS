@@ -4,9 +4,11 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from basketball_study import CAMERAS, digest, training_key, verify_files, write_new
+import basketball_study
 
 
 class StudyTests(unittest.TestCase):
@@ -35,6 +37,18 @@ class StudyTests(unittest.TestCase):
             path.write_text(json.dumps({'a': 2}))
             with self.assertRaisesRegex(ValueError, 'changed historical input'):
                 verify_files(files)
+
+    def test_supervisor_records_failure_and_releases_lock(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(basketball_study, 'ARTIFACTS', Path(tmp)):
+            result = basketball_study.supervise([sys.executable, '-c', 'raise SystemExit(7)'], 'validation', Path(tmp)/'failed')
+            self.assertEqual(result['exit_code'], 7)
+            self.assertGreater(result['charged_seconds'], 0)
+            with basketball_study.ledger_lock():
+                with self.assertRaises(BlockingIOError):
+                    with basketball_study.ledger_lock():
+                        pass
+            rows = [json.loads(line) for line in (Path(tmp)/'ledger.jsonl').read_text().splitlines()]
+            self.assertEqual([r['event'] for r in rows], ['start', 'finish'])
 
 
 if __name__ == '__main__':

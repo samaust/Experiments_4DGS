@@ -109,7 +109,7 @@ def supervise(command, stage, output):
     with ledger_lock():
         output.mkdir(parents=True, exist_ok=False)
         started = time.monotonic()
-        append_event(dict(event='start', stage=stage, output=str(output), command=command))
+        append_event(dict(event='start', stage=stage, output=str(output), command=command, started_monotonic=started))
         interrupted = [False]
         handlers = {}
         def stop(*_):
@@ -121,6 +121,8 @@ def supervise(command, stage, output):
             with (output / 'worker.log').open('w') as log:
                 process = subprocess.Popen(command, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
                                            start_new_session=True)
+                write_new(output / 'process.json', dict(supervisor_pid=os.getpid(), worker_pid=process.pid,
+                                                       worker_pgid=process.pid, started_monotonic=started))
                 stop_time = None
                 while process.poll() is None:
                     if interrupted[0] and stop_time is None:
