@@ -1,4 +1,9 @@
-# Timing and runtime milestone
+# Implementation validation
+
+The milestone notes below are historical. The completed native reload section
+and [final evidence audit](final-validation.json) describe the final state.
+All 2,100 metric rows are complete and finite; the final source hashes and
+budget checks pass. See the [research report](report.md) for scientific limits.
 
 Local checkpoint following Plan 025; this is not completion of Plan 024.
 

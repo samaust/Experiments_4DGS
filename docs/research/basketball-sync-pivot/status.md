@@ -1,15 +1,15 @@
 # Plan 024 execution status
 
-2026-09-08: **Active: Basketball pilot execution. Plan 024 is incomplete.**
+**Plan 024 campaign complete. No full-rig timing correction or measured correction benefit was established.**
+See the [final research report](report.md) and [passed evidence audit](final-validation.json).
 This campaign does not activate or resume the continuous improvement loop.
 
 The user supplied `/tmp/plan024-sync4drf.pdf` and explicitly resumed. Its title
 and text extraction are verified; [source provenance](sync4drf-source.json)
 retains its hash. The historical HTTP refusal below is resolved through the
-user-provided file. Continue remaining authorized work; no additional download
-of this paper is needed.
+user-provided file. The remaining authorized work has now completed.
 
-## Synchronization pilots completed; reconstruction active
+## Completed campaign
 
 All three Sync-NeRF pilots exited successfully within their caps at 43,049,
 42,944 and 42,999 updates. The [matched-checkpoint analysis](syncnerf-matched-checkpoint.json)
@@ -23,14 +23,22 @@ Final-window images remain unopened. All three STG Full zero controls completed 
 in 222.49, 221.99 and 225.85 charged seconds. All three FreeTimeGS seeds also reached 5,000 updates (136.50, 136.21,
 137.04 charged seconds). The shared checkpoint is frozen at update 5,000.
 All six fresh reload/render evaluations passed: 2,100 images and 78 exact
-raw-float/PNG repeat probes. Shared metrics are active; final reporting remains pending.
+raw-float/PNG repeat probes. All image metrics and temporal observations completed.
+STG Full has higher image quality in these zero controls (held-out PSNR 23.52
+versus 19.22 dB), but both blur players. No causal timing claim follows.
+
+The campaign charged 8,732.49 GPU seconds (2.43 hours); combined historical and
+new training charged 30,539.45 seconds (8.48 hours). Every allocation stayed
+within its ceiling. No active job or unresolved reservation remains. Missing
+VisualSync core code and exact benchmark labels are documented availability
+limits; no extra attempts or continuous-improvement loop were launched.
 Use [evaluation protocol v3](evaluation-protocol-v3.json), [benchmark/code status](benchmark-code-matrix.md),
 [metric interface evidence](metric-interface-check.json) and [global training admission](global-training-admission.json).
 The original central ledger was copied byte-for-byte to
 `.local/sync-pivot/central-training-before.json` before reconstruction charges.
 No consumed allocation or historical attempt was reset.
 
-## Training protocol checkpoint
+## Historical training protocol checkpoint
 
 [Training settings](training-protocol.json) are frozen before scientific GPU execution.
 Eight-camera inputs contain 800 fit-window images; no new final-window images
