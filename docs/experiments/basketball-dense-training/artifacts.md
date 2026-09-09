@@ -20,4 +20,11 @@ their records retain rejection counts and cropped-association rejection reasons.
 `ledger.jsonl` records GPU job lifetimes and charges; `historical-links.json`
 binds the prior ledger and final curve index. `segments/` retains command logs,
 process metadata, and outcomes. `run-state.json` is the live handoff state.
-Training, evaluation, metrics, endpoint visuals, and final analysis are pending.
+Coarse seed 0 at 5,000 updates is trained and render/reload verified; see
+[endpoint evidence](endpoint-coarse-seed0-005000.json). Metrics, remaining
+trajectories, endpoint visuals, and final analysis are pending.
+
+[Initialization panel validation](initial-panel-validation.json) retains the
+index for all twelve ground-truth/coarse/cropped training-view comparisons.
+[Post-cleanup reuse audit](post-cleanup-reuse-validation.json) confirms all
+30 historical curve artifacts and 10,500 historical PNGs remain intact.
