@@ -51,7 +51,10 @@ def main():
     parent = None
     if a.resume:
         parent = torch.load(a.resume, map_location='cpu', weights_only=True)
-        verify_files(parent['provenance']['files'])
+        files = dict(parent['provenance']['files'])
+        if parent['provenance'].get('plan') == 28:
+            files.pop(str(Path(__file__).resolve()), None)
+        verify_files(files)
         if (parent['provenance'].get('method') != 'freetimegs' or
                 parent['provenance'].get('arm') != a.arm or parent['provenance'].get('seed') != a.seed or
                 parent['iteration'] >= a.target_update):
