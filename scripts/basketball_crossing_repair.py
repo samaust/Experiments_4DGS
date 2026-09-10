@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import math
+import hashlib
+import json
 from typing import Mapping
 
 import torch
@@ -10,6 +12,12 @@ import torch
 REPAIR_VERSION = "duration-floor-v1"
 RENDERING_MIN_DURATION = 0.02
 AUTOMATIC_DURATION_SENTINEL = -1.0
+
+
+def training_key_hash(keys) -> str:
+    """Hash the exact ordered camera/frame keys used by a branch sampler."""
+    normalized = [[str(camera), int(frame)] for camera, frame in sorted(keys)]
+    return hashlib.sha256(json.dumps(normalized, separators=(',', ':')).encode()).hexdigest()
 
 
 def resolve_duration_target(initializer_metadata: Mapping, requested: float = AUTOMATIC_DURATION_SENTINEL) -> float:

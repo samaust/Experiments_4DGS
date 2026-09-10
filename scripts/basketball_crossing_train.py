@@ -13,7 +13,8 @@ import time
 
 from basketball_study import CURVE, MANIFEST, ROOT, digest, verify_files, write_new
 from basketball_dense_training import ARMS
-from basketball_crossing_repair import policy_record, project_duration_parameter_, resolve_duration_target
+from basketball_crossing_repair import (policy_record, project_duration_parameter_,
+    resolve_duration_target, training_key_hash)
 
 
 def main():
@@ -90,6 +91,7 @@ def main():
         scene._training_keys = [(camera, frame) for camera in sorted(scene.cameras)
                                 if camera not in {'0', '10', '20', '30'} for frame in range(50)]
     sampler = ManifestBalancedSampler(scene, 1, seed=a.seed)
+    provenance['training_key_sha256'] = training_key_hash(scene.training_keys())
     iteration = 0
     if a.resume:
         # Plan 027 encoded the sentinel in its config.  Recreate that config
