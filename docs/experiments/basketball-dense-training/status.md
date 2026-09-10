@@ -17,21 +17,17 @@ defects. The historical Plan 026 visual rejection remains unchanged.
   remaining production retention, with approximately 432 GB available after validation.
   The user freed additional disk space before qualification.
 
-Current stage: all six 5,000-update endpoints and both metric cohorts are complete
-(30,000 first-phase production updates and 2,100 new metric rows). Each endpoint
-passed all 350 targets and 13 reload probes. The [partial analysis](analysis-005000/artifact-index.json)
-contains 36 combined curve results; the remaining 24 dense curves are pending.
-The [held-out visual validation](visual-validation-005000.json) passed for 48 PNGs
-and 12 videos. Coarse seed 0 completed exactly 50,000 updates and all five curve render/reload
-checks. Its continuation restored complete saved state without differences and
-performed exactly 45,000 additional updates. Cropped seed 0 also completed exactly 50,000 updates and all five curve render/reload
-checks. Coarse seed 1 also completed exactly 50,000 updates and all five curve render/reload
-checks. All six final trajectories are complete through 50,000 updates, including
-cropped seed 2. The controller is completing the final metric cohort and artifact
-validation. Live consumption
-is recorded in loss logs. Authorized
-production remains six trajectories of 50,000 updates each (300,000 total), one GPU
-job at a time, with no time or GPU-hour ceiling. Validation is charged separately.
+Current stage: Plan 027 is complete. All six dense trajectories reached exactly
+50,000 updates (300,000 production updates), retained the required 5k/10k/20k/
+30k/50k checkpoints, passed complete saved-state restoration, and passed 13
+reload probes per endpoint. The [final analysis](analysis-final/artifact-index.json)
+contains 60 complete result records with no missing results. The [final audit](audit-final/trajectories.json)
+reports six trajectories, one-job concurrency,
+and no failures. The [50k held-out visual validation](visual-validation-050000.json)
+passes all 48 PNG panels and 12 videos. Trained diagnostics cover both endpoints
+for all six trajectories; fixed diagnostic panels are under
+`.local/basketball-dense-training/diagnostic-panels/`. The measured storage and
+qualified estimate are recorded in [storage-final.json](storage-final.json).
 
 [Preparation evidence](preparation-002.json), [implementation validation](implementation-validation.md),
 and [historical reuse](baseline-reuse.json) retain compact evidence. Large artifacts,
@@ -67,3 +63,11 @@ Full initializer/native qualification milestone: `9f54536`.
 [Coarse seed-2 final endpoint](endpoint-coarse-seed2-050000.json).
 
 [Cropped seed-2 final endpoint](endpoint-cropped-seed2-050000.json).
+
+[Final analysis](analysis-final/artifact-index.json).
+
+[Final audit](audit-final/trajectories.json).
+
+[Final visual validation](visual-validation-050000.json).
+
+[Final storage measurement](storage-final.json).

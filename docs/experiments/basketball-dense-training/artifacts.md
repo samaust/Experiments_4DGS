@@ -7,6 +7,10 @@
 - [Fixed initialization diagnostics](initial-diagnostics.json)
 - [Thirty verified historical curve results](baseline-reuse.json)
 - [Implementation and runtime validation](implementation-validation.md)
+- [Final report](analysis-final/artifact-index.json)
+- [Final trajectory audit](audit-final/trajectories.json)
+- [Final held-out visuals](visual-validation-050000.json)
+- [Final storage measurement](storage-final.json)
 - [Current execution state](status.md)
 
 Large artifacts reside under `.local/basketball-dense-training/`:
@@ -20,9 +24,9 @@ their records retain rejection counts and cropped-association rejection reasons.
 `ledger.jsonl` records GPU job lifetimes and charges; `historical-links.json`
 binds the prior ledger and final curve index. `segments/` retains command logs,
 process metadata, and outcomes. `run-state.json` is the live handoff state.
-Coarse seed 0 at 5,000 updates is trained and render/reload verified; see
-[endpoint evidence](endpoint-coarse-seed0-005000.json). Metrics, remaining
-trajectories, endpoint visuals, and final analysis are pending.
+All six dense trajectories reached 50,000 updates with complete render/reload
+evidence. The final analysis contains 60 complete metric records; the audit,
+visual validation, trained diagnostics, and storage measurement are linked above.
 
 [Initialization panel validation](initial-panel-validation.json) retains the
 index for all twelve ground-truth/coarse/cropped training-view comparisons.
