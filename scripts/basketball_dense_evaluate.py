@@ -11,6 +11,16 @@ from basketball_crossing_repair import policy_record
 EVALUATION_CURVE = CURVE + (70000,)
 
 
+def fresh_segment(base):
+    base = Path(base)
+    if not base.exists():
+        return base
+    index = 2
+    while (base.parent / f'{base.name}-retry{index}').exists():
+        index += 1
+    return base.parent / f'{base.name}-retry{index}'
+
+
 def main():
     configure()
     p = argparse.ArgumentParser(description=__doc__)
@@ -61,7 +71,8 @@ def main():
             'evaluate', '--method', method, '--checkout', str(checkout), '--manifest', str(MANIFEST),
             '--checkpoint', str(checkpoint), '--regions', str(ROOT / '.local/sync-pivot/basketball-evaluation-regions/regions.json'),
             '--output', str(folder)]
-        segment = supervise(command, 'evaluation', artifact_root / f'segments/evaluate-{a.arm}-seed{a.seed}-{a.training_policy}-{a.lifetime_policy}-{step}')
+        segment = supervise(command, 'evaluation', fresh_segment(
+            artifact_root / f'segments/evaluate-{a.arm}-seed{a.seed}-{a.training_policy}-{a.lifetime_policy}-{step}'))
         if segment['exit_code'] or segment['interrupted']:
             raise SystemExit('evaluation stopped; inspect retained segment and worker logs')
         evaluation = json.loads((folder / 'evaluation.json').read_text())
