@@ -67,11 +67,14 @@ def main():
     a.output.mkdir(parents=True, exist_ok=bool(a.resume))
     (a.output/'study_adapter.py').write_bytes(Path(__file__).read_bytes())
     a.checkout = ROOT/'.local/FreeTimeGsVanilla'
-    if not (a.output/'study-provenance.json').exists():
-        write_new(a.output/'study-provenance.json', dict(plan=28, method='freetimegs', arm=a.arm, seed=a.seed,
+    study_provenance = dict(plan=28, method='freetimegs', arm=a.arm, seed=a.seed,
             training_policy=a.training_policy, lifetime_policy=a.lifetime_policy,
             target_update=a.target_update, parent_sha256=digest(a.resume) if a.resume else None,
-            adapter_sha256=digest(__file__), schedule='absolute native 70000-step schedule; relocation ends at 63000'))
+            adapter_sha256=digest(__file__), schedule='absolute native 70000-step schedule; relocation ends at 63000')
+    if (a.output/'study-provenance.json').exists():
+        study_provenance.update(json.loads((a.output/'study-provenance.json').read_text()))
+        study_provenance.update(adapter_sha256=digest(__file__), parent_sha256=digest(a.resume))
+    write_json(a.output/'study-provenance.json', study_provenance)
 
     random.seed(a.seed); np.random.seed(a.seed); torch.manual_seed(a.seed); torch.cuda.manual_seed_all(a.seed)
     torch.hub.set_dir(str(ROOT/'.local/cache/torch/hub'))
