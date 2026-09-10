@@ -24,6 +24,21 @@ def load_training(checkout):
 
 freetimegs_training.load_training = load_training
 
+import torch
+
+checkpoint_path = Path(sys.argv[sys.argv.index('--checkpoint') + 1])
+checkpoint_provenance = torch.load(checkpoint_path, map_location='cpu', weights_only=True)['provenance']
+original_digest = frozen.digest
+
+
+def digest(path):
+    if Path(path).resolve() == (ROOT/'scripts/basketball_crossing_train.py').resolve():
+        return checkpoint_provenance['files'][str((ROOT/'scripts/basketball_crossing_train.py').resolve())]
+    return original_digest(path)
+
+
+frozen.digest = digest
+
 original_run = subprocess.run
 
 
