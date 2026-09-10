@@ -18,9 +18,12 @@ def main():
     p.add_argument('--seed', type=int, choices=range(3), required=True)
     p.add_argument('--iteration', type=int, choices=EVALUATION_CURVE, required=True)
     p.add_argument('--training', type=Path, required=True)
+    p.add_argument('--artifact-root', type=Path)
     p.add_argument('--training-policy', choices=('holdout', 'all-times'), default='holdout')
     p.add_argument('--lifetime-policy', choices=('original', 'repaired'), default='original')
     a = p.parse_args()
+    new_artifacts = a.artifact_root is not None
+    artifact_root = a.artifact_root.resolve() if new_artifacts else ARTIFACTS
     protocol = json.loads((ROOT / 'docs/research/basketball-sync-pivot/evaluation-protocol-v3.json').read_text())
     verify_files(protocol['files'])
     training = a.training
@@ -37,7 +40,10 @@ def main():
     method = 'stg-full' if a.arm == 'stg-full' else 'freetimegs'
     environment = 'stg-render' if method == 'stg-full' else 'freetimegs'
     checkout = ROOT / ('.local/SpacetimeGaussians' if method == 'stg-full' else '.local/FreeTimeGsVanilla')
-    output = ARTIFACTS / f'evaluation/{a.arm}-seed{a.seed}'
+    evaluation_name = f'{a.arm}-seed{a.seed}'
+    if new_artifacts:
+        evaluation_name += f'/{a.training_policy}-{a.lifetime_policy}'
+    output = artifact_root / f'evaluation/{evaluation_name}'
     output.mkdir(parents=True, exist_ok=True)
     os.environ['TRAINING_STOP_MONOTONIC'] = 'inf'
     for step in (a.iteration,):
@@ -45,7 +51,7 @@ def main():
         checkpoint_hash = digest(checkpoint)
         saved = next(r for r in result['checkpoints'] if r['iteration'] == step)
         binding = json.loads((training/'checkpoint-provenance.json').read_text())
-        frozen = json.loads((ARTIFACTS/'initializers'/a.arm/'result.json').read_text())
+        frozen = json.loads((artifact_root/'initializers'/a.arm/'result.json').read_text())
         if (saved['sha256'] != checkpoint_hash or binding.get('arm') != a.arm or
                 binding['method'] != 'freetimegs' or binding['seed'] != a.seed or
                 binding['initializer_sha256'] != frozen['archive_sha256']):
