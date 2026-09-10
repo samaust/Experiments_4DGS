@@ -55,6 +55,7 @@ def load_model(a):
     if digest(a.checkpoint.parent/'training-config.json')!=provenance['configuration_sha256']:
         raise ValueError('native configuration changed')
     cfg,_,training_source=load_training(a.checkout);cfg.start_frame,cfg.end_frame=0,50
+    cfg.init_duration=config['native']['init_duration']
     if asdict(cfg)!=config['native']:raise ValueError('native config mismatch')
     methods,render_source=load_temporal_methods(a.checkout,include_render=True)
     _,init_source=load_initializer(a.checkout)
