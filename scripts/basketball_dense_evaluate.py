@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import shutil
 
 from basketball_study import CURVE, MANIFEST, ROOT, digest, supervise, verify_files, write_new
 from basketball_dense_training import ARTIFACTS, DOCS, ARMS, configure
@@ -67,6 +68,13 @@ def main():
                 binding['initializer_sha256'] != frozen['archive_sha256']):
             raise ValueError('checkpoint recipe/initializer/seed/hash mismatch')
         folder = output / f'{step:06d}'
+        if folder.exists() and not (folder / 'evaluation.json').exists():
+            index = 1
+            retained = folder.with_name(f'{folder.name}-incomplete')
+            while retained.exists():
+                index += 1
+                retained = folder.with_name(f'{folder.name}-incomplete-retry{index}')
+            shutil.move(str(folder), str(retained))
         command = [str(ROOT / f'.local/envs/{environment}/bin/python'), 'scripts/evaluate-basketball-sync-plan028.py',
             'evaluate', '--method', method, '--checkout', str(checkout), '--manifest', str(MANIFEST),
             '--checkpoint', str(checkpoint), '--regions', str(ROOT / '.local/sync-pivot/basketball-evaluation-regions/regions.json'),
