@@ -86,7 +86,7 @@ def production():
     ledger = []
     for seed in range(3):
         for arm in ARMS:
-            parent = PARENT[arm].format(seed=seed)
+            parent = str(PARENT[arm]).format(seed=seed)
             for training_policy, lifetime_policy in POLICIES:
                 branch = STUDY/f'training/{arm}/seed{seed}/{training_policy}-{lifetime_policy}'
                 result = basketball_study.supervise(command_for(arm, seed, 70000, branch,
