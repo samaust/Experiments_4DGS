@@ -2,6 +2,7 @@
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import sys
 import freetimegs_training
 
@@ -22,4 +23,16 @@ def load_training(checkout):
 
 
 freetimegs_training.load_training = load_training
+
+original_run = subprocess.run
+
+
+def run(command, *args, **kwargs):
+    command = list(command)
+    if len(command) > 1 and command[1].endswith('/scripts/evaluate-basketball-sync.py'):
+        command[1] = str(Path(__file__).resolve())
+    return original_run(command, *args, **kwargs)
+
+
+frozen.subprocess.run = run
 frozen.main()
