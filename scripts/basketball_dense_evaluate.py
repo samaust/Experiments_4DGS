@@ -61,7 +61,7 @@ def main():
             'evaluate', '--method', method, '--checkout', str(checkout), '--manifest', str(MANIFEST),
             '--checkpoint', str(checkpoint), '--regions', str(ROOT / '.local/sync-pivot/basketball-evaluation-regions/regions.json'),
             '--output', str(folder)]
-        segment = supervise(command, 'evaluation', artifact_root / f'segments/evaluate-{a.arm}-seed{a.seed}-{step}')
+        segment = supervise(command, 'evaluation', artifact_root / f'segments/evaluate-{a.arm}-seed{a.seed}-{a.training_policy}-{a.lifetime_policy}-{step}')
         if segment['exit_code'] or segment['interrupted']:
             raise SystemExit('evaluation stopped; inspect retained segment and worker logs')
         evaluation = json.loads((folder / 'evaluation.json').read_text())

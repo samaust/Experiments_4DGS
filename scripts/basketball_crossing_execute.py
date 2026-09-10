@@ -100,7 +100,8 @@ def production():
             for training_policy, lifetime_policy in POLICIES:
                 branch = STUDY/f'training/{arm}/seed{seed}/{training_policy}-{lifetime_policy}'
                 marker = STUDY/f'completed-{arm}-seed{seed}-{training_policy}-{lifetime_policy}.json'
-                if marker.exists():
+                evaluation_json = STUDY/f'evaluation/{arm}-seed{seed}/{training_policy}-{lifetime_policy}/070000/evaluation.json'
+                if marker.exists() and evaluation_json.exists():
                     ledger.append(json.loads(marker.read_text()))
                     continue
                 worker_result = branch/'worker-result.json'
@@ -114,7 +115,6 @@ def production():
                     '--arm', arm, '--seed', str(seed), '--iteration', '70000', '--training', str(branch),
                     '--artifact-root', str(STUDY), '--training-policy', training_policy,
                     '--lifetime-policy', lifetime_policy]
-                evaluation_json = STUDY/f'evaluation/{arm}-seed{seed}/{training_policy}-{lifetime_policy}/070000/evaluation.json'
                 if not evaluation_json.exists():
                     folder = evaluation_json.parent
                     if folder.exists() and not any(folder.iterdir()):
