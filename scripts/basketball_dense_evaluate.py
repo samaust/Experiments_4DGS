@@ -57,7 +57,7 @@ def main():
                 binding['initializer_sha256'] != frozen['archive_sha256']):
             raise ValueError('checkpoint recipe/initializer/seed/hash mismatch')
         folder = output / f'{step:06d}'
-        command = [str(ROOT / f'.local/envs/{environment}/bin/python'), 'scripts/evaluate-basketball-sync.py',
+        command = [str(ROOT / f'.local/envs/{environment}/bin/python'), 'scripts/evaluate-basketball-sync-plan028.py',
             'evaluate', '--method', method, '--checkout', str(checkout), '--manifest', str(MANIFEST),
             '--checkpoint', str(checkpoint), '--regions', str(ROOT / '.local/sync-pivot/basketball-evaluation-regions/regions.json'),
             '--output', str(folder)]
