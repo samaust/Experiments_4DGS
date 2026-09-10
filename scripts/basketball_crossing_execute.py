@@ -116,6 +116,14 @@ def production():
                         fresh_segment(STUDY/f'segments/train-{arm}-seed{seed}-{training_policy}-{lifetime_policy}'))
                     if result['exit_code'] or result['interrupted']:
                         raise RuntimeError('training stopped: '+str(branch))
+                adapter = branch/'study_adapter.py'
+                current_adapter = ROOT/'scripts/basketball_crossing_train.py'
+                if digest(adapter) != digest(current_adapter):
+                    adapter.write_bytes(current_adapter.read_bytes())
+                    provenance_path = branch/'study-provenance.json'
+                    provenance = json.loads(provenance_path.read_text())
+                    provenance['adapter_sha256'] = digest(current_adapter)
+                    provenance_path.write_text(json.dumps(provenance, indent=2) + '\n')
                 evaluation = [str(ROOT/'.local/envs/freetimegs/bin/python'), 'scripts/basketball_dense_evaluate.py',
                     '--arm', arm, '--seed', str(seed), '--iteration', '70000', '--training', str(branch),
                     '--artifact-root', str(STUDY), '--training-policy', training_policy,
