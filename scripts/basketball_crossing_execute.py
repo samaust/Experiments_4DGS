@@ -57,6 +57,16 @@ def command_for(arm, seed, target, output, training_policy, lifetime_policy, res
     return command
 
 
+def fresh_segment(base):
+    base = Path(base)
+    if not base.exists():
+        return base
+    index = 2
+    while (base.parent / f'{base.name}-retry{index}').exists():
+        index += 1
+    return base.parent / f'{base.name}-retry{index}'
+
+
 def qualify():
     (STUDY/'qualification').mkdir(parents=True, exist_ok=True)
     records = []
@@ -89,19 +99,26 @@ def production():
             parent = str(PARENT[arm]).format(seed=seed)
             for training_policy, lifetime_policy in POLICIES:
                 branch = STUDY/f'training/{arm}/seed{seed}/{training_policy}-{lifetime_policy}'
-                result = basketball_study.supervise(command_for(arm, seed, 70000, branch,
-                    training_policy, lifetime_policy, parent), 'production-training',
-                    STUDY/f'segments/train-{arm}-seed{seed}-{training_policy}-{lifetime_policy}')
-                if result['exit_code'] or result['interrupted']:
-                    raise RuntimeError('training stopped: '+str(branch))
+                worker_result = branch/'worker-result.json'
+                if not worker_result.exists() or not json.loads(worker_result.read_text()).get('completed'):
+                    result = basketball_study.supervise(command_for(arm, seed, 70000, branch,
+                        training_policy, lifetime_policy, parent), 'production-training',
+                        fresh_segment(STUDY/f'segments/train-{arm}-seed{seed}-{training_policy}-{lifetime_policy}'))
+                    if result['exit_code'] or result['interrupted']:
+                        raise RuntimeError('training stopped: '+str(branch))
                 evaluation = [str(ROOT/'.local/envs/freetimegs/bin/python'), 'scripts/basketball_dense_evaluate.py',
                     '--arm', arm, '--seed', str(seed), '--iteration', '70000', '--training', str(branch),
                     '--artifact-root', str(STUDY), '--training-policy', training_policy,
                     '--lifetime-policy', lifetime_policy]
-                result = basketball_study.supervise(evaluation, 'evaluation',
-                    STUDY/f'segments/evaluate-{arm}-seed{seed}-{training_policy}-{lifetime_policy}')
-                if result['exit_code'] or result['interrupted']:
-                    raise RuntimeError('evaluation stopped: '+str(branch))
+                evaluation_json = STUDY/f'evaluation/{arm}-seed{seed}/{training_policy}-{lifetime_policy}/070000/evaluation.json'
+                if not evaluation_json.exists():
+                    folder = evaluation_json.parent
+                    if folder.exists() and not any(folder.iterdir()):
+                        folder.rmdir()
+                    result = basketball_study.supervise(evaluation, 'evaluation',
+                        fresh_segment(STUDY/f'segments/evaluate-{arm}-seed{seed}-{training_policy}-{lifetime_policy}'))
+                    if result['exit_code'] or result['interrupted']:
+                        raise RuntimeError('evaluation stopped: '+str(branch))
                 ledger.append(dict(arm=arm, seed=seed, training_policy=training_policy,
                                    lifetime_policy=lifetime_policy, training=str(branch)))
                 write_new(STUDY/f'completed-{arm}-seed{seed}-{training_policy}-{lifetime_policy}.json',
