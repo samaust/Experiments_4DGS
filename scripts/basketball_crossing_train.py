@@ -17,6 +17,12 @@ from basketball_crossing_repair import (policy_record, project_duration_paramete
     resolve_duration_target, training_key_hash)
 
 
+def write_json(path, value):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, indent=2, allow_nan=False) + '\n')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--arm', choices=ARMS, required=True)
@@ -55,13 +61,14 @@ def main():
                 parent['provenance'].get('lifetime_policy') != a.lifetime_policy):
             raise ValueError('resume policy does not match branch provenance')
     a.output = a.output.resolve()
-    a.output.mkdir(parents=True, exist_ok=False)
+    a.output.mkdir(parents=True, exist_ok=bool(a.resume))
     (a.output/'study_adapter.py').write_bytes(Path(__file__).read_bytes())
     a.checkout = ROOT/'.local/FreeTimeGsVanilla'
-    write_new(a.output/'study-provenance.json', dict(plan=28, method='freetimegs', arm=a.arm, seed=a.seed,
-        training_policy=a.training_policy, lifetime_policy=a.lifetime_policy,
-        target_update=a.target_update, parent_sha256=digest(a.resume) if a.resume else None,
-        adapter_sha256=digest(__file__), schedule='absolute native 70000-step schedule; relocation ends at 63000'))
+    if not (a.output/'study-provenance.json').exists():
+        write_new(a.output/'study-provenance.json', dict(plan=28, method='freetimegs', arm=a.arm, seed=a.seed,
+            training_policy=a.training_policy, lifetime_policy=a.lifetime_policy,
+            target_update=a.target_update, parent_sha256=digest(a.resume) if a.resume else None,
+            adapter_sha256=digest(__file__), schedule='absolute native 70000-step schedule; relocation ends at 63000'))
 
     random.seed(a.seed); np.random.seed(a.seed); torch.manual_seed(a.seed); torch.cuda.manual_seed_all(a.seed)
     torch.hub.set_dir(str(ROOT/'.local/cache/torch/hub'))
@@ -105,7 +112,7 @@ def main():
         from basketball_study_resume_check import differences
         restored = torch.load(a.output/'restored-parent.pt', map_location='cpu', weights_only=True)
         changed = differences(parent, restored)
-        write_new(a.output/'restore-validation.json', dict(passed=not changed, differences=changed))
+        write_json(a.output/'restore-validation.json', dict(passed=not changed, differences=changed))
         if changed:
             raise ValueError('saved-state restoration mismatch: '+str(changed[:10]))
         sampler = ManifestBalancedSampler(scene, 1, seed=a.seed)
@@ -113,10 +120,10 @@ def main():
             cfg.init_duration = target
     configuration = dict(native=asdict(cfg), normalization=normalization,
                          training_policy=a.training_policy, lifetime_policy=a.lifetime_policy)
-    write_new(a.output/'training-config.json', configuration)
+    write_json(a.output/'training-config.json', configuration)
     provenance['configuration_sha256'] = digest(a.output/'training-config.json')
-    write_new(a.output/'checkpoint-provenance.json', provenance)
-    if a.lifetime_policy == 'repaired':
+    write_json(a.output/'checkpoint-provenance.json', provenance)
+    if a.lifetime_policy == 'repaired' and not (a.output/'initial-duration-projection.json').exists():
         write_new(a.output/'initial-duration-projection.json',
                   project_duration_parameter_(model.splats['durations'], model.optimizers['durations']))
     stopping = [False]
@@ -141,7 +148,7 @@ def main():
                             loop_state={'sampler': sampler.state_dict()}, provenance=provenance)
             saved.append(dict(iteration=iteration, path=path.name, sha256=digest(path), bytes=path.stat().st_size))
             last_save = time.monotonic()
-    write_new(a.output/'worker-result.json', dict(iteration=iteration, target_update=a.target_update,
+    write_json(a.output/'worker-result.json', dict(iteration=iteration, target_update=a.target_update,
         completed=iteration == a.target_update, interrupted=stopping[0], checkpoints=saved,
         peak_allocated_bytes=torch.cuda.max_memory_allocated(), peak_reserved_bytes=torch.cuda.max_memory_reserved()))
 

@@ -106,8 +106,13 @@ def production():
                     continue
                 worker_result = branch/'worker-result.json'
                 if not worker_result.exists() or not json.loads(worker_result.read_text()).get('completed'):
+                    resume = parent
+                    candidates = [path for path in branch.glob('checkpoint-*.pt')
+                                  if path.name != 'checkpoint-070000.pt' and not path.name.endswith('.pt.yxku_xp3')]
+                    if candidates:
+                        resume = str(max(candidates, key=lambda path: int(path.stem.split('-')[1])))
                     result = basketball_study.supervise(command_for(arm, seed, 70000, branch,
-                        training_policy, lifetime_policy, parent), 'production-training',
+                        training_policy, lifetime_policy, resume), 'production-training',
                         fresh_segment(STUDY/f'segments/train-{arm}-seed{seed}-{training_policy}-{lifetime_policy}'))
                     if result['exit_code'] or result['interrupted']:
                         raise RuntimeError('training stopped: '+str(branch))
