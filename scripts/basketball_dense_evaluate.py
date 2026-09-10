@@ -6,6 +6,9 @@ from pathlib import Path
 
 from basketball_study import CURVE, MANIFEST, ROOT, digest, supervise, verify_files, write_new
 from basketball_dense_training import ARTIFACTS, DOCS, ARMS, configure
+from basketball_crossing_repair import policy_record
+
+EVALUATION_CURVE = CURVE + (70000,)
 
 
 def main():
@@ -13,8 +16,10 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--arm', choices=ARMS, required=True)
     p.add_argument('--seed', type=int, choices=range(3), required=True)
-    p.add_argument('--iteration', type=int, choices=CURVE, required=True)
+    p.add_argument('--iteration', type=int, choices=EVALUATION_CURVE, required=True)
     p.add_argument('--training', type=Path, required=True)
+    p.add_argument('--training-policy', choices=('holdout', 'all-times'), default='holdout')
+    p.add_argument('--lifetime-policy', choices=('original', 'repaired'), default='original')
     a = p.parse_args()
     protocol = json.loads((ROOT / 'docs/research/basketball-sync-pivot/evaluation-protocol-v3.json').read_text())
     verify_files(protocol['files'])
@@ -25,6 +30,10 @@ def main():
         raise ValueError('training endpoint or pairing mismatch')
     if digest(training / 'study_adapter.py') != provenance['adapter_sha256']:
         raise ValueError('executed training adapter changed')
+    if provenance.get('plan') == 28 and (
+            provenance.get('training_policy') != a.training_policy or
+            provenance.get('lifetime_policy') != a.lifetime_policy):
+        raise ValueError('evaluation policy does not match training provenance')
     method = 'stg-full' if a.arm == 'stg-full' else 'freetimegs'
     environment = 'stg-render' if method == 'stg-full' else 'freetimegs'
     checkout = ROOT / ('.local/SpacetimeGaussians' if method == 'stg-full' else '.local/FreeTimeGsVanilla')
@@ -60,6 +69,10 @@ def main():
         if len(report['frames']) != 350:
             raise ValueError('curve target coverage mismatch')
         record = dict(arm=a.arm, method=method, seed=a.seed, iteration=step,
+            training_policy=a.training_policy, lifetime_policy=a.lifetime_policy,
+            evaluation_split='training-observation' if a.training_policy == 'all-times' else 'heldout-camera',
+            policy=policy_record(a.training_policy, a.lifetime_policy,
+                                 .2 if a.lifetime_policy == 'repaired' else .2),
             checkpoint=str(checkpoint), checkpoint_sha256=checkpoint_hash, checkpoint_bytes=checkpoint.stat().st_size,
             render=str(render), render_sha256=digest(render), reload=repeated,
             rendering_fps=report['benchmark']['fps'], peak_allocated_bytes=report['peak_allocated_bytes'],

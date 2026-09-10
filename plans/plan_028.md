@@ -1,5 +1,17 @@
   # Plan 028 — Diagnose and repair the Basketball crossing artifacts
 
+  ## Implementation revision (2026-09-10)
+
+  The implementation uses new Plan 028 adapters under `scripts/` and preserves
+  the Plan 027 adapter and checkpoint source bindings. The frozen initializer
+  metadata resolves the automatic duration target to `0.2`; the repaired policy
+  projects trainable log durations at the representable `0.02` rendering floor,
+  clears only affected Adam moments, and retains step counters. Training and
+  evaluation interfaces expose explicit `holdout`/`all-times` and
+  `original`/`repaired` policies, with branch provenance and parent restoration
+  checks. Production execution remains gated on diagnosis, qualification, and
+  the storage/resource checks specified below.
+
   ## Summary
 
   Determine why sharp dense reconstructions fragment around frames 20–24, then test a
