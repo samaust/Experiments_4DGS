@@ -71,3 +71,11 @@ Full initializer/native qualification milestone: `9f54536`.
 [Final visual validation](visual-validation-050000.json).
 
 [Final storage measurement](storage-final.json).
+
+Post-experiment human feedback: both dense variants have sharp players for most
+of the video, while STG Full and sparse FreeTimeGS have blurry players. The
+[crossing investigation](crossing-investigation-001/report.md) confirms a brief
+fragmentation burst in frames 20–24, the common training-time holdout. All 24
+dense camera/seed combinations peak in motion-pixel error at frame 22. The
+precise mechanism remains unverified and the issue is not fixed. This follow-up
+uses existing results and adds no training or GPU evaluation jobs.

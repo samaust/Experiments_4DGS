@@ -11,6 +11,7 @@
 - [Final trajectory audit](audit-final/trajectories.json)
 - [Final held-out visuals](visual-validation-050000.json)
 - [Final storage measurement](storage-final.json)
+- [Human assessment and crossing-artifact investigation](crossing-investigation-001/report.md)
 - [Current execution state](status.md)
 
 Large artifacts reside under `.local/basketball-dense-training/`:
