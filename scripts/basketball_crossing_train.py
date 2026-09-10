@@ -110,10 +110,15 @@ def main():
         if restore_sentinel:
             cfg.init_duration = -1.0
         iteration, loop = restore_checkpoint(a.resume, model, provenance=parent['provenance'])
-        save_checkpoint(a.output/'restored-parent.pt', model, iteration=iteration,
+        restored_path = a.output/'restored-parent.pt'
+        index = 2
+        while restored_path.exists():
+            restored_path = a.output/f'restored-parent-retry{index}.pt'
+            index += 1
+        save_checkpoint(restored_path, model, iteration=iteration,
                         loop_state={'sampler': loop['sampler']}, provenance=parent['provenance'])
         from basketball_study_resume_check import differences
-        restored = torch.load(a.output/'restored-parent.pt', map_location='cpu', weights_only=True)
+        restored = torch.load(restored_path, map_location='cpu', weights_only=True)
         changed = differences(parent, restored)
         write_json(a.output/'restore-validation.json', dict(passed=not changed, differences=changed))
         if changed:
