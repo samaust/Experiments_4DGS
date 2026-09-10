@@ -26,7 +26,7 @@ and 12 videos. Coarse seed 0 completed exactly 50,000 updates and all five curve
 checks. Its continuation restored complete saved state without differences and
 performed exactly 45,000 additional updates. Cropped seed 0 also completed exactly 50,000 updates and all five curve render/reload
 checks. Coarse seed 1 also completed exactly 50,000 updates and all five curve render/reload
-checks. Four final trajectories are complete, including cropped seed 1. Coarse
+checks. Five final trajectories are complete, including coarse seed 2. Cropped
 seed 2 is now continuing from 5,000 to the absolute 50,000 target. Live consumption
 is recorded in loss logs. Authorized
 production remains six trajectories of 50,000 updates each (300,000 total), one GPU
@@ -62,3 +62,5 @@ Full initializer/native qualification milestone: `9f54536`.
 [Coarse seed-1 final endpoint](endpoint-coarse-seed1-050000.json).
 
 [Cropped seed-1 final endpoint](endpoint-cropped-seed1-050000.json).
+
+[Coarse seed-2 final endpoint](endpoint-coarse-seed2-050000.json).
