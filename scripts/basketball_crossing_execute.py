@@ -99,6 +99,10 @@ def production():
             parent = str(PARENT[arm]).format(seed=seed)
             for training_policy, lifetime_policy in POLICIES:
                 branch = STUDY/f'training/{arm}/seed{seed}/{training_policy}-{lifetime_policy}'
+                marker = STUDY/f'completed-{arm}-seed{seed}-{training_policy}-{lifetime_policy}.json'
+                if marker.exists():
+                    ledger.append(json.loads(marker.read_text()))
+                    continue
                 worker_result = branch/'worker-result.json'
                 if not worker_result.exists() or not json.loads(worker_result.read_text()).get('completed'):
                     result = basketball_study.supervise(command_for(arm, seed, 70000, branch,
@@ -121,8 +125,7 @@ def production():
                         raise RuntimeError('evaluation stopped: '+str(branch))
                 ledger.append(dict(arm=arm, seed=seed, training_policy=training_policy,
                                    lifetime_policy=lifetime_policy, training=str(branch)))
-                write_new(STUDY/f'completed-{arm}-seed{seed}-{training_policy}-{lifetime_policy}.json',
-                          ledger[-1])
+                write_new(marker, ledger[-1])
     write_new(STUDY/'production.json', dict(schema='basketball-crossing-repair-production/v1',
         records=ledger, production_updates=480000, serial=True, complete=True))
 
