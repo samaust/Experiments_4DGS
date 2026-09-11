@@ -33,6 +33,15 @@ Production completed 24 endpoints (two recipes × three seeds × four policies),
 
 The fixed repair, policy labels, paired gap effects, and endpoint resource records are captured in [results.json](results.json). Lower is better for MAE, LPIPS, and temporal difference error; higher is better for PSNR and SSIM.
 
+**User assessment, 2026-09-11:** A and B provide minimal improvement and are
+rejected as solutions. C and D noticeably repair the issue and are approved
+solutions; no winner has been selected between them. See the
+[parent failure and future workflow explanation](workflow-explanation.md) for
+the mechanisms, implementation requirements, and limits of this conclusion.
+This is an arm-level user assessment; it does not supply separate judgments for
+every recipe, seed, and camera. The table below retains the automated report's
+earlier status before that user assessment.
+
 | Condition | Fixed? | Evidence assessment |
 |---|---|---|
 | Coarse, holdout, original | Unverified | Complete endpoint, metric, and video evidence; no automated test can establish visual absence of the burst. |
