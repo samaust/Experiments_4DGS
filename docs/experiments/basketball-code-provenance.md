@@ -128,14 +128,68 @@ dense preparation workflow used here. These additions use established
 techniques; "added here" does not imply that each technique is a new research
 invention.
 
-ViPE also has an underlying dependency chain. Its masking component incorporates
-[Segment-and-Track-Anything](https://github.com/z-x-yang/Segment-and-Track-Anything),
-using [GroundingDINO](https://github.com/IDEA-Research/GroundingDINO) for
-text-conditioned detection, [SAM](https://github.com/facebookresearch/segment-anything)
-for segmentation, and [DeAOT](https://github.com/yoxu515/aot-benchmark) for
-propagation. The user's ViPE fork already contains caching, GPU-tensor, batching,
-and device-support changes. The Basketball adapter reuses that fork's component;
-it does not use ViPE's complete pose/depth pipeline to replace the accepted
+**At `de50e6a`, ViPE uses an adapted implementation of
+[Segment-and-Track-Anything (SAM-Track)](https://github.com/z-x-yang/Segment-and-Track-Anything),
+combining three pretrained models.** The source explicitly credits that
+repository in
+[TrackAnythingPipeline](https://github.com/samaust/vipe/blob/de50e6ab1066e32c96d32499a282ecaa2fbf2d90/vipe/priors/track_anything/__init__.py).
+
+| Stage | Model used | What it does |
+|---|---|---|
+| **Detect people and balls** | [GroundingDINO](https://github.com/IDEA-Research/GroundingDINO), **Swin-T**, with a **BERT-base-uncased** text encoder | Takes the image and text queries such as `person` and `basketball`, then predicts bounding boxes. |
+| **Produce pixel masks** | [Segment Anything — SAM](https://github.com/facebookresearch/segment-anything), **ViT-B** | Uses those bounding boxes as prompts to identify the pixels belonging to each detected object. |
+| **Track masks across frames** | [DeAOT](https://github.com/yoxu515/aot-benchmark), **ResNet-50 DeAOT-L** | Propagates the existing masks into subsequent frames and maintains instance identities within that tracker. |
+
+The checkpoint files selected by the code are:
+
+- GroundingDINO: `groundingdino_swint_ogc.pth`
+- SAM: `sam_vit_b_01ec64.pth`
+- DeAOT: `R50_DeAOTL_PRE_YTB_DAV.pth`
+
+The pinned
+[detector loader](https://github.com/samaust/vipe/blob/de50e6ab1066e32c96d32499a282ecaa2fbf2d90/vipe/priors/track_anything/detector.py)
+selects the GroundingDINO checkpoint; `TrackAnythingPipeline` selects the SAM
+and DeAOT models and checkpoints.
+
+**The implementations are bundled inside ViPE's source tree**, a practice
+called *vendoring*:
+
+```text
+vipe/priors/track_anything/
+├── groundingdino/   # Object detector implementation
+├── sam/            # Segment Anything implementation
+├── aot/            # AOT/DeAOT tracking implementation
+├── detector.py     # Integration wrappers
+├── segmentor.py
+├── aot_tracker.py
+└── seg_tracker.py
+```
+
+For example, the wrappers import `from .sam import ...` and
+`from .groundingdino.models import ...`. They use these bundled copies, with
+adaptations, rather than relying solely on separately installed SAM or
+GroundingDINO packages.
+
+The Basketball execution stack is **Python, PyTorch, torchvision, and CUDA**.
+Hugging Face **Transformers** supplies BERT and its tokenizer. GroundingDINO
+also uses ViPE's compiled `grounding_dino_ext` attention operator. NumPy,
+Pillow, and OpenCV support image handling around the pipeline.
+
+The user's fork adds runtime changes such as **shared model caching, processing
+images and masks directly as GPU tensors, batched tracking-image encoding, and
+device handling**. Those changes adapt existing model implementations and
+pretrained weights.
+
+For the Basketball experiments, the local adapter supplies the words **`person`
+and `basketball`**. GroundingDINO performs the semantic selection; SAM produces
+the boundaries. No new Basketball segmentation network is trained.
+
+The [Basketball mask adapter](../../scripts/basketball_temporal_masks.py) creates
+a fresh tracker for each camera/keyframe pair: detection and SAM segmentation
+run on the keyframe, then DeAOT tracks its immediate successor. Consequently,
+those instance IDs belong to that camera and pair; they do not establish player
+identities across cameras. The Basketball adapter reuses this masking component
+without using ViPE's complete pose/depth pipeline to replace the accepted
 camera calibration.
 
 **STG requires a separate qualification about "as is."** Its model, renderer,
