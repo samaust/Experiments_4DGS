@@ -24,7 +24,7 @@ def main():
     p.add_argument('--output', type=Path, default=ROOT/'.local/basketball-crossing-repair/videos')
     a = p.parse_args()
     records = {}
-    for path in sorted((a.artifact_root/'evaluation').glob('*/record-070000.json')):
+    for path in sorted((a.artifact_root/'evaluation').rglob('record-070000.json')):
         r = json.loads(path.read_text())
         if r.get('iteration') == 70000 and r.get('reload', {}).get('complete'):
             records[r['arm'], r['seed'], r['training_policy']+'-'+r['lifetime_policy']] = r
@@ -40,7 +40,7 @@ def main():
     artifacts = []
 
     def source(camera, frame):
-        x = camera_map[int(camera)]['frames'][frame]
+        x = camera_map[camera]['frames'][frame]
         path = MANIFEST.parent/x['path']
         if digest(path) != x['sha256']:
             raise ValueError('source image hash mismatch')
@@ -101,7 +101,7 @@ def main():
                         if proc.poll() is None: proc.terminate(); proc.wait(timeout=30)
                 probe = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-count_frames', '-select_streams', 'v:0',
                     '-show_entries', 'stream=nb_read_frames,r_frame_rate,width,height', '-of', 'json', str(video)], text=True))['streams'][0]
-                if probe != {'nb_read_frames': '50', 'r_frame_rate': '25/1', 'width': '5760', 'height': '592'}:
+                if probe != {'nb_read_frames': '50', 'r_frame_rate': '25/1', 'width': 5760, 'height': 592}:
                     raise ValueError(f'video probe mismatch: {probe}')
                 artifacts.append({'path': str(video.relative_to(a.output)), 'sha256': digest(video), 'kind': 'video', 'probe': probe})
                 print(json.dumps({'recipe': recipe, 'camera': camera, 'seed': seed}), flush=True)

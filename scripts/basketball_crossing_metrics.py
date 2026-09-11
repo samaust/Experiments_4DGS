@@ -13,7 +13,7 @@ def main():
     p.add_argument('--runtime', type=Path, default=ROOT/'docs/experiments/basketball-dense-temporal/metric-runtime.json')
     a = p.parse_args()
     records = []
-    for path in sorted(a.artifact_root.glob('evaluation/*/record-070000.json')):
+    for path in sorted((a.artifact_root/'evaluation').rglob('record-070000.json')):
         record = json.loads(path.read_text())
         if record.get('iteration') != 70000 or not record.get('reload', {}).get('complete'):
             raise ValueError(f'incomplete endpoint: {path}')
@@ -32,13 +32,21 @@ def main():
             for life in ('original', 'repaired'):
                 selected = [r for r in records if (r['arm'], r['training_policy'], r['lifetime_policy']) == (arm, train, life)]
                 inputs = a.artifact_root/f'metric-inputs-{arm}-{train}-{life}.json'
-                write_new(inputs, dict(runs=[dict(method='freetimegs', seed=r['seed'], render=r['render']) for r in selected]))
+                if not inputs.exists():
+                    write_new(inputs, dict(runs=[dict(method='freetimegs', seed=r['seed'], render=r['render']) for r in selected]))
                 output = a.artifact_root/f'metrics/{arm}/{train}-{life}'
                 if (output/'summary.json').exists():
                     result_paths = [output/f'freetimegs-seed{s}.json' for s in range(3)]
                     if not all(x.exists() for x in result_paths):
                         raise ValueError(f'partial existing metrics: {output}')
                 else:
+                    if output.exists():
+                        retry = 1
+                        preserved = output.with_name(output.name + '-incomplete')
+                        while preserved.exists():
+                            retry += 1
+                            preserved = output.with_name(output.name + f'-incomplete-retry{retry}')
+                        output.rename(preserved)
                     command = ['docker', 'run', '--rm', '--name', f'plan028-metrics-{arm}-{train}-{life}',
                                '--network', 'none', '--gpus', 'all', '--user', '1000:1000',
                                '-e', 'TRAINING_STOP_MONOTONIC=inf', '-e', 'MPLCONFIGDIR=/tmp/matplotlib',
@@ -47,6 +55,7 @@ def main():
                     segment = supervise(command, 'evaluation', a.artifact_root/f'segments/metrics-{arm}-{train}-{life}')
                     if segment['exit_code'] or segment['interrupted']:
                         raise SystemExit('metrics stopped; inspect retained segment and worker logs')
+                    result_paths = [output/f'freetimegs-seed{s}.json' for s in range(3)]
                 for path in result_paths:
                     metric = json.loads(path.read_text())
                     source = next(r for r in selected if r['seed'] == metric['seed'])
