@@ -57,8 +57,51 @@ explicit in [freetimegs_source.py](../../scripts/freetimegs_source.py) and
 For **EDGS**, the loader extracts four unchanged upstream function bodies:
 `prepare_tensor`, `triangulate_points`, `pairwise_distances`, and
 `k_closest_vectors`. The Basketball pipeline uses the triangulation helper and
-adds its own calibrated projection adapter. **It does not run EDGS's Gaussian
-trainer.** See [edgs_source.py](../../scripts/edgs_source.py).
+reuses a calibrated projection adapter written in this repository during the
+earlier EDGS/SelfCap integration. **It does not run EDGS's Gaussian trainer.**
+See [edgs_source.py](../../scripts/edgs_source.py).
+
+**The calibrated projection adapter is local integration code.** Git history
+shows that `calibrated_projection()` was introduced on **2026-09-06** in commit
+`21327005a4b699f53b72c1d91d9ed91c85dea52e` (`2132700`), titled
+"Validate pinned EDGS geometry and RoMa CUDA execution." The
+[SelfCap initializer](../../scripts/initialize-edgs-selfcap.py) and later
+[Basketball cloud builder](../../scripts/basketball_temporal_cloud.py) import the
+same function. The earlier wording that Basketball "adds its own" adapter did
+not make this reuse history clear.
+
+Its mathematics is the standard pinhole-camera projection, `P = K[R|t]`.
+`K` contains the focal lengths and principal point, while `R` and `t` describe
+the rotation and translation from world coordinates into the camera frame.
+This established formulation is documented, for example, in
+[OpenCV's camera geometry reference](https://docs.opencv.org/4.13.0/d9/d0c/group__calib3d.html).
+The adapter itself is a small local PyTorch implementation.
+
+The custom part packages that projection matrix for the pinned EDGS helper's
+four-column, row-vector interface:
+
+- Its triangulation equations use column index **2** for camera depth.
+- Its reprojection-error calculation uses column index **3**.
+- The adapter transposes the standard projection matrix and places the depth
+  coefficients in both columns. These indices are zero-based.
+
+The essential implementation is two lines:
+
+```python
+projection = intrinsics @ world_to_camera[:3]
+return torch.cat((projection.T, projection[2, :, None]), dim=1)
+```
+
+The remaining code checks matrix dimensions, finite values, and coordinate
+conventions. The reason for this arrangement is also recorded in the
+[original compatibility notes](007-freetimegs.md#released-geometry-compatibility-check).
+It uses processed-image pixel coordinates and camera depth; it is not a graphics
+near/far clip-space projection.
+
+**"Calibrated" means the adapter consumes existing camera calibration.** It does
+not estimate or improve calibration. Basketball supplies its saved camera
+matrices, this adapter converts their representation, and the unchanged EDGS
+helper triangulates the matched pixels.
 
 For **RoMa**, the upstream indoor matcher and pretrained weights are reused
 without fine-tuning. The loader verifies the revision and weight hashes and
