@@ -3,6 +3,8 @@
 [Plan 027](../../../plans/plan_027.md) is active as a fixed experiment; the
 continuous-improvement loop is inactive.
 
+Research and implementation ancestry: [shared code provenance](../basketball-code-provenance.md).
+
 Both full initializers are frozen for experimental training with known visual
 defects. The historical Plan 026 visual rejection remains unchanged.
 

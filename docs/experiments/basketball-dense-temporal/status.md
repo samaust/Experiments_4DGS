@@ -8,6 +8,7 @@ The continuous-improvement loop is inactive. No study job remains running.
 Specification: [plan 026](../../../plans/plan_026.md).
 Results and limitations: [final report](report.md).
 Browse outputs: [artifacts](artifacts.md).
+Research and implementation ancestry: [shared code provenance](../basketball-code-provenance.md).
 
 - All six historical 5,000-update parents were verified and preserved.
 - All six sparse trajectories reached 50,000, totaling 270,000 new updates.

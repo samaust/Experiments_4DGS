@@ -2,6 +2,8 @@
 
 Production completed 24 endpoints (two recipes × three seeds × four policies), with 480,000 continuation updates. Frozen evaluation coverage is 8,400 metric rows.
 
+Research and implementation ancestry: [shared code provenance](../basketball-code-provenance.md).
+
 | Recipe | Seed | Training | Lifetime | Gap motion MAE | Gap dynamic LPIPS | Video |
 |---|---:|---|---|---:|---:|---|
 | dense-coarse | 0 | all-times | original | 0.04737 | 0.05712 | [camera 0](../../../.local/basketball-crossing-repair/videos/freetimegs-dense-coarse-camera0-seed0/comparison.mp4) |

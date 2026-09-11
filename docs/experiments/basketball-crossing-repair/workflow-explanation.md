@@ -1,5 +1,9 @@
 # Why the parent fragmented, and what C and D require
 
+The [shared code provenance](../basketball-code-provenance.md) explains the
+research papers, upstream repositories, and local additions behind this workflow
+and the dense initialization studies.
+
 The results point to missing training frames as the main reason the parent failed
 during the crossing. C and D both restore those frames. In the user's assessment
 on 2026-09-11, A and B provide minimal improvement and are rejected as solutions;
