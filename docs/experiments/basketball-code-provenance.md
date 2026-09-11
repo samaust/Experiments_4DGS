@@ -99,9 +99,157 @@ It uses processed-image pixel coordinates and camera depth; it is not a graphics
 near/far clip-space projection.
 
 **"Calibrated" means the adapter consumes existing camera calibration.** It does
-not estimate or improve calibration. Basketball supplies its saved camera
-matrices, this adapter converts their representation, and the unchanged EDGS
-helper triangulates the matched pixels.
+not estimate or improve calibration. The Basketball pipeline supplies camera
+matrices previously estimated and saved by this project, this adapter converts
+their representation, and the unchanged EDGS helper triangulates the matched
+pixels. Those matrices were not supplied by the dataset.
+
+**The Basketball DG archive used here contains videos, without calibration.**
+This project estimated the camera calibration from those videos. The current
+calibration comes from [Plan 006's calibration investigation](basketball-calibration-alternatives.md),
+followed by [Plan 005 revision 2's scale estimation](basketball-rev2.md).
+Those results were subsequently frozen for the reconstruction experiments.
+
+```mermaid
+flowchart TD
+    A["34 Basketball videos"] --> B["Exclude moving objects; extract static image features"]
+    B --> C["COLMAP: estimate cameras and sparse 3D scene"]
+    C --> D["Refine camera poses, focal lengths and lens distortion"]
+    D --> E["Localize evaluation cameras; validate and save calibration"]
+    E --> F["Estimate scene scale using UniDepth"]
+    F --> G["Undistort images and export reconstruction camera matrices"]
+    G --> H["EDGS initialization and Gaussian reconstruction"]
+```
+
+1. **Select video frames for calibration.**
+
+   The input consists of `0.mp4` through `33.mp4`: 34 videos at 1920×1080,
+   25 fps, with 250 frames each. The workflow assigned separate frame ranges:
+
+   | Purpose | Source frames |
+   |---|---|
+   | Later Gaussian reconstruction | **0–49** |
+   | Calibration fitting | **50–149** |
+   | Calibration selection checks | **150–199** |
+   | Final calibration validation | **200–249** |
+
+   Calibration used selected snapshots within these ranges. The reconstruction
+   interval, frames 0–49, was excluded from calibration fitting. The
+   [calibration report](basketball-calibration-alternatives.md) records the exact
+   frame selections and the audited video inventory.
+
+2. **Identify static background evidence.**
+
+   Camera calibration relied on features in the stationary scene. ViPE's
+   person/ball segmentation and neighboring-frame image differences produced
+   masks excluding moving regions.
+
+   Images were resized to 960×540. For the accepted workflow, OpenCV SIFT
+   extracted features from the remaining static regions. Features near mask
+   boundaries were rejected, and repeated observations across timestamps were
+   spatially deduplicated.
+
+   The model assumes each physical camera has a fixed pose and fixed intrinsics
+   across the sampled frames. This allows static observations from several
+   timestamps to contribute to one camera estimate. See
+   [mask preparation](../../scripts/basketball_alternatives_prepare.py) and
+   [feature pooling](../../scripts/basketball_alternatives_refine.py).
+
+3. **Estimate camera geometry with COLMAP.**
+
+   The accepted route used **incremental COLMAP through PyCOLMAP**, with
+   exhaustive matching of the pooled SIFT descriptors and geometric verification.
+   SuperPoint/LightGlue was used in earlier snapshot screening; the accepted
+   five-frame reconstruction used the pooled SIFT frontend.
+
+   It began with an **initial focal-length guess of 1,152 pixels at 960×540**,
+   explicitly marked as having no trusted focal-length prior. COLMAP estimated
+   camera poses and sparse 3D points from the image correspondences. This is the
+   standard structure-from-motion process described in
+   [COLMAP's documentation](https://colmap.github.io/tutorial.html).
+
+   The subsequent robust bundle adjustment jointly refined camera rotations
+   and translations, sparse 3D point positions, one focal length per camera,
+   and one radial lens-distortion coefficient per camera.
+
+   **Square pixels and a centered principal point were assumed; the principal
+   point was fixed.** The accepted camera model was `SIMPLE_RADIAL`. GeoCalib's
+   predicted intrinsics were not supplied to this final reconstruction.
+
+   The optimization uses COLMAP's implementation; local scripts supply the
+   pooled observations, camera-model choices, and execution protocol. See
+   [mapping](../../scripts/basketball_alternatives_colmap.py) and
+   [bundle adjustment](../../scripts/basketball_alternatives_refine.py).
+
+4. **Calibrate the four reconstruction-held-out cameras separately.**
+
+   Cameras **0, 10, 20, and 30** were excluded from constructing the
+   training-camera map. Their static features were then matched to that frozen
+   map. COLMAP's robust absolute-pose estimation and refinement—PnP with unknown
+   focal length—estimated their poses, focal lengths, and radial distortion.
+
+   **Their own calibration-window images were used for this localization.**
+   "Held out" means excluded from Gaussian reconstruction training; it does not
+   mean their camera calibration was obtained without seeing any images from
+   them. Their localization did not modify the training map. See
+   [held-out localization](../../scripts/basketball_alternatives_localize.py).
+
+5. **Validate and freeze one calibration.**
+
+   Independent early/late fitting windows and three seeds tested repeatability.
+   The final exported calibration uses **seed 0's early map**, fitted from
+   frames **50, 62, 75, 87, and 99**, plus its separately localized held-out
+   cameras. Late maps and other seeds remain diagnostics; their parameters are
+   not averaged into the export.
+
+   Selection and final validation checked static-feature reprojection, spatial
+   coverage, and positive depth. Across the final validation, the worst camera
+   median error was approximately **0.506 pixels**, and the worst camera
+   95th-percentile error was **2.228 pixels** at 960×540. See the
+   [final validation](basketball-calibration-alternatives/validation.json).
+
+   These establish the recorded static-image consistency and repeatability,
+   not surveyed physical accuracy. The resulting artifact is
+   [calibration.json](basketball-calibration-alternatives/calibration.json),
+   which explicitly records `"estimated": true`.
+
+6. **Estimate physical scale separately using UniDepth.**
+
+   The COLMAP reconstruction initially has an arbitrary scale. A separate step
+   ran **UniDepth V2 ViT-L through the pinned ViPE wrapper**, supplying the
+   accepted focal lengths and appropriately undistorted images. UniDepth is a
+   pretrained monocular metric-depth model from the
+   [UniDepth repository](https://github.com/lpiccinelli-eth/UniDepth).
+
+   The local scale estimator compared predicted depths with the corresponding
+   sparse-map depths, using a robust aggregation with equal camera weighting.
+   It fitted on frame **100** and checked the frozen scale on frame **175**.
+
+   The result was approximately **1.31507 estimated metres per calibration
+   unit**. This remains a model-based scale estimate, with possible shared
+   monocular-depth bias. See [scale implementation](../../scripts/basketball_scale.py)
+   and [saved scale result](basketball-rev2/scale-fit.json).
+
+7. **Convert the estimates into reconstruction inputs.**
+
+   The [preparation script](../../scripts/prepare-basketball-sync.py) reads the
+   frozen calibration and scale, resizes and undistorts the reconstruction
+   images, applies the estimated scale to camera translations and centers, and
+   converts between OpenCV and renderer pixel-center conventions. It saves the
+   processed images and camera matrices in the
+   [reconstruction manifest](../../.local/sync-pivot/basketball-zero/manifest.json).
+
+   **That manifest is what the Basketball dense pipeline reads before calling
+   the calibrated projection adapter.** The provenance audit verified all 34
+   current camera matrices against the original calibration and the recorded
+   scale and pixel-coordinate conversions. The
+   [frozen input record](../research/basketball-sync-pivot/basketball-freeze.json)
+   binds the calibration and scale artifacts by hash.
+
+Camera synchronization is a separate issue: these reconstruction experiments
+use **zero time offsets as an operational assumption**. The static calibration
+and scale results do not establish physical synchronization; that distinction
+is recorded in the [timing report](../research/basketball-sync-pivot/report.md).
 
 For **RoMa**, the upstream indoor matcher and pretrained weights are reused
 without fine-tuning. The loader verifies the revision and weight hashes and
