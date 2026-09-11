@@ -7,7 +7,7 @@ Use the settings from **arm D** of the latest crossing-repair experiment. Includ
 ## Workflow
 
 ```mermaid
-flowchart LR
+flowchart TB
     A[Multi-camera videos] --> B[Estimate and validate camera calibration]
     B --> C[Undistorted images, cameras, and timestamps]
     C --> D[Dense geometry and motion initialization]
