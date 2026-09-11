@@ -46,6 +46,8 @@ Both dense recipes were used in the successful repaired experiment:
 | `freetimegs-dense-coarse` | Match the full camera images. | [.local/basketball-dense-training/initializers/freetimegs-dense-coarse](.local/basketball-dense-training/initializers/freetimegs-dense-coarse) |
 | `freetimegs-dense-cropped` | Add person-cropped matching and convert crop coordinates back to calibrated image coordinates. | [.local/basketball-dense-training/initializers/freetimegs-dense-cropped](.local/basketball-dense-training/initializers/freetimegs-dense-cropped) |
 
+The [dense recipe explanation](docs/experiments/basketball-dense-training/recipes.md) details the shared matching process, person-crop refinement, and how both initializers feed the same training workflow.
+
 Select initialization keyframes across the clip while retaining every captured frame for image-loss training. The validated repaired runs reused their existing frozen keyframe initializers; initialization sampling and training-image selection are separate. Keep the recipe and its matching initializer together. The implementation is in the [dense cloud builder](scripts/basketball_temporal_cloud.py), [geometry checks](scripts/basketball_temporal_geometry.py), and [fusion/packaging adapter](scripts/basketball_dense_fusion.py).
 
 ## Train with complete time coverage and the duration repair

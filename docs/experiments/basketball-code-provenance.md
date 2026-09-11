@@ -276,6 +276,10 @@ dense preparation workflow used here. These additions use established
 techniques; "added here" does not imply that each technique is a new research
 invention.
 
+The [dense recipe explanation](basketball-dense-training/recipes.md) describes
+full-image matching, the additional person-crop refinement, and the shared
+geometry and motion preparation before FreeTimeGS training.
+
 **At `de50e6a`, ViPE uses an adapted implementation of
 [Segment-and-Track-Anything (SAM-Track)](https://github.com/z-x-yang/Segment-and-Track-Anything),
 combining three pretrained models.** The source explicitly credits that
