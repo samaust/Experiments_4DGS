@@ -56,7 +56,7 @@ def load_cloud(directory, scene, frame_id):
 def load_dense_cloud(directory, scene, frame_id):
     directory = Path(directory)
     report = json.loads((directory / 'result.json').read_text())
-    if (report.get('schema') != 'edgs-selfcap-cloud/v1' or report.get('status') != 'prepared'
+    if (report.get('schema') not in ('edgs-selfcap-cloud/v1', 'edgs-selfcap-cloud/v2') or report.get('status') != 'prepared'
             or report.get('manifest_sha256') != scene.sha256 or report.get('frame_id') != frame_id):
         raise ValueError('dense cloud manifest, frame or status mismatch')
     keys = [(item['camera_id'], item['frame_id']) for item in report['inputs']]

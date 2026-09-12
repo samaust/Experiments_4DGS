@@ -3,7 +3,6 @@ import argparse
 import json
 from pathlib import Path
 import signal
-import subprocess
 import time
 
 import cv2
@@ -13,7 +12,8 @@ import torch
 
 from basketball_study import CAMERAS, MANIFEST, ROOT, digest, training_key, verify_files, write_new
 from basketball_temporal_geometry import geometry_gate, labels_at, project, projection, track_lk, velocity_from_support
-from edgs_source import ROMA_PIN, ROMA_WEIGHTS, calibrated_projection, load_geometry, load_roma
+from edgs_source import ROMA_PIN, ROMA_WEIGHTS, load_roma
+from triangulation import solver_metadata, triangulate_points
 
 
 def person_crop_warp(model, warp, confidence, image0, image1, labels0, labels1, phrases0, phrases1):
@@ -43,8 +43,6 @@ def person_crop_warp(model, warp, confidence, image0, image1, labels0, labels1, 
         crops = [Image.fromarray(im).crop(box) for im, box in zip((image0, image1), boxes)]
         with torch.inference_mode():
             refined, certainty = model.match(*crops, device='cuda')
-        if not torch.isfinite(refined).all() or not torch.isfinite(certainty).all():
-            raise RuntimeError('nonfinite person-cropped prediction')
         refined, certainty = refined.cpu().numpy(), certainty.cpu().numpy()
         x0, y0, x1, y1 = boxes[0]
         h, w = refined.shape[:2]
@@ -118,25 +116,18 @@ def main():
         raise ValueError('sparse normalization changed')
     normalization = json.loads(cfgpath.read_text())['normalization']
     transform = np.array(normalization['transform'])
-    edgs = ROOT / '.local/EDGS'
-    edgs_pin = subprocess.check_output(['git', '-C', str(edgs), 'rev-parse', 'HEAD'], text=True).strip()
-    if edgs_pin != 'f90b022445fc88368f75e66e8fb34aea88372cac' or subprocess.check_output(
-            ['git', '-C', str(edgs), 'status', '--porcelain', '--untracked-files=no'], text=True):
-        raise ValueError('EDGS source revision changed')
-    native, source = load_geometry(edgs)
     roma = load_roma(ROOT / '.local/RoMa-edgs', ROOT / '.local/weights/roma-edgs')
     torch.manual_seed(0)
     rng = np.random.default_rng(0)
     stopping = [False]
     signal.signal(signal.SIGTERM, lambda *_: stopping.__setitem__(0, True))
-    config = dict(schema='basketball-temporal-cloud/v1', normalization=normalization,
+    config = dict(schema='basketball-temporal-cloud/v2', normalization=normalization,
         mask_result_sha256=digest(a.masks / 'result.json'), neighbors_sha256=digest(a.neighbors),
-        geometry_source=source, edgs_pin=edgs_pin, roma_pin=ROMA_PIN, roma_weights=ROMA_WEIGHTS,
+        geometry_source=solver_metadata(), roma_pin=ROMA_PIN, roma_weights=ROMA_WEIGHTS,
         adapter_sha256=digest(__file__),
         geometry_adapter_sha256=digest(ROOT / 'scripts/basketball_temporal_geometry.py'),
         sampled_per_reference=15000, reprojection_pixels=2, angle_degrees=1,
         foreground_min_cameras=3, mode='person-cropped' if a.cropped else 'coarse', frames=mask_config['frames'])
-    write_new(a.output / 'config.json', config)
     started = time.monotonic()
     records = []
     result = dict(status='incomplete', records=records)
@@ -171,8 +162,6 @@ def main():
                 for j, other in enumerate(others):
                     with torch.inference_mode():
                         warp, confidence = roma.match(Image.fromarray(images[ref]), Image.fromarray(images[other]), device='cuda')
-                    if not torch.isfinite(warp).all() or not torch.isfinite(confidence).all():
-                        raise RuntimeError('nonfinite RoMa prediction')
                     w = warp.cpu().numpy()
                     prob = confidence.cpu().numpy()
                     if a.cropped:
@@ -182,22 +171,18 @@ def main():
                     warps[other] = w
                     uv0 = (w[..., :2].reshape(-1, 2)+1)*[480, 270]
                     prob = prob.reshape(-1)
+                    prob[~np.isfinite(prob)] = 0
                     prob[prob > roma.sample_thresh] = 1
                     sampled = balanced_samples(prob, labels_at(labels[ref], uv0), observations[ref, frame]['phrases'], 5000, rng)
                     uv1 = (w[..., 2:].reshape(-1, 2)[sampled]+1)*[480, 270]
                     candidates.append((j+1, uv0[sampled], uv1))
                 for pair, uv0, uv1 in candidates:
                     other = ids[pair]
-                    Ps = []
-                    for c in (ref, other):
-                        extrinsic = torch.eye(4)
-                        extrinsic[:3, :3] = torch.tensor(cameras[c]['world_to_camera_R'])
-                        extrinsic[:3, 3] = torch.tensor(cameras[c]['world_to_camera_T'])
-                        Ps.append(calibrated_projection(torch.tensor(cameras[c]['K']), extrinsic).cuda())
-                    u0, u1 = torch.tensor(uv0, device='cuda', dtype=torch.float32), torch.tensor(uv1, device='cuda', dtype=torch.float32)
-                    xyz, _, _ = native['triangulate_points'](Ps[0], Ps[1], u0[:, 0], u0[:, 1], u1[:, 0], u1[:, 1], device='cuda')
-                    xyz = xyz[:, :3].cpu().numpy()
+                    xyz, numerical = triangulate_points(P[0], P[pair], uv0, uv1,
+                        device='cuda', dtype=torch.float32)
+                    xyz, numerical = xyz.cpu().numpy(), numerical.cpu().numpy()
                     good, diagnostics = geometry_gate(xyz, [uv0, uv1], P[[0, pair]], centers[[0, pair]])
+                    good &= numerical
                     all_uv = np.array([uv0]+[uv1 if c == other else query_warp(warps[c], uv0) for c in others])
                     sampled_labels = np.array([labels_at(labels[c], uv) for c, uv in zip(ids, all_uv)])
                     semantic = np.zeros_like(sampled_labels)
@@ -240,6 +225,7 @@ def main():
                         region=region_kept, velocity_valid=measured, camera_ids=np.array(ids), uv=UV,
                         support=support, instance_labels=sampled_labels[:, kept])
                     record = dict(frame=frame, reference=ref, other=other, sampled=len(xyz), retained=len(X),
+                        numerical_rejections=int((~numerical).sum()),
                         static=int((region_kept == 0).sum()), person=int((region_kept == 1).sum()), ball=int((region_kept == 2).sum()),
                         measured_velocity=int(measured.sum()), unsupported_velocity=int(((region_kept > 0) & ~measured).sum()),
                         rejected_geometry=int((~geometry_gate(xyz, [uv0, uv1], P[[0, pair]], centers[[0, pair]])[0]).sum()),
@@ -255,8 +241,11 @@ def main():
         result['error'] = f'{type(error).__name__}: {error}'
         raise
     finally:
+        result['numerical_rejections'] = sum(r.get('numerical_rejections', 0) for r in records)
         result['wall_seconds'] = time.monotonic()-started
         result['peak_allocated_bytes'] = torch.cuda.max_memory_allocated()
+        config['numerical_rejections'] = result['numerical_rejections']
+        write_new(a.output / 'config.json', config)
         result['config_sha256'] = digest(a.output / 'config.json')
         write_new(a.output / 'result.json', result)
 

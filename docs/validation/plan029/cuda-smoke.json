@@ -1,0 +1,35 @@
+{
+  "schema": "triangulation-cuda-validation/v1",
+  "status": "passed",
+  "python": "3.14.6",
+  "pytorch": "2.13.0+cu130",
+  "cuda_runtime": "13.0",
+  "device": "NVIDIA GeForce RTX 4090",
+  "device_count": 1,
+  "driver": "595.84",
+  "geometry_source": {
+    "implementation_sha256": "8a28824220773678e9ba036dbab64b3a15eedae1c9f324c4ddd615c6aa47488f",
+    "solver": "local-inhomogeneous-lstsq/v1",
+    "dtype": "torch.float32",
+    "driver": "gels",
+    "rank_rtol": 4.76837158203125e-07
+  },
+  "correspondences": 15000,
+  "accepted": 14998,
+  "rejected": 2,
+  "max_xyz_difference": 5.790558460283535e-06,
+  "max_residual_difference": 0.0002093625198860817,
+  "max_scaled_residual_excess": 1.652187977511868e-08,
+  "scaled_residual_limit": 4.76837158203125e-07,
+  "synchronized_seconds": 0.10897522303275764,
+  "peak_allocated_bytes": 15232000,
+  "seed": 292,
+  "reference": "independently assembled NumPy float64 lstsq, quantized float32 inputs",
+  "timing_scope": "single cold helper call including input transfers, screening, solve and synchronization",
+  "limits": {
+    "gpus": 1,
+    "invocation_timeout_seconds": 300,
+    "inference": 0,
+    "training": 0
+  }
+}

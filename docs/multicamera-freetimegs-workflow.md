@@ -108,7 +108,7 @@ Run entry-point scripts with the repository root as working directory. Some path
 | ffprobe / OpenCV | CPU video inspection, decoding and image transformations. |
 | ViPE segmentation and UniDepth | Separate pinned environment and existing weights; CUDA inference. ViPE is used for these components, not as the Gaussian trainer. |
 | OpenCV SIFT / PyCOLMAP / NumPy / SciPy | Static features, mapping, bundle adjustment, projection checks, normalization and fusion; CPU operations in this route. |
-| RoMa / EDGS | CUDA matching and pairwise triangulation; NumPy/OpenCV handle subsequent checks and tracking. |
+| RoMa / local PyTorch | CUDA matching and independently derived pairwise least squares; NumPy/OpenCV handle subsequent checks and tracking. |
 | FreeTimeGsVanilla / gsplat / PyTorch | Gaussian model, CUDA rendering, differentiation and optimization. Native initializer KNN runs through scikit-learn on CPU. |
 | Metric container / ffmpeg | Pinned evaluation environment with CUDA LPIPS; CPU image encoding and video assembly. |
 
@@ -339,20 +339,31 @@ Relevant local contracts:
 | `balanced_samples(confidence, labels, phrases, count, rng)` | Flattened probabilities/labels; phrase map; `count=5000`; `numpy.random.Generator` seeded 0. | Integer `[M]` sampled indices without replacement; `M≤5000`. Roughly half the quota is allocated across detected people. |
 | `query_warp(warp, uv)` | CPU warp grid; full-image continuous coordinates `[M,2]`. | Floating `[M,2]` target coordinates; bilinear sampling, NaN outside support. |
 
-Person boxes get 10% padding per side, minimum 2 pixels, clipped to the image. Refined crop coordinates are explicitly mapped back to calibrated full-image coordinates. Missing person associations leave the original predictions in place; nonfinite matching outputs raise errors. Crop association can still be wrong, so this recipe does not guarantee better geometry.
+Person boxes get 10% padding per side, minimum 2 pixels, clipped to the image. Refined crop coordinates are explicitly mapped back to calibrated full-image coordinates. Missing person associations leave the original predictions in place; nonfinite coordinates are rejected per correspondence; nonfinite confidence is excluded from sampling. Crop association can still be wrong, so this recipe does not guarantee better geometry.
 
 ### 4.4 Triangulate and filter geometry
 
-For each camera pair, the cloud builder calls `load_geometry` once per process and its extracted EDGS `triangulate_points` for batches of sampled correspondences.
+For each camera pair, the cloud builder calls the local
+[`triangulate_points`](../scripts/triangulation.py) with standard `P=K[R|T]`
+projections `[3,4]` and corresponding pixels `[M,2]`. It returns float32 CUDA
+XYZ `[M,3]` and boolean numerical validity `[M]`. Per-point projections
+`[M,3,4]` and float64 are also supported by the reusable helper.
 
-| Function | Input | Output |
-|---|---|---|
-| `load_geometry(checkout)` | EDGS `Path`. | Function dictionary plus source/license/AST hash dictionary. Four functions are loaded; this route calls `triangulate_points` and its `prepare_tensor` helper. |
-| `calibrated_projection(intrinsics, world_to_camera)` | Floating tensor-like `[3,3]` and `[4,4]` matrices. | Tensor `[4,4]` on input K's dtype/device; caller moves it to CUDA. |
-| `prepare_tensor(input_array, device)` | Tensor or array-like input; device. | Detached, cloned `torch.float32` tensor of the same shape on that device. |
-| `triangulate_points(P1, P2, k1_x, k1_y, k2_x, k2_y, device='cuda')` | Packed `4×4` projections; four `T32[M]` pixel-coordinate arrays. | `(T32[M,4], A32[M], A32[M])`: homogeneous world positions and two reprojection-error arrays. Caller takes xyz and recomputes local geometric gates. |
+The independently derived inhomogeneous least-squares system uses unweighted
+`torch.linalg.lstsq` with `driver="gels"`. Nonfinite and numerically rank-deficient
+matches are screened individually before solving; invalid XYZ are NaN.
+The default relative rank threshold is `4 * torch.finfo(torch.float32).eps`.
+No projection packing, EDGS source extraction, or EDGS checkout access remains
+in this active path. The numerical mask is combined with the existing geometric
+mask; the multiview velocity solver is unchanged. See the
+[derivation and provenance notes](triangulation.md).
 
-The adapter packages `P=K[R|T]` as `[Pᵀ, P_depthᵀ]` because EDGS uses column 2 for solving and column 3 for depth division. This is a pixel-space projection, not a graphics near/far projection.
+New configurations use `basketball-temporal-cloud/v2`, recording the local source
+hash, solver, dtype, driver, rank threshold, and final numerical rejection count.
+The configuration is finalized alongside the result, including on handled failures.
+Pair records and the result also contain numerical rejection counts. Historical
+version-1 configurations and measured results retain their original EDGS provenance;
+this implementation change does not establish unchanged reconstruction quality.
 
 Local [geometry functions](../scripts/basketball_temporal_geometry.py) operate on CPU arrays:
 
@@ -873,7 +884,7 @@ The following revisions identify the computation described here. Local source li
 |---|---|
 | Local adapters | `d7a4a952e114d2908c9e0f935d192fd0189452f5` before this documentation change. |
 | FreeTimeGsVanilla | `911dcf4157a3ddf5c96d9147f97627480268fe0f`; [native trainer](../.local/FreeTimeGsVanilla/src/simple_trainer_freetime_4d_pure_relocation.py), [normalization](../.local/FreeTimeGsVanilla/datasets/normalize.py), [initializer helpers](../.local/FreeTimeGsVanilla/src/utils.py). Independent reproduction, not the full official authors' pipeline. |
-| EDGS | `f90b022445fc88368f75e66e8fb34aea88372cac`; [geometry source](../.local/EDGS/source/corr_init.py). The Gaussian trainer is not used here. |
+| EDGS (historical geometry only; no active runtime dependency) | `f90b022445fc88368f75e66e8fb34aea88372cac`; [geometry source](../.local/EDGS/source/corr_init.py). The Gaussian trainer is not used here. |
 | RoMa used by dense builder | `370117431ffc5dc000fb46f6e581b74bdb2c3ff8`; `.local/RoMa-edgs`, not the separate `.local/RoMa` checkout. Indoor matcher and DINOv2 weights are hash-bound in `edgs_source.py`. |
 | ViPE | `de50e6ab1066e32c96d32499a282ecaa2fbf2d90`, branch `tridi`, recorded at `/home/auss/git_repos/samaust/Tridi/vipe` in the input audit. Component contracts above are verified at local call boundaries. |
 | gsplat | Build-script pin `b60e917c95afc449c5be33a634f1f457e116ff5e`. See the [native build script](../scripts/build-freetimegs-native.sh). |
