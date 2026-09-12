@@ -6,6 +6,8 @@ Use the settings from **arm D** of the latest crossing-repair experiment. Includ
 
 ## Workflow
 
+For a step-by-step code walkthrough with function arguments, data types, file handoffs, and app-design implications, see the [multi-camera FreeTimeGS workflow](docs/multicamera-freetimegs-workflow.md).
+
 ```mermaid
 flowchart TB
     A[Multi-camera videos] --> B[Estimate and validate camera calibration]
