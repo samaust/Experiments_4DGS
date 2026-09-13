@@ -1,6 +1,6 @@
 # Plan 031 status
 
-## Second E1 recovery authorized
+## E1 setup recovered successfully
 
 After the reported upstream reset, the user explicitly instructed “retry”.
 [The new authorization](e1-recovery-authorization-002.json) grants exactly one
@@ -9,6 +9,22 @@ failure. Network recovery is unverified; this setup is the authorized retry.
 [All 310 CPU fixtures pass](e1-recovery-validation-002.json). Cumulative setup
 time remaining is 53,778.642 seconds; existing download, storage and runtime
 limits remain enforced. Other stopped jobs retain their state.
+
+[Recovery 002 completed](e1-recovery-results-002.json) in 442.676 seconds with
+confirmed process cleanup and no remaining active jobs. The pinned CUDA 12.4
+toolkit, correlation extension and Grounding DINO extension built successfully;
+all eight required import entries passed. Setup retained Python 3.11,
+PyTorch 2.5.1+cu124, torchvision 0.20.1+cu124 and NumPy 1.26.4, with the resolved
+dependency lock and full environment/source inventory saved. No model
+constructors or forwards ran; first-forward qualification remains pending.
+
+`setup_result_record(..., 'E1')` verifies and resolves recovery 002 while retaining
+the original E1 and recovery 001 failures. S1 model jobs were not dispatched by
+this setup-only request. Cumulative setup usage is 4,264.035 seconds across seven
+original/recovery attempts; total recorded downloads are 19,343,753,718 bytes and
+peak run storage is 39,927,513,088 bytes. The implementation checkpoint is
+`95db77d` (310 passing CPU fixtures). The E1-specific request is complete;
+the full benchmark remains incomplete. Earlier sections below are historical.
 
 ## E1 recovery stopped
 
