@@ -29,6 +29,10 @@ class Ledger:
                 verify_record(event['authorization'])
                 allocated[event['job_id']] = dict(allocated['S3-reconstruction'],
                     id=event['job_id'], seconds=5400, scope='explicit user-authorized S3 reconstruction recovery')
+            if event['event'] == 'component_recovery_authorized':
+                verify_record(event['authorization'])
+                allocated[event['job_id']] = dict(allocated[event['original_job_id']],
+                    id=event['job_id'], scope='explicit user-authorized component recovery')
             if event['event'] == 'setup_recovery_authorized':
                 verify_record(event['authorization'])
                 allocated[event['job_id']] = dict(allocated[event['original_job_id']],
@@ -184,7 +188,7 @@ class Ledger:
 
     def note(self, event, **fields):
         if event in ('reserve', 'finish', 'account', 'resume_unstarted', 'checkpoint',
-                     'checkpoint_resume', 'cpu_preparation_charge', 'setup_recovery_authorized',
+                     'checkpoint_resume', 'cpu_preparation_charge', 'setup_recovery_authorized', 'component_recovery_authorized',
                      'reconstruction_recovery_authorized', 'memory_diagnostic_authorized'):
             raise ValueError('use the checked ledger transition')
         with self.locked() as (stream, events):
@@ -220,6 +224,51 @@ class Ledger:
                 raise ValueError('resume can reopen only unstarted accounted slots, not consumed attempts')
             return self._append(stream, events, dict(event='resume_unstarted', job_ids=job_ids,
                                                      authorization=authorization))
+
+    def authorize_component_recovery(self, authorization):
+        """One approved fixed-configuration retry, retaining original failures."""
+        document = read_json(verify_record(authorization)['path'])
+        original_id = document.get('original_job_id', '')
+        if not re.fullmatch(r'S[0-4]-(calibration|reconstruction)', original_id):
+            raise ValueError('component recovery requires an original segmentation matrix arm')
+        spec = jobs(self.config)[original_id]
+        required = dict(schema='vipe-benchmark-component-recovery/v1', attempts_limit=1,
+            seconds_limit=spec['seconds'], reset_previous_consumption=False,
+            gpu_total_seconds_limit=self.config['gpu_total_seconds_limit'],
+            changes_to_prescribed_configuration=False, unrelated_attempts_reopened=False)
+        if any(document.get(k) != v for k, v in required.items()) or not document.get('authorization'):
+            raise ValueError('exact explicit component recovery authorization required')
+        validation = read_json(verify_record(document['repair_validation'])['path'])
+        if validation.get('status') != 'passed' or not validation.get('sources'):
+            raise ValueError('passing source-bound repair validation required')
+        for source in validation['sources']:
+            verify_record(source)
+        with self.locked() as (stream, events):
+            prior = [e for e in events if e['event'] == 'component_recovery_authorized'
+                     and e['original_job_id'] == original_id]
+            if any(e['job_id'] == document.get('job_id') for e in prior):
+                raise ValueError('component recovery already allocated')
+            if document.get('job_id') != f'{original_id}-recovery-{len(prior)+1:03d}':
+                raise ValueError('component recovery must use next sequential identity')
+            states = self.states(events)
+            original = states.get(original_id, {})
+            if (original.get('event') != 'finish' or original.get('status') != 'failed' or
+                    original.get('cleanup_confirmed') is not True or
+                    original.get('event_sha256') != document.get('original_failure_event_sha256')):
+                raise ValueError('recovery must bind original cleaned-up component failure')
+            if prior:
+                previous = states.get(prior[-1]['job_id'], {})
+                if (previous.get('event') != 'finish' or previous.get('status') != 'failed' or
+                        previous.get('cleanup_confirmed') is not True or
+                        previous.get('event_sha256') != document.get('previous_recovery_failure_event_sha256')):
+                    raise ValueError('recovery must bind previous cleaned-up component failure')
+            if any(s['event'] == 'reserve' for s in states.values()):
+                raise ValueError('unreconciled active attempt')
+            if self.totals(events)['gpu']['elapsed_seconds'] >= self.config['gpu_total_seconds_limit']:
+                raise ValueError('cumulative GPU allocation exhausted')
+            return self._append(stream, events, dict(event='component_recovery_authorized',
+                job_id=document['job_id'], original_job_id=original_id, authorization=authorization,
+                original_failure_event_sha256=original['event_sha256']))
 
     def authorize_reconstruction_recovery(self, authorization):
         document = read_json(verify_record(authorization)['path'])

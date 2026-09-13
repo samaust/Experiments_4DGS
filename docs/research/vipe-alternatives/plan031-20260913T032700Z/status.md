@@ -1,3 +1,7 @@
+# Current: S2 ownership-race repair validated; fresh reconstruction recovery ready
+
+[Assessment011](assessment-011.md) and [Accounting009](matrix-accounting-009.json) are current. Original S2 reconstruction failed supervision after exporting all 840 outputs; these remain unadmitted. The deterministic CPU ownership-race fix passes 338 tests. Next: commit and run the [approved fresh S2 recovery](s2-reconstruction-recovery-authorization-001.json). Network setup remains paused.
+
 # Current: S2 calibration complete; reconstruction starting
 
 [S2 calibration](S2-calibration-results.json) completed all 510 outputs in 142.857 seconds with result validation and cleanup confirmed. Original S2 reconstruction is next/running under validation013. S1 failures remain preserved; shared network setup remains paused.

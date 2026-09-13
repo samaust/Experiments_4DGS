@@ -22,6 +22,17 @@ def result_record(local, job):
     ledger = Ledger(local / 'ledger.jsonl', load())
     state = ledger.states().get(job, {})
     if state.get('event') != 'finish' or state.get('status') != 'complete' or not state.get('result'):
+        recoveries = [e for e in ledger.events() if e['event'] == 'component_recovery_authorized'
+                      and e['original_job_id'] == job]
+        if recoveries:
+            record = result_record(local, recoveries[-1]['job_id'])
+            if record:
+                result = read_json(record['path'])
+                component, branch = job.split('-', 1)
+                if (result.get('component') != component or result.get('branch') != branch or
+                        len(result.get('rows', [])) != (510 if branch == 'calibration' else 840)):
+                    raise ValueError('component recovery result has wrong original arm')
+                return record
         if job == 'S3-reconstruction':
             recoveries = [e for e in ledger.events() if e['event'] == 'reconstruction_recovery_authorized']
             if recoveries:
@@ -394,6 +405,18 @@ def require_stage_order(local, job_id, config):
             raise ValueError('required frozen aggregation checkpoint unavailable: ' + stage)
 
 
+def component_recovery_request(local, config, job):
+    events = Ledger(local / 'ledger.jsonl', config).events()
+    registered = [e for e in events if e['event'] == 'component_recovery_authorized' and e['job_id'] == job]
+    if len(registered) != 1:
+        raise ValueError('component recovery lacks registered authorization')
+    event = registered[0]
+    request, reasons = make_request(local, event['original_job_id'], config)
+    if reasons:
+        raise ValueError('; '.join(reasons))
+    return dict(request, job_id=job)
+
+
 def reconstruction_request(local, config, job):
     from .sam3_memory import DIAGNOSTIC, CLEANUP, validate_diagnostic_review
     request, reasons = make_request(local, 'S3-reconstruction', config)
@@ -422,6 +445,9 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
         raise ValueError('unallocated worker')
     if '-setup-recovery-' in job and operation != 'setup':
         raise ValueError('authorized setup recovery cannot fund another operation')
+    if any(e['event'] == 'component_recovery_authorized' and e['job_id'] == job for e in ledger.events()):
+        if operation != 'component' or request != component_recovery_request(local, config, job):
+            raise ValueError('component recovery must preserve the exact original recipe')
     if job.startswith('S3-reconstruction-recovery-') or job == 'S3-memory-diagnostic-001':
         expected = reconstruction_request(local, config, job)
         if operation != 'component' or request != expected:
@@ -448,7 +474,7 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
             raise ValueError('worker did not complete its explicit result contract')
         if operation == 'component' and request['component'].startswith(('S', 'D')):
             expected = (96 if job == 'S3-memory-diagnostic-001' else 2 if job == 'R-S' else 1 if job == 'R-D' else
-                        510 if job.endswith('-calibration') else 840 if request.get('branch') == 'reconstruction' else 30)
+                        510 if request.get('branch') == 'calibration' else 840 if request.get('branch') == 'reconstruction' else 30)
             if len(result['rows']) != expected:
                 raise ValueError('component output count differs from allocated identity set')
             for row in result['rows']:
@@ -539,8 +565,10 @@ def execute_matrix(local, docs, config, validation):
     write_json(local / 'final-components.json', components(local))
     recovery_allocations = [event for event in ledger.events() if event['event'] == 'setup_recovery_authorized']
     reconstruction_recoveries = [event for event in ledger.events() if event['event'] == 'reconstruction_recovery_authorized']
+    component_recoveries = [e for e in ledger.events() if e['event'] == 'component_recovery_authorized']
     write_json(local / 'final-accounting-before-report.json', dict(jobs=ledger.states(), consumption=ledger.totals(),
-        setup_recovery_authorizations=recovery_allocations, reconstruction_recovery_authorizations=reconstruction_recoveries))
+        setup_recovery_authorizations=recovery_allocations, reconstruction_recovery_authorizations=reconstruction_recoveries,
+        component_recovery_authorizations=component_recoveries))
     request = dict(job_id='report', inputs=result_artifact(local, 'prepare', 'inputs'),
         annotations=result_artifact(local, 'annotations', 'annotations'),
         aggregate=aggregate_record(local, 'final', artifact=True),
@@ -548,6 +576,7 @@ def execute_matrix(local, docs, config, validation):
         accounting=file_record(local / 'final-accounting-before-report.json'), validation=file_record(validation))
     result = dispatch(local, docs, config, request, operation='report')
     write_json(docs / 'matrix-accounting-final.json', dict(jobs=ledger.states(), consumption=ledger.totals(),
-        setup_recovery_authorizations=recovery_allocations, reconstruction_recovery_authorizations=reconstruction_recoveries))
+        setup_recovery_authorizations=recovery_allocations, reconstruction_recovery_authorizations=reconstruction_recoveries,
+        component_recovery_authorizations=component_recoveries))
     shutil.copyfile(result['report']['path'], docs / 'report.md')
     return result

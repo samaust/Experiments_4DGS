@@ -15,14 +15,14 @@ class SupervisionFailure(RuntimeError):
         self.stop_required = stop_required
 
 
-def group_processes(pgid):
+def group_processes(pgid, *, include_zombies=False):
     result = []
     for entry in Path('/proc').iterdir():
         if not entry.name.isdigit():
             continue
         try:
             fields = (entry / 'stat').read_text().rsplit(')', 1)[1].split()
-            if int(fields[2]) == pgid and fields[0] != 'Z':
+            if int(fields[2]) == pgid and (include_zombies or fields[0] != 'Z'):
                 result.append(int(entry.name))
         except (FileNotFoundError, ProcessLookupError):
             continue
@@ -142,8 +142,15 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
                 if peak['download_bytes'] > ledger.config['new_download_gib_limit'] * 2**30:
                     failure_kind = 'download_budget'
                     raise RuntimeError('new download ceiling exceeded')
-                owned = set(group_processes(process.pid))
-                if any(pid not in owned for pid in reading.get('gpu_pids', [])):
+                # The unreaped worker can exit after nvidia-smi samples its PID.
+                # Zombies retain their real PGID and cannot execute or reuse
+                # that PID; count them for ownership, never for live cleanup.
+                owned = set(group_processes(process.pid, include_zombies=True))
+                foreign = sorted(set(reading.get('gpu_pids', [])) - owned)
+                if foreign:
+                    ledger.note('gpu_ownership_failure', job_id=job_id,
+                        sampled_gpu_pids=reading.get('gpu_pids', []), owned_pids=sorted(owned),
+                        foreign_pids=foreign, worker_pid=process.pid)
                     failure_kind = 'gpu_exclusivity'
                     raise RuntimeError('exclusive GPU access lost')
                 if time.monotonic() >= run_deadline:

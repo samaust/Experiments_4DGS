@@ -159,6 +159,20 @@ def execute(args, config):
         elif len(registered) != 1 or registered[0]['authorization'] != authorization:
             raise ValueError('a different recovery authorization is already registered')
         dispatch(local, docs, config, recovery_request(local, authorization), operation='setup')
+    elif args.command == 'component-recovery':
+        from vipe_benchmark.execution import common_admission, component_recovery_request
+        authorization = file_record(args.authorization)
+        document = read_json(args.authorization)
+        record = common_admission(local, docs, config, Path(verify_record(document['repair_validation'])['path']))
+        if record['status'] != 'admitted':
+            raise ValueError('; '.join(record['reasons']))
+        registered = [e for e in ledger.events() if e['event'] == 'component_recovery_authorized'
+                      and e['job_id'] == document['job_id']]
+        if not registered:
+            ledger.authorize_component_recovery(authorization)
+        elif len(registered) != 1 or registered[0]['authorization'] != authorization:
+            raise ValueError('different component recovery authorization already registered')
+        dispatch(local, docs, config, component_recovery_request(local, config, document['job_id']))
     elif args.command in ('reconstruction-recovery', 'memory-diagnostic'):
         from vipe_benchmark.execution import common_admission, reconstruction_request
         authorization = file_record(args.authorization)
@@ -224,6 +238,8 @@ def main():
     choice.add_argument('--environment', choices=[f'E{i}' for i in range(1, 8)])
     p = sub.add_parser('setup-recovery')
     p.add_argument('--authorization', type=Path, required=True)
+    p = sub.add_parser('component-recovery')
+    p.add_argument('--authorization', type=Path, required=True)
     p = sub.add_parser('reconstruction-recovery')
     p.add_argument('--authorization', type=Path, required=True)
     p = sub.add_parser('memory-diagnostic')
@@ -246,7 +262,7 @@ def main():
         return auto_annotations(args, config)
     if args.command == 'admit':
         return admission(args, config)
-    if args.command in ('qualify', 'inventory-existing', 'setup', 'setup-recovery', 'reconstruction-recovery', 'memory-diagnostic', 'execute', 'stage'):
+    if args.command in ('qualify', 'inventory-existing', 'setup', 'setup-recovery', 'component-recovery', 'reconstruction-recovery', 'memory-diagnostic', 'execute', 'stage'):
         return execute(args, config)
     if args.command == 'resume':
         return resume(args, config)

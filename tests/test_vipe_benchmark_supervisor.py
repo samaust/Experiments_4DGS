@@ -128,6 +128,34 @@ class SupervisorTests(unittest.TestCase):
         self.assertTrue(failure.exception.stop_required)
         self.assertEqual(failure.exception.kind, 'device_memory')
 
+    def test_gpu_sample_of_exited_unreaped_worker_keeps_true_group_ownership(self):
+        import time
+        code = "import sys,json; from pathlib import Path; p=Path(sys.argv[1]); p.mkdir(); (p/'result.json').write_text(json.dumps({'status':'complete'}))"
+        def sample():
+            events = [e for e in self.ledger.events() if e['event'] == 'started']
+            if not events:
+                return {}
+            pid = events[-1]['pid']
+            deadline = time.monotonic() + 1.
+            while time.monotonic() < deadline:
+                fields = Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()
+                if fields[0] == 'Z':
+                    self.assertNotIn(pid, group_processes(pid))
+                    self.assertIn(pid, group_processes(pid, include_zombies=True))
+                    return dict(gpu_pids=[pid])
+                time.sleep(.005)
+            self.fail('fixture worker did not reach zombie state')
+        self.assertEqual(self.run_worker(code, sample_resources=sample)['status'], 'complete')
+        self.assertTrue(self.ledger.states()['prepare']['cleanup_confirmed'])
+
+    def test_foreign_gpu_pid_still_fails_and_preserves_ownership_evidence(self):
+        samples = iter([{}, dict(gpu_pids=[99999999])])
+        with self.assertRaisesRegex(SupervisionFailure, 'exclusive GPU access lost'):
+            self.run_worker('import time; time.sleep(20)', sample_resources=lambda: next(samples))
+        evidence = next(e for e in self.ledger.events() if e['event'] == 'gpu_ownership_failure')
+        self.assertEqual(evidence['foreign_pids'], [99999999])
+        self.assertTrue(self.ledger.states()['prepare']['cleanup_confirmed'])
+
     def test_restart_does_not_relaunch_unfinished_attempt(self):
         self.ledger.reserve('prepare', [], {})
         restarted = Ledger(self.root / 'ledger.jsonl', self.config)
