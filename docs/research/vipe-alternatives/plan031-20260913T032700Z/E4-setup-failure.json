@@ -1,0 +1,88 @@
+{
+  "status": "failed_network",
+  "allocation_consumed": true,
+  "retry_permitted": false,
+  "supervisor": {
+    "cleanup_confirmed": true,
+    "deadline_exceeded": false,
+    "elapsed_seconds": 2111.6620846109,
+    "error": "RuntimeError: worker exited 1",
+    "event": "finish",
+    "failure_kind": "worker_failure",
+    "job_id": "E4-setup",
+    "peak": {
+      "artifact_bytes": 21996625920,
+      "device_bytes": 2279604224,
+      "download_bytes": 3642975817
+    },
+    "previous_sha256": "e54c5c0711a45336a66df7328ea28fb8dbeb0621e87c648b85045b0676ec1123",
+    "recorded_unix": 1789283735.8543947,
+    "resource": "setup",
+    "result": null,
+    "sequence": 123,
+    "status": "failed",
+    "stop_required": false,
+    "surviving_pids": [],
+    "event_sha256": "ded1df4be1cf7d8513bdc880dcca02f79e2c05a28524f2663fd09be2a7bc2eea"
+  },
+  "controller_command": ".local/envs/stg-colmap/bin/python scripts/basketball_vipe_benchmark.py --run-id plan031-20260913T032700Z setup --environment E4",
+  "failed_command": [
+    "/home/auss/.local/bin/uv",
+    "pip",
+    "install",
+    "--python",
+    "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup/environment/bin/python",
+    "--index-url",
+    "https://pypi.org/simple",
+    "--extra-index-url",
+    "https://download.pytorch.org/whl/cu124",
+    "--index-strategy",
+    "unsafe-best-match",
+    "-c",
+    "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup/constraints.txt",
+    "torch==2.5.1+cu124",
+    "torchvision==0.20.1+cu124",
+    "numpy==2.1.3",
+    "pip",
+    "setuptools==80.9.0",
+    "wheel",
+    "packaging",
+    "ninja"
+  ],
+  "command_receipt": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup/commands/01-base.json",
+    "sha256": "ee382693f5dd8577b170d118bcd69f5182f164105f32b42377817270f6d77ada",
+    "bytes": 1264
+  },
+  "failure": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup/failure.json",
+    "sha256": "f2cf51094feed643620e7d9954ffca624901ed849e03cdc884547918b375de1b",
+    "bytes": 2367
+  },
+  "log": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup.log",
+    "sha256": "3fd4a5b40e6c8b16515d76045bbb43fe0aee16b783dc463517e6245c55b4cd70",
+    "bytes": 2484
+  },
+  "transfer_receipt": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/uv-transfers/transfer-81ba4227e47646068b56782212eb88b2.json",
+    "sha256": "e7d3145053b78f54b3e0d3e50fda7f9ba1d3e6beb1bf742739b94233f1963964",
+    "bytes": 404
+  },
+  "error": "ConnectionResetError: [Errno 104] Connection reset by peer",
+  "secondary_error": "UV reported Connection refused (os error 111) after the proxy listener stopped.",
+  "classification": "Actual upstream receive failure during the approved outside-sandbox setup. The specific upstream peer/connection role and cause of its reset are not recorded; no benign local half-close explanation is established. This is not a confirmed Codex permission denial. Possible network/access restriction remains unresolved.",
+  "permission_rule": "AGENTS.md: a command already attempted outside the sandbox does not get another permission retry; stop affected work after outside-sandbox failure.",
+  "approval_rule_status": "The scoped controller invocation was approved outside the sandbox. No missing allow rule was reported, and a duplicate rule would not repair an upstream reset.",
+  "affected_candidates": [
+    "D1"
+  ],
+  "shared_network_setup_stopped": [
+    "E5",
+    "E6",
+    "E7"
+  ],
+  "next_action": "Stop the run at the setup prerequisite, preserve all consumed attempts and unstarted allocations, and wait for explicit user resume after the network issue is resolved. E4 itself has no remaining build attempt.",
+  "native_imports": 0,
+  "model_forwards": 0
+}
