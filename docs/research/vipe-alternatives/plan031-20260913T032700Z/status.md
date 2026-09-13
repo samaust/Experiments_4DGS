@@ -1,3 +1,7 @@
+# Current: neighbors complete; coarse reference geometry dispatched
+
+[Assessment016](assessment-016.md) and [neighbor results](neighbor-results-001.json) are current. N0/N1/N2 all selected three neighbors for 30 training references with cleanup confirmed. G-S0 is next/running under validation014; R-G follows only a complete reference result. E4/E5–E7 network setup remains paused.
+
 # Current: D0 fit/check passed; neighbor selection starting
 
 [Assessment015](assessment-015.md) and [D0 scale evidence](D0-scale-results-001.json) are current. D0 completed all 60 depth outputs and passed fit/check gates; frozen scale 1.31506947, frame175 disagreement about 3.13%, cleanup confirmed. N0 is next/running. D1–D4 remain unstarted and network-blocked.
