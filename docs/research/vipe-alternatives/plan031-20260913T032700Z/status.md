@@ -1,3 +1,11 @@
+# Current: E2 qualified; E4 recovery next
+
+[Assessment009](assessment-009.md) and [Accounting008](matrix-accounting-008.json) are current. E2 completed in 534.675 seconds; native imports and cleanup pass. Validation013 covers downstream recovery lookup. E4 uses authorization002 for its same approved first recovery attempt.
+
+# Current: E2 setup recovery complete; continuing approved benchmark
+
+[E2 recovery evidence](e2-recovery-results-001.json) verifies pinned runtime imports, immutable results and process cleanup. No model forward ran. Remaining setup and matrix work continues under [Resume004](resume-004.json) and [retry amendment](retry-amendment-001.json).
+
 # Current: remaining benchmark resumed; E2/E4 recovery authorized
 
 [Resume004](resume-004.json) reopens only unconsumed slots and grants one fresh setup attempt per E2/E4. [Assessment008](assessment-008.md) is current. [Validation012](implementation-validation-012.json) passes 333 CPU tests. Next: serial setup recovery, remaining setups, then admitted matrix execution. Original failures and all charges remain; existing proxy annotation amendment and resource ceilings remain binding.

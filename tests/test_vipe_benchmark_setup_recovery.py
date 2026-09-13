@@ -293,7 +293,17 @@ class SetupRecoveryTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, 'prescribed dependency'):
                         runtime._validate_setup_request(request)
                 self.ledger.reserve(args['job_id'], [], {})
-                self.ledger.finish(args['job_id'], 'failed', 2., cleanup_confirmed=True)
+                path = self.root / 'jobs' / args['job_id'] / 'result.json'
+                write_json(path.parent / 'imports.json', dict(status='complete', forwards=0))
+                evidence = file_record(path.parent / 'imports.json')
+                write_json(path, dict(status='complete', environment=environment,
+                    components=['S2', 'S4'] if environment == 'E2' else ['D1'],
+                    runtime=dict(versions=runtime.TARGETS[environment], imports=evidence,
+                        inventory=evidence, dependency_lock=evidence, build_inputs=evidence)))
+                self.assertIsNone(setup_result_record(self.root, environment))
+                self.ledger.finish(args['job_id'], 'complete', 2., cleanup_confirmed=True,
+                    result=file_record(path))
+                self.assertEqual(setup_result_record(self.root, environment), file_record(path))
                 with self.assertRaisesRegex(ValueError, 'already consumed'):
                     self.ledger.reserve(args['job_id'], [], {})
                 self.assertEqual(self.ledger.states()[original], failed)

@@ -234,7 +234,7 @@ def components(local):
 def setup_result_record(local, environment):
     """Resolve an authorized successful recovery without relabeling its failure."""
     original = result_record(local, environment + '-setup')
-    if original or environment not in ('E1', 'E3'):
+    if original or environment not in ('E1', 'E2', 'E3', 'E4'):
         return original
     ledger = Ledger(local / 'ledger.jsonl', load())
     recoveries = [event for event in ledger.events() if event['event'] == 'setup_recovery_authorized'
@@ -246,7 +246,7 @@ def setup_result_record(local, environment):
     recovered = result_record(local, event['job_id'])
     if recovered:
         result = read_json(recovered['path'])
-        components = ['S1'] if environment == 'E1' else ['S3']
+        components = sorted(c for c, env in ENVIRONMENTS.items() if env == environment)
         if (result.get('environment') != environment or result.get('components') != components or
                 result.get('runtime', {}).get('versions') != TARGETS[environment]):
             raise ValueError(f'successful recovery differs from the prescribed {environment} qualification')
@@ -254,7 +254,7 @@ def setup_result_record(local, environment):
             verify_record(result['runtime'][field])
         imports = read_json(result['runtime']['imports']['path'])
         if imports.get('status') != 'complete' or imports.get('forwards') != 0:
-            raise ValueError('SAM3 recovery lacks completed import-only qualification')
+            raise ValueError('setup recovery lacks completed import-only qualification')
     return recovered
 
 
