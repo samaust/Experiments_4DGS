@@ -159,24 +159,25 @@ def execute(args, config):
         elif len(registered) != 1 or registered[0]['authorization'] != authorization:
             raise ValueError('a different recovery authorization is already registered')
         dispatch(local, docs, config, recovery_request(local, authorization), operation='setup')
-    elif args.command == 'reconstruction-recovery':
-        from vipe_benchmark.execution import common_admission
+    elif args.command in ('reconstruction-recovery', 'memory-diagnostic'):
+        from vipe_benchmark.execution import common_admission, reconstruction_request
         authorization = file_record(args.authorization)
         document = read_json(args.authorization)
         validation = verify_record(document['repair_validation'])
         record = common_admission(local, docs, config, Path(validation['path']))
         if record['status'] != 'admitted':
             raise ValueError('; '.join(record['reasons']))
-        registered = [e for e in ledger.events() if e['event'] == 'reconstruction_recovery_authorized'
+        event = 'memory_diagnostic_authorized' if args.command == 'memory-diagnostic' else 'reconstruction_recovery_authorized'
+        registered = [e for e in ledger.events() if e['event'] == event
                       and e['job_id'] == document['job_id']]
         if not registered:
-            ledger.authorize_reconstruction_recovery(authorization)
+            if args.command == 'memory-diagnostic':
+                ledger.authorize_memory_diagnostic(authorization)
+            else:
+                ledger.authorize_reconstruction_recovery(authorization)
         elif len(registered) != 1 or registered[0]['authorization'] != authorization:
             raise ValueError('different reconstruction recovery authorization already registered')
-        request, reasons = make_request(local, 'S3-reconstruction', config)
-        if reasons:
-            raise ValueError('; '.join(reasons))
-        dispatch(local, docs, config, dict(request, job_id=document['job_id']))
+        dispatch(local, docs, config, reconstruction_request(local, config, document['job_id']))
     elif args.command == 'execute':
         execute_matrix(local, docs, config, args.validation)
     elif args.command == 'stage':
@@ -225,6 +226,8 @@ def main():
     p.add_argument('--authorization', type=Path, required=True)
     p = sub.add_parser('reconstruction-recovery')
     p.add_argument('--authorization', type=Path, required=True)
+    p = sub.add_parser('memory-diagnostic')
+    p.add_argument('--authorization', type=Path, required=True)
     p = sub.add_parser('execute')
     p.add_argument('--validation', type=Path, required=True)
     p = sub.add_parser('stage')
@@ -243,7 +246,7 @@ def main():
         return auto_annotations(args, config)
     if args.command == 'admit':
         return admission(args, config)
-    if args.command in ('qualify', 'inventory-existing', 'setup', 'setup-recovery', 'reconstruction-recovery', 'execute', 'stage'):
+    if args.command in ('qualify', 'inventory-existing', 'setup', 'setup-recovery', 'reconstruction-recovery', 'memory-diagnostic', 'execute', 'stage'):
         return execute(args, config)
     if args.command == 'resume':
         return resume(args, config)

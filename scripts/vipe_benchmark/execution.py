@@ -394,6 +394,26 @@ def require_stage_order(local, job_id, config):
             raise ValueError('required frozen aggregation checkpoint unavailable: ' + stage)
 
 
+def reconstruction_request(local, config, job):
+    from .sam3_memory import DIAGNOSTIC, CLEANUP, validate_diagnostic_review
+    request, reasons = make_request(local, 'S3-reconstruction', config)
+    if reasons:
+        raise ValueError('; '.join(reasons))
+    events = Ledger(local / 'ledger.jsonl', config).events()
+    kind = 'memory_diagnostic_authorized' if job == DIAGNOSTIC else 'reconstruction_recovery_authorized'
+    registered = [e for e in events if e['event'] == kind and e['job_id'] == job]
+    if len(registered) != 1:
+        raise ValueError('reconstruction/diagnostic identity lacks exact registered authorization')
+    document = read_json(verify_record(registered[0]['authorization'])['path'])
+    request = dict(request, job_id=job)
+    if job == DIAGNOSTIC:
+        request.update(memory_cleanup=CLEANUP, partial_output=str(local / 'jobs/S3-reconstruction-recovery-002'))
+    elif document.get('memory_diagnostic_review'):
+        validate_diagnostic_review(document['memory_diagnostic_review'])
+        request.update(memory_cleanup=CLEANUP, memory_diagnostic_review=document['memory_diagnostic_review'])
+    return request
+
+
 def dispatch(local, docs, config, request, *, operation='component', checkpoint=False, resume_checkpoint=False):
     job = request['job_id']
     ledger = Ledger(local / 'ledger.jsonl', config)
@@ -402,9 +422,9 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
         raise ValueError('unallocated worker')
     if '-setup-recovery-' in job and operation != 'setup':
         raise ValueError('authorized setup recovery cannot fund another operation')
-    if job.startswith('S3-reconstruction-recovery-'):
-        expected, reasons = make_request(local, 'S3-reconstruction', config)
-        if reasons or operation != 'component' or request != dict(expected, job_id=job):
+    if job.startswith('S3-reconstruction-recovery-') or job == 'S3-memory-diagnostic-001':
+        expected = reconstruction_request(local, config, job)
+        if operation != 'component' or request != expected:
             raise ValueError('reconstruction recovery must use the exact original component recipe')
     device_monitored = allocated[job]['resource'] in ('gpu', 'setup')
     if device_monitored and Path('/proc/1/comm').read_text().strip() != 'systemd':
@@ -427,7 +447,7 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
         if result.get('status') != 'complete':
             raise ValueError('worker did not complete its explicit result contract')
         if operation == 'component' and request['component'].startswith(('S', 'D')):
-            expected = (2 if job == 'R-S' else 1 if job == 'R-D' else
+            expected = (96 if job == 'S3-memory-diagnostic-001' else 2 if job == 'R-S' else 1 if job == 'R-D' else
                         510 if job.endswith('-calibration') else 840 if request.get('branch') == 'reconstruction' else 30)
             if len(result['rows']) != expected:
                 raise ValueError('component output count differs from allocated identity set')

@@ -1,0 +1,19 @@
+# Approved S3 memory diagnosis and conditional reconstruction
+
+[The user approval](sam3-memory-repair-approval-001.json) covers two process-level GPU attempts, at most 6,000 seconds total: one 600-second diagnostic and one conditional 5,400-second reconstruction. Both count actual time against the existing 93,600-second cumulative ceiling. The hard total-device ceiling remains 22 GiB, one exclusive RTX 4090 process group. Other setup/model/scoring allocations remain stopped. There are no extra smoke tests or retries; unused diagnostic time cannot extend reconstruction or fund attempts.
+
+## Diagnostic implementation and evidence
+
+`S3-memory-diagnostic-001` processes exactly the first 48 consecutive pairs (96 output identities) in the frozen original order. It uses the same S3 model, bfloat16 precision, input resolution, semantic prompts, native Triton algorithms/autotuning and inference controls. Each semantic state is reset natively, then the adapter drops its state and last native-output references before creating another state. It records live tensor, reserved allocator and CUDA total/free memory before/after initialization, prompting, reset, reference release, garbage collection, allocator-cache release and pair completion. The supervisor independently samples total-device memory through nvidia-smi.
+
+Diagnostic cleanup performs `gc.collect()` and `torch.cuda.empty_cache()` after reference release at semantic and pair boundaries. Per-step measurements distinguish which operation releases memory; cached model/kernel programs remain intact. PyTorch allocation history is limited to 4,096 events and at most 12 JSON snapshots (initial/first-pair cleanup stages, high memory and final state). History/snapshots are diagnostic only. This changes object lifetime and allocator housekeeping, not model inputs or algorithms. The full run, if qualified, uses the same measured cleanup sequence and lightweight telemetry, with all cleanup/observation overhead charged to its timing.
+
+Compare all overlapping 82 saved instance arrays and static-mask pixel arrays exactly, preserving native IDs. Diagnostic images are not annotation truth, a new model-selection arm, or benchmark timing. The original partial outputs remain immutable and the diagnostic writes a separate directory.
+
+## Validation and conditional gate
+
+[Validation011](implementation-validation-011.json) passes 331 CPU tests. New fixtures verify state/output weak references are dead before the next native initialization, cleanup ordering, pixel/label disagreement detection, exact single diagnostic allocation and prevention of a full run without a diagnostic review. No GPU/model/native compilation probe runs outside the allocated diagnostic.
+
+Before the conditional reconstruction, require 48 completed pairs, an exact 82-output overlap match, supervised peak device memory no greater than 22 GiB, confirmed cleanup, and a saved assessment of memory behavior beyond the previous 41-pair stopping point. The assessment must link the measurements establishing which cleanup step matters, whether post-cleanup live memory is bounded, and any remaining limitations. It must bind the cleanup source hashes. Missing/contradictory evidence prevents full dispatch. Passing this diagnostic does not prove every later reconstruction pair fits; the full run retains the same supervisor cap and shutdown rules.
+
+On a qualified diagnostic, bind its ledger result and review to `S3-reconstruction-recovery-003`, then automatically execute the already approved full run, at most 5,400 seconds including cleanup. The source/outputs of original, recovery001, recovery002 and this diagnostic are preserved separately. On a failed diagnostic/gate, retain evidence and stop affected execution without consuming the conditional full attempt or silently changing thresholds, precision, resolution or memory limits.

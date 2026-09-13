@@ -715,14 +715,24 @@ class SAM3Backend:
                 if self.video_model is None:
                     self.video_model = self.video_factory()
                 model = self.video_model
+                observer = getattr(self, 'memory_observer', None)
+                if observer:
+                    observer.phase('model_ready')
                 for semantic in ('person', 'basketball'):
                     # Each native semantic prompt resets the model state. Separate
                     # states make that behavior explicit and keep both results.
+                    if observer:
+                        observer.phase('before_init_state', semantic)
                     state = model.init_state(resource_path=[Image.fromarray(im) for im in images],
                         offload_video_to_cpu=False, offload_state_to_cpu=False, async_loading_frames=False)
+                    output = None
                     seen, local_sets = set(), []
                     try:
+                        if observer:
+                            observer.phase('after_init_state', semantic)
                         model.add_prompt(state, frame_idx=0, text_str=semantic)
+                        if observer:
+                            observer.phase('after_add_prompt', semantic)
                         for internal, output in model.propagate_in_video(
                                 state, start_frame_idx=0, max_frame_num_to_track=1, reverse=False):
                             if internal not in (0, 1) or internal in seen:
@@ -737,6 +747,10 @@ class SAM3Backend:
                         native_sets.append(dict(concept=semantic, frame_ids={i: sorted(ids) for i, ids in local_sets}))
                     finally:
                         model.reset_state(state)
+                        if observer:
+                            observer.phase('after_reset', semantic)
+                            state = output = None
+                            observer.cleanup(semantic)
         first = {r[1]['id'] for r in rows_by_frame[0]}
         second = {r[1]['id'] for r in rows_by_frame[-1]}
         metadata.update(births=sorted(second - first), disappearances=sorted(first - second),

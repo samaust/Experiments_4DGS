@@ -1,3 +1,7 @@
+# Current: approved memory diagnostic and conditional full run
+
+The user approved the [two-stage memory repair plan](sam3-memory-diagnostic-plan-001.md): one 10-minute/48-pair diagnostic and, only after validation, one 90-minute reconstruction. [331 CPU tests pass](implementation-validation-011.json). Both new GPU attempts remain unused. Next: commit the validated instrumentation, then dispatch the bounded diagnostic. The existing 22-GiB and cumulative resource ceilings remain unchanged; unrelated work stays stopped. Earlier sections are historical.
+
 # Current stop: recovery002 reached the device-memory ceiling
 
 The approved S3 reconstruction ran for **124.829 seconds** and exported **82/840 outputs** before the supervisor stopped it at **23.468 GiB**, above the unchanged **22 GiB** limit. [Assessment006](assessment-006.md), [corrected output/cleanup evidence](s3-reconstruction-recovery-results-002-corrected.json), and [accounting006](matrix-accounting-006.json) are authoritative. Cleanup is confirmed; no worker or GPU process remains active. The attempt is consumed, and no further attempt is allocated.

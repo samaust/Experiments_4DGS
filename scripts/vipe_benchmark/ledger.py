@@ -21,6 +21,10 @@ class Ledger:
     def _jobs(self, events):
         allocated = jobs(self.config)
         for event in events:
+            if event['event'] == 'memory_diagnostic_authorized':
+                verify_record(event['authorization'])
+                allocated[event['job_id']] = dict(allocated['S3-reconstruction'],
+                    id=event['job_id'], seconds=600, scope='explicit user-authorized 48-pair S3 memory diagnostic')
             if event['event'] == 'reconstruction_recovery_authorized':
                 verify_record(event['authorization'])
                 allocated[event['job_id']] = dict(allocated['S3-reconstruction'],
@@ -181,7 +185,7 @@ class Ledger:
     def note(self, event, **fields):
         if event in ('reserve', 'finish', 'account', 'resume_unstarted', 'checkpoint',
                      'checkpoint_resume', 'cpu_preparation_charge', 'setup_recovery_authorized',
-                     'reconstruction_recovery_authorized'):
+                     'reconstruction_recovery_authorized', 'memory_diagnostic_authorized'):
             raise ValueError('use the checked ledger transition')
         with self.locked() as (stream, events):
             return self._append(stream, events, dict(event=event, **fields))
@@ -232,6 +236,12 @@ class Ledger:
             raise ValueError('passing bound native-helper repair validation required')
         for source in validation['sources']:
             verify_record(source)
+        if document.get('memory_diagnostic_review'):
+            from .sam3_memory import validate_diagnostic_review
+            review = validate_diagnostic_review(document['memory_diagnostic_review'])
+            state = self.states().get('S3-memory-diagnostic-001', {})
+            if state.get('status') != 'complete' or state.get('result') != review['diagnostic_result'] or not state.get('cleanup_confirmed'):
+                raise ValueError('diagnostic review must bind a completed supervised diagnostic')
         with self.locked() as (stream, events):
             prior = [e for e in events if e['event'] == 'reconstruction_recovery_authorized']
             if any(e['job_id'] == document['job_id'] for e in prior):
@@ -245,6 +255,10 @@ class Ledger:
                         previous.get('cleanup_confirmed') is not True or previous.get('event_sha256') !=
                         document.get('previous_recovery_failure_event_sha256')):
                     raise ValueError('recovery must bind the previous cleaned-up recovery failure')
+            if (document['job_id'] == 'S3-reconstruction-recovery-003' and
+                    any(e['event'] == 'memory_diagnostic_authorized' for e in events) and
+                    not document.get('memory_diagnostic_review')):
+                raise ValueError('approved full memory-repair run is conditional on diagnostic validation')
             original = states.get('S3-reconstruction', {})
             if (original.get('event') != 'finish' or original.get('status') != 'failed' or
                     original.get('cleanup_confirmed') is not True or
@@ -257,6 +271,31 @@ class Ledger:
             return self._append(stream, events, dict(event='reconstruction_recovery_authorized',
                 job_id=document['job_id'], original_job_id='S3-reconstruction', authorization=authorization,
                 original_failure_event_sha256=original['event_sha256']))
+
+    def authorize_memory_diagnostic(self, authorization):
+        document = read_json(verify_record(authorization)['path'])
+        required = dict(schema='vipe-benchmark-s3-memory-diagnostic/v1', job_id='S3-memory-diagnostic-001',
+            attempts_limit=1, seconds_limit=600, pairs_limit=48, gpu_total_seconds_limit=self.config['gpu_total_seconds_limit'],
+            reset_previous_consumption=False, unrelated_attempts_reopened=False)
+        if any(document.get(k) != v for k, v in required.items()) or not document.get('authorization'):
+            raise ValueError('exact explicit 48-pair memory diagnostic authorization required')
+        validation = read_json(verify_record(document['repair_validation'])['path'])
+        if validation.get('status') != 'passed' or not validation.get('sources'):
+            raise ValueError('passing bound implementation validation required')
+        for source in validation['sources']:
+            verify_record(source)
+        with self.locked() as (stream, events):
+            if any(e['event'] == 'memory_diagnostic_authorized' for e in events):
+                raise ValueError('memory diagnostic already allocated')
+            states = self.states(events)
+            previous = states.get('S3-reconstruction-recovery-002', {})
+            if (previous.get('status') != 'failed' or previous.get('cleanup_confirmed') is not True or
+                    previous.get('event_sha256') != document.get('previous_failure_event_sha256')):
+                raise ValueError('memory diagnostic must bind the preserved cleaned-up memory failure')
+            if any(s['event'] == 'reserve' for s in states.values()):
+                raise ValueError('unreconciled active attempt')
+            return self._append(stream, events, dict(event='memory_diagnostic_authorized', job_id=document['job_id'],
+                authorization=authorization, previous_failure_event_sha256=previous['event_sha256']))
 
     def authorize_setup_recovery(self, authorization):
         """Register the user's one SAM3 access recovery without reopening E3.

@@ -1,0 +1,27 @@
+{
+  "schema": "vipe-benchmark-s3-memory-repair-approval/v1",
+  "authorization": "Do that. I approve.",
+  "authorization_context": "User approves the proposed 10-minute/48-pair diagnostic followed by targeted repair validation and one conditional full reconstruction capped at 90 minutes.",
+  "diagnostic": {
+    "job_id": "S3-memory-diagnostic-001",
+    "attempts": 1,
+    "seconds": 600,
+    "pairs": 48
+  },
+  "reconstruction": {
+    "job_id": "S3-reconstruction-recovery-003",
+    "attempts": 1,
+    "seconds": 5400,
+    "condition": "passed diagnostic review; 48 pairs complete within 22 GiB, exact comparison against 82 saved outputs, validated cleanup memory behavior and confirmed process cleanup"
+  },
+  "maximum_new_gpu_seconds": 6000,
+  "gpu_total_seconds_limit": 93600,
+  "gpu_consumed_before": 789.1922918289201,
+  "memory_limit_gib": 22,
+  "concurrency": 1,
+  "changes_to_model_settings": false,
+  "reset_previous_consumption": false,
+  "unrelated_attempts_reopened": false,
+  "cpu_scope": "existing 57600-second cumulative preparation/scoring/report allowance",
+  "approved_utc": "2026-09-13T10:35:01.922906+00:00"
+}

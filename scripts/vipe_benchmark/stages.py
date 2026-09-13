@@ -97,6 +97,12 @@ def segment(request, output, config):
     component = request['component']
     branch = request['branch']
     identities = output_identities(config, branch)
+    from .sam3_memory import MemoryObserver, CLEANUP, DIAGNOSTIC, compare_partial
+    diagnostic = request['job_id'] == DIAGNOSTIC
+    if diagnostic:
+        if component != 'S3' or branch != 'reconstruction' or request.get('memory_cleanup') != CLEANUP:
+            raise ValueError('memory diagnostic must use the prescribed S3 reconstruction cleanup')
+        identities = identities[:96]
     repeat = request['job_id'] == 'R-S'
     if repeat:
         if component != 'S1' or branch != 'reconstruction':
@@ -106,7 +112,14 @@ def segment(request, output, config):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=False)
     write_json(output / 'config.json', request)
+    observer = None
+    if request.get('memory_cleanup'):
+        if component != 'S3' or branch != 'reconstruction' or request['memory_cleanup'] != CLEANUP:
+            raise ValueError('unadmitted memory cleanup recipe')
+        observer = MemoryObserver(torch, output, diagnostic=diagnostic)
     adapter = build_backend(component, request['assets'], device='cuda')
+    if observer:
+        adapter.memory_observer = observer
     rows, native_seconds = [], 0.
     size = 1 if branch == 'calibration' else 2
     for offset in range(0, len(identities), size):
@@ -115,7 +128,13 @@ def segment(request, output, config):
         footprints = [load_array(loader.row(i)['valid']) for i in group]
         torch.cuda.synchronize()
         tick = time.monotonic()
+        if observer:
+            observer.pair = offset//2+1
+            observer.phase('before_pair')
         predictions = adapter.segment(rgbs, footprints, frame_ids=[i.frame for i in group])
+        if observer:
+            observer.cleanup()
+            observer.phase('after_pair_cleanup')
         torch.cuda.synchronize()
         elapsed = time.monotonic() - tick
         native_seconds += elapsed
@@ -156,6 +175,11 @@ def segment(request, output, config):
     result = dict(status='complete', component=component, branch=branch, job_id=request['job_id'], rows=rows,
         configuration=file_record(output / 'config.json'), runtime=runtime, native_wall_seconds=native_seconds,
         peak_allocated_bytes=torch.cuda.max_memory_allocated(), peak_reserved_bytes=torch.cuda.max_memory_reserved())
+    if observer:
+        result['memory'] = observer.finish()
+        result['timing_scope'] = 'memory diagnostic only; excluded from benchmark timing' if diagnostic else 'reconstruction including validated lifecycle cleanup and memory observation'
+    if diagnostic:
+        result['partial_comparison'] = compare_partial(rows, request['partial_output'])
     if repeat:
         baseline = read_json(verify_record(request['baseline'])['path'])
         by_key = {Identity(**r['identity']).key(): r for r in baseline['rows']}
