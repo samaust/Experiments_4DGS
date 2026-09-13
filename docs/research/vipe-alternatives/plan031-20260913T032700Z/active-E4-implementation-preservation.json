@@ -1,0 +1,34 @@
+{
+  "job_id": "E4-setup",
+  "validation": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/implementation-validation-005.json",
+    "sha256": "f799166673aed6132cef0a5447d30ba8271ab0df465693b7dc3fc5036cd68d30",
+    "bytes": 14879
+  },
+  "immutable_source_archive": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/implementation-snapshots/validation-005/manifest.json",
+    "sha256": "a272770a6ea127d7693be04c38517b292b64727deea8f5acec1c50ba7cb92b7f",
+    "bytes": 36076
+  },
+  "worker_phase": "base package installation",
+  "already_loaded_modules": [
+    "vipe_benchmark.runtime",
+    "vipe_benchmark.backends",
+    "vipe_benchmark.budgets",
+    "vipe_benchmark.transfer_proxy"
+  ],
+  "preservation_basis": "setup acquires assets and imports AssetBundle from backends before launching base installation. The UV proxy imports budgets before its selector starts. Those loaded functions retain validation005 bytecode; Python does not reload them when source files change.",
+  "unchanged_future_subprocess_sources": [
+    "scripts/vipe_benchmark/runtime.py",
+    "scripts/vipe_benchmark/setup_recipes.py",
+    "scripts/vipe_benchmark/isolation.py",
+    "scripts/vipe_benchmark/runtime_inventory.py"
+  ],
+  "authorized_followup_edits": [
+    "scripts/vipe_benchmark/backends.py",
+    "scripts/vipe_benchmark/budgets.py"
+  ],
+  "limits_unchanged": true,
+  "current_attempt_restarted": false,
+  "native_behavior_evidence": "No model forwards; native import qualification still pending. Future jobs will bind the next validated snapshot."
+}

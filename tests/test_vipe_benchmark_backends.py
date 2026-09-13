@@ -256,6 +256,31 @@ class SAM2Tests(unittest.TestCase):
             backend.segment([rgb, rgb], [valid, valid], frame_ids=[0, 1])
         self.assertEqual(video.resets, 1)
 
+    def test_native_postprocessing_skip_fails_pair_and_resets_before_export(self):
+        import warnings
+        message = ('CUDA kernel error\nsecond error line\n\n'
+            "Skipping the post-processing step due to the error above. You can "
+            "still use SAM 2 and it's OK to ignore the error above, although some post-processing "
+            "functionality may be limited (which doesn't affect the results in most cases; see "
+            "https://github.com/facebookresearch/sam2/blob/main/INSTALL.md).")
+        for component in ('S2', 'S4'):
+            with self.subTest(component=component):
+                backend, _, video = self.make_backend()
+                backend.component = component
+                returned = []
+                def propagate(state, **kwargs):
+                    yield 0, [1, 2], np.ones((2, 1, 4, 6))
+                    warnings.warn_explicit(message, UserWarning, filename='sam2/sam2_video_predictor.py',
+                                           lineno=783, module='sam2.sam2_video_predictor')
+                    returned.append('unfilled fallback')
+                    yield 1, [1, 2], np.ones((2, 1, 4, 6))
+                video.propagate_in_video = propagate
+                rgb, valid = image()
+                with self.assertRaisesRegex(UserWarning, 'Skipping the post-processing'):
+                    backend.segment([rgb, rgb], [valid, valid], frame_ids=[20, 21])
+                self.assertEqual(returned, [])
+                self.assertEqual(video.resets, 1)
+
     def test_source_frames_not_internal_indices_or_cross_role_context(self):
         backend, det, _ = self.make_backend()
         rgb, valid = image()
@@ -533,15 +558,22 @@ class DepthTests(unittest.TestCase):
                 return None
             def infer(self, pixels, K):
                 calls.update(pixels=pixels, K=K.copy())
-                self.encode_decode(inputs={'image': np.zeros((1, 3, 28, 42)), 'camera': K})
+                processed_K = K.copy(); processed_K[:, :2] *= 2.3
+                self.encode_decode(inputs={'image': np.zeros((1, 3, 28, 42)),
+                                           'camera': SimpleNamespace(K=processed_K)})
                 values = np.full((1, 1, *valid.shape), 4., np.float32); values[..., 0, 0] = 0
-                return dict(depth=values, confidence=np.ones_like(values))
+                return dict(depth=values, confidence=np.full_like(values, .7))
         model = Model(); original = model.encode_decode
         result = UniDepthBackend('D1', model, FakeRuntime()).predict(rgb, self.K, valid)
         self.assertEqual(calls['pixels'].dtype, np.uint8)
         self.assertEqual(calls['pixels'].shape, (1, 3, 4, 6))
         np.testing.assert_allclose(calls['K'][0], self.K)
         self.assertEqual(result.metadata['actual_processed_shape'], [28, 42])
+        expected_K = self.K[None].copy(); expected_K[:, :2] *= 2.3
+        np.testing.assert_allclose(result.metadata['native_processed_K'], expected_K)
+        self.assertEqual(result.metadata['confidence']['direction'], 'lower is more confident')
+        np.testing.assert_allclose(result.confidence[result.valid], .7)
+        self.assertTrue(np.isnan(result.confidence[~result.valid]).all())
         self.assertEqual(result.metadata['focal_conversion_count'], 0)
         self.assertTrue(np.isnan(result.depth[0, 0]))
         self.assertEqual(model.encode_decode, original)
@@ -558,6 +590,7 @@ class DepthTests(unittest.TestCase):
         result = UniDepthBackend('D0', Model(), FakeRuntime(), legacy_input=SimpleNamespace).predict(rgb, self.K, valid)
         self.assertEqual(inputs[0].rgb.dtype, np.float32)
         self.assertEqual(result.metadata['native_input_K'], [[1200., 0., 3.], [0., 1200., 2.], [0., 0., 1.]])
+        self.assertEqual(result.metadata['confidence']['direction'], 'lower is more confident')
 
     def test_da3_uses_processor_K_once_no_pose_alignment_and_missing_confidence(self):
         rgb, valid = image(); calls = {}

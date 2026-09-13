@@ -304,7 +304,7 @@ def download_remaining(run_root, limit, *, active_output=None, bytes_received=0,
 
     Call while holding download_lock; never request remaining+1 to probe EOF.
     active_output names the final output of this attempt, not a prior receipt.
-    Inside the exclusive lock, scan once per second and charge all intervening
+    Inside the exclusive lock, wait one second after each completed scan and charge all intervening
     received/reserved bytes locally. This bounds wire reads without a tree walk
     per chunk. Outside a lock, always take a fresh snapshot (read-only callers).
     """
@@ -316,7 +316,10 @@ def download_remaining(run_root, limit, *, active_output=None, bytes_received=0,
     if state is None or state['snapshot'] is None or now - state['checked'] >= 1:
         result = _snapshot(root)
         if state is not None:
-            state.update(snapshot=result, checked=now)
+            # A large inventory can itself take over a second. Start the
+            # reuse interval at completion so that one slow scan cannot turn
+            # every subsequent socket read into another full tree walk.
+            state.update(snapshot=result, checked=time.monotonic())
     else:
         result = state['snapshot']
     if active_output is not None and uv_transfer_id is not None:

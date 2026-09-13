@@ -305,6 +305,28 @@ class BudgetTests(unittest.TestCase):
             self.assertEqual(budgets.download_remaining(self.root, 40, uv_transfer_id='a', bytes_received=15), 10)
             self.assertEqual(budgets.download_remaining(self.root, 40, uv_transfer_id='a', bytes_received=33), 7)
 
+    def test_slow_snapshot_still_reuses_inventory_and_charges_pending_bytes(self):
+        output = self.root / 'job/data'
+        self.intent('current', output)
+        original = budgets._snapshot
+        clock = [10.]
+        def slow_snapshot(root):
+            result = original(root)
+            clock[0] += 1.2
+            return result
+        with budgets.download_lock(self.root), \
+             mock.patch.object(budgets.time, 'monotonic', side_effect=lambda: clock[0]), \
+             mock.patch.object(budgets, '_snapshot', side_effect=slow_snapshot) as scan:
+            self.assertEqual(budgets.download_remaining(self.root, 10, active_output=output), 10)
+            clock[0] += .5
+            self.assertEqual(budgets.download_remaining(self.root, 10, active_output=output, bytes_received=7), 3)
+            self.assertEqual(budgets.download_remaining(self.root, 10, active_output=output, bytes_received=10), 0)
+            self.assertEqual(scan.call_count, 1)
+            self.payload('job/data.partial', 10)
+            clock[0] += .6
+            self.assertEqual(budgets.download_remaining(self.root, 10, active_output=output, bytes_received=10), 0)
+            self.assertEqual(scan.call_count, 2)
+
     def test_two_transfer_threads_cannot_spend_the_same_remaining_bytes(self):
         barrier = threading.Barrier(2)
         received, errors = [], []

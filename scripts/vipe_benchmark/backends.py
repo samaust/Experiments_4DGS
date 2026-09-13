@@ -383,6 +383,11 @@ class SAM2Backend:
         self.runtime, self.provenance = runtime, provenance or {}
 
     def segment(self, images, valid, *, frame_ids):
+        from .sam2_postprocessing import require_sam2_postprocessing
+        with require_sam2_postprocessing():
+            return self._segment(images, valid, frame_ids=frame_ids)
+
+    def _segment(self, images, valid, *, frame_ids):
         _pair(images, valid, frame_ids)
         detections = self.detector(images[0])
         shape = valid[0].shape
@@ -392,7 +397,8 @@ class SAM2Backend:
             pair_reset=True, successor_detector_rerun=False,
             keyframe_mask_choice='highest predicted IoU; first index on exact tie',
             postprocessing=dict(dynamic_multimask_via_stability=True, stability_delta=.05,
-                stability_threshold=.98, video_fill_hole_area=8, binarize_mask_from_points_for_memory=True),
+                stability_threshold=.98, video_fill_hole_area=8, binarize_mask_from_points_for_memory=True,
+                skipped_native_postprocessing='hard failure on the exact upstream warning'),
             pair_transport='PNG payload in native JPG-discovered temporary files; no lossy encoding')
         if not detections:
             return [_segmentation(np.zeros(shape, np.int32), {}, footprint,
@@ -816,6 +822,12 @@ class UniDepthBackend:
             inputs = kwargs.get('inputs', args[0] if args else None)
             processing['actual_processed_shape'] = list(inputs['image'].shape[-2:])
             processing['native_processed_rgb_dtype'] = str(inputs['image'].dtype)
+            camera = inputs.get('camera')
+            if camera is not None:
+                camera_K = _numpy(getattr(camera, 'K', camera))
+                if camera_K.shape[-2:] != (3, 3) or not np.isfinite(camera_K).all():
+                    raise BackendError('UniDepth processed camera matrix has an unexpected shape or nonfinite values')
+                processing['native_processed_K'] = camera_K.tolist()
         with _capture_method(native, 'encode_decode', observe), self.runtime.inference():
             if self.component == 'D0':
                 output = self.model.estimate(self.legacy_input(
@@ -828,6 +840,9 @@ class UniDepthBackend:
                 raw, confidence = _plane(output['depth']), _plane(output['confidence'])
         if 'actual_processed_shape' not in processing:
             raise BackendError('UniDepth native processing dimensions were not observed')
+        if self.component == 'D1':
+            processing.update(native_pixel_centers='half-integers in native coords_grid',
+                native_camera_resize='scalar camera scaling precedes rounding raster dimensions to multiples of 14; no adapter correction')
         converted, _, conversion = contracts.metric_depth(raw, self.component, already_metric=True)
         h, w = valid.shape
         native_K = np.array([[K[0, 0], 0, w / 2], [0, K[0, 0], h / 2], [0, 0, 1]])
@@ -838,7 +853,8 @@ class UniDepthBackend:
                              'historical fork infer float16 decorator'),
             resolution_policy='checkpoint default bounds; no resolution_level override',
             depth_type='camera-z metres', grid_restore='native camera-aware infer postprocess',
-            confidence=dict(meaning='native within-image relative confidence', direction='higher is more confident',
+            native_grid_processing='native camera/raster preprocessing retained; processed K is observed independently of image dimensions',
+            confidence=dict(meaning='native relative uncertainty: estimate of scale-invariant log error', direction='lower is more confident',
                             calibration='uncalibrated; never used to filter scale support'))
         return _finish_depth(converted, valid, raw, metadata, confidence)
 
