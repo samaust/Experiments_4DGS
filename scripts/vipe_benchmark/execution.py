@@ -198,7 +198,7 @@ def components(local):
             records[name] = dict(status='admitted', runtime=qualification['runtime']['E0'], assets=assets,
                                  commercial_permission='unverified', non_agpl='unverified')
     for i in range(1, 8):
-        record = result_record(local, f'E{i}-setup')
+        record = setup_result_record(local, f'E{i}')
         if record:
             result = read_json(record['path'])
             assets = read_json(verify_record(result['assets'])['path'])
@@ -220,6 +220,32 @@ def components(local):
     for name, record in records.items():
         record.update(assess(local, name, record))
     return records
+
+
+def setup_result_record(local, environment):
+    """Resolve an authorized successful recovery without relabeling E3's failure."""
+    original = result_record(local, environment + '-setup')
+    if original or environment != 'E3':
+        return original
+    ledger = Ledger(local / 'ledger.jsonl', load())
+    recoveries = [event for event in ledger.events() if event['event'] == 'setup_recovery_authorized'
+                  and event['environment'] == environment]
+    if not recoveries:
+        return None
+    event = recoveries[0]
+    verify_record(event['authorization'])
+    recovered = result_record(local, event['job_id'])
+    if recovered:
+        result = read_json(recovered['path'])
+        if (result.get('environment') != 'E3' or result.get('components') != ['S3'] or
+                result.get('runtime', {}).get('versions') != TARGETS['E3']):
+            raise ValueError('successful recovery differs from the prescribed E3 qualification')
+        for field in ('inventory', 'imports', 'dependency_lock', 'build_inputs'):
+            verify_record(result['runtime'][field])
+        imports = read_json(result['runtime']['imports']['path'])
+        if imports.get('status') != 'complete' or imports.get('forwards') != 0:
+            raise ValueError('SAM3 recovery lacks completed import-only qualification')
+    return recovered
 
 
 def common_admission(local, docs, config, validation):
@@ -360,13 +386,16 @@ def require_stage_order(local, job_id, config):
 
 def dispatch(local, docs, config, request, *, operation='component', checkpoint=False, resume_checkpoint=False):
     job = request['job_id']
-    if job not in jobs(config):
+    ledger = Ledger(local / 'ledger.jsonl', config)
+    allocated = ledger.jobs
+    if job not in allocated:
         raise ValueError('unallocated worker')
-    device_monitored = jobs(config)[job]['resource'] in ('gpu', 'setup')
+    if job.endswith('-recovery-001') and operation != 'setup':
+        raise ValueError('authorized setup recovery cannot fund another operation')
+    device_monitored = allocated[job]['resource'] in ('gpu', 'setup')
     if device_monitored and Path('/proc/1/comm').read_text().strip() != 'systemd':
         raise PermissionError('GPU execution requires host PID visibility for nvidia-smi ownership; '
                               'run this allocated dispatch outside the sandbox before reserving an attempt')
-    ledger = Ledger(local / 'ledger.jsonl', config)
     suffix = job if job != 'aggregate' else 'aggregate-' + request['stage']
     request = dict(request, configuration=file_record(ROOT / 'configs/vipe-alternatives/benchmark-v1.json'))
     request_path = local / 'requests' / (suffix + '.json')
@@ -474,13 +503,16 @@ def execute_matrix(local, docs, config, validation):
         dispatch(local, docs, config, aggregate_request(local, 'final', config),
                  operation='aggregate', resume_checkpoint=True)
     write_json(local / 'final-components.json', components(local))
-    write_json(local / 'final-accounting-before-report.json', dict(jobs=ledger.states(), consumption=ledger.totals()))
+    recovery_allocations = [event for event in ledger.events() if event['event'] == 'setup_recovery_authorized']
+    write_json(local / 'final-accounting-before-report.json', dict(jobs=ledger.states(), consumption=ledger.totals(),
+        setup_recovery_authorizations=recovery_allocations))
     request = dict(job_id='report', inputs=result_artifact(local, 'prepare', 'inputs'),
         annotations=result_artifact(local, 'annotations', 'annotations'),
         aggregate=aggregate_record(local, 'final', artifact=True),
         components=file_record(local / 'final-components.json'),
         accounting=file_record(local / 'final-accounting-before-report.json'), validation=file_record(validation))
     result = dispatch(local, docs, config, request, operation='report')
-    write_json(docs / 'matrix-accounting-final.json', dict(jobs=ledger.states(), consumption=ledger.totals()))
+    write_json(docs / 'matrix-accounting-final.json', dict(jobs=ledger.states(), consumption=ledger.totals(),
+        setup_recovery_authorizations=recovery_allocations))
     shutil.copyfile(result['report']['path'], docs / 'report.md')
     return result

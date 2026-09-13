@@ -2,7 +2,7 @@
 from pathlib import Path
 import shutil
 
-from .files import read_json
+from .files import read_json, verify_record
 from .runtime import ENVIRONMENTS, TARGETS
 
 BUILD_REQUIREMENTS = ['pip', 'setuptools==80.9.0', 'wheel', 'packaging', 'ninja']
@@ -53,7 +53,9 @@ CORE_IMPORTS = {
            ('transformers', None, ['RTDetrImageProcessor', 'RTDetrV2ForObjectDetection'])],
     'E3': [('sam3.model_builder', 'sam3_source', ['build_sam3_image_model', 'build_sam3_video_model']),
            ('sam3.model.sam3_image_processor', 'sam3_source', ['Sam3Processor']),
-           ('sam3.model.sam3_video_inference', 'sam3_source', ['Sam3VideoInferenceWithInstanceInteractivity'])],
+           ('sam3.model.sam3_video_inference', 'sam3_source', ['Sam3VideoInferenceWithInstanceInteractivity']),
+           ('sam3.perflib.triton.connected_components', 'sam3_source', ['connected_components_triton']),
+           ('sam3.perflib.triton.nms', 'sam3_source', ['nms_triton'])],
     'E4': [('unidepth.models', 'unidepth_source', ['UniDepthV2']), ('xformers.ops', None, [])],
     'E5': [('depth_anything_3.api', 'da3_source', ['DepthAnything3']), ('xformers.ops', None, [])],
     'E6': [('hubconf', 'metric3d_source', ['metric3d_vit_large']),
@@ -93,3 +95,26 @@ def request(local, environment):
         toolkit_directory=str(local / 'toolkits/cuda-12.4.1'),
         source_default_dependencies='include pinned source default inference dependency lists; no optional app/gs/train extras',
         no_runtime_fallback=True, no_automatic_retry=True)
+
+
+def recovery_request(local, authorization):
+    """Use the user's registered recovery and its verified asset preparation."""
+    from .config import load
+    from .ledger import Ledger
+    from .backends import REQUIRED_ASSETS
+    document = read_json(verify_record(authorization)['path'])
+    events = Ledger(Path(local) / 'ledger.jsonl', load()).events()
+    matching = [event for event in events if event['event'] == 'setup_recovery_authorized' and
+                event['authorization'] == authorization and event['job_id'] == document['job_id']]
+    if len(matching) != 1 or document['environment'] != 'E3':
+        raise ValueError('SAM3 recovery is not registered in this run')
+    preparation = read_json(verify_record(document['asset_preparation'])['path'])
+    assets = read_json(verify_record(preparation['assets'])['path'])
+    result = request(local, 'E3')
+    # A new editable build must not mutate the immutable preparation source.
+    # Re-extract its verified archive into the fresh recovery output instead.
+    result.update(job_id=document['job_id'], recovery_authorization=authorization,
+        reuse_assets={name: assets[name] for name in REQUIRED_ASSETS['S3']
+                      if name not in ('sam3_source', 'bpe_vocabulary')},
+        reuse_source_archives={'sam3_source': assets['sam3_source']['archive']})
+    return result

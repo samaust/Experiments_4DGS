@@ -703,6 +703,8 @@ class SAM3Backend:
             if len(images) == 1:
                 if self.image_processor is None:
                     self.image_processor = self.image_factory()
+                if hasattr(self.image_processor, 'benchmark_checkpoint_loading'):
+                    metadata['checkpoint_loading'] = self.image_processor.benchmark_checkpoint_loading
                 for semantic in ('person', 'basketball'):
                     state = self.image_processor.set_image(Image.fromarray(images[0]))
                     output = self.image_processor.set_text_prompt(prompt=semantic, state=state)
@@ -1028,6 +1030,42 @@ def _sam2(bundle, runtime, detector, component):
     return SAM2Backend(component, detector, predictor, video, runtime, bundle.provenance)
 
 
+def _sam3_image_processor(bundle, runtime, builders, processor_type):
+    """Observe native detector-only loading; reject uninitialized required keys."""
+    native_load = builders._load_checkpoint
+    loading = dict(native_detector_key_selection=True, strict=False,
+                   missing_keys=[], unexpected_keys=[], calls=0)
+    def checked_load(model, checkpoint_path):
+        if checkpoint_path != bundle['sam3_checkpoint'] or loading['calls']:
+            raise BackendError('SAM3 image checkpoint loading identity/count changed')
+        def observe(_args, kwargs, incompatible):
+            loading['calls'] += 1
+            if kwargs.get('strict') is not False:
+                raise BackendError('SAM3 native image checkpoint loading policy changed')
+            loading.update(missing_keys=list(incompatible.missing_keys),
+                           unexpected_keys=list(incompatible.unexpected_keys),
+                           selected_key_count=len(_args[0]), selected_keys_sha256=object_hash(sorted(_args[0])))
+            if loading['missing_keys']:
+                raise BackendError('SAM3 image checkpoint has missing required keys: ' +
+                                   ', '.join(loading['missing_keys']))
+        # Preserve the official detector/tracker selection and returned values.
+        # Extra unused keys are disclosed, without guessing an allowlist.
+        with _capture_method(model, 'load_state_dict', observe):
+            return native_load(model, checkpoint_path)
+    with patch.object(builders, '_load_checkpoint', checked_load):
+        model = builders.build_sam3_image_model(checkpoint_path=bundle['sam3_checkpoint'],
+            bpe_path=bundle['bpe_vocabulary'], device=runtime.device, load_from_HF=False,
+            eval_mode=True, enable_segmentation=True, enable_inst_interactivity=False, compile=False)
+    if loading['calls'] != 1:
+        raise BackendError('SAM3 image checkpoint loading was not observed exactly once')
+    # The pinned builder moves only the literal 'cuda'; our public API also
+    # accepts 'cuda:0'. Moving explicitly preserves dtype and the selected GPU.
+    model = model.to(device=runtime.device)
+    processor = processor_type(model, resolution=1008, device=runtime.device, confidence_threshold=.5)
+    processor.benchmark_checkpoint_loading = loading
+    return processor
+
+
 def _legacy_vipe_segmentation(bundle, runtime):
     module = bundle.module('vipe.priors.track_anything', 'vipe_source')
     frame_type = bundle.module('vipe.streams.base', 'vipe_source').VideoFrame
@@ -1106,16 +1144,26 @@ def _build_native(component, bundle, runtime):
     if component == 'S3':
         builders = bundle.module('sam3.model_builder', 'sam3_source')
         processor_type = bundle.module('sam3.model.sam3_image_processor', 'sam3_source').Sam3Processor
+        perflib = bundle.module('sam3.perflib', 'sam3_source')
+        if not perflib.is_enabled:
+            raise BackendError('SAM3 native perflib was disabled by an inherited override')
+        cc = bundle.module('sam3.perflib.connected_components', 'sam3_source')
+        nms = bundle.module('sam3.perflib.nms', 'sam3_source')
+        provenance = dict(bundle.provenance, perflib_enabled=True,
+            cuda_connected_components='cc_torch' if cc.HAS_CC_TORCH else 'bundled Triton',
+            cuda_nms='torch_generic_nms' if nms.GENERIC_NMS_AVAILABLE else 'bundled Triton',
+            required_video_rank=0, required_video_world_size=1)
         def image_factory():
-            model = builders.build_sam3_image_model(checkpoint_path=bundle['sam3_checkpoint'],
-                bpe_path=bundle['bpe_vocabulary'], device=runtime.device, load_from_HF=False,
-                eval_mode=True, enable_segmentation=True, enable_inst_interactivity=False, compile=False)
-            return processor_type(model, resolution=1008, device=runtime.device, confidence_threshold=.5)
+            return _sam3_image_processor(bundle, runtime, builders, processor_type)
         def video_factory():
-            return builders.build_sam3_video_model(checkpoint_path=bundle['sam3_checkpoint'],
+            model = builders.build_sam3_video_model(checkpoint_path=bundle['sam3_checkpoint'],
                 bpe_path=bundle['bpe_vocabulary'], load_from_HF=False, device=runtime.device,
                 strict_state_dict_loading=True, apply_temporal_disambiguation=True, compile=False).eval()
-        return SAM3Backend(image_factory, video_factory, runtime, bundle.provenance)
+            for part in (model, model.detector):
+                if part.rank != 0 or part.world_size != 1:
+                    raise BackendError('SAM3 inherited distributed state differs from the serial allocation')
+            return model
+        return SAM3Backend(image_factory, video_factory, runtime, provenance)
     if component == 'D0':
         module = bundle.module('vipe.priors.depth.unidepth', 'vipe_source')
         native_class = module.UniDepthV2

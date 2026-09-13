@@ -8,7 +8,7 @@ from pathlib import Path
 import time
 
 from .config import jobs
-from .files import canonical, object_hash, safe_path
+from .files import canonical, object_hash, read_json, safe_path, verify_record
 
 
 class Ledger:
@@ -16,7 +16,19 @@ class Ledger:
         self.path = safe_path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.config = config
-        self.jobs = jobs(config)
+
+    def _jobs(self, events):
+        allocated = jobs(self.config)
+        for event in events:
+            if event['event'] == 'setup_recovery_authorized':
+                verify_record(event['authorization'])
+                allocated[event['job_id']] = dict(allocated[event['original_job_id']],
+                    id=event['job_id'], scope='explicit user-authorized SAM3 access recovery')
+        return allocated
+
+    @property
+    def jobs(self):
+        return self._jobs(self.events())
 
     @contextmanager
     def locked(self):
@@ -76,6 +88,10 @@ class Ledger:
                 totals[row['resource']]['elapsed_seconds'] += row['elapsed_seconds']
             elif row['event'] == 'cpu_preparation_charge':
                 totals['cpu']['elapsed_seconds'] += row['elapsed_seconds']
+            elif row['event'] == 'setup_recovery_authorized':
+                # Asset-only recovery was already conservatively charged to
+                # preparation. It also belongs to cumulative setup wall time.
+                totals['setup']['elapsed_seconds'] += row['preparation_elapsed_seconds']
         for row in self.states(events).values():
             if row['event'] == 'reserve':
                 totals[row['resource']]['reserved_seconds'] += row['seconds']
@@ -83,14 +99,15 @@ class Ledger:
 
     def reserve(self, job_id, command, evidence, *, seconds_limit=None):
         with self.locked() as (stream, events):
-            if job_id not in self.jobs:
+            allocated = self._jobs(events)
+            if job_id not in allocated:
                 raise ValueError('unallocated job identity')
             states = self.states(events)
             if job_id in states:
                 raise ValueError('job already consumed or accounted for; no automatic retry')
             if any(r['event'] == 'reserve' for r in states.values()):
                 raise ValueError('unreconciled active attempt; refusing concurrent dispatch')
-            spec = self.jobs[job_id]
+            spec = allocated[job_id]
             resource = spec['resource']
             total = self.totals(events)[resource]['elapsed_seconds']
             caps = dict(gpu=self.config['gpu_total_seconds_limit'],
@@ -158,7 +175,7 @@ class Ledger:
 
     def note(self, event, **fields):
         if event in ('reserve', 'finish', 'account', 'resume_unstarted', 'checkpoint',
-                     'checkpoint_resume', 'cpu_preparation_charge'):
+                     'checkpoint_resume', 'cpu_preparation_charge', 'setup_recovery_authorized'):
             raise ValueError('use the checked ledger transition')
         with self.locked() as (stream, events):
             return self._append(stream, events, dict(event=event, **fields))
@@ -178,7 +195,7 @@ class Ledger:
         if status not in ('blocked', 'skipped') or not reason:
             raise ValueError('unstarted jobs require explicit blocked/skipped reasons')
         with self.locked() as (stream, events):
-            if job_id not in self.jobs or job_id in self.states(events):
+            if job_id not in self._jobs(events) or job_id in self.states(events):
                 raise ValueError('unknown or already accounted job')
             return self._append(stream, events, dict(event='account', job_id=job_id, status=status, reason=reason))
 
@@ -193,3 +210,45 @@ class Ledger:
                 raise ValueError('resume can reopen only unstarted accounted slots, not consumed attempts')
             return self._append(stream, events, dict(event='resume_unstarted', job_ids=job_ids,
                                                      authorization=authorization))
+
+    def authorize_setup_recovery(self, authorization):
+        """Register the user's one SAM3 access recovery without reopening E3.
+
+        This deliberately does not grant a general retry pool or reinterpret
+        unused time as attempts. The original failed state and all charges stay
+        intact, and the new process shares the original cumulative setup cap.
+        """
+        document = read_json(verify_record(authorization)['path'])
+        required = dict(schema='vipe-benchmark-sam3-recovery/v1',
+            job_id='E3-setup-recovery-001', original_job_id='E3-setup', environment='E3',
+            recovery_attempts_limit=1, setup_wall_seconds_limit=self.config['setup_wall_seconds_limit'],
+            reset_previous_consumption=False, changes_to_prescribed_runtime=False,
+            sam3_access_resolved=True, unrelated_attempts_reopened=False)
+        if any(document.get(key) != value for key, value in required.items()) or not document.get('authorization'):
+            raise ValueError('recovery requires the exact explicit SAM3 authorization scope')
+        acquisition = read_json(verify_record(document['asset_preparation'])['path'])
+        if (acquisition.get('status') != 'complete' or acquisition.get('environment_builds') != 0 or
+                acquisition.get('model_forwards') != 0):
+            raise ValueError('SAM3 recovery requires completed asset-only preparation')
+        verify_record(acquisition['assets'])
+        preparation_seconds = acquisition.get('elapsed_seconds')
+        if not isinstance(preparation_seconds, (int, float)) or not math.isfinite(preparation_seconds) or preparation_seconds < 0:
+            raise ValueError('invalid SAM3 acquisition elapsed time')
+        with self.locked() as (stream, events):
+            if any(event['event'] == 'setup_recovery_authorized' for event in events):
+                raise ValueError('SAM3 recovery already allocated; no additional recovery attempt')
+            states = self.states(events)
+            original = states.get('E3-setup', {})
+            if (original.get('event') != 'finish' or original.get('status') != 'failed' or
+                    original.get('cleanup_confirmed') is not True or
+                    original.get('event_sha256') != document.get('original_failure_event_sha256')):
+                raise ValueError('recovery must bind the preserved, cleaned-up E3 failure')
+            if any(state['event'] == 'reserve' for state in states.values()):
+                raise ValueError('unreconciled active attempt; refusing recovery allocation')
+            if self.totals(events)['setup']['elapsed_seconds'] + preparation_seconds >= self.config['setup_wall_seconds_limit']:
+                raise ValueError('cumulative setup allocation exhausted')
+            return self._append(stream, events, dict(event='setup_recovery_authorized',
+                job_id=document['job_id'], original_job_id='E3-setup', environment='E3',
+                original_failure_event_sha256=original['event_sha256'], authorization=authorization,
+                preparation_elapsed_seconds=preparation_seconds,
+                preparation_evidence=document['asset_preparation']))

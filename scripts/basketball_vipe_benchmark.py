@@ -148,6 +148,15 @@ def execute(args, config):
         if request['job_id'] != request['environment'] + '-setup':
             raise ValueError('setup request/job identity mismatch')
         dispatch(local, docs, config, request, operation='setup')
+    elif args.command == 'setup-recovery':
+        from vipe_benchmark.setup_recipes import recovery_request
+        authorization = file_record(args.authorization)
+        registered = [event for event in ledger.events() if event['event'] == 'setup_recovery_authorized']
+        if not registered:
+            ledger.authorize_setup_recovery(authorization)
+        elif len(registered) != 1 or registered[0]['authorization'] != authorization:
+            raise ValueError('a different recovery authorization is already registered')
+        dispatch(local, docs, config, recovery_request(local, authorization), operation='setup')
     elif args.command == 'execute':
         execute_matrix(local, docs, config, args.validation)
     elif args.command == 'stage':
@@ -192,6 +201,8 @@ def main():
     choice = p.add_mutually_exclusive_group(required=True)
     choice.add_argument('--request', type=Path)
     choice.add_argument('--environment', choices=[f'E{i}' for i in range(1, 8)])
+    p = sub.add_parser('setup-recovery')
+    p.add_argument('--authorization', type=Path, required=True)
     p = sub.add_parser('execute')
     p.add_argument('--validation', type=Path, required=True)
     p = sub.add_parser('stage')
@@ -210,7 +221,7 @@ def main():
         return auto_annotations(args, config)
     if args.command == 'admit':
         return admission(args, config)
-    if args.command in ('qualify', 'inventory-existing', 'setup', 'execute', 'stage'):
+    if args.command in ('qualify', 'inventory-existing', 'setup', 'setup-recovery', 'execute', 'stage'):
         return execute(args, config)
     if args.command == 'resume':
         return resume(args, config)

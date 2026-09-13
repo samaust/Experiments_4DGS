@@ -377,7 +377,8 @@ def run(request, output, config):
     if masks.get('annotations') and masks['annotations'] != request['annotations']:
         raise ValueError('report annotation evidence differs from the scored bundle')
     states = documents['accounting']['jobs']
-    expected = set(jobs(config)) - {'report'}
+    recoveries = documents['accounting'].get('setup_recovery_authorizations', [])
+    expected = (set(jobs(config)) | {event['job_id'] for event in recoveries}) - {'report'}
     unresolved = sorted(job for job in expected if states.get(job, {}).get('status') != 'complete')
     paired = paired_rows(masks.get('comparisons', {}), MASK_BASELINES, aggregate['mask_metrics'], scope='masks')
     for field, scope, baseline in [('isolated_geometry_metrics', 'isolated-geometry', 'G-S0'),
@@ -392,6 +393,10 @@ def run(request, output, config):
         'This bounded diagnostic does not establish production readiness or physical accuracy.', '',
         f"Annotation evidence: {'candidate-independent model-assisted proxy' if proxy else 'reviewed external annotations'}; "
         f"{len(annotations['images'])} images and {len(annotations['pairs'])} pair records."]
+    if recoveries:
+        lines += ['', 'The user separately authorized one SAM3 setup recovery after gated access was granted. '
+            'The original E3 failure remains failed; both processes and the resumed asset acquisition '
+            'remain charged against the unchanged cumulative setup limit.']
     if proxy:
         lines += ['', 'The user authorized automated labeling because human contributors were unavailable. '
             'Pixel and boundary scores measure agreement with the frozen CPU Mask R-CNN teacher, including uncertain '

@@ -16,7 +16,7 @@ from vipe_benchmark.backends import (
     LegacyStandaloneBackend, LegacyViPESegmentationBackend, Metric3DBackend, S1TrackerBridge,
     RTDetrDetector, SAM2Backend, SAM3Backend, SOURCE_PINS, UniDepthBackend,
     build_backend, detection_rows, normalize_phrase,
-    _build_native, _sam2, _legacy_vipe_segmentation, _s1_aot_module, _s1_tracker,
+    _build_native, _sam2, _sam3_image_processor, _legacy_vipe_segmentation, _s1_aot_module, _s1_tracker,
 )
 from vipe_benchmark.files import file_record
 
@@ -671,6 +671,96 @@ class DepthTests(unittest.TestCase):
 
 
 class FactoryTests(unittest.TestCase):
+    def sam3_fixture(self, *, missing=(), unexpected=(), load_calls=1):
+        calls = []
+        class Model:
+            def load_state_dict(self, state, *, strict):
+                calls.append(('load', state, strict))
+                return SimpleNamespace(missing_keys=list(missing), unexpected_keys=list(unexpected))
+            def to(self, **kwargs):
+                calls.append(('move', kwargs))
+                return self
+        model = Model()
+        def native_load(model, checkpoint_path):
+            calls.append(('native', checkpoint_path))
+            for _ in range(load_calls):
+                # Stand in for the native, already filtered detector subset.
+                model.load_state_dict({'detector_weight': 'unchanged'}, strict=False)
+        builders = SimpleNamespace(_load_checkpoint=native_load)
+        def build(**kwargs):
+            calls.append(('build', kwargs))
+            builders._load_checkpoint(model, kwargs['checkpoint_path'])
+            return model
+        builders.build_sam3_image_model = build
+        bundle = {'sam3_checkpoint': '/pinned/sam3.pt', 'bpe_vocabulary': '/pinned/bpe.gz'}
+        processor = lambda model, **kwargs: SimpleNamespace(model=model, settings=kwargs)
+        return calls, model, builders, bundle, processor, native_load
+
+    def test_sam3_preserves_native_key_selection_records_extras_and_moves_cuda_index(self):
+        calls, model, builders, bundle, processor, original = self.sam3_fixture(unexpected=['unused_weight'])
+        result = _sam3_image_processor(bundle, SimpleNamespace(device='cuda:0'), builders, processor)
+        self.assertIn(('load', {'detector_weight': 'unchanged'}, False), calls)
+        self.assertIn(('move', {'device': 'cuda:0'}), calls)
+        self.assertEqual(result.benchmark_checkpoint_loading['missing_keys'], [])
+        self.assertEqual(result.benchmark_checkpoint_loading['unexpected_keys'], ['unused_weight'])
+        self.assertEqual(result.benchmark_checkpoint_loading['calls'], 1)
+        self.assertIs(builders._load_checkpoint, original)
+        self.assertNotIn('load_state_dict', model.__dict__)
+        self.assertEqual(result.settings, dict(resolution=1008, device='cuda:0', confidence_threshold=.5))
+        settings = next(row[1] for row in calls if row[0] == 'build')
+        self.assertFalse(settings['load_from_HF'])
+        self.assertFalse(settings['enable_inst_interactivity'])
+        self.assertFalse(settings['compile'])
+
+    def test_sam3_missing_required_weight_stops_before_processor_and_restores_loader(self):
+        calls, model, builders, bundle, processor, original = self.sam3_fixture(missing=['required_weight'])
+        with self.assertRaisesRegex(BackendError, 'missing required keys: required_weight'):
+            _sam3_image_processor(bundle, SimpleNamespace(device='cuda'), builders, processor)
+        self.assertFalse(any(row[0] == 'move' for row in calls))
+        self.assertIs(builders._load_checkpoint, original)
+        self.assertNotIn('load_state_dict', model.__dict__)
+
+    def test_sam3_unobserved_or_repeated_checkpoint_load_cannot_qualify(self):
+        for load_calls in (0, 2):
+            with self.subTest(load_calls=load_calls):
+                _, model, builders, bundle, processor, original = self.sam3_fixture(load_calls=load_calls)
+                with self.assertRaisesRegex(BackendError, 'not observed exactly once'):
+                    _sam3_image_processor(bundle, SimpleNamespace(device='cuda'), builders, processor)
+                self.assertIs(builders._load_checkpoint, original)
+                self.assertNotIn('load_state_dict', model.__dict__)
+
+    def test_sam3_serial_and_perflib_overrides_are_checked_without_fallback(self):
+        native = SimpleNamespace(rank=0, world_size=1, detector=SimpleNamespace(rank=0, world_size=1))
+        native.eval = lambda: native
+        calls = []
+        def build(**kwargs):
+            calls.append(kwargs)
+            return native
+        perflib = SimpleNamespace(is_enabled=True)
+        modules = {'sam3.model_builder': SimpleNamespace(build_sam3_video_model=build),
+            'sam3.model.sam3_image_processor': SimpleNamespace(Sam3Processor=object),
+            'sam3.perflib': perflib,
+            'sam3.perflib.connected_components': SimpleNamespace(HAS_CC_TORCH=False),
+            'sam3.perflib.nms': SimpleNamespace(GENERIC_NMS_AVAILABLE=False)}
+        class Bundle:
+            provenance = {}
+            def __getitem__(self, name):
+                return '/pinned/' + name
+            def module(self, name, source):
+                return modules[name]
+        runtime = SimpleNamespace(torch=object(), device='cuda')
+        backend = _build_native('S3', Bundle(), runtime)
+        self.assertIs(backend.video_factory(), native)
+        self.assertTrue(calls[0]['strict_state_dict_loading'])
+        self.assertEqual(backend.provenance['cuda_nms'], 'bundled Triton')
+        self.assertEqual(backend.provenance['cuda_connected_components'], 'bundled Triton')
+        native.detector.world_size = 2
+        with self.assertRaisesRegex(BackendError, 'serial allocation'):
+            backend.video_factory()
+        perflib.is_enabled = False
+        with self.assertRaisesRegex(BackendError, 'inherited override'):
+            _build_native('S3', Bundle(), runtime)
+
     def test_d1_native_constructor_only_uses_explicit_snapshot_and_bilinear(self):
         calls = []
         class Model:

@@ -298,9 +298,14 @@ def acquire_assets(request, output, config):
             continue
         if name in SOURCE_REPOS:
             revision = SOURCE_PINS[name]
-            archive = output / 'archives' / f'{name}-{revision}.tar.gz'
-            receipt = download(f'https://codeload.github.com/{SOURCE_REPOS[name]}/tar.gz/{revision}',
-                               archive, transfer_dir, limit=config['new_download_gib_limit'] * 2**30)
+            reused = request.get('reuse_source_archives', {}).get(name)
+            if reused:
+                receipt = verify_record(reused)
+                archive = Path(receipt['path'])
+            else:
+                archive = output / 'archives' / f'{name}-{revision}.tar.gz'
+                receipt = download(f'https://codeload.github.com/{SOURCE_REPOS[name]}/tar.gz/{revision}',
+                                   archive, transfer_dir, limit=config['new_download_gib_limit'] * 2**30)
             assets[name] = extract_source(archive, output / 'sources' / name, revision)
             assets[name]['archive'] = receipt
             assets[name]['license_files'] = _license_records(assets[name]['files'])
@@ -450,6 +455,13 @@ def _validate_setup_request(request):
             raise ValueError(f'{name} must belong to the declared run')
     if safe_path(request['transfer_dir']).absolute() != local / 'transfers':
         raise ValueError('setup requires the shared run transfer directory')
+    if request.get('recovery_authorization'):
+        from .setup_recipes import recovery_request
+        recovered = recovery_request(local, request['recovery_authorization'])
+        if any(request.get(key) != value for key, value in recovered.items()):
+            raise ValueError('setup recovery differs from its authorized assets and recipe')
+    elif request.get('reuse_source_archives') or request['job_id'] != environment + '-setup':
+        raise ValueError('fresh recovery identity or source archive reuse requires explicit authorization')
     return expected
 
 
