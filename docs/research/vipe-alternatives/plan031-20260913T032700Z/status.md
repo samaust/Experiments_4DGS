@@ -1,3 +1,7 @@
+# Current: shared network setup paused; qualified local comparisons continuing
+
+[Assessment010](assessment-010.md) is current. [E4 recovery](e4-recovery-results-001.json) failed on PyTorch index connection timeout after 46.914 seconds; cleanup is confirmed. E5–E7 remain unstarted and blocked pending network resolution. E1/E2/E3 and historical runtimes remain available; next is original S1 calibration. Broad retry approval does not bypass the AGENTS.md outside-sandbox failure stop.
+
 # Current: E2 qualified; E4 recovery next
 
 [Assessment009](assessment-009.md) and [Accounting008](matrix-accounting-008.json) are current. E2 completed in 534.675 seconds; native imports and cleanup pass. Validation013 covers downstream recovery lookup. E4 uses authorization002 for its same approved first recovery attempt.
