@@ -1,3 +1,11 @@
+# Current: S2 calibration complete; reconstruction starting
+
+[S2 calibration](S2-calibration-results.json) completed all 510 outputs in 142.857 seconds with result validation and cleanup confirmed. Original S2 reconstruction is next/running under validation013. S1 failures remain preserved; shared network setup remains paused.
+
+# Current: S2 calibration running; S1 semantic failures retained
+
+S1 calibration and reconstruction both failed on an empty native semantic phrase; their cleanup is confirmed and R-S is skipped for missing source. No guessed labels or changed thresholds were applied. S2 first-result qualification passed and the allocated 510-image calibration branch is running. E4/E5–E7 network setup remains paused; qualified local work continues.
+
 # Current: shared network setup paused; qualified local comparisons continuing
 
 [Assessment010](assessment-010.md) is current. [E4 recovery](e4-recovery-results-001.json) failed on PyTorch index connection timeout after 46.914 seconds; cleanup is confirmed. E5–E7 remain unstarted and blocked pending network resolution. E1/E2/E3 and historical runtimes remain available; next is original S1 calibration. Broad retry approval does not bypass the AGENTS.md outside-sandbox failure stop.
