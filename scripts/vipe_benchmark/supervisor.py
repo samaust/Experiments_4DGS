@@ -70,7 +70,7 @@ def directory_bytes(root):
 
 
 def supervise(ledger, job_id, command, output, *, evidence, sample_resources=None,
-              validate_result=None, poll_seconds=.1):
+              validate_result=None, poll_seconds=.1, seconds_limit=None):
     """The worker owns a fresh output directory; logs are siblings, not results.
 
     Resource injection is for disposable CPU tests. Real GPU dispatch always
@@ -87,7 +87,7 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
     initial = sampler()
     if initial.get('gpu_pids'):
         raise ValueError('GPU is already in use; no attempt dispatched')
-    reservation = ledger.reserve(job_id, command, evidence)
+    reservation = ledger.reserve(job_id, command, evidence, seconds_limit=seconds_limit)
     start = reservation['monotonic_start']
     deadline = start + reservation['seconds']
     cleanup_reserve = min(30., reservation['seconds'] / 4)

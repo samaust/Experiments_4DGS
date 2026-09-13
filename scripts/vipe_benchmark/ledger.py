@@ -72,12 +72,14 @@ class Ledger:
                 totals[row['resource']]['attempts'] += 1
             elif row['event'] == 'finish':
                 totals[row['resource']]['elapsed_seconds'] += row['elapsed_seconds']
+            elif row['event'] == 'cpu_preparation_charge':
+                totals['cpu']['elapsed_seconds'] += row['elapsed_seconds']
         for row in self.states(events).values():
             if row['event'] == 'reserve':
                 totals[row['resource']]['reserved_seconds'] += row['seconds']
         return totals
 
-    def reserve(self, job_id, command, evidence):
+    def reserve(self, job_id, command, evidence, *, seconds_limit=None):
         with self.locked() as (stream, events):
             if job_id not in self.jobs:
                 raise ValueError('unallocated job identity')
@@ -95,11 +97,30 @@ class Ledger:
                         motion=self.config['cpu_motion_jobs']['attempts'] * self.config['cpu_motion_jobs']['seconds_each'],
                         neighbor=self.config['cpu_neighbor_jobs']['attempts'] * self.config['cpu_neighbor_jobs']['seconds_each'])
             seconds = min(spec['seconds'], caps[resource] - total)
+            if seconds_limit is not None:
+                if not math.isfinite(seconds_limit) or seconds_limit <= 0:
+                    raise ValueError('invalid narrower job deadline')
+                seconds = min(seconds, seconds_limit)
             if seconds <= 0:
                 raise ValueError('resource wall allocation exhausted')
             return self._append(stream, events, dict(event='reserve', job_id=job_id, resource=resource,
                 seconds=seconds, command=command, evidence=evidence, monotonic_start=time.monotonic(),
                 boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
+
+    def charge_cpu_preparation(self, elapsed_seconds, evidence):
+        """Charge separately retriable input acquisition without a model attempt."""
+        from .files import verify_record
+        verify_record(evidence)
+        if not math.isfinite(elapsed_seconds) or elapsed_seconds < 0:
+            raise ValueError('invalid preparation time charge')
+        with self.locked() as (stream, events):
+            if any(e['event'] == 'cpu_preparation_charge' and e['evidence'] == evidence for e in events):
+                raise ValueError('preparation evidence already charged')
+            total = self.totals(events)['cpu']['elapsed_seconds'] + elapsed_seconds
+            if total > self.config['cpu_prepare_score_report_seconds_limit']:
+                raise ValueError('CPU preparation allocation exhausted')
+            return self._append(stream, events, dict(event='cpu_preparation_charge',
+                                resource='cpu', elapsed_seconds=elapsed_seconds, evidence=evidence))
 
     def note(self, event, **fields):
         if event in ('reserve', 'finish', 'account', 'resume_unstarted'):

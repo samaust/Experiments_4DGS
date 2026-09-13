@@ -11,7 +11,7 @@ def main():
     parser.add_argument('--config', type=Path, required=True)
     parser.add_argument('--request', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--operation', choices=['prepare', 'annotations'], required=True)
+    parser.add_argument('--operation', choices=['prepare', 'annotations', 'auto-annotations'], required=True)
     args = parser.parse_args()
     config = load(args.config)
     request = read_json(args.request)
@@ -22,6 +22,9 @@ def main():
         from vipe_benchmark.prepare import prepare
         verify_record(request['exposure'])
         prepare(args.output, config, exposure=request['exposure'])
+    elif args.operation == 'auto-annotations':
+        from vipe_benchmark.auto_annotations import run
+        run(request, args.output, config)
     else:
         from vipe_benchmark.annotations import validate
         from vipe_benchmark.files import file_record, write_json

@@ -1,0 +1,84 @@
+{
+  "schema": "vipe-benchmark-automated-annotation-policy/v1",
+  "created_utc": "2026-09-13T03:47:44.561044+00:00",
+  "authorization": "no. choose a solution yourself. you could use a script and a model. you could spawn a subagent.",
+  "original_plan": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_031.md",
+    "sha256": "27f3f284886f1af7e19602d0b21a2494ac1c5cbab1878b8e73b25874d43db74b",
+    "bytes": 31274
+  },
+  "original_protocol": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/benchmark-protocol.md",
+    "sha256": "6d32683e3d351f8f19afffa11fe5664c5a15515f84a2b9380f86a39a757072f5",
+    "bytes": 49712
+  },
+  "historical_authorization": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/authorization.json",
+    "sha256": "8979aa131a3677d85890da2291bf0866d38e417720d159458ede84a8dc1b00cf",
+    "bytes": 4794
+  },
+  "scope": "Replace unavailable external human annotations with candidate-independent automated proxy annotation and independent agent/script review. Continue original Plan 031; no continuous improvement loop.",
+  "evidence_kind": "model-assisted-proxy",
+  "human_ground_truth": false,
+  "primary": {
+    "kind": "torchvision-maskrcnn-cpu",
+    "architecture": "maskrcnn_resnet50_fpn_v2",
+    "weights": "COCO_V1",
+    "url": "https://download.pytorch.org/models/maskrcnn_resnet50_fpn_v2_coco-73cbd019.pth",
+    "sha256_prefix": "73cbd019",
+    "device": "cpu",
+    "dtype": "float32",
+    "batch_size": 1,
+    "threads": 8,
+    "score_threshold": 0.5,
+    "mask_threshold": 0.5,
+    "min_size": 800,
+    "max_size": 1333,
+    "classes": {
+      "1": "person",
+      "37": "basketball"
+    },
+    "overlap": "maximum mask probability; ties higher detection score then lower original detection index",
+    "maximum_attempts": 1
+  },
+  "review": {
+    "kind": "independent-agent-and-script",
+    "all_images": 232,
+    "pairs": 112,
+    "feature_locations_max": 768,
+    "candidate_blind": true,
+    "scope": "Hash/schema/geometry audits for every image, visible overlay inspection with explicit inspected-image IDs. Model-inferred boundaries and nondetections are never independently verified by audit alone."
+  },
+  "eligibility": {
+    "person_union": "frozen model proxy agreement only",
+    "basketball": "frozen model proxy agreement only; detected class presence and false negatives disclosed",
+    "player_role": "unknown unless individually reviewed",
+    "changing": "unverified; no changing reference synthesized from M0-M2",
+    "boundary": "teacher boundary agreement only; never independently validated two-pixel accuracy",
+    "temporal": "automatic IoU>=0.5 associations with uncertain identity; no verified switches without review",
+    "static_features": "uncertain unless explicitly reviewed; automatic frozen feature retention remains descriptive"
+  },
+  "selection": {
+    "segmentation": "original tuple where all required proxy terms are defined on common frozen domain; otherwise explicit S2 unverified baseline default",
+    "motion": "M0 predeclared baseline default if independent changing/static evidence is unavailable, never labeled a measured winner",
+    "neighbors": "original geometry ranking unchanged"
+  },
+  "limits": {
+    "annotation_seconds": 21600,
+    "asset_acquisition_seconds": 1200,
+    "cpu_cumulative_seconds": 57600,
+    "gpu_attempts": 36,
+    "gpu_seconds": 93600,
+    "new_environment_builds": 7,
+    "new_download_gib": 60,
+    "new_artifact_gib": 150,
+    "new_annotation_gpu_jobs": 0,
+    "new_annotation_builds": 0
+  },
+  "criteria_amendment": {
+    "criterion": "P31-3",
+    "required_outcome": "All 232 entries carry candidate-independent frozen model-assisted labels, per-image independent automated review/adjudication records and explicit unknown eligibility. Publish proxy metrics and available reviewed semantic/temporal strata with raw counts and uncertainties.",
+    "validation": "Verify immutable original input identities/hashes, proposal, teacher checkpoint, policy and review/adjudication hashes; independent reviewer identity and explicit review scope; reject truth/human claims."
+  },
+  "preserve_original_assessment": true
+}

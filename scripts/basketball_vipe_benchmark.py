@@ -82,6 +82,36 @@ def cpu_stage(args, config):
     print(f'{operation}: complete')
 
 
+def auto_annotations(args, config):
+    from vipe_benchmark.auto_annotations import check_policy, validate
+    from vipe_benchmark.supervisor import directory_bytes, supervise
+    local, docs, ledger = check_run(args, config)
+    policy_record = file_record(args.policy)
+    policy = check_policy(policy_record)
+    checkpoint = read_json(args.checkpoint_receipt)['asset']
+    verify_record(checkpoint)
+    request = dict(configuration=file_record(CONFIG), inputs=file_record(local / 'prepare/inputs.json'),
+                   policy=policy_record, checkpoint=checkpoint)
+    request_path = local / 'auto-annotations-request.json'
+    write_json(request_path, request)
+    command = [sys.executable, str(ROOT / 'scripts/basketball_vipe_worker.py'),
+               '--operation', 'auto-annotations', '--config', str(CONFIG),
+               '--request', str(request_path), '--output', str(local / 'annotations')]
+    def validate_result(output):
+        result = read_json(output / 'result.json')
+        if result.get('status') != 'complete':
+            raise ValueError('annotation worker incomplete')
+        verify_record(result['annotations'])
+        validate(read_json(result['annotations']['path']), read_json(request['inputs']['path']), config)
+    downloads = sum(read_json(p)['bytes_received'] for p in (local / 'assets').glob('*.transfer-*.json'))
+    result = supervise(ledger, 'annotations', command, local / 'annotations',
+        evidence=dict(request=file_record(request_path), policy=policy_record),
+        sample_resources=lambda: dict(artifact_bytes=directory_bytes(local), download_bytes=downloads),
+        validate_result=validate_result, poll_seconds=2., seconds_limit=policy['limits']['annotation_seconds'])
+    write_json(docs / 'annotations-002.json', result)
+    print('Automated annotations: reviewed proxy bundle complete')
+
+
 def admission(args, config):
     local, docs, ledger = check_run(args, config)
     reasons = []
@@ -134,6 +164,9 @@ def main():
     sub.add_parser('status')
     p = sub.add_parser('annotations')
     p.add_argument('--bundle', type=Path, required=True)
+    p = sub.add_parser('auto-annotations')
+    p.add_argument('--policy', type=Path, required=True)
+    p.add_argument('--checkpoint-receipt', type=Path, required=True)
     p = sub.add_parser('admit')
     p.add_argument('--validation', type=Path)
     p = sub.add_parser('resume')
@@ -145,6 +178,8 @@ def main():
         return init_run(args, config)
     if args.command in ('prepare', 'annotations'):
         return cpu_stage(args, config)
+    if args.command == 'auto-annotations':
+        return auto_annotations(args, config)
     if args.command == 'admit':
         return admission(args, config)
     if args.command == 'resume':
