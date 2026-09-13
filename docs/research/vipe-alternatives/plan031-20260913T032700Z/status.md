@@ -1,3 +1,7 @@
+# Current: motion comparisons complete; mask aggregation next
+
+M0/M1/M2 each completed 1350 rows in 24.823/146.896/82.796 seconds with cleanup confirmed. Segmentation remains complete for S0/S2/S3/S4 and failed for S1. Next is the first checkpoint of the single staged aggregation pass under validation014. Network setup remains paused; no final report is dispatched yet.
+
 # Current: segmentation accounted; M0 motion dispatched
 
 [Assessment013](assessment-013.md) and [Accounting011](matrix-accounting-011.json) are current. S0/S2/S3/S4 have 5400 successful primary mask rows; S1 failed and R-S is skipped. S4 reconstruction completed in 299.083 seconds with cleanup. Next: M0/M1/M2, then mask aggregation. Network setup remains paused.
