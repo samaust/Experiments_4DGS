@@ -1,0 +1,163 @@
+{
+  "schema": "vipe-alternatives-benchmark/v1",
+  "scene": "Basketball_dg",
+  "seed": 0,
+  "held_out_cameras": [
+    0,
+    10,
+    20,
+    30
+  ],
+  "fit_snapshots": [
+    50,
+    62,
+    75,
+    87,
+    99,
+    100,
+    112,
+    125,
+    137,
+    149
+  ],
+  "selection_snapshots": [
+    150,
+    162,
+    175,
+    187,
+    199
+  ],
+  "validation_history_snapshots": [
+    200,
+    212,
+    225,
+    237,
+    249
+  ],
+  "scale_fit_frame": 100,
+  "scale_check_frame": 175,
+  "pair_starts": [
+    0,
+    5,
+    10,
+    15,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    30,
+    35,
+    40,
+    45
+  ],
+  "diagnostic_cameras": [
+    1,
+    6,
+    11,
+    16,
+    21,
+    26,
+    31,
+    33
+  ],
+  "diagnostic_pair_starts": [
+    0,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    45
+  ],
+  "annotation_calibration_cameras": [
+    0,
+    1,
+    10,
+    11,
+    20,
+    21,
+    30,
+    31
+  ],
+  "annotation_calibration_frames": [
+    50,
+    100,
+    149,
+    150,
+    175,
+    199
+  ],
+  "neighbors_per_reference": 3,
+  "samples_per_neighbor": 5000,
+  "gpu_concurrency": 1,
+  "gpu_peak_device_gib_limit": 22,
+  "gpu_total_seconds_limit": 93600,
+  "gpu_jobs": [
+    {
+      "scope": "S0-S4 calibration",
+      "attempts": 5,
+      "seconds_each": 3600
+    },
+    {
+      "scope": "S0-S4 reconstruction pairs",
+      "attempts": 5,
+      "seconds_each": 5400
+    },
+    {
+      "scope": "D0-D4 frame100 fit",
+      "attempts": 5,
+      "seconds_each": 900
+    },
+    {
+      "scope": "D0-D4 frame175 check if fit passes",
+      "attempts": 5,
+      "seconds_each": 900
+    },
+    {
+      "scope": "five segmentation geometry arms",
+      "attempts": 5,
+      "seconds_each": 1800
+    },
+    {
+      "scope": "two additional motion geometry arms",
+      "attempts": 2,
+      "seconds_each": 1800
+    },
+    {
+      "scope": "two additional neighbor geometry arms",
+      "attempts": 2,
+      "seconds_each": 1800
+    },
+    {
+      "scope": "C0-C3 combined cropped geometry",
+      "attempts": 4,
+      "seconds_each": 5400
+    },
+    {
+      "scope": "R-S R-D R-G repeats",
+      "attempts": 3,
+      "seconds_each": 600
+    }
+  ],
+  "cpu_motion_jobs": {
+    "attempts": 3,
+    "seconds_each": 1800
+  },
+  "cpu_neighbor_jobs": {
+    "attempts": 3,
+    "seconds_each": 300
+  },
+  "cpu_prepare_score_report_seconds_limit": 57600,
+  "cpu_max_workers": 8,
+  "environment_builds_limit": 7,
+  "setup_wall_seconds_limit": 57600,
+  "annotation_person_hours_limit": 112,
+  "new_download_gib_limit": 60,
+  "new_artifact_disk_gib_limit": 150,
+  "calibration_runs": 0,
+  "training_updates": 0,
+  "new_final_window_evaluations": 0
+}

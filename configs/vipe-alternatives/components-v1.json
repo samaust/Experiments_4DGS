@@ -1,0 +1,169 @@
+{
+  "schema": "vipe-benchmark-components/v1",
+  "source_hashes": {
+    "study": "6fbb6e55dedf444766c75e946c3d5099426839e0df158706d98d28b635353e8e",
+    "protocol": "6d32683e3d351f8f19afffa11fe5664c5a15515f84a2b9380f86a39a757072f5"
+  },
+  "settings": {
+    "S0": "Pinned ViPE historical Grounding DINO/SAM-B/R50-DeAOTL calls, float32, phrases `['person','basketball']`, box threshold 0.35; effective fork phrase assignment and reset behavior described in the study. Reproduce existing invocation behavior through a diagnostic worker; keep historical source unchanged.",
+    "S1": "Direct upstream SAM-Track/SAM-B/R50-DeAOTL with the same historical checkpoint bytes; caption `person.basketball.`, box 0.35, nominal text 0.5, SAM gap 10, 255-object limit, historical new-object/automatic-mask area 200. Preserve box-prompted first-frame behavior and propagate exactly one successor. Float32. Record differences from S0, including effective phrase assignment, preprocessing and overlap order.",
+    "S2": "Native Grounding DINO Swin-T OGC, caption `person.basketball.`, box threshold 0.35, text threshold 0.25; native 800/max-1333 preprocessing, float32. SAM 2.1 Hiera-L, `sam2.1_hiera_l.yaml`, 1024\u00b2, bfloat16 autocast, no compilation, default supplied postprocessing recorded. Choose highest predicted-IoU mask for each keyframe box; propagate to the successor using the video predictor with fresh pair state. No successor detector rerun.",
+    "S3": "Original SAM 3 `sam3.pt`, original image/video builders (not the 3.1 multiplex builder), 1008\u00b2, bfloat16, no compilation, confidence threshold 0.5. Issue `person` and `basketball` concept prompts separately; union for calibration exclusion and merge instances deterministically for reconstruction. Fresh video session for each two-frame pair; native detector/tracker births allowed and recorded. No examples, clicks, MLLM agent or manual inference correction.",
+    "S4": "`PekingU/rtdetr_v2_r50vd` snapshot from the study, `RTDetrImageProcessor` and `RTDetrV2ForObjectDetection`, float32, 640\u00b2 RGB, rescale 1/255, no mean/std normalization. Keep `person`/`sports ball` by model label names at score \u22650.35; map sports ball to `basketball`. Exactly S2's SAM checkpoint, precision, box prompting and pair policy.",
+    "D0": "Historical ViPE UniDepth2Model type `l`; float32 invocation and bilinear interpolation, original source/weights/runtime.",
+    "D1": "Official `UniDepthV2` ViT-L, historical snapshot/serialization, byte RGB NCHW, supplied pinhole K, bilinear, checkpoint-default pixel bounds/resolution policy (no resolution-level override), float32 invocation. Save actual internal processing dimensions.",
+    "D2": "`DA3METRIC-LARGE`, `process_res=504`, `process_res_method='upper_bound_resize'`, ImageNet normalization, batch of one image, native bfloat16 inference. No input extrinsics, no pose-scale alignment, `infer_gs=false`, no export that requires predicted cameras. Compute processed-K focal/300 scaling once and restore output grid; retain raw depth and actual processed K.",
+    "D3": "`metric3d_vit_large` with `metric_depth_vit_large_800k.pth` and `vit.raft5.large.py`; float32, fit/pad to H=616/W=1064, RGB mean `[123.675,116.28,103.53]`, std `[58.395,57.12,57.375]`. Native hub de-canonicalization using resized fx/1000. Record native [0,300] metre clamp and saturated fraction; no percentile clipping.",
+    "D4": "Apple native `depth_pro.pt`, float32, official transform and internal 1536\u00b2 inference. Supply accepted input fx as a float32 device tensor to `f_px`; native output restore/inversion, no extra focal multiplication. Record native inverse-depth clamp saturation; confidence omitted.",
+    "M0": "For calibration frame f, compare f+1 except at role end where f\u22121 is used. For reconstruction, compare t and t+1. RGB\u2192grayscale, `absdiff>20`, one 9\u00d79 all-ones dilation. Same pair-changing mask for both members of an M0 reconstruction pair.",
+    "M1": "For each target f in role [lo,hi], let `a=max(lo,min(f-4,hi-8))`; context is all nine frames a\u2026a+8. Pixelwise median of grayscale values; `abs(gray_f-median)>20`, one 9\u00d79 dilation. Compute both pair members separately; exclude the union of their changing masks when checking pair-static evidence.",
+    "M2": "OpenCV MOG2 per camera and role, history=50, varThreshold=16, detectShadows=true, learningRate=0.02. Reset at each role start; process every frame chronologically once. Classify output 127 and 255 as excluded, then one 9\u00d79 dilation. Retain cold-start behavior in scores; no hidden warmup or reuse of final-window state. For pair-static evidence use the union of both members.",
+    "N0": "Current raw shared-track count, descending; exact tie by lower physical camera ID. Positive overlap only; three neighbors required.",
+    "N1": "Jaccard co-visibility on the same track sets; descending J, then raw shared count, then lower camera ID. Positive overlap only; three neighbors required.",
+    "N2": "Greedy coverage/parallax selection defined immediately below, three iterations and deterministic ties. No learned or image-adaptive neighbor scoring."
+  },
+  "runtimes": {
+    "E0": {
+      "name": "E0 existing ViPE",
+      "scope": "S0, D0",
+      "target": "Existing Python 3.14 / 2.13.0+cu130 / 0.28.0+cu130; verify historical runtime/source hashes."
+    },
+    "E1": {
+      "name": "E1 standalone legacy",
+      "scope": "S1",
+      "target": "Python 3.11 / torch 2.5.1+cu124 / torchvision 0.20.1+cu124; NumPy 1.26.4. Exact DeAOT native extensions and remaining packages resolved once."
+    },
+    "E2": {
+      "name": "E2 SAM 2 detector adapters",
+      "scope": "S2, S4",
+      "target": "Python 3.11 / torch 2.5.1+cu124 / torchvision 0.20.1+cu124; NumPy 1.26.4; Transformers 4.51.3 for S4. Grounding DINO and SAM source pins from study; record CUDA extension build."
+    },
+    "E3": {
+      "name": "E3 SAM 3",
+      "scope": "S3",
+      "target": "Python 3.12 / torch 2.10.0+cu128 / torchvision 0.25.0+cu128; NumPy 1.26.4. No FlashAttention-3 or multiplex acceleration. Use core inference imports and explicitly recorded required extras."
+    },
+    "E4": {
+      "name": "E4 UniDepth",
+      "scope": "D1",
+      "target": "Python 3.11 / torch 2.5.1+cu124 / torchvision 0.20.1+cu124; NumPy 2.1.3, xFormers 0.0.28.post3."
+    },
+    "E5": {
+      "name": "E5 DA3 metric",
+      "scope": "D2",
+      "target": "Python 3.11 / torch 2.5.1+cu124 / torchvision 0.20.1+cu124; NumPy 1.26.4, xFormers 0.0.28.post3. Include default package dependencies in license inventory; no app/gs extras."
+    },
+    "E6": {
+      "name": "E6 Metric3D",
+      "scope": "D3",
+      "target": "Python 3.10 / torch 2.0.1+cu118 / torchvision 0.15.2+cu118; NumPy 1.23.1, xFormers 0.0.21. Pin resolved MMCV/config dependencies before admission."
+    },
+    "E7": {
+      "name": "E7 Depth Pro",
+      "scope": "D4",
+      "target": "Python 3.11 / torch 2.5.1+cu124 / torchvision 0.20.1+cu124; NumPy 1.26.4; record timm and image/codec packages."
+    },
+    "E8": {
+      "name": "E8 existing geometry",
+      "scope": "All diagnostic geometry",
+      "target": "Existing hash-verified RoMa/geometry environment and runtime; no changes to matcher weights, native kernels, solver, calibration or normalization."
+    }
+  },
+  "pins": [
+    {
+      "source": "[SAM-Track](https://github.com/z-x-yang/Segment-and-Track-Anything/tree/99ca4bd5074a6ed62db4664285073ab669503926)",
+      "revision": "99ca4bd5074a6ed62db4664285073ab669503926",
+      "selected_file": null
+    },
+    {
+      "source": "[AOT benchmark](https://github.com/yoxu515/aot-benchmark/tree/601c138435a1764eb01404f3495b914e6e2e8eca)",
+      "revision": "601c138435a1764eb01404f3495b914e6e2e8eca",
+      "selected_file": null
+    },
+    {
+      "source": "[SAM 1](https://github.com/facebookresearch/segment-anything/tree/dca509fe793f601edb92606367a655c15ac00fdf)",
+      "revision": "dca509fe793f601edb92606367a655c15ac00fdf",
+      "selected_file": null
+    },
+    {
+      "source": "[Grounding DINO](https://github.com/IDEA-Research/GroundingDINO/tree/856dde20aee659246248e20734ef9ba5214f5e44)",
+      "revision": "856dde20aee659246248e20734ef9ba5214f5e44",
+      "selected_file": null
+    },
+    {
+      "source": "[SAM 2](https://github.com/facebookresearch/sam2/tree/2b90b9f5ceec907a1c18123530e92e794ad901a4)",
+      "revision": "2b90b9f5ceec907a1c18123530e92e794ad901a4",
+      "selected_file": null
+    },
+    {
+      "source": "[SAM 3](https://github.com/facebookresearch/sam3/tree/660a5e9e1b8b4c02c0ad97229b88a09a6e4ff5b7)",
+      "revision": "660a5e9e1b8b4c02c0ad97229b88a09a6e4ff5b7",
+      "selected_file": null
+    },
+    {
+      "source": "[RT-DETRv2](https://github.com/lyuwenyu/RT-DETR/tree/29320b6fd828f8e0987a71426cf2d961b09dfed7)",
+      "revision": "29320b6fd828f8e0987a71426cf2d961b09dfed7",
+      "selected_file": null
+    },
+    {
+      "source": "[UniDepth](https://github.com/lpiccinelli-eth/UniDepth/tree/8d8cfe4c7ee15297099983607febf0d4f32eb3d6)",
+      "revision": "8d8cfe4c7ee15297099983607febf0d4f32eb3d6",
+      "selected_file": null
+    },
+    {
+      "source": "[DA3](https://github.com/ByteDance-Seed/Depth-Anything-3/tree/3d835ec1a5802d64a8b8b15f817a1ab54809bfe4)",
+      "revision": "3d835ec1a5802d64a8b8b15f817a1ab54809bfe4",
+      "selected_file": null
+    },
+    {
+      "source": "[Metric3D](https://github.com/YvanYin/Metric3D/tree/eb5b6fac0dc155e4e52f576e304fbf11655ff339)",
+      "revision": "eb5b6fac0dc155e4e52f576e304fbf11655ff339",
+      "selected_file": null
+    },
+    {
+      "source": "[Depth Pro](https://github.com/apple/ml-depth-pro/tree/9e65e4dbe9568d23c546fcec53302b10445e109e)",
+      "revision": "9e65e4dbe9568d23c546fcec53302b10445e109e",
+      "selected_file": null
+    },
+    {
+      "source": "ShilongLiu/GroundingDINO",
+      "revision": "a94c9b567a2a374598f05c584e96798a170c56fb",
+      "selected_file": "`groundingdino_swint_ogc.pth`"
+    },
+    {
+      "source": "facebook/sam2.1-hiera-large",
+      "revision": "665f8e2ad61cf5f53d65644ff27c8ee525124610",
+      "selected_file": "`sam2.1_hiera_large.pt`"
+    },
+    {
+      "source": "facebook/sam3",
+      "revision": "3c879f39826c281e95690f02c7821c4de09afae7",
+      "selected_file": "`sam3.pt` (manual access gate; not requested)"
+    },
+    {
+      "source": "PekingU/rtdetr_v2_r50vd",
+      "revision": "282494075698cab9faa1096ae26856890030c817",
+      "selected_file": "`model.safetensors` and processor/config JSON"
+    },
+    {
+      "source": "lpiccinelli/unidepth-v2-vitl14",
+      "revision": "52b349b514bd8b47642f67ac78cb7b5dc5c51dd9",
+      "selected_file": "`model.safetensors`, matching the historical audit's selected serialization"
+    },
+    {
+      "source": "depth-anything/DA3METRIC-LARGE",
+      "revision": "4010e39f3634a45bc60553321fb49fb760bd594e",
+      "selected_file": "`model.safetensors`"
+    },
+    {
+      "source": "JUGGHM/Metric3D",
+      "revision": "80d2d1410afb4b23cd9d18c6be9144483d4b70b6",
+      "selected_file": "`metric_depth_vit_large_800k.pth`"
+    },
+    {
+      "source": "apple/DepthPro",
+      "revision": "ccd1350a774eb2248bcdfb3be430e38f1d3087ef",
+      "selected_file": "`depth_pro.pt`"
+    }
+  ]
+}
