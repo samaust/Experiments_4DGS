@@ -1,3 +1,7 @@
+# Current: remaining benchmark resumed; E2/E4 recovery authorized
+
+[Resume004](resume-004.json) reopens only unconsumed slots and grants one fresh setup attempt per E2/E4. [Assessment008](assessment-008.md) is current. [Validation012](implementation-validation-012.json) passes 333 CPU tests. Next: serial setup recovery, remaining setups, then admitted matrix execution. Original failures and all charges remain; existing proxy annotation amendment and resource ceilings remain binding.
+
 # Current: approved S3 memory repair and reconstruction complete
 
 [Recovery003 completed all 840 outputs](s3-reconstruction-recovery-results-003.md) in **894.108 seconds**. Device peaks were **11.782 GiB** from supervisor samples and **13.521 GiB** from phase probes, below the unchanged 22-GiB cap. Post-pair live/reserved memory remained constant across all 420 pairs. Output/source/helper hashes and host/GPU cleanup are verified. All 510 calibration outputs remain, and S3 is engineering-qualified.

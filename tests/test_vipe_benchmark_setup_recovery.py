@@ -263,6 +263,46 @@ class SetupRecoveryTests(unittest.TestCase):
         self.assertEqual(setup_result_record(self.root, 'E1'), file_record(path))
         self.assertEqual(self.ledger.states()['E1-setup']['status'], 'failed')
 
+    def test_e2_e4_recoveries_preserve_limits_history_and_exact_recipes(self):
+        for environment in ('E2', 'E4'):
+            with self.subTest(environment=environment):
+                original = environment + '-setup'
+                if original in self.ledger.states():
+                    self.ledger.resume_unstarted([original], 'Synthetic resume')
+                self.ledger.reserve(original, [], {})
+                failed = self.ledger.finish(original, 'failed', 11., cleanup_confirmed=True)
+                validation = self.root / (environment + '-validation.json')
+                write_json(validation, dict(status='passed', source_files=[file_record(__file__)]))
+                args = dict(schema='vipe-benchmark-setup-recovery/v1',
+                    environment=environment, original_job_id=original,
+                    job_id=original + '-recovery-001', repair_validation=file_record(validation),
+                    original_failure_event_sha256=failed['event_sha256'])
+                with self.assertRaisesRegex(ValueError, 'exact explicit'):
+                    self.ledger.authorize_setup_recovery(self.authorization(**args, recovery_attempts_limit=2))
+                history = self.ledger.path.read_bytes()
+                authorization = self.authorization(**args)
+                self.ledger.authorize_setup_recovery(authorization)
+                self.assertTrue(self.ledger.path.read_bytes().startswith(history))
+                with self.assertRaisesRegex(ValueError, 'already allocated'):
+                    self.ledger.authorize_setup_recovery(authorization)
+                with patch('vipe_benchmark.setup_recipes.shutil.which', return_value='/fixture/uv'):
+                    request = setup_recipes.recovery_request(self.root, authorization)
+                    runtime._validate_setup_request(request)
+                    self.assertEqual(request['environment'], environment)
+                    request['requirements'].append('unapproved-package')
+                    with self.assertRaisesRegex(ValueError, 'prescribed dependency'):
+                        runtime._validate_setup_request(request)
+                self.ledger.reserve(args['job_id'], [], {})
+                self.ledger.finish(args['job_id'], 'failed', 2., cleanup_confirmed=True)
+                with self.assertRaisesRegex(ValueError, 'already consumed'):
+                    self.ledger.reserve(args['job_id'], [], {})
+                self.assertEqual(self.ledger.states()[original], failed)
+
+    def test_generic_recovery_cannot_authorize_other_environments(self):
+        with self.assertRaisesRegex(ValueError, 'limited to approved E2/E4'):
+            self.ledger.authorize_setup_recovery(self.authorization(
+                schema='vipe-benchmark-setup-recovery/v1', environment='E5'))
+
 
 if __name__ == '__main__':
     unittest.main()

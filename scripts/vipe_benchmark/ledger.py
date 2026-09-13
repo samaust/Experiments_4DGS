@@ -307,6 +307,10 @@ class Ledger:
         document = read_json(verify_record(authorization)['path'])
         if document.get('schema') == 'vipe-benchmark-e1-recovery/v1':
             return self._authorize_e1_recovery(authorization, document)
+        if document.get('schema') == 'vipe-benchmark-setup-recovery/v1':
+            if document.get('environment') not in ('E2', 'E4'):
+                raise ValueError('generic recovery is limited to approved E2/E4 environments')
+            return self._authorize_e1_recovery(authorization, document, document['environment'])
         required = dict(schema='vipe-benchmark-sam3-recovery/v1',
             job_id='E3-setup-recovery-001', original_job_id='E3-setup', environment='E3',
             recovery_attempts_limit=1, setup_wall_seconds_limit=self.config['setup_wall_seconds_limit'],
@@ -342,45 +346,45 @@ class Ledger:
                 preparation_elapsed_seconds=preparation_seconds,
                 preparation_evidence=document['asset_preparation']))
 
-    def _authorize_e1_recovery(self, authorization, document):
-        """One explicitly requested E1 retry; preserve every historical charge."""
-        required = dict(original_job_id='E1-setup',
-            environment='E1', recovery_attempts_limit=1,
+    def _authorize_e1_recovery(self, authorization, document, environment="E1"):
+        """One explicitly requested fixed-runtime retry; preserve every historical charge."""
+        required = dict(original_job_id=f'{environment}-setup',
+            environment=environment, recovery_attempts_limit=1,
             setup_wall_seconds_limit=self.config['setup_wall_seconds_limit'],
             reset_previous_consumption=False, changes_to_prescribed_runtime=False,
             unrelated_attempts_reopened=False)
         if any(document.get(k) != v for k, v in required.items()) or not document.get('authorization'):
-            raise ValueError('recovery requires the exact explicit E1 authorization scope')
-        if not re.fullmatch(r'E1-setup-recovery-[0-9]{3}', document.get('job_id', '')):
-            raise ValueError('E1 recovery requires a numbered fresh identity')
+            raise ValueError(f'recovery requires the exact explicit {environment} authorization scope')
+        if not re.fullmatch(rf'{environment}-setup-recovery-[0-9]{{3}}', document.get('job_id', '')):
+            raise ValueError(f'{environment} recovery requires a numbered fresh identity')
         validation = read_json(verify_record(document['repair_validation'])['path'])
         if validation.get('status') != 'passed':
-            raise ValueError('E1 recovery requires passing repair validation')
+            raise ValueError(f'{environment} recovery requires passing repair validation')
         for record in validation['source_files']:
             verify_record(record)
         with self.locked() as (stream, events):
-            prior = [e for e in events if e['event'] == 'setup_recovery_authorized' and e['environment'] == 'E1']
+            prior = [e for e in events if e['event'] == 'setup_recovery_authorized' and e['environment'] == environment]
             if any(e['job_id'] == document['job_id'] for e in prior):
-                raise ValueError('E1 recovery already allocated; no additional recovery attempt')
-            if document['job_id'] != f'E1-setup-recovery-{len(prior) + 1:03d}':
-                raise ValueError('E1 recovery must use the next sequential identity')
+                raise ValueError(f'{environment} recovery already allocated; no additional recovery attempt')
+            if document['job_id'] != f'{environment}-setup-recovery-{len(prior) + 1:03d}':
+                raise ValueError(f'{environment} recovery must use the next sequential identity')
             states = self.states(events)
             if prior:
                 previous = states.get(prior[-1]['job_id'], {})
                 if (previous.get('event') != 'finish' or previous.get('status') != 'failed' or
                         previous.get('cleanup_confirmed') is not True or
                         previous.get('event_sha256') != document.get('previous_recovery_failure_event_sha256')):
-                    raise ValueError('new E1 authorization must bind the previous cleaned-up recovery failure')
-            original = states.get('E1-setup', {})
+                    raise ValueError(f'new {environment} authorization must bind the previous cleaned-up recovery failure')
+            original = states.get(f'{environment}-setup', {})
             if (original.get('event') != 'finish' or original.get('status') != 'failed' or
                     original.get('cleanup_confirmed') is not True or
                     original.get('event_sha256') != document.get('original_failure_event_sha256')):
-                raise ValueError('recovery must bind the preserved, cleaned-up E1 failure')
+                raise ValueError(f'recovery must bind the preserved, cleaned-up {environment} failure')
             if any(state['event'] == 'reserve' for state in states.values()):
                 raise ValueError('unreconciled active attempt; refusing recovery allocation')
             if self.totals(events)['setup']['elapsed_seconds'] >= self.config['setup_wall_seconds_limit']:
                 raise ValueError('cumulative setup allocation exhausted')
             return self._append(stream, events, dict(event='setup_recovery_authorized',
-                job_id=document['job_id'], original_job_id='E1-setup', environment='E1',
+                job_id=document['job_id'], original_job_id=f'{environment}-setup', environment=environment,
                 original_failure_event_sha256=original['event_sha256'], authorization=authorization,
                 preparation_elapsed_seconds=0., preparation_evidence=document['repair_validation']))

@@ -106,10 +106,10 @@ def recovery_request(local, authorization):
     events = Ledger(Path(local) / 'ledger.jsonl', load()).events()
     matching = [event for event in events if event['event'] == 'setup_recovery_authorized' and
                 event['authorization'] == authorization and event['job_id'] == document['job_id']]
-    if len(matching) != 1 or document['environment'] not in ('E1', 'E3'):
-        raise ValueError('SAM3 recovery is not registered in this run')
-    if document['environment'] == 'E1':
-        result = request(local, 'E1')
+    if len(matching) != 1 or document['environment'] not in ('E1', 'E2', 'E3', 'E4'):
+        raise ValueError('setup recovery is not registered in this run')
+    if document['environment'] in ('E1', 'E2', 'E4'):
+        result = request(local, document['environment'])
         result.update(job_id=document['job_id'], recovery_authorization=authorization)
         return result
     preparation = read_json(verify_record(document['asset_preparation'])['path'])
