@@ -119,6 +119,12 @@ def status(args, config):
                           admission=read_json(docs / 'admission.json') if (docs / 'admission.json').exists() else 'pending'), indent=2))
 
 
+def resume(args, config):
+    _, _, ledger = check_run(args, config)
+    ledger.resume_unstarted(args.jobs, args.authorization)
+    print('Recorded explicit resume for unstarted slots only; no jobs launched.')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run-id', required=True)
@@ -130,6 +136,9 @@ def main():
     p.add_argument('--bundle', type=Path, required=True)
     p = sub.add_parser('admit')
     p.add_argument('--validation', type=Path)
+    p = sub.add_parser('resume')
+    p.add_argument('--authorization', required=True, help='Exact explicit user resume instruction')
+    p.add_argument('--jobs', nargs='+', required=True)
     args = parser.parse_args()
     config = load()
     if args.command == 'init':
@@ -138,6 +147,8 @@ def main():
         return cpu_stage(args, config)
     if args.command == 'admit':
         return admission(args, config)
+    if args.command == 'resume':
+        return resume(args, config)
     return status(args, config)
 
 

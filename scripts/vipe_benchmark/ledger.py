@@ -58,6 +58,9 @@ class Ledger:
         for row in self.events() if events is None else events:
             if row['event'] in ('reserve', 'finish', 'account'):
                 states[row['job_id']] = row
+            elif row['event'] == 'resume_unstarted':
+                for job_id in row['job_ids']:
+                    states.pop(job_id, None)
         return states
 
     def totals(self, events=None):
@@ -99,7 +102,7 @@ class Ledger:
                 boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
 
     def note(self, event, **fields):
-        if event in ('reserve', 'finish', 'account'):
+        if event in ('reserve', 'finish', 'account', 'resume_unstarted'):
             raise ValueError('use the checked ledger transition')
         with self.locked() as (stream, events):
             return self._append(stream, events, dict(event=event, **fields))
@@ -122,3 +125,15 @@ class Ledger:
             if job_id not in self.jobs or job_id in self.states(events):
                 raise ValueError('unknown or already accounted job')
             return self._append(stream, events, dict(event='account', job_id=job_id, status=status, reason=reason))
+
+    def resume_unstarted(self, job_ids, authorization):
+        """Explicit resume may reopen blocked slots, never consumed attempts."""
+        if not authorization or not job_ids or len(set(job_ids)) != len(job_ids):
+            raise ValueError('explicit resume authorization and unique job IDs required')
+        with self.locked() as (stream, events):
+            states = self.states(events)
+            consumed = {r['job_id'] for r in events if r['event'] == 'reserve'}
+            if any(job_id in consumed or states.get(job_id, {}).get('event') != 'account' for job_id in job_ids):
+                raise ValueError('resume can reopen only unstarted accounted slots, not consumed attempts')
+            return self._append(stream, events, dict(event='resume_unstarted', job_ids=job_ids,
+                                                     authorization=authorization))

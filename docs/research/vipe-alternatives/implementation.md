@@ -86,6 +86,11 @@ The Python `annotations.validate` function is available for synthetic implementa
 fixtures. Admission currently remains blocked on the unfinished implementation
 and runtime qualification even if annotations pass.
 
+After an explicit user resume, previously blocked **unstarted** slots can be
+reopened with `resume --authorization 'EXACT USER INSTRUCTION' --jobs JOB_ID ...`.
+The ledger retains their earlier blocked records. This launches nothing and
+cannot reopen any consumed attempt or replenish time/attempt allocations.
+
 ## Implemented interfaces and limits
 
 - Exact diagnostic membership, immutable file hashes and forbidden-directory guards.
@@ -115,6 +120,6 @@ filesystem isolation proof. Synthetic passing tests are not real-model evidence.
 .local/envs/stg-colmap/bin/python -m unittest discover -s tests -p 'test_basketball_dense_fusion.py' -v
 ```
 
-47 focused tests and 15 existing scale, temporal geometry/crop and dense-fusion
+48 focused tests and 15 existing scale, temporal geometry/crop and dense-fusion
 tests passed at this checkpoint. No real model, GPU smoke test, calibration
 regeneration, training update or final-window evaluation was run.

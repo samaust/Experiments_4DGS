@@ -110,6 +110,19 @@ class SupervisorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'corruption'):
             self.ledger.events()
 
+    def test_explicit_resume_reopens_unstarted_slots_only(self):
+        self.ledger.account('annotations', 'blocked', 'missing independently reviewed labels')
+        with self.assertRaisesRegex(ValueError, 'already consumed or accounted'):
+            self.ledger.reserve('annotations', [], {})
+        with self.assertRaises(ValueError):
+            self.ledger.resume_unstarted(['annotations'], '')
+        self.ledger.resume_unstarted(['annotations'], 'synthetic explicit user resume instruction')
+        self.ledger.reserve('annotations', [], {})
+        self.ledger.finish('annotations', 'failed', .1)
+        with self.assertRaisesRegex(ValueError, 'consumed attempts'):
+            self.ledger.resume_unstarted(['annotations'], 'another explicit instruction')
+        self.assertEqual(self.ledger.totals()['cpu']['attempts'], 1)
+
     def test_concurrent_reservation_has_one_winner(self):
         code = ('import sys; from pathlib import Path; sys.path.insert(0,sys.argv[1]); '
                 'from vipe_benchmark.ledger import Ledger; from vipe_benchmark.config import load; '
