@@ -22,6 +22,15 @@ def result_record(local, job):
     ledger = Ledger(local / 'ledger.jsonl', load())
     state = ledger.states().get(job, {})
     if state.get('event') != 'finish' or state.get('status') != 'complete' or not state.get('result'):
+        if job == 'S3-reconstruction':
+            recoveries = [e for e in ledger.events() if e['event'] == 'reconstruction_recovery_authorized']
+            if recoveries:
+                record = result_record(local, recoveries[-1]['job_id'])
+                if record:
+                    result = read_json(record['path'])
+                    if result.get('component') != 'S3' or result.get('branch') != 'reconstruction' or len(result.get('rows', [])) != 840:
+                        raise ValueError('recovery result differs from S3 reconstruction contract')
+                    return record
         return None
     record = state['result']
     if Path(record['path']).resolve() != path.resolve():
@@ -393,6 +402,10 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
         raise ValueError('unallocated worker')
     if '-setup-recovery-' in job and operation != 'setup':
         raise ValueError('authorized setup recovery cannot fund another operation')
+    if job == 'S3-reconstruction-recovery-001':
+        expected, reasons = make_request(local, 'S3-reconstruction', config)
+        if reasons or operation != 'component' or request != dict(expected, job_id=job):
+            raise ValueError('reconstruction recovery must use the exact original component recipe')
     device_monitored = allocated[job]['resource'] in ('gpu', 'setup')
     if device_monitored and Path('/proc/1/comm').read_text().strip() != 'systemd':
         raise PermissionError('GPU execution requires host PID visibility for nvidia-smi ownership; '
@@ -415,7 +428,7 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
             raise ValueError('worker did not complete its explicit result contract')
         if operation == 'component' and request['component'].startswith(('S', 'D')):
             expected = (2 if job == 'R-S' else 1 if job == 'R-D' else
-                        510 if job.endswith('-calibration') else 840 if job.endswith('-reconstruction') else 30)
+                        510 if job.endswith('-calibration') else 840 if request.get('branch') == 'reconstruction' else 30)
             if len(result['rows']) != expected:
                 raise ValueError('component output count differs from allocated identity set')
             for row in result['rows']:
@@ -505,8 +518,9 @@ def execute_matrix(local, docs, config, validation):
                  operation='aggregate', resume_checkpoint=True)
     write_json(local / 'final-components.json', components(local))
     recovery_allocations = [event for event in ledger.events() if event['event'] == 'setup_recovery_authorized']
+    reconstruction_recoveries = [event for event in ledger.events() if event['event'] == 'reconstruction_recovery_authorized']
     write_json(local / 'final-accounting-before-report.json', dict(jobs=ledger.states(), consumption=ledger.totals(),
-        setup_recovery_authorizations=recovery_allocations))
+        setup_recovery_authorizations=recovery_allocations, reconstruction_recovery_authorizations=reconstruction_recoveries))
     request = dict(job_id='report', inputs=result_artifact(local, 'prepare', 'inputs'),
         annotations=result_artifact(local, 'annotations', 'annotations'),
         aggregate=aggregate_record(local, 'final', artifact=True),
@@ -514,6 +528,6 @@ def execute_matrix(local, docs, config, validation):
         accounting=file_record(local / 'final-accounting-before-report.json'), validation=file_record(validation))
     result = dispatch(local, docs, config, request, operation='report')
     write_json(docs / 'matrix-accounting-final.json', dict(jobs=ledger.states(), consumption=ledger.totals(),
-        setup_recovery_authorizations=recovery_allocations))
+        setup_recovery_authorizations=recovery_allocations, reconstruction_recovery_authorizations=reconstruction_recoveries))
     shutil.copyfile(result['report']['path'], docs / 'report.md')
     return result

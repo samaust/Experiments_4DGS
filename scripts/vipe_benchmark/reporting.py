@@ -378,7 +378,8 @@ def run(request, output, config):
         raise ValueError('report annotation evidence differs from the scored bundle')
     states = documents['accounting']['jobs']
     recoveries = documents['accounting'].get('setup_recovery_authorizations', [])
-    expected = (set(jobs(config)) | {event['job_id'] for event in recoveries}) - {'report'}
+    reconstruction_recoveries = documents['accounting'].get('reconstruction_recovery_authorizations', [])
+    expected = (set(jobs(config)) | {event['job_id'] for event in recoveries + reconstruction_recoveries}) - {'report'}
     unresolved = sorted(job for job in expected if states.get(job, {}).get('status') != 'complete')
     paired = paired_rows(masks.get('comparisons', {}), MASK_BASELINES, aggregate['mask_metrics'], scope='masks')
     for field, scope, baseline in [('isolated_geometry_metrics', 'isolated-geometry', 'G-S0'),
@@ -397,6 +398,10 @@ def run(request, output, config):
         lines += ['', 'The user separately authorized one SAM3 setup recovery after gated access was granted. '
             'The original E3 failure remains failed; both processes and the resumed asset acquisition '
             'remain charged against the unchanged cumulative setup limit.']
+    if reconstruction_recoveries:
+        lines += ['', 'The user authorized one additional S3 reconstruction attempt of at most 5,400 seconds '
+            'after native-helper isolation repair. Original failure and elapsed charges remain intact; '
+            'the cumulative GPU ceiling is unchanged.']
     if proxy:
         lines += ['', 'The user authorized automated labeling because human contributors were unavailable. '
             'Pixel and boundary scores measure agreement with the frozen CPU Mask R-CNN teacher, including uncertain '
@@ -467,9 +472,28 @@ def run(request, output, config):
         records = row.get('qualification_results', [])
         results = [reader.read(record) for record in records]
         standalone = component.startswith(('S', 'D')) and component not in ('S0', 'D0')
+        def guarded(result):
+            isolation = result.get('runtime', {}).get('isolation', {})
+            if isolation.get('import_guard') is not True:
+                return False
+            if isolation.get('subprocesses') is False:
+                return True
+            helpers = isolation.get('native_helpers') or {}
+            if isolation.get('subprocesses') != 'confined-native-helpers' or not helpers.get('completed'):
+                return False
+            completed = reader.read(helpers['completed'])
+            policy = reader.read(completed['policy'])
+            if completed.get('status') != 'complete' or not policy.get('inherited_process_group'):
+                return False
+            for command in completed['commands']:
+                reader.read(command['request'])
+                reader.read(command['started'])
+                if reader.read(command['result'])['returncode'] != 0:
+                    return False
+            return True
         isolated = standalone and row.get('status') == 'qualified' and bool(results) and all(
             r.get('status') == 'complete' and r.get('runtime', {}).get('isolation', {}).get('import_guard') is True and
-            r.get('runtime', {}).get('isolation', {}).get('subprocesses') is False for r in results)
+            guarded(r) for r in results)
         conclusion = 'qualified on completed guarded outputs' if isolated else 'reference wrapper' if component in ('S0', 'D0') else 'unverified'
         dependency_removal[component] = dict(status='qualified' if isolated else 'unverified', reason=conclusion, evidence=records)
         license_evidence = row.get('license_evidence', {})

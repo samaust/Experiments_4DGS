@@ -77,8 +77,15 @@ def _model_runtime(request):
     socket.create_connection = deny_network
     socket.socket.connect = deny_network
     socket.socket.connect_ex = deny_network
+    helpers = None
+    if component == 'S3':
+        import importlib.util
+        import os
+        from .native_helpers import NativeHelpers
+        helpers = NativeHelpers(Path(importlib.util.find_spec('triton').origin).parent,
+                                os.environ['TMPDIR'], request['forbidden_vipe_roots'])
     isolation = (dict(reference_vipe_access=True) if component in ('S0', 'D0') else
-                 deny_vipe(request['forbidden_vipe_roots']))
+                 deny_vipe(request['forbidden_vipe_roots'], native_helpers=helpers))
     return dict(versions=actual, cuda=torch.version.cuda, device=torch.cuda.get_device_name(), isolation=isolation)
 
 
@@ -144,6 +151,8 @@ def segment(request, output, config):
                 note='first real predictions validated inside the allocated job'))
         print(f'{request["job_id"]}: {len(rows)}/{len(identities)} outputs', flush=True)
     validate_membership(rows, identities)
+    from .native_helpers import finalize_evidence
+    finalize_evidence(runtime.get('isolation', {}))
     result = dict(status='complete', component=component, branch=branch, job_id=request['job_id'], rows=rows,
         configuration=file_record(output / 'config.json'), runtime=runtime, native_wall_seconds=native_seconds,
         peak_allocated_bytes=torch.cuda.max_memory_allocated(), peak_reserved_bytes=torch.cuda.max_memory_reserved())

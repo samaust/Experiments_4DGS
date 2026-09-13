@@ -1,3 +1,7 @@
+# Current: S3 reconstruction recovery authorized and repaired
+
+The user authorized exactly one additional S3 reconstruction attempt, capped at 90 minutes, after native-helper isolation repair. [Repair](native-helper-repair-001.md) passes [322 CPU tests and host confinement fixtures](implementation-validation-009.json). [Authorization](s3-reconstruction-recovery-authorization-001.json) preserves the original failure and all cumulative limits. The additional attempt is not yet dispatched; no model ran during repair. Next: commit the validated milestone, then dispatch the single recovery automatically. Other stopped work remains stopped. Earlier status sections below are historical.
+
 # Plan 031 status
 
 ## E1 setup recovered successfully

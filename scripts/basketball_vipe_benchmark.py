@@ -159,6 +159,23 @@ def execute(args, config):
         elif len(registered) != 1 or registered[0]['authorization'] != authorization:
             raise ValueError('a different recovery authorization is already registered')
         dispatch(local, docs, config, recovery_request(local, authorization), operation='setup')
+    elif args.command == 'reconstruction-recovery':
+        from vipe_benchmark.execution import common_admission
+        authorization = file_record(args.authorization)
+        document = read_json(args.authorization)
+        validation = verify_record(document['repair_validation'])
+        record = common_admission(local, docs, config, Path(validation['path']))
+        if record['status'] != 'admitted':
+            raise ValueError('; '.join(record['reasons']))
+        registered = [e for e in ledger.events() if e['event'] == 'reconstruction_recovery_authorized']
+        if not registered:
+            ledger.authorize_reconstruction_recovery(authorization)
+        elif len(registered) != 1 or registered[0]['authorization'] != authorization:
+            raise ValueError('different reconstruction recovery authorization already registered')
+        request, reasons = make_request(local, 'S3-reconstruction', config)
+        if reasons:
+            raise ValueError('; '.join(reasons))
+        dispatch(local, docs, config, dict(request, job_id=document['job_id']))
     elif args.command == 'execute':
         execute_matrix(local, docs, config, args.validation)
     elif args.command == 'stage':
@@ -205,6 +222,8 @@ def main():
     choice.add_argument('--environment', choices=[f'E{i}' for i in range(1, 8)])
     p = sub.add_parser('setup-recovery')
     p.add_argument('--authorization', type=Path, required=True)
+    p = sub.add_parser('reconstruction-recovery')
+    p.add_argument('--authorization', type=Path, required=True)
     p = sub.add_parser('execute')
     p.add_argument('--validation', type=Path, required=True)
     p = sub.add_parser('stage')
@@ -223,7 +242,7 @@ def main():
         return auto_annotations(args, config)
     if args.command == 'admit':
         return admission(args, config)
-    if args.command in ('qualify', 'inventory-existing', 'setup', 'setup-recovery', 'execute', 'stage'):
+    if args.command in ('qualify', 'inventory-existing', 'setup', 'setup-recovery', 'reconstruction-recovery', 'execute', 'stage'):
         return execute(args, config)
     if args.command == 'resume':
         return resume(args, config)
