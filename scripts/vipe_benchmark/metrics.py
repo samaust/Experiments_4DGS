@@ -31,6 +31,10 @@ def boundary_counts(prediction, truth, domain, tolerance=2):
 
 
 def boundary_score(counts):
+    if not counts['predicted_boundary'] and not counts['truth_boundary']:
+        return None
+    if not counts['predicted_boundary'] or not counts['truth_boundary']:
+        return 0.
     p = divide(counts['matched_prediction'], counts['predicted_boundary'])
     r = divide(counts['matched_truth'], counts['truth_boundary'])
     return None if p is None or r is None else (2 * p * r / (p + r) if p + r else 0.)

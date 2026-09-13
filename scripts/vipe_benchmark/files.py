@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import tempfile
 
 
 def safe_path(path):
@@ -15,7 +16,10 @@ def safe_path(path):
 
 def digest(path):
     with safe_path(path).open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
+        checksum = hashlib.sha256()
+        while block := stream.read(2**20):
+            checksum.update(block)
+        return checksum.hexdigest()
 
 
 def canonical(value):
@@ -33,10 +37,21 @@ def read_json(path):
 def write_json(path, value):
     path = safe_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open('x') as stream:
-        stream.write(json.dumps(value, indent=2, allow_nan=False) + '\n')
-        stream.flush()
-        os.fsync(stream.fileno())
+    payload = json.dumps(value, indent=2, allow_nan=False) + '\n'
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='w', dir=path.parent,
+                prefix='.' + path.name + '.', suffix='.tmp', delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        # Linking publishes a complete file atomically and refuses an existing
+        # destination, including a concurrently published result or a symlink.
+        os.link(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def file_record(path, expected=None):

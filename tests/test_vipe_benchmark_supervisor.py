@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from vipe_benchmark.config import load
 from vipe_benchmark.files import read_json
 from vipe_benchmark.ledger import Ledger
-from vipe_benchmark.supervisor import group_processes, supervise
+from vipe_benchmark.supervisor import group_processes, supervise, SupervisionFailure
 
 
 class SupervisorTests(unittest.TestCase):
@@ -80,19 +80,31 @@ class SupervisorTests(unittest.TestCase):
             self.run_worker(code)
         self.assertEqual(self.ledger.states()['prepare']['status'], 'failed')
         self.assertTrue(self.ledger.states()['prepare']['cleanup_confirmed'])
+        self.assertTrue(self.ledger.states()['prepare']['stop_required'])
+        self.assertEqual(self.ledger.states()['prepare']['failure_kind'], 'interrupted')
 
     def test_simulated_storage_cap_stops_worker(self):
+        samples = iter([{}, dict(artifact_bytes=151 * 2**30)])
         with self.assertRaisesRegex(RuntimeError, 'storage ceiling'):
-            self.run_worker('import time; time.sleep(20)', sample_resources=lambda: dict(artifact_bytes=151 * 2**30))
+            self.run_worker('import time; time.sleep(20)', sample_resources=lambda: next(samples))
         self.assertTrue(self.ledger.states()['prepare']['cleanup_confirmed'])
+        self.assertTrue(self.ledger.states()['prepare']['stop_required'])
+
+    def test_preexisting_resource_cap_never_spends_an_attempt(self):
+        with self.assertRaisesRegex(ValueError, 'already exhausted'):
+            self.run_worker('pass', sample_resources=lambda: dict(artifact_bytes=151 * 2**30))
+        self.assertEqual(self.ledger.totals()['cpu']['attempts'], 0)
 
     def test_simulated_memory_and_foreign_gpu_process(self):
         with self.assertRaisesRegex(ValueError, 'already in use'):
             self.run_worker('pass', sample_resources=lambda: dict(gpu_pids=[999999]))
         self.assertEqual(self.ledger.totals()['cpu']['attempts'], 0)
-        with self.assertRaisesRegex(RuntimeError, 'memory ceiling'):
-            self.run_worker('import time; time.sleep(20)', sample_resources=lambda: dict(device_bytes=23 * 2**30))
+        samples = iter([{}, dict(device_bytes=23 * 2**30)])
+        with self.assertRaisesRegex(SupervisionFailure, 'memory ceiling') as failure:
+            self.run_worker('import time; time.sleep(20)', sample_resources=lambda: next(samples))
         self.assertEqual(self.ledger.totals()['cpu']['attempts'], 1)
+        self.assertTrue(failure.exception.stop_required)
+        self.assertEqual(failure.exception.kind, 'device_memory')
 
     def test_restart_does_not_relaunch_unfinished_attempt(self):
         self.ledger.reserve('prepare', [], {})

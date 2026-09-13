@@ -56,8 +56,10 @@ class Ledger:
     def states(self, events=None):
         states = {}
         for row in self.events() if events is None else events:
-            if row['event'] in ('reserve', 'finish', 'account'):
+            if row['event'] in ('reserve', 'finish', 'account', 'checkpoint'):
                 states[row['job_id']] = row
+            elif row['event'] == 'checkpoint_resume':
+                states[row['job_id']] = dict(row, event='reserve')
             elif row['event'] == 'resume_unstarted':
                 for job_id in row['job_ids']:
                     states.pop(job_id, None)
@@ -70,7 +72,7 @@ class Ledger:
         for row in events:
             if row['event'] == 'reserve':
                 totals[row['resource']]['attempts'] += 1
-            elif row['event'] == 'finish':
+            elif row['event'] in ('finish', 'checkpoint'):
                 totals[row['resource']]['elapsed_seconds'] += row['elapsed_seconds']
             elif row['event'] == 'cpu_preparation_charge':
                 totals['cpu']['elapsed_seconds'] += row['elapsed_seconds']
@@ -122,8 +124,41 @@ class Ledger:
             return self._append(stream, events, dict(event='cpu_preparation_charge',
                                 resource='cpu', elapsed_seconds=elapsed_seconds, evidence=evidence))
 
+    def checkpoint(self, job_id, elapsed_seconds, **fields):
+        """Pause only the single aggregation transaction between frozen stages."""
+        if job_id != 'aggregate' or not math.isfinite(elapsed_seconds) or elapsed_seconds < 0:
+            raise ValueError('only aggregation may checkpoint a bounded stage')
+        with self.locked() as (stream, events):
+            state = self.states(events).get(job_id)
+            if not state or state['event'] != 'reserve' or elapsed_seconds > state['seconds']:
+                raise ValueError('aggregation checkpoint has no valid active reservation')
+            return self._append(stream, events, dict(event='checkpoint', job_id=job_id,
+                status='checkpointed', resource='cpu', elapsed_seconds=elapsed_seconds, **fields))
+
+    def resume_checkpoint(self, job_id, command, evidence, *, seconds_limit=None):
+        if job_id != 'aggregate':
+            raise ValueError('only the aggregation transaction has resumable checkpoints')
+        with self.locked() as (stream, events):
+            states = self.states(events)
+            if states.get(job_id, {}).get('event') != 'checkpoint':
+                raise ValueError('no frozen aggregate checkpoint to resume')
+            if any(s['event'] == 'reserve' for s in states.values()):
+                raise ValueError('unreconciled active attempt; refusing concurrent dispatch')
+            seconds = self.config['cpu_prepare_score_report_seconds_limit'] - self.totals(events)['cpu']['elapsed_seconds']
+            if seconds_limit is not None:
+                if not math.isfinite(seconds_limit) or seconds_limit <= 0:
+                    raise ValueError('invalid narrower job deadline')
+                seconds = min(seconds, seconds_limit)
+            if seconds <= 0:
+                raise ValueError('CPU allocation exhausted')
+            return self._append(stream, events, dict(event='checkpoint_resume', job_id=job_id,
+                resource='cpu', seconds=seconds, command=command, evidence=evidence,
+                previous_result=states[job_id].get('result'), monotonic_start=time.monotonic(),
+                boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
+
     def note(self, event, **fields):
-        if event in ('reserve', 'finish', 'account', 'resume_unstarted'):
+        if event in ('reserve', 'finish', 'account', 'resume_unstarted', 'checkpoint',
+                     'checkpoint_resume', 'cpu_preparation_charge'):
             raise ValueError('use the checked ledger transition')
         with self.locked() as (stream, events):
             return self._append(stream, events, dict(event=event, **fields))

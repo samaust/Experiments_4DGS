@@ -63,6 +63,8 @@ def combined(finalists, depth_gates, components):
             for component in ids:
                 record = components.get(component, {})
                 if record.get('commercial_permission') != 'verified' or record.get('non_agpl') != 'verified':
-                    reasons.append(f'{component}: exact code/weights/dependency license preferences unverified')
+                    detail = record.get('license_evidence', {}).get('reasons', [])
+                    reasons.append(f'{component}: exact code/weights/dependency license preferences unverified' +
+                                   (': ' + '; '.join(detail[:3]) if detail else ''))
         result[slot] = dict(components=ids, status='blocked' if reasons else 'eligible', reasons=reasons)
     return result

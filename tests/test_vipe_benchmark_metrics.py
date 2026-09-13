@@ -26,6 +26,15 @@ class MetricsTests(unittest.TestCase):
         a[5:10, 5:10], b[5:10, 7:12] = True, True
         self.assertEqual(boundary_score(boundary_counts(a, b, np.ones_like(a))), 1.)
 
+    def test_boundary_complete_miss_is_zero_and_both_empty_undefined(self):
+        empty = np.zeros((10, 10), bool)
+        truth = empty.copy()
+        truth[3:7, 3:7] = True
+        domain = np.ones_like(empty)
+        self.assertEqual(boundary_score(boundary_counts(empty, truth, domain)), 0.)
+        self.assertEqual(boundary_score(boundary_counts(truth, empty, domain)), 0.)
+        self.assertIsNone(boundary_score(boundary_counts(empty, empty, domain)))
+
     def test_hungarian_eligible_count_and_stable_tie(self):
         truth = np.array([[1, 1, 2, 2]])
         pred = np.array([[8, 8, 8, 8]])
