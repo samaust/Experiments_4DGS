@@ -1,3 +1,15 @@
+# Current stop: recovery002 reached the device-memory ceiling
+
+The approved S3 reconstruction ran for **124.829 seconds** and exported **82/840 outputs** before the supervisor stopped it at **23.468 GiB**, above the unchanged **22 GiB** limit. [Assessment006](assessment-006.md), [corrected output/cleanup evidence](s3-reconstruction-recovery-results-002-corrected.json), and [accounting006](matrix-accounting-006.json) are authoritative. Cleanup is confirmed; no worker or GPU process remains active. The attempt is consumed, and no further attempt is allocated.
+
+The OpenCV/native-helper repair in `2661c92` passed 325 CPU tests and the actual first pair; all 85 recorded native helpers completed successfully. The current blocker is reconstruction device-memory use. Partial arrays/masks are preserved, with no complete result manifest and no downstream promotion. No Codex denial or missing allow rule caused this stop. A bounded memory diagnosis and new explicit model-attempt allocation are required before further execution. Other stopped work remains stopped.
+
+Current totals: 6 GPU attempts / 789.192 seconds; 7 setup attempts / 4264.035 seconds; CPU preparation 10307.919 seconds. Earlier sections are historical checkpoints.
+
+# Current: recovery002 running; first pair qualified
+
+`S3-reconstruction-recovery-002` passed [first-pair qualification](s3-reconstruction-recovery-first-pair-002.json), including successful confined native helpers. The single 5,400-second reservation is active; reconstruction is progressing toward 840 outputs. Implementation commit `2661c92` is bound to validation010. No final result or cleanup is claimed yet. Other stopped work remains stopped. Earlier sections are historical.
+
 # Current: recovery002 authorized after OpenCV-path repair
 
 The user approved another run. [Repair002](native-helper-repair-002.md) passes [325 CPU tests and the actual OpenCV import lifecycle](implementation-validation-010.json). [Authorization002](s3-reconstruction-recovery-authorization-002.json) binds the original and recovery001 failures and grants exactly one additional S3 reconstruction attempt of at most 90 minutes. No new GPU attempt has started. Next: commit the validated repair and dispatch recovery002. Other stopped work remains stopped. Earlier sections are historical.
