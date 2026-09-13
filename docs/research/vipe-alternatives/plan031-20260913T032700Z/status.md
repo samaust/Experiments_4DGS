@@ -1,3 +1,7 @@
+# Current: memory diagnostic passed; approved full reconstruction ready
+
+[The diagnostic completed 48 pairs](sam3-memory-diagnostic-results-001.md) with exact agreement on all 82 saved outputs. Post-cleanup live/reserved memory stayed constant at 4.717/4.852 GiB; device observations stayed below 22 GiB and cleanup is confirmed. [The passed gate](sam3-memory-diagnostic-review-001.json) admits [the already approved 90-minute recovery003](s3-reconstruction-recovery-authorization-003.json). Next: commit the diagnostic evidence, then dispatch the single full reconstruction automatically. Other stopped work remains stopped. Earlier sections are historical.
+
 # Current: approved memory diagnostic and conditional full run
 
 The user approved the [two-stage memory repair plan](sam3-memory-diagnostic-plan-001.md): one 10-minute/48-pair diagnostic and, only after validation, one 90-minute reconstruction. [331 CPU tests pass](implementation-validation-011.json). Both new GPU attempts remain unused. Next: commit the validated instrumentation, then dispatch the bounded diagnostic. The existing 22-GiB and cumulative resource ceilings remain unchanged; unrelated work stays stopped. Earlier sections are historical.
