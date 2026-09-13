@@ -1,3 +1,7 @@
+# Current: D0 fit/check passed; neighbor selection starting
+
+[Assessment015](assessment-015.md) and [D0 scale evidence](D0-scale-results-001.json) are current. D0 completed all 60 depth outputs and passed fit/check gates; frozen scale 1.31506947, frame175 disagreement about 3.13%, cleanup confirmed. N0 is next/running. D1–D4 remain unstarted and network-blocked.
+
 # Current: mask checkpoint complete; D0 fit dispatched
 
 [Assessment014](assessment-014.md) and [mask aggregation evidence](mask-aggregation-results-001.json) are current. The original staged aggregation froze all 232 proxy annotation images and 5400 completed primary mask rows in about 20 minutes; cleanup is confirmed. D0 fit is next/running under validation014. Network setup remains paused. No final report has run.
