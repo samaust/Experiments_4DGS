@@ -61,6 +61,8 @@ def tree_record(path, revision):
             record = file_record(source)
             record['path'] = str(source.absolute())
             record['mode'] = stat.S_IMODE(source.stat().st_mode)
+            if source.is_symlink():
+                record['symlink_target'] = os.readlink(source)
             files.append(record)
     if not files:
         raise ValueError('empty source/snapshot inventory')
@@ -196,18 +198,63 @@ def _download(url, path, transfer_dir, *, limit, run_root, artifact_limit, use_h
 def extract_source(archive, output, revision):
     output = safe_path(output)
     output.mkdir(parents=True, exist_ok=False)
-    with tarfile.open(archive) as source:
+    if not isinstance(revision, str) or not re.fullmatch('[0-9a-f]{40}', revision):
+        raise ValueError('source archive requires an exact commit revision')
+    members, aliases, archive_root = {}, {}, None
+    with tarfile.open(safe_path(archive)) as source:
+        # Validate all member metadata before reading any file payload. Links
+        # may precede their target in a git archive; none is created this pass.
         for member in source:
-            parts = Path(member.name).parts
-            if not parts or 'prompts' in parts or len(parts) == 1:
-                continue
-            if Path(member.name).is_absolute() or '..' in parts or '\\' in member.name:
+            name = member.name.rstrip('/') if member.isdir() else member.name
+            parts = name.split('/')
+            if (not name or Path(name).is_absolute() or '\\' in name or '\x00' in name or
+                    any(part in ('', '.', '..') for part in parts)):
                 raise ValueError('unsafe source archive member')
             if not parts[0].endswith('-' + revision):
                 raise ValueError('source archive does not identify the exact pinned revision')
-            relative = Path(*parts[1:])
-            if member.issym() or member.islnk() or member.mode & 0o7000:
+            if archive_root is None:
+                archive_root = parts[0]
+            if parts[0] != archive_root:
+                raise ValueError('source archive contains more than one pinned root')
+            if member.islnk() or member.mode & 0o7000:
                 raise ValueError('unsafe source archive member')
+            if not (member.isdir() or member.isfile() or member.issym()):
+                raise ValueError('source archive contains a special file')
+            if 'prompts' in parts:
+                if member.issym():
+                    raise ValueError('source archive aliases cannot access prompts')
+                continue
+            relative = Path(*parts[1:])
+            if relative in members:
+                raise ValueError('source archive contains a path collision')
+            if len(parts) == 1 and not member.isdir():
+                raise ValueError('source archive root must be a directory')
+            members[relative] = member
+            if member.issym():
+                text = member.linkname
+                link_parts = text.split('/')
+                if (not text or Path(text).is_absolute() or '\\' in text or '\x00' in text or
+                        re.match(r'^[A-Za-z]:', text) or 'prompts' in link_parts):
+                    raise ValueError('unsafe source archive alias target')
+                target_parts = list(relative.parent.parts)
+                for part in link_parts:
+                    if part == '..':
+                        if not target_parts:
+                            raise ValueError('source archive alias escapes its pinned root')
+                        target_parts.pop()
+                    elif part not in ('', '.'):
+                        target_parts.append(part)
+                aliases[relative] = Path(*target_parts)
+
+        for relative in members:
+            for parent in relative.parents:
+                if parent in members and not members[parent].isdir():
+                    raise ValueError('source archive contains a path collision')
+        for target in aliases.values():
+            if target not in members or not members[target].isfile():
+                raise ValueError('source archive alias must target a regular member directly')
+
+        for relative, member in members.items():
             target = safe_path(output / relative)
             if member.isdir():
                 target.mkdir(parents=True, exist_ok=True)
@@ -216,9 +263,19 @@ def extract_source(archive, output, revision):
                 with source.extractfile(member) as inp, target.open('xb') as out:
                     shutil.copyfileobj(inp, out)
                 target.chmod(member.mode & 0o777)
-            else:
-                raise ValueError('source archive contains a special file')
-    return tree_record(output, revision)
+
+        for relative, target_relative in aliases.items():
+            target = safe_path(output / target_relative)
+            if target.is_symlink() or not target.is_file() or not target.resolve().is_relative_to(output.resolve()):
+                raise ValueError('source archive alias target changed during extraction')
+            link = safe_path(output / relative)
+            link.parent.mkdir(parents=True, exist_ok=True)
+            link.symlink_to(members[relative].linkname, target_is_directory=False)
+    record = tree_record(output, revision)
+    record['archive_root'] = archive_root
+    record['archive_symlinks'] = [dict(member=members[path].name, target=members[path].linkname,
+                                     target_member=members[target].name) for path, target in aliases.items()]
+    return record
 
 
 def acquire_assets(request, output, config):

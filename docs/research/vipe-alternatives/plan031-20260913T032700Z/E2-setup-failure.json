@@ -1,0 +1,73 @@
+{
+  "status": "failed",
+  "allocation_consumed": true,
+  "retry_permitted": false,
+  "supervisor": {
+    "cleanup_confirmed": true,
+    "deadline_exceeded": false,
+    "elapsed_seconds": 767.6898049139418,
+    "error": "RuntimeError: worker exited 1",
+    "event": "finish",
+    "failure_kind": "worker_failure",
+    "job_id": "E2-setup",
+    "peak": {
+      "artifact_bytes": 20268498944,
+      "device_bytes": 980418560,
+      "download_bytes": 2008214170
+    },
+    "previous_sha256": "fd4fd0efcd4e709bfed69c430f6fa0ac798c8c83fa6d0ff82b301357a7735048",
+    "recorded_unix": 1789280588.1356626,
+    "resource": "setup",
+    "result": null,
+    "sequence": 99,
+    "status": "failed",
+    "stop_required": false,
+    "surviving_pids": [],
+    "event_sha256": "eda2e5a00d47836915379d1786f73db30cd4dbe1cad830e68f561db3b184e7b0"
+  },
+  "failure": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E2-setup/failure.json",
+    "sha256": "41a93d45ac0f6d599342e60b53477a470b267398df4ee45c8ce19be351f86404",
+    "bytes": 1065
+  },
+  "log": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E2-setup.log",
+    "sha256": "25a268ac977ce533f7ddfe2fef28ba004f2bbb54c9a8acb61c97f259b05ff3b2",
+    "bytes": 1482
+  },
+  "archive": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E2-setup/archives/sam2_source-2b90b9f5ceec907a1c18123530e92e794ad901a4.tar.gz",
+    "sha256": "1f2fbfad3ffa38110368abac76c6ef9df9c282a66d5c2807bc94abf4d2fb30f8",
+    "bytes": 55645345
+  },
+  "rejected_aliases": [
+    {
+      "member": "sam2-2b90b9f5ceec907a1c18123530e92e794ad901a4/sam2/sam2_hiera_b+.yaml",
+      "target": "configs/sam2/sam2_hiera_b+.yaml",
+      "mode": "0o777"
+    },
+    {
+      "member": "sam2-2b90b9f5ceec907a1c18123530e92e794ad901a4/sam2/sam2_hiera_l.yaml",
+      "target": "configs/sam2/sam2_hiera_l.yaml",
+      "mode": "0o777"
+    },
+    {
+      "member": "sam2-2b90b9f5ceec907a1c18123530e92e794ad901a4/sam2/sam2_hiera_s.yaml",
+      "target": "configs/sam2/sam2_hiera_s.yaml",
+      "mode": "0o777"
+    },
+    {
+      "member": "sam2-2b90b9f5ceec907a1c18123530e92e794ad901a4/sam2/sam2_hiera_t.yaml",
+      "target": "configs/sam2/sam2_hiera_t.yaml",
+      "mode": "0o777"
+    }
+  ],
+  "classification": "Implementation failure: the source extractor rejected every symbolic link, including four ordinary within-root SAM2 configuration file aliases. No sandbox, network or host authorization denial is identified.",
+  "affected_candidates": [
+    "S2",
+    "S4"
+  ],
+  "native_imports": 0,
+  "model_forwards": 0,
+  "next_action": "Repair and validate generic extraction for unconsumed E3-E7 builds. Preserve E2 failed with all downloads and partial source output; no re-extraction or setup replay."
+}
