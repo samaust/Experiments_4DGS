@@ -1,0 +1,13 @@
+# Pinned OpenCV library-path repair and recovery002
+
+The user explicitly replied **“I approve another run”** to the stopped recovery001 and targeted repair requirement. [Authorization002](s3-reconstruction-recovery-authorization-002.json) grants one new identity, `S3-reconstruction-recovery-002`, at most 5,400 seconds including cleanup, against the unchanged 93,600-second cumulative GPU ceiling. It binds both the original and recovery001 failures; neither charge is reset. Other stopped work remains stopped.
+
+The qualified E3 interpreter reproduced the exact import transition: absent `LD_LIBRARY_PATH` before `cv2`, then the pinned loader's `cv2/../../lib64:` string. The resolved lib64 directory does not exist. The final empty entry searches cwd. The repair checks exact loader/config hashes, actual loaded cv2 location, the exact environment string, continued absence of the library directory, unchanged cwd and absence of cwd shared libraries. External library paths remain rejected. It preserves the environment variable rather than deleting or replacing it.
+
+Bubblewrap now preserves the original cwd pathname as an otherwise unexposed namespace directory. This retains the empty search entry's lack of host shared libraries and prevents it from searching writable generated libraries under TMPDIR. Read-only tool/source mounts, closed host descriptors, private proc/network namespaces, single-use audit capability and inherited process-group cleanup remain enforced. This is the same trusted-Python/system-toolchain boundary documented in repair001.
+
+[Validation010](implementation-validation-010.json) passes **325 CPU tests** in 14.752 seconds. The actual E3 Torch/torchvision -> policy -> cv2 lifecycle fixture passes, with unchanged native ldconfig/ptxas output and interpreter architecture, unchanged environment bytes, forbidden descendant access, preserved cwd and rejected extra library paths. No GPU initialization/forward, model execution or native compilation was used as a smoke attempt. These checks establish repair behavior, not reconstruction qualification.
+
+Numbered recovery registration now requires the next unused identity and the previous cleaned-up failure hash. Each recovery still grants only one attempt; duplicate, skipped-number and unbound allocations are rejected. Exact S3 component/configuration dispatch and downstream resolution retain failed historical identities.
+
+Implementation and fixture sources are archived immutably before dispatch. The next action is the one authorized 90-minute recovery; native compilation and first-pair output qualification remain part of that attempt.

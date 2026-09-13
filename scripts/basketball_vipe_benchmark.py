@@ -167,7 +167,8 @@ def execute(args, config):
         record = common_admission(local, docs, config, Path(validation['path']))
         if record['status'] != 'admitted':
             raise ValueError('; '.join(record['reasons']))
-        registered = [e for e in ledger.events() if e['event'] == 'reconstruction_recovery_authorized']
+        registered = [e for e in ledger.events() if e['event'] == 'reconstruction_recovery_authorized'
+                      and e['job_id'] == document['job_id']]
         if not registered:
             ledger.authorize_reconstruction_recovery(authorization)
         elif len(registered) != 1 or registered[0]['authorization'] != authorization:

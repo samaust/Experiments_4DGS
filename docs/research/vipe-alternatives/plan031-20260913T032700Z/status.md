@@ -1,3 +1,7 @@
+# Current: recovery002 authorized after OpenCV-path repair
+
+The user approved another run. [Repair002](native-helper-repair-002.md) passes [325 CPU tests and the actual OpenCV import lifecycle](implementation-validation-010.json). [Authorization002](s3-reconstruction-recovery-authorization-002.json) binds the original and recovery001 failures and grants exactly one additional S3 reconstruction attempt of at most 90 minutes. No new GPU attempt has started. Next: commit the validated repair and dispatch recovery002. Other stopped work remains stopped. Earlier sections are historical.
+
 # Current stop: additional S3 reconstruction attempt consumed
 
 The user-authorized recovery failed after **17.421 seconds** with `ValueError: unadmitted native helper environment override: LD_LIBRARY_PATH`, before exporting any pair. [Results and verified cleanup](s3-reconstruction-recovery-results-001.json), [assessment005](assessment-005.md), and [accounting005](matrix-accounting-005.json) are authoritative for this stop. No worker/helper/GPU process remains active. No Codex denial or missing allow rule caused this failure.

@@ -220,20 +220,31 @@ class Ledger:
     def authorize_reconstruction_recovery(self, authorization):
         document = read_json(verify_record(authorization)['path'])
         required = dict(schema='vipe-benchmark-s3-reconstruction-recovery/v1',
-            job_id='S3-reconstruction-recovery-001', original_job_id='S3-reconstruction',
+            original_job_id='S3-reconstruction',
             attempts_limit=1, seconds_limit=5400, reset_previous_consumption=False,
             gpu_total_seconds_limit=self.config['gpu_total_seconds_limit'], unrelated_attempts_reopened=False)
         if any(document.get(k) != v for k, v in required.items()) or not document.get('authorization'):
             raise ValueError('exact explicit S3 reconstruction recovery authorization required')
+        if not re.fullmatch(r'S3-reconstruction-recovery-[0-9]{3}', document.get('job_id', '')):
+            raise ValueError('reconstruction recovery requires a numbered fresh identity')
         validation = read_json(verify_record(document['repair_validation'])['path'])
         if validation.get('status') != 'passed' or not validation.get('sources'):
             raise ValueError('passing bound native-helper repair validation required')
         for source in validation['sources']:
             verify_record(source)
         with self.locked() as (stream, events):
-            if any(e['event'] == 'reconstruction_recovery_authorized' for e in events):
+            prior = [e for e in events if e['event'] == 'reconstruction_recovery_authorized']
+            if any(e['job_id'] == document['job_id'] for e in prior):
                 raise ValueError('S3 reconstruction recovery already allocated')
+            if document['job_id'] != f'S3-reconstruction-recovery-{len(prior)+1:03d}':
+                raise ValueError('reconstruction recovery must use the next sequential identity')
             states = self.states(events)
+            if prior:
+                previous = states.get(prior[-1]['job_id'], {})
+                if (previous.get('event') != 'finish' or previous.get('status') != 'failed' or
+                        previous.get('cleanup_confirmed') is not True or previous.get('event_sha256') !=
+                        document.get('previous_recovery_failure_event_sha256')):
+                    raise ValueError('recovery must bind the previous cleaned-up recovery failure')
             original = states.get('S3-reconstruction', {})
             if (original.get('event') != 'finish' or original.get('status') != 'failed' or
                     original.get('cleanup_confirmed') is not True or

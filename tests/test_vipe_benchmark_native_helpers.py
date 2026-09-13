@@ -56,6 +56,7 @@ class NativeHelperTests(unittest.TestCase):
         policy.forbidden = [self.forbidden]
         policy.temporary = self.scratch
         policy.triton = self.root / 'triton'
+        policy.working_directory = Path.cwd()
         policy.interpreter = Path('/usr/bin/python3').resolve()
         policy.include = Path('/usr/include')
         policy.tools = {k: {'path': str(Path(v).resolve())} for k, v in {
@@ -63,6 +64,37 @@ class NativeHelperTests(unittest.TestCase):
             'bwrap': '/usr/bin/bwrap', 'ptxas': str(policy.triton / 'backends/nvidia/bin/ptxas')}.items()}
         policy.frame = lambda frames, relative, name: frames.get((relative, name))
         return policy
+
+    def test_opencv_mutation_requires_loaded_pinned_module_and_exact_path(self):
+        p = self.policy()
+        p.opencv = self.root / 'site-packages/cv2'
+        p.opencv.mkdir(parents=True)
+        source = p.opencv / '__init__.py'
+        source.write_text('fixture pinned bootstrap')
+        p.opencv_sources = {'__init__.py': file_record(source)}
+        p.opencv_library_path = str(p.opencv / '../../lib64') + ':'
+        env = {'TMPDIR': str(self.scratch), 'LD_LIBRARY_PATH': p.opencv_library_path}
+        with patch.dict(sys.modules, cv2=SimpleNamespace(__file__=str(source))):
+            self.assertEqual(p.admitted_opencv_path(env), p.opencv_library_path)
+            check_environment(env, self.scratch, [self.forbidden], opencv_library_path=p.admitted_opencv_path(env))
+            with self.assertRaises(ValueError):
+                p.admitted_opencv_path(dict(env, LD_LIBRARY_PATH=p.opencv_library_path+'/extra'))
+            (self.root / 'lib64').mkdir()
+            with self.assertRaisesRegex(ValueError, 'no longer absent'):
+                p.admitted_opencv_path(env)
+            (self.root / 'lib64').rmdir()
+            source.write_text('tampered')
+            with self.assertRaises(ValueError):
+                p.admitted_opencv_path(env)
+        with patch.dict(sys.modules, cv2=SimpleNamespace(__file__='/unrelated/cv2.py')):
+            with self.assertRaisesRegex(ValueError, 'actual pinned'):
+                p.admitted_opencv_path(env)
+
+    def test_native_cwd_does_not_search_temporary_shared_libraries(self):
+        command = confined_command(['/usr/bin/true'], readonly=[], temporary=self.scratch,
+                                   working_directory=self.root / 'empty-original-cwd')
+        self.assertEqual(command[command.index('--chdir')+1], str(self.root / 'empty-original-cwd'))
+        self.assertIn('--dir', command)
 
     def test_ldconfig_exact_callsite_argv_and_single_use(self):
         p = self.policy()
@@ -211,3 +243,13 @@ class ReconstructionRecoveryTests(unittest.TestCase):
         self.ledger.finish(job, 'complete', 10, result=file_record(path), cleanup_confirmed=True)
         self.assertEqual(result_record(self.root, 'S3-reconstruction'), file_record(path))
         self.assertEqual(self.ledger.states()['S3-reconstruction']['status'], 'failed')
+
+    def test_second_recovery_requires_new_authorization_bound_to_previous_failure(self):
+        self.authorize()
+        self.ledger.reserve('S3-reconstruction-recovery-001', [], {})
+        previous = self.ledger.finish('S3-reconstruction-recovery-001', 'failed', 17.421, cleanup_confirmed=True)
+        with self.assertRaisesRegex(ValueError, 'previous cleaned-up'):
+            self.authorize(job_id='S3-reconstruction-recovery-002')
+        self.authorize(job_id='S3-reconstruction-recovery-002', previous_recovery_failure_event_sha256=previous['event_sha256'])
+        self.assertEqual(self.ledger.reserve('S3-reconstruction-recovery-002', [], {})['seconds'], 5400)
+        self.assertEqual(self.ledger.totals()['gpu']['attempts'], 3)

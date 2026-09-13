@@ -402,7 +402,7 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
         raise ValueError('unallocated worker')
     if '-setup-recovery-' in job and operation != 'setup':
         raise ValueError('authorized setup recovery cannot fund another operation')
-    if job == 'S3-reconstruction-recovery-001':
+    if job.startswith('S3-reconstruction-recovery-'):
         expected, reasons = make_request(local, 'S3-reconstruction', config)
         if reasons or operation != 'component' or request != dict(expected, job_id=job):
             raise ValueError('reconstruction recovery must use the exact original component recipe')

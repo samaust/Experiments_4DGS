@@ -23,6 +23,11 @@ PINS = {
     'knobs.py': 'd84bda664f733f0547f9f4397c2dab11da1f9c58f974a840a3f1c61ea48c76fa',
 }
 CACHE_ENV = {'TRITON_HOME', 'TRITON_CACHE_DIR', 'TRITON_DUMP_DIR', 'TRITON_OVERRIDE_DIR'}
+CV2_PINS = {
+    '__init__.py': '936bd94c5a5debf0212fc751af79d3a163652f3e850259df2159db6aa3ed8ad8',
+    'config.py': '974e2d4096ee1a9a9a341df1bf33e16973683bf1ac733006de27ff2f23bc584d',
+    'config-3.py': '9a7aadf724b822001f5e963b01fd4e375d45e2cbbe328d2ca7b42a440c083a1c',
+}
 UNSAFE_ENV = {'CC', 'CXX', 'CPATH', 'C_INCLUDE_PATH', 'CPLUS_INCLUDE_PATH', 'OBJC_INCLUDE_PATH',
               'COMPILER_PATH', 'GCC_EXEC_PREFIX', 'LIBRARY_PATH', 'LD_PRELOAD', 'LD_AUDIT',
               'LD_LIBRARY_PATH', 'PTXAS_OPTIONS', 'DISABLE_PTXAS_OPT', 'NVPTX_ENABLE_DUMP',
@@ -38,8 +43,10 @@ def checked_path(value, forbidden_roots):
     return resolved
 
 
-def check_environment(env, temporary, forbidden_roots):
+def check_environment(env, temporary, forbidden_roots, *, opencv_library_path=None):
     for key, value in env.items():
+        if key == 'LD_LIBRARY_PATH' and value and value == opencv_library_path:
+            continue
         if value and (key in UNSAFE_ENV or key.startswith('TRITON_') and key not in CACHE_ENV):
             raise ValueError(f'unadmitted native helper environment override: {key}')
         if key in CACHE_ENV and not checked_path(value, forbidden_roots).is_relative_to(temporary):
@@ -50,7 +57,7 @@ def check_environment(env, temporary, forbidden_roots):
         checked_path(entry or '.', forbidden_roots)
 
 
-def confined_command(argv, *, readonly, temporary):
+def confined_command(argv, *, readonly, temporary, working_directory=None):
     command = ['/usr/bin/bwrap', '--die-with-parent', '--unshare-user', '--unshare-pid',
                '--unshare-net', '--unshare-ipc', '--unshare-uts', '--cap-drop', 'ALL',
                '--ro-bind', '/usr', '/usr', '--symlink', 'usr/bin', '/bin',
@@ -60,7 +67,13 @@ def confined_command(argv, *, readonly, temporary):
     for path in sorted(set(map(str, readonly))):
         if not Path(path).is_relative_to('/usr'):
             command += ['--ro-bind', path, path]
-    command += ['--bind', str(temporary), str(temporary), '--chdir', str(temporary), '--', *argv]
+    command += ['--bind', str(temporary), str(temporary)]
+    if working_directory is not None:
+        # Preserve the native cwd spelling without exposing host repository
+        # files. In particular an empty LD_LIBRARY_PATH entry must not search
+        # writable generated libraries in the attempt's temporary directory.
+        command += ['--dir', str(working_directory)]
+    command += ['--chdir', str(working_directory or temporary), '--', *argv]
     return command
 
 
@@ -72,6 +85,11 @@ class NativeHelpers:
         if not self.temporary.is_dir():
             raise ValueError('fresh supervised native temporary directory missing')
         check_environment(os.environ, self.temporary, self.forbidden)
+        self.working_directory = checked_path(os.getcwd(), self.forbidden)
+        self.opencv = self.triton.parent / 'cv2'
+        self.opencv_sources = {name: file_record(self.opencv / name, pin) for name, pin in CV2_PINS.items()}
+        self.opencv_library_path = str(self.opencv / '../../lib64') + ':'
+        self.check_opencv_search_paths()
         self.records = {key: file_record(self.triton / key, pin) for key, pin in PINS.items()}
         self.platform = file_record('/usr/lib/python3.12/platform.py',
             'ed0defe8ff7c116710493ffd099b566d3de686ab1b431a3d5401056798e59341')
@@ -90,9 +108,35 @@ class NativeHelpers:
         self.sequence = 0
         self.evidence = dict(boundary='bubblewrap mount/user/pid/network namespaces inherited by descendants',
             sources=self.records, platform=self.platform, tools=self.tools, log=str(self.log),
+            opencv_sources=self.opencv_sources, opencv_library_path=self.opencv_library_path,
+            native_cwd=str(self.working_directory),
+            opencv_search_policy='Exact pinned import mutation only; missing lib64 and no host-cwd shared libraries; empty namespace cwd preserves search result',
             trusted_system_tree='/usr', inherited_process_group=True,
             limitation='Trusted pinned Python callsites and host system toolchain; not an arbitrary-code sandbox')
         write_json(self.log / 'policy.json', self.evidence)
+
+    def check_opencv_search_paths(self):
+        library = self.opencv / '../../lib64'
+        checked_path(library, self.forbidden)
+        if library.exists() or library.is_symlink():
+            raise ValueError('OpenCV loader library directory is no longer absent')
+        if Path.cwd().resolve() != self.working_directory:
+            raise ValueError('native helper cwd changed after admission')
+        if self.working_directory.is_relative_to(self.temporary) or any(self.working_directory.glob('*.so*')):
+            raise ValueError('native helper cwd contains unadmitted shared libraries')
+
+    def admitted_opencv_path(self, env):
+        if not env.get('LD_LIBRARY_PATH'):
+            return None
+        if env['LD_LIBRARY_PATH'] != self.opencv_library_path:
+            raise ValueError('LD_LIBRARY_PATH differs from pinned OpenCV import mutation')
+        module = sys.modules.get('cv2')
+        if module is None or Path(getattr(module, '__file__', '')).resolve() != self.opencv / '__init__.py':
+            raise ValueError('OpenCV library path requires the actual pinned cv2 import')
+        for record in self.opencv_sources.values():
+            verify_record(record)
+        self.check_opencv_search_paths()
+        return self.opencv_library_path
 
     def frame(self, frames, relative, name):
         record = self.platform if relative == 'platform' else self.records[relative]
@@ -105,7 +149,8 @@ class NativeHelpers:
     def admit(self, argv, frames, env):
         if not isinstance(argv, (list, tuple)) or not argv or any(not isinstance(a, str) for a in argv):
             raise PermissionError('native helper requires explicit string argv')
-        check_environment(env, self.temporary, self.forbidden)
+        check_environment(env, self.temporary, self.forbidden,
+                          opencv_library_path=self.admitted_opencv_path(env))
         executable = checked_path(shutil.which(argv[0], path=env.get('PATH')) or argv[0], self.forbidden)
         for arg in argv:
             if arg.startswith('@'):
@@ -182,7 +227,8 @@ class NativeHelpers:
             raise PermissionError('unadmitted native executable')
         verify_record(self.tools[kind])
         verify_record(self.tools['bwrap'])
-        return confined_command(list(argv), readonly=readonly, temporary=self.temporary), source, result, kind
+        return confined_command(list(argv), readonly=readonly, temporary=self.temporary,
+                                working_directory=self.working_directory), source, result, kind
 
     def consume(self, args):
         expected = getattr(self.local, 'permit', None)
