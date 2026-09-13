@@ -1,3 +1,11 @@
+# Current: segmentation accounted; M0 motion dispatched
+
+[Assessment013](assessment-013.md) and [Accounting011](matrix-accounting-011.json) are current. S0/S2/S3/S4 have 5400 successful primary mask rows; S1 failed and R-S is skipped. S4 reconstruction completed in 299.083 seconds with cleanup. Next: M0/M1/M2, then mask aggregation. Network setup remains paused.
+
+# Current: S4 reconstruction running
+
+S4 calibration completed all 510 outputs in 92.424 seconds; [results](S4-calibration-results.json). Original S4 reconstruction has passed first-pair qualification and is running under validation014. Next: M0/M1/M2, then the single staged mask aggregation and eligible local downstream arms. E4/E5–E7 network setup remains paused. Current controller session is owned by this active turn; on context loss inspect the ledger before dispatching anything.
+
 # Current: S2 recovery complete; S4 calibration dispatched
 
 [Assessment012](assessment-012.md) and [Accounting010](matrix-accounting-010.json) are current. S2 recovery passed all 840 outputs and final supervision in 334.397 seconds, with cleanup confirmed. Original S2 failure is preserved. S4 calibration is next/running under validation014. Network setup stays paused.
