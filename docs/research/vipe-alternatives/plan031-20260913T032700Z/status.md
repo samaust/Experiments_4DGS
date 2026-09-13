@@ -1,3 +1,11 @@
+# Current stop: additional S3 reconstruction attempt consumed
+
+The user-authorized recovery failed after **17.421 seconds** with `ValueError: unadmitted native helper environment override: LD_LIBRARY_PATH`, before exporting any pair. [Results and verified cleanup](s3-reconstruction-recovery-results-001.json), [assessment005](assessment-005.md), and [accounting005](matrix-accounting-005.json) are authoritative for this stop. No worker/helper/GPU process remains active. No Codex denial or missing allow rule caused this failure.
+
+The repair is committed as `9a9d0f7`; [322 CPU tests passed](implementation-validation-009.json), but the real OpenCV import lifecycle was not covered. Source review identifies its later `LD_LIBRARY_PATH` mutation as the likely cause. A targeted library-path/import-order repair and a new explicit reconstruction attempt allocation are required before another model run. The granted additional attempt is consumed; unused time cannot fund another attempt. Original failures, all 510 S3 calibration results, E1/E3 qualification, and historical consumption remain preserved. Other stopped work remains stopped; the full benchmark is incomplete.
+
+Current totals: five GPU attempts / 664.363 seconds; seven setup attempts / 4264.035 seconds; CPU preparation 9725.919 seconds. Earlier sections below are historical checkpoints.
+
 # Current: S3 reconstruction recovery authorized and repaired
 
 The user authorized exactly one additional S3 reconstruction attempt, capped at 90 minutes, after native-helper isolation repair. [Repair](native-helper-repair-001.md) passes [322 CPU tests and host confinement fixtures](implementation-validation-009.json). [Authorization](s3-reconstruction-recovery-authorization-001.json) preserves the original failure and all cumulative limits. The additional attempt is not yet dispatched; no model ran during repair. Next: commit the validated milestone, then dispatch the single recovery automatically. Other stopped work remains stopped. Earlier status sections below are historical.
