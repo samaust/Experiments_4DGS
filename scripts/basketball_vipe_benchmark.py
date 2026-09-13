@@ -151,7 +151,9 @@ def execute(args, config):
     elif args.command == 'setup-recovery':
         from vipe_benchmark.setup_recipes import recovery_request
         authorization = file_record(args.authorization)
-        registered = [event for event in ledger.events() if event['event'] == 'setup_recovery_authorized']
+        environment = read_json(args.authorization)['environment']
+        registered = [event for event in ledger.events() if event['event'] == 'setup_recovery_authorized'
+                      and event['environment'] == environment]
         if not registered:
             ledger.authorize_setup_recovery(authorization)
         elif len(registered) != 1 or registered[0]['authorization'] != authorization:

@@ -223,9 +223,9 @@ def components(local):
 
 
 def setup_result_record(local, environment):
-    """Resolve an authorized successful recovery without relabeling E3's failure."""
+    """Resolve an authorized successful recovery without relabeling its failure."""
     original = result_record(local, environment + '-setup')
-    if original or environment != 'E3':
+    if original or environment not in ('E1', 'E3'):
         return original
     ledger = Ledger(local / 'ledger.jsonl', load())
     recoveries = [event for event in ledger.events() if event['event'] == 'setup_recovery_authorized'
@@ -237,9 +237,10 @@ def setup_result_record(local, environment):
     recovered = result_record(local, event['job_id'])
     if recovered:
         result = read_json(recovered['path'])
-        if (result.get('environment') != 'E3' or result.get('components') != ['S3'] or
-                result.get('runtime', {}).get('versions') != TARGETS['E3']):
-            raise ValueError('successful recovery differs from the prescribed E3 qualification')
+        components = ['S1'] if environment == 'E1' else ['S3']
+        if (result.get('environment') != environment or result.get('components') != components or
+                result.get('runtime', {}).get('versions') != TARGETS[environment]):
+            raise ValueError(f'successful recovery differs from the prescribed {environment} qualification')
         for field in ('inventory', 'imports', 'dependency_lock', 'build_inputs'):
             verify_record(result['runtime'][field])
         imports = read_json(result['runtime']['imports']['path'])

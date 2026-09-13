@@ -1,0 +1,26 @@
+{
+  "schema": "vipe-benchmark-e1-recovery/v1",
+  "job_id": "E1-setup-recovery-001",
+  "original_job_id": "E1-setup",
+  "environment": "E1",
+  "recovery_attempts_limit": 1,
+  "setup_wall_seconds_limit": 57600,
+  "reset_previous_consumption": false,
+  "changes_to_prescribed_runtime": false,
+  "unrelated_attempts_reopened": false,
+  "authorization": "Reset E1 allocation. Fix E1 failure and retry.",
+  "basis": "User explicitly restores one E1 setup attempt. Preserve original failed attempt and elapsed charges, use a fresh output/environment, and retain original cumulative ceilings and exact runtime recipe. This authorizes E1 setup only.",
+  "original_failure_event_sha256": "5a2ed976321a8e9a023603ea175107a1132fd82df6736768b7dc407dfe4866f3",
+  "repair_validation": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/e1-recovery-validation-001.json",
+    "sha256": "2691ec19d405e11ca7c572fe5047405ecc0a9bd3f495a02ddc38941b71569068",
+    "bytes": 13289
+  },
+  "setup_remaining_seconds_at_authorization": 54034.286967695225,
+  "resources_at_authorization": {
+    "download_bytes": 14775188913,
+    "artifact_bytes": 34587717632
+  },
+  "execution_scope": "One supervised E1 setup, zero model forwards. Existing proxy and AOT repairs are validated. Fresh source extraction and package install use the existing monitored transfer/cache mechanism. E1 retry ends at successful setup qualification or failure; no other stopped work resumes.",
+  "continuous_improvement_loop": false
+}

@@ -179,6 +179,70 @@ class SetupRecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'requires explicit authorization'):
                 runtime._validate_setup_request(request)
 
+    def e1_authorization(self, **changes):
+        if 'E1-setup' not in self.ledger.states():
+            self.ledger.reserve('E1-setup', [], {})
+            self.ledger.finish('E1-setup', 'failed', 207., cleanup_confirmed=True)
+        validation = self.root / 'e1-validation.json'
+        if not validation.exists():
+            write_json(validation, dict(status='passed', source_files=[file_record(__file__)]))
+        return self.authorization(schema='vipe-benchmark-e1-recovery/v1',
+            job_id='E1-setup-recovery-001', original_job_id='E1-setup', environment='E1',
+            original_failure_event_sha256=self.ledger.states()['E1-setup']['event_sha256'],
+            repair_validation=file_record(validation), **changes)
+
+    def test_e1_and_e3_recoveries_coexist_with_independent_single_attempts(self):
+        self.ledger.authorize_setup_recovery(self.authorization())
+        authorization = self.e1_authorization()
+        history = self.ledger.path.read_bytes()
+        self.ledger.authorize_setup_recovery(authorization)
+        self.assertTrue(self.ledger.path.read_bytes().startswith(history))
+        self.assertIn('E3-setup-recovery-001', self.ledger.jobs)
+        self.assertEqual(self.ledger.totals()['setup']['elapsed_seconds'], 240.5)
+        with self.assertRaisesRegex(ValueError, 'already allocated'):
+            self.ledger.authorize_setup_recovery(authorization)
+        self.ledger.reserve('E1-setup-recovery-001', [], {})
+        self.ledger.finish('E1-setup-recovery-001', 'failed', 2., cleanup_confirmed=True)
+        with self.assertRaisesRegex(ValueError, 'already consumed'):
+            self.ledger.reserve('E1-setup-recovery-001', [], {})
+        self.assertEqual(self.ledger.states()['E4-setup']['status'], 'blocked')
+
+    def test_e1_recovery_preserves_recipe_and_fresh_build_tree(self):
+        authorization = self.e1_authorization()
+        self.ledger.authorize_setup_recovery(authorization)
+        with patch('vipe_benchmark.setup_recipes.shutil.which', return_value='/fixture/uv'):
+            request = setup_recipes.recovery_request(self.root, authorization)
+            runtime._validate_setup_request(request)
+            self.assertEqual(request['components'], ['S1'])
+            self.assertEqual(request['reuse_assets'], {})
+            request['requirements'].append('unapproved-package')
+            with self.assertRaisesRegex(ValueError, 'prescribed dependency'):
+                runtime._validate_setup_request(request)
+
+    def test_e1_recovery_rejects_expanded_scope_and_stale_validation(self):
+        for change in [dict(recovery_attempts_limit=2), dict(reset_previous_consumption=True),
+                       dict(unrelated_attempts_reopened=True), dict(authorization='')]:
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'exact explicit E1'):
+                self.ledger.authorize_setup_recovery(self.e1_authorization(**change))
+        authorization = self.e1_authorization()
+        (self.root / 'e1-validation.json').write_text('{}')
+        with self.assertRaisesRegex(ValueError, 'changed file'):
+            self.ledger.authorize_setup_recovery(authorization)
+
+    def test_successful_e1_recovery_qualifies_s1_without_relabeling_failure(self):
+        self.ledger.authorize_setup_recovery(self.e1_authorization())
+        path = self.root / 'jobs/E1-setup-recovery-001/result.json'
+        write_json(path.parent / 'imports.json', dict(status='complete', forwards=0))
+        evidence = file_record(path.parent / 'imports.json')
+        write_json(path, dict(status='complete', environment='E1', components=['S1'],
+            runtime=dict(versions=runtime.TARGETS['E1'], imports=evidence, inventory=evidence,
+                         dependency_lock=evidence, build_inputs=evidence)))
+        self.assertIsNone(setup_result_record(self.root, 'E1'))
+        self.ledger.reserve('E1-setup-recovery-001', [], {})
+        self.ledger.finish('E1-setup-recovery-001', 'complete', 2., result=file_record(path))
+        self.assertEqual(setup_result_record(self.root, 'E1'), file_record(path))
+        self.assertEqual(self.ledger.states()['E1-setup']['status'], 'failed')
+
 
 if __name__ == '__main__':
     unittest.main()

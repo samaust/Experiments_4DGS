@@ -1,5 +1,16 @@
 # Plan 031 status
 
+## E1 recovery authorized
+
+The user explicitly requested “Reset E1 allocation. Fix E1 failure and retry.”
+[Authorization](e1-recovery-authorization-001.json) restores one E1 setup attempt
+as `E1-setup-recovery-001`, preserving the original failure and all charges.
+[Validation](e1-recovery-validation-001.json) passes all 309 CPU fixtures,
+including proxy shutdown, AOT compatibility and independent recovery accounting.
+The remaining cumulative setup allowance is 54,034.287 seconds before dispatch.
+This resumes E1 setup only; other stopped work retains its state. Native setup
+qualification is pending. Earlier paragraphs below retain historical checkpoints.
+
 SAM3 access is **restored**, its pinned assets and exact E3 environment are verified, and **all 510 S3 calibration images completed**. The original S3 reconstruction attempt then failed on the benchmark's own subprocess isolation guard during Triton CUDA setup. [Assessment004](assessment-004.md), [failure details](S3-reconstruction-failure.json) and [accounting004](matrix-accounting-004.json) record the current stop. No model/setup job or subagent remains active; all process cleanup is confirmed. The run is incomplete.
 
 Preparation and the single annotation pass are complete. All 232 images received independent visual and structural review; the labels remain model-assisted proxies. Roles, changing-region truth, verified negatives and temporal identity truth remain unverified. See [review results](automated-review-results.md), [annotation milestone evidence](annotation-milestone-validation.json), and [completed bundle record](annotations-002.json).

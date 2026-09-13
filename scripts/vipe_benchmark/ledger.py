@@ -23,7 +23,7 @@ class Ledger:
             if event['event'] == 'setup_recovery_authorized':
                 verify_record(event['authorization'])
                 allocated[event['job_id']] = dict(allocated[event['original_job_id']],
-                    id=event['job_id'], scope='explicit user-authorized SAM3 access recovery')
+                    id=event['job_id'], scope='explicit user-authorized setup recovery')
         return allocated
 
     @property
@@ -219,6 +219,8 @@ class Ledger:
         intact, and the new process shares the original cumulative setup cap.
         """
         document = read_json(verify_record(authorization)['path'])
+        if document.get('schema') == 'vipe-benchmark-e1-recovery/v1':
+            return self._authorize_e1_recovery(authorization, document)
         required = dict(schema='vipe-benchmark-sam3-recovery/v1',
             job_id='E3-setup-recovery-001', original_job_id='E3-setup', environment='E3',
             recovery_attempts_limit=1, setup_wall_seconds_limit=self.config['setup_wall_seconds_limit'],
@@ -235,7 +237,8 @@ class Ledger:
         if not isinstance(preparation_seconds, (int, float)) or not math.isfinite(preparation_seconds) or preparation_seconds < 0:
             raise ValueError('invalid SAM3 acquisition elapsed time')
         with self.locked() as (stream, events):
-            if any(event['event'] == 'setup_recovery_authorized' for event in events):
+            if any(event['event'] == 'setup_recovery_authorized' and event['environment'] == 'E3'
+                   for event in events):
                 raise ValueError('SAM3 recovery already allocated; no additional recovery attempt')
             states = self.states(events)
             original = states.get('E3-setup', {})
@@ -252,3 +255,35 @@ class Ledger:
                 original_failure_event_sha256=original['event_sha256'], authorization=authorization,
                 preparation_elapsed_seconds=preparation_seconds,
                 preparation_evidence=document['asset_preparation']))
+
+    def _authorize_e1_recovery(self, authorization, document):
+        """One explicitly requested E1 retry; preserve every historical charge."""
+        required = dict(job_id='E1-setup-recovery-001', original_job_id='E1-setup',
+            environment='E1', recovery_attempts_limit=1,
+            setup_wall_seconds_limit=self.config['setup_wall_seconds_limit'],
+            reset_previous_consumption=False, changes_to_prescribed_runtime=False,
+            unrelated_attempts_reopened=False)
+        if any(document.get(k) != v for k, v in required.items()) or not document.get('authorization'):
+            raise ValueError('recovery requires the exact explicit E1 authorization scope')
+        validation = read_json(verify_record(document['repair_validation'])['path'])
+        if validation.get('status') != 'passed':
+            raise ValueError('E1 recovery requires passing repair validation')
+        for record in validation['source_files']:
+            verify_record(record)
+        with self.locked() as (stream, events):
+            if any(e['event'] == 'setup_recovery_authorized' and e['environment'] == 'E1' for e in events):
+                raise ValueError('E1 recovery already allocated; no additional recovery attempt')
+            states = self.states(events)
+            original = states.get('E1-setup', {})
+            if (original.get('event') != 'finish' or original.get('status') != 'failed' or
+                    original.get('cleanup_confirmed') is not True or
+                    original.get('event_sha256') != document.get('original_failure_event_sha256')):
+                raise ValueError('recovery must bind the preserved, cleaned-up E1 failure')
+            if any(state['event'] == 'reserve' for state in states.values()):
+                raise ValueError('unreconciled active attempt; refusing recovery allocation')
+            if self.totals(events)['setup']['elapsed_seconds'] >= self.config['setup_wall_seconds_limit']:
+                raise ValueError('cumulative setup allocation exhausted')
+            return self._append(stream, events, dict(event='setup_recovery_authorized',
+                job_id=document['job_id'], original_job_id='E1-setup', environment='E1',
+                original_failure_event_sha256=original['event_sha256'], authorization=authorization,
+                preparation_elapsed_seconds=0., preparation_evidence=document['repair_validation']))
