@@ -1,3 +1,11 @@
+# Current: mask checkpoint complete; D0 fit dispatched
+
+[Assessment014](assessment-014.md) and [mask aggregation evidence](mask-aggregation-results-001.json) are current. The original staged aggregation froze all 232 proxy annotation images and 5400 completed primary mask rows in about 20 minutes; cleanup is confirmed. D0 fit is next/running under validation014. Network setup remains paused. No final report has run.
+
+# Current: mask aggregation checkpoint running
+
+The original single aggregate allocation is active at stage masks, launched by `/tmp/plan031-aggregate-masks.py`; [dispatch record](mask-aggregation-dispatch-001.json). Worker PID 1806410 is supervised by the active controller. All 8100 static-mask artifacts and their manifest are written; annotation metrics/uncertainty are still computing. No final checkpoint or report is claimed. Next after successful checkpoint: D0 fit and remaining eligible local work. E4/E5–E7 network setup remains paused. Inspect the ledger and existing process before any resume; never redispatch a reserved aggregate.
+
 # Current: motion comparisons complete; mask aggregation next
 
 M0/M1/M2 each completed 1350 rows in 24.823/146.896/82.796 seconds with cleanup confirmed. Segmentation remains complete for S0/S2/S3/S4 and failed for S1. Next is the first checkpoint of the single staged aggregation pass under validation014. Network setup remains paused; no final report is dispatched yet.
