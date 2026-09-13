@@ -1,6 +1,16 @@
 # Plan 031 status
 
-## E1 recovery authorized
+## Second E1 recovery authorized
+
+After the reported upstream reset, the user explicitly instructed “retry”.
+[The new authorization](e1-recovery-authorization-002.json) grants exactly one
+fresh `E1-setup-recovery-002` attempt, binding the cleaned-up first recovery
+failure. Network recovery is unverified; this setup is the authorized retry.
+[All 310 CPU fixtures pass](e1-recovery-validation-002.json). Cumulative setup
+time remaining is 53,778.642 seconds; existing download, storage and runtime
+limits remain enforced. Other stopped jobs retain their state.
+
+## E1 recovery stopped
 
 The user explicitly requested “Reset E1 allocation. Fix E1 failure and retry.”
 [Authorization](e1-recovery-authorization-001.json) restores one E1 setup attempt
@@ -8,8 +18,20 @@ as `E1-setup-recovery-001`, preserving the original failure and all charges.
 [Validation](e1-recovery-validation-001.json) passes all 309 CPU fixtures,
 including proxy shutdown, AOT compatibility and independent recovery accounting.
 The remaining cumulative setup allowance is 54,034.287 seconds before dispatch.
-This resumes E1 setup only; other stopped work retains its state. Native setup
-qualification is pending. Earlier paragraphs below retain historical checkpoints.
+The [retry failed](E1-setup-recovery-001-failure.json) after 255.645 seconds during
+base-package installation: upstream receive raised `ConnectionResetError:
+[Errno 104] Connection reset by peer`. The proxy then closed its listener and
+UV reported connection refusal. The original `ENOTCONN` shutdown defect did not
+recur. No native build, import qualification or model forward was reached.
+All process cleanup is confirmed; no jobs remain active. The new attempt is
+consumed, and cumulative setup consumption is now 3,821.358 seconds across six
+attempts. The validated recovery implementation is committed as `ee48aa1`.
+
+The host command was approved; this is not a confirmed Codex sandbox denial and
+no missing allow rule was reported. AGENTS.md's outside-sandbox network-failure
+rule requires stopping affected work pending network resolution and explicit
+authorization for another attempt. E1 remains unqualified and S1 remains blocked.
+Other stopped work retains its state. Earlier paragraphs below are historical.
 
 SAM3 access is **restored**, its pinned assets and exact E3 environment are verified, and **all 510 S3 calibration images completed**. The original S3 reconstruction attempt then failed on the benchmark's own subprocess isolation guard during Triton CUDA setup. [Assessment004](assessment-004.md), [failure details](S3-reconstruction-failure.json) and [accounting004](matrix-accounting-004.json) record the current stop. No model/setup job or subagent remains active; all process cleanup is confirmed. The run is incomplete.
 

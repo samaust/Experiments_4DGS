@@ -186,10 +186,30 @@ class SetupRecoveryTests(unittest.TestCase):
         validation = self.root / 'e1-validation.json'
         if not validation.exists():
             write_json(validation, dict(status='passed', source_files=[file_record(__file__)]))
-        return self.authorization(schema='vipe-benchmark-e1-recovery/v1',
+        document = dict(schema='vipe-benchmark-e1-recovery/v1',
             job_id='E1-setup-recovery-001', original_job_id='E1-setup', environment='E1',
             original_failure_event_sha256=self.ledger.states()['E1-setup']['event_sha256'],
-            repair_validation=file_record(validation), **changes)
+            repair_validation=file_record(validation))
+        document.update(changes)
+        return self.authorization(**document)
+
+    def test_next_e1_retry_needs_new_authorization_bound_to_cleaned_up_failure(self):
+        self.ledger.authorize_setup_recovery(self.e1_authorization())
+        with self.assertRaisesRegex(ValueError, 'previous cleaned-up'):
+            self.ledger.authorize_setup_recovery(self.e1_authorization(job_id='E1-setup-recovery-002'))
+        self.ledger.reserve('E1-setup-recovery-001', [], {})
+        failed = self.ledger.finish('E1-setup-recovery-001', 'failed', 12., cleanup_confirmed=True)
+        with self.assertRaisesRegex(ValueError, 'previous cleaned-up'):
+            self.ledger.authorize_setup_recovery(self.e1_authorization(job_id='E1-setup-recovery-002'))
+        second = self.e1_authorization(job_id='E1-setup-recovery-002',
+            authorization='Synthetic user instruction: retry',
+            previous_recovery_failure_event_sha256=failed['event_sha256'])
+        self.ledger.authorize_setup_recovery(second)
+        self.ledger.reserve('E1-setup-recovery-002', [], {})
+        self.assertEqual(self.ledger.totals()['setup']['attempts'], 4)
+        self.assertEqual(self.ledger.states()['E1-setup-recovery-001'], failed)
+        with self.assertRaisesRegex(ValueError, 'already allocated'):
+            self.ledger.authorize_setup_recovery(second)
 
     def test_e1_and_e3_recoveries_coexist_with_independent_single_attempts(self):
         self.ledger.authorize_setup_recovery(self.authorization())

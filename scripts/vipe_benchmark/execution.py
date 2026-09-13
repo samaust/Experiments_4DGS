@@ -232,7 +232,7 @@ def setup_result_record(local, environment):
                   and event['environment'] == environment]
     if not recoveries:
         return None
-    event = recoveries[0]
+    event = recoveries[-1]
     verify_record(event['authorization'])
     recovered = result_record(local, event['job_id'])
     if recovered:
@@ -391,7 +391,7 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
     allocated = ledger.jobs
     if job not in allocated:
         raise ValueError('unallocated worker')
-    if job.endswith('-recovery-001') and operation != 'setup':
+    if '-setup-recovery-' in job and operation != 'setup':
         raise ValueError('authorized setup recovery cannot fund another operation')
     device_monitored = allocated[job]['resource'] in ('gpu', 'setup')
     if device_monitored and Path('/proc/1/comm').read_text().strip() != 'systemd':

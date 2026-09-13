@@ -4,6 +4,7 @@ import fcntl
 import json
 import math
 import os
+import re
 from pathlib import Path
 import time
 
@@ -258,22 +259,33 @@ class Ledger:
 
     def _authorize_e1_recovery(self, authorization, document):
         """One explicitly requested E1 retry; preserve every historical charge."""
-        required = dict(job_id='E1-setup-recovery-001', original_job_id='E1-setup',
+        required = dict(original_job_id='E1-setup',
             environment='E1', recovery_attempts_limit=1,
             setup_wall_seconds_limit=self.config['setup_wall_seconds_limit'],
             reset_previous_consumption=False, changes_to_prescribed_runtime=False,
             unrelated_attempts_reopened=False)
         if any(document.get(k) != v for k, v in required.items()) or not document.get('authorization'):
             raise ValueError('recovery requires the exact explicit E1 authorization scope')
+        if not re.fullmatch(r'E1-setup-recovery-[0-9]{3}', document.get('job_id', '')):
+            raise ValueError('E1 recovery requires a numbered fresh identity')
         validation = read_json(verify_record(document['repair_validation'])['path'])
         if validation.get('status') != 'passed':
             raise ValueError('E1 recovery requires passing repair validation')
         for record in validation['source_files']:
             verify_record(record)
         with self.locked() as (stream, events):
-            if any(e['event'] == 'setup_recovery_authorized' and e['environment'] == 'E1' for e in events):
+            prior = [e for e in events if e['event'] == 'setup_recovery_authorized' and e['environment'] == 'E1']
+            if any(e['job_id'] == document['job_id'] for e in prior):
                 raise ValueError('E1 recovery already allocated; no additional recovery attempt')
+            if document['job_id'] != f'E1-setup-recovery-{len(prior) + 1:03d}':
+                raise ValueError('E1 recovery must use the next sequential identity')
             states = self.states(events)
+            if prior:
+                previous = states.get(prior[-1]['job_id'], {})
+                if (previous.get('event') != 'finish' or previous.get('status') != 'failed' or
+                        previous.get('cleanup_confirmed') is not True or
+                        previous.get('event_sha256') != document.get('previous_recovery_failure_event_sha256')):
+                    raise ValueError('new E1 authorization must bind the previous cleaned-up recovery failure')
             original = states.get('E1-setup', {})
             if (original.get('event') != 'finish' or original.get('status') != 'failed' or
                     original.get('cleanup_confirmed') is not True or

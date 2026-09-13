@@ -1,0 +1,101 @@
+{
+  "supervisor": {
+    "cleanup_confirmed": true,
+    "deadline_exceeded": false,
+    "elapsed_seconds": 255.64516464597546,
+    "error": "RuntimeError: worker exited 1",
+    "event": "finish",
+    "failure_kind": "worker_failure",
+    "job_id": "E1-setup-recovery-001",
+    "peak": {
+      "artifact_bytes": 38051475456,
+      "device_bytes": 1017118720,
+      "download_bytes": 17987492695
+    },
+    "previous_sha256": "73e89702b086770bd3a735e65a04dc0fa684bbd58489fbed4b5a50e45e71380d",
+    "recorded_unix": 1789291774.3474443,
+    "resource": "setup",
+    "result": null,
+    "sequence": 193,
+    "status": "failed",
+    "stop_required": false,
+    "surviving_pids": [],
+    "event_sha256": "f7d25e3eba68981e597a329d1bd954031561a7e7eddbcbc23d2763c1d0047052"
+  },
+  "failure": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-001/failure.json",
+    "sha256": "9d94137589d849635a96ff21eddff3f1be642d11c8332d5fe6e6a537ad7f3524",
+    "bytes": 2380
+  },
+  "log": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-001.log",
+    "sha256": "39d112f929e5cec61220892ea5008b901ddf1cb6aa07561204aff9d5066a3326",
+    "bytes": 3011
+  },
+  "command": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-001/commands/01-base.json",
+    "sha256": "93fe1ececc5d536d7f65348180bfb3bad8421abe558017507b1e2de7a2d1c6ef",
+    "bytes": 1303
+  },
+  "package_command": [
+    "/home/auss/.local/bin/uv",
+    "pip",
+    "install",
+    "--python",
+    "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-001/environment/bin/python",
+    "--index-url",
+    "https://pypi.org/simple",
+    "--extra-index-url",
+    "https://download.pytorch.org/whl/cu124",
+    "--index-strategy",
+    "unsafe-best-match",
+    "-c",
+    "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-001/constraints.txt",
+    "torch==2.5.1+cu124",
+    "torchvision==0.20.1+cu124",
+    "numpy==1.26.4",
+    "pip",
+    "setuptools==80.9.0",
+    "wheel",
+    "packaging",
+    "ninja"
+  ],
+  "totals": {
+    "gpu": {
+      "attempts": 4,
+      "elapsed_seconds": 646.942044109921,
+      "reserved_seconds": 0
+    },
+    "cpu": {
+      "attempts": 2,
+      "elapsed_seconds": 7996.91867222598,
+      "reserved_seconds": 0
+    },
+    "setup": {
+      "attempts": 6,
+      "elapsed_seconds": 3821.3581969507504,
+      "reserved_seconds": 0
+    },
+    "motion": {
+      "attempts": 0,
+      "elapsed_seconds": 0,
+      "reserved_seconds": 0
+    },
+    "neighbor": {
+      "attempts": 0,
+      "elapsed_seconds": 0,
+      "reserved_seconds": 0
+    }
+  },
+  "active_jobs": [],
+  "status": "failed",
+  "allocation_consumed": true,
+  "retry_permitted": false,
+  "classification": "Upstream receive raised ConnectionResetError errno 104; proxy then closed its listener and UV reported connection refusal. No original ENOTCONN half-close error recurred. Host command was approved; no confirmed Codex sandbox denial or missing allow rule. Exact upstream failure source remains unverified.",
+  "error": "TransferProxyError: UV transfer proxy failed: ConnectionResetError: [Errno 104] Connection reset by peer",
+  "controller_command": ".local/envs/stg-colmap/bin/python scripts/basketball_vipe_benchmark.py --run-id plan031-20260913T032700Z setup-recovery --authorization docs/research/vipe-alternatives/plan031-20260913T032700Z/e1-recovery-authorization-001.json",
+  "implementation_commit": "ee48aa1",
+  "tests": 309,
+  "model_forwards": 0,
+  "stop_reason": "AGENTS.md Sandbox and permission failures: affected network/setup work stops after an outside-sandbox connection failure. Network resolution and explicit authorization for another attempt are needed before retry. No fallback or further network request was made."
+}
