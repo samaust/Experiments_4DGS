@@ -117,7 +117,14 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
         temporary = output.with_name(output.name + '-temporary')
         temporary.mkdir(exist_ok=False)
         env['TMPDIR'] = str(temporary)
-        ledger.note('temporary_directory', job_id=job_id, path=str(temporary))
+        # Native Triton kernels compile even when model compilation is off.
+        # Retain their caches inside the monitored run, separately per attempt.
+        caches = {name: str((temporary / folder).absolute()) for name, folder in (
+            ('TRITON_HOME', 'triton-home'), ('TRITON_CACHE_DIR', 'triton-cache'),
+            ('TRITON_DUMP_DIR', 'triton-dump'), ('TRITON_OVERRIDE_DIR', 'triton-override'),
+            ('TORCHINDUCTOR_CACHE_DIR', 'torchinductor-cache'), ('CUDA_CACHE_PATH', 'cuda-cache'))}
+        env.update(caches)
+        ledger.note('temporary_directory', job_id=job_id, path=str(temporary), native_caches=caches)
         with output.with_suffix('.log').open('x') as log:
             process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
                                        start_new_session=True, env=env)

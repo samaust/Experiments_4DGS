@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from vipe_benchmark.config import load
@@ -45,6 +46,27 @@ class SupervisorTests(unittest.TestCase):
         self.assertTrue(state['cleanup_confirmed'])
         self.assertLess(state['elapsed_seconds'], 3.)
         self.assertEqual(self.ledger.totals()['cpu']['attempts'], 1)
+
+    def test_native_kernel_caches_stay_in_monitored_attempt_and_override_external_paths(self):
+        from vipe_benchmark.supervisor import directory_bytes
+        keys = ['TRITON_HOME', 'TRITON_CACHE_DIR', 'TRITON_DUMP_DIR', 'TRITON_OVERRIDE_DIR',
+                'TORCHINDUCTOR_CACHE_DIR', 'CUDA_CACHE_PATH']
+        outside = self.root / 'outside-run'
+        code = ('import os,sys,json; from pathlib import Path; '
+                'p=Path(sys.argv[1]); p.mkdir(); '
+                f'caches={{k:os.environ[k] for k in {keys!r}}}; '
+                '[(Path(v).mkdir(parents=True,exist_ok=True), '
+                '(Path(v)/"kernel.bin").write_bytes(b"x"*4096)) for v in caches.values()]; '
+                '(p/"result.json").write_text(json.dumps(dict(status="complete",caches=caches)))')
+        with patch.dict('os.environ', {key: str(outside) for key in keys}):
+            self.run_worker(code, sample_resources=lambda: dict(artifact_bytes=directory_bytes(self.root)))
+        result = read_json(self.root / 'output/result.json')
+        temporary = self.root / 'output-temporary'
+        self.assertTrue(all(Path(value).is_relative_to(temporary) for value in result['caches'].values()))
+        self.assertFalse(outside.exists())
+        event = next(row for row in self.ledger.events() if row['event'] == 'temporary_directory')
+        self.assertEqual(event['native_caches'], result['caches'])
+        self.assertGreaterEqual(self.ledger.states()['prepare']['peak']['artifact_bytes'], 6 * 4096)
 
     def test_timeout_kills_sigterm_ignoring_group_within_allocation(self):
         self.config['cpu_prepare_score_report_seconds_limit'] = .8
