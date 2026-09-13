@@ -1,0 +1,61 @@
+{
+  "status": "failed",
+  "allocation_consumed": true,
+  "retry_permitted": false,
+  "supervisor": {
+    "cleanup_confirmed": true,
+    "deadline_exceeded": false,
+    "elapsed_seconds": 207.02063947997522,
+    "error": "RuntimeError: worker exited 1",
+    "event": "finish",
+    "failure_kind": "worker_failure",
+    "job_id": "E1-setup",
+    "peak": {
+      "artifact_bytes": 19393396736,
+      "device_bytes": 544210944,
+      "download_bytes": 1152953804
+    },
+    "previous_sha256": "7ea74b10fda9d3b54ce8ffbe91da653f6c5b3b1264521a922484a24fea5e6d66",
+    "recorded_unix": 1789278117.2305222,
+    "resource": "setup",
+    "result": null,
+    "sequence": 79,
+    "status": "failed",
+    "stop_required": false,
+    "surviving_pids": [],
+    "event_sha256": "5a2ed976321a8e9a023603ea175107a1132fd82df6736768b7dc407dfe4866f3"
+  },
+  "failure": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup/failure.json",
+    "sha256": "b3ee4990eadf5331778bd604ca5e1c22923b64f4e6127c3236fa3c0f2e46b03e",
+    "bytes": 2385
+  },
+  "command": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup/commands/01-base.json",
+    "sha256": "a1ecf545f5e46621304880ef8399c02f92ca1ebd1e88db9f7e82cb70f8ac018c",
+    "bytes": 1264
+  },
+  "log": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup.log",
+    "sha256": "20a3ae0543a693cd3ae71446b5686e4ccbd1643ee2c893091c315058cb8af725",
+    "bytes": 3028
+  },
+  "package_transfer_receipts": [
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/uv-transfers/transfer-522a6f01da0843239198ee5586ea4d81.json",
+      "sha256": "5d9f6e3bc6e40cf4669da6a0eeb440958892684eea7f86652fba45142387ee4b",
+      "bytes": 362
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/uv-transfers/transfer-df8b1d230dff4f6fbc7503bfebf7bf2e.json",
+      "sha256": "398fa2e52858d5b9e7d4f786587a50fdf4e4201f19a9e19f41f999b01191287a",
+      "bytes": 408
+    }
+  ],
+  "classification": "Implementation failure in local proxy half-close handling. The upstream operation was already outside the sandbox; there is no evidence of a sandbox or host authorization denial.",
+  "causal_evidence": "The proxy thread raised OSError errno 107 from client.shutdown(SHUT_WR) in _sync, then closed its listener. UV subsequently reported connection refused when attempting to open a CONNECT tunnel through that stopped local listener.",
+  "affected_candidates": [
+    "S1"
+  ],
+  "next_action": "Fix and validate the narrowly identified local proxy lifecycle bug before unconsumed E2-E7 builds. Preserve E1 as failed; do not replay its installation or reset its allocation."
+}

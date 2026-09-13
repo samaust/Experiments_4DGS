@@ -1,7 +1,9 @@
 """Localhost-only opaque tunnel fixtures; no external network or setup."""
 from contextlib import contextmanager
+import errno
 import json
 from pathlib import Path
+import selectors
 import socket
 import tempfile
 import threading
@@ -83,6 +85,136 @@ class TransferProxyTests(unittest.TestCase):
 
     def receipt(self, proxy):
         return json.loads((self.root / 'uv-transfers' / f'transfer-{proxy.transfer_id}.json').read_text())
+
+    def disconnected_fixture(self, side, code=errno.ENOTCONN):
+        proxy = transfer_proxy.uv_proxy(self.root, 100)
+        proxy._selector = mock.Mock()
+        tunnel = transfer_proxy._Tunnel(mock.Mock(), upstream=mock.Mock())
+        proxy._tunnels.add(tunnel)
+        setattr(tunnel, ('upstream' if side == 'client' else 'client') + '_eof', True)
+        getattr(tunnel, side).shutdown.side_effect = OSError(code, 'deterministic half-close fixture')
+        return proxy, tunnel
+
+    def test_enotconn_during_drained_half_close_retires_either_endpoint(self):
+        for side in ('client', 'upstream'):
+            with self.subTest(side=side):
+                proxy, tunnel = self.disconnected_fixture(side)
+                proxy._sync(tunnel)
+                self.assertTrue(getattr(tunnel, side + '_eof'))
+                self.assertTrue(getattr(tunnel, side + '_write_closed'))
+                getattr(tunnel, side).shutdown.assert_called_once_with(socket.SHUT_WR)
+                tunnel.client.close.assert_called_once()
+                tunnel.upstream.close.assert_called_once()
+                self.assertNotIn(tunnel, proxy._tunnels)
+                proxy.check()
+
+    def test_half_close_ignores_only_enotconn_and_propagates_other_errors(self):
+        for side in ('client', 'upstream'):
+            for code in (errno.EACCES, errno.EPERM, errno.ENETUNREACH,
+                         errno.ECONNRESET, errno.EBADF, errno.EPIPE):
+                with self.subTest(side=side, errno=code):
+                    proxy, tunnel = self.disconnected_fixture(side, code)
+                    with self.assertRaises(OSError) as caught:
+                        proxy._sync(tunnel)
+                    self.assertEqual(caught.exception.errno, code)
+                    self.assertFalse(getattr(tunnel, side + '_write_closed'))
+
+    def test_disconnected_upstream_preserves_buffered_response_and_skips_stale_events(self):
+        proxy, tunnel = self.disconnected_fixture('upstream')
+        response = b'previously received and charged TLS bytes'
+        proxy.received = len(response)
+        tunnel.to_client.extend(response)
+        proxy._sync(tunnel)
+        self.assertIn(tunnel, proxy._tunnels)
+        self.assertEqual(bytes(tunnel.to_client), response)
+        tunnel.client.shutdown.assert_not_called()
+        proxy._event(tunnel, 'upstream', selectors.EVENT_READ | selectors.EVENT_WRITE)
+        tunnel.upstream.send.assert_not_called()
+        tunnel.upstream.recv.assert_not_called()
+        tunnel.client.send.return_value = len(response)
+        proxy._event(tunnel, 'client', selectors.EVENT_WRITE)
+        self.assertEqual(tunnel.to_client, b'')
+        self.assertNotIn(tunnel, proxy._tunnels)
+        self.assertEqual(proxy.received, len(response))
+
+    def test_half_close_does_not_erase_received_bytes_or_pending_reservation(self):
+        proxy, tunnel = self.disconnected_fixture('client')
+        proxy.received, proxy.reserved = 7, 11
+        proxy._meter.parent.mkdir()
+        proxy._publish()
+        before = proxy._meter.read_bytes()
+        proxy._sync(tunnel)
+        self.assertEqual((proxy.received, proxy.reserved), (7, 11))
+        self.assertEqual(proxy._meter.read_bytes(), before)
+        self.assertEqual(budgets.budget_snapshot(self.root)['download_bytes'], 18)
+
+    def test_unconfirmed_send_disconnect_and_permission_errors_still_propagate(self):
+        for side in ('client', 'upstream'):
+            for code in (errno.ENOTCONN, errno.EPIPE, errno.ECONNRESET, errno.EACCES, errno.ENETUNREACH):
+                with self.subTest(side=side, errno=code):
+                    proxy = transfer_proxy.uv_proxy(self.root, 100)
+                    tunnel = transfer_proxy._Tunnel(mock.Mock(), upstream=mock.Mock())
+                    queue = tunnel.to_client if side == 'client' else tunnel.to_upstream
+                    queue.extend(b'pending bytes')
+                    getattr(tunnel, side).send.side_effect = OSError(code, 'deterministic send failure')
+                    with self.assertRaises(OSError) as caught:
+                        proxy._event(tunnel, side, selectors.EVENT_WRITE)
+                    self.assertEqual(caught.exception.errno, code)
+                    self.assertEqual(queue, b'pending bytes')
+
+    def test_upstream_recv_errors_keep_reservations_and_propagate(self):
+        for code in (errno.ENOTCONN, errno.ECONNRESET, errno.EACCES, errno.ENETUNREACH):
+            with self.subTest(errno=code):
+                before = budgets.budget_snapshot(self.root)['download_bytes']
+                proxy = transfer_proxy.uv_proxy(self.root, before + 13)
+                proxy._meter.parent.mkdir(exist_ok=True)
+                tunnel = transfer_proxy._Tunnel(mock.Mock(), upstream=mock.Mock())
+                tunnel.upstream.recv.side_effect = OSError(code, 'deterministic receive failure')
+                with budgets.download_lock(self.root):
+                    with self.assertRaises(OSError) as caught:
+                        proxy._event(tunnel, 'upstream', selectors.EVENT_READ)
+                self.assertEqual(caught.exception.errno, code)
+                self.assertEqual((proxy.received, proxy.reserved), (0, 13))
+                self.assertEqual(budgets.budget_snapshot(self.root)['download_bytes'], before + 13)
+
+    def test_accounting_failure_still_aborts_before_a_socket_read(self):
+        proxy = transfer_proxy.uv_proxy(self.root, 100)
+        tunnel = transfer_proxy._Tunnel(mock.Mock(), upstream=mock.Mock())
+        with mock.patch.object(proxy, '_remaining', side_effect=budgets.BudgetAccountingError('fixture counter failure')):
+            with self.assertRaisesRegex(budgets.BudgetAccountingError, 'counter failure'):
+                proxy._event(tunnel, 'upstream', selectors.EVENT_READ)
+        tunnel.upstream.recv.assert_not_called()
+
+    def test_enotconn_does_not_close_listener_or_break_next_local_tunnel(self):
+        response = b'opaque TLS response'
+        def serve(connection):
+            connection.sendall(response)
+            connection.shutdown(socket.SHUT_WR)
+        original_shutdown = socket.socket.shutdown
+        proxy_port, injected = [], threading.Event()
+        def disconnected_shutdown(endpoint, how):
+            if (how == socket.SHUT_WR and proxy_port and not injected.is_set()
+                    and endpoint.getsockname()[1] == proxy_port[0]):
+                injected.set()
+                raise OSError(errno.ENOTCONN, 'deterministic E1 half-close race')
+            return original_shutdown(endpoint, how)
+        with local_server(serve) as first, local_server(serve) as second:
+            with mock.patch.object(socket.socket, 'shutdown', new=disconnected_shutdown):
+                with transfer_proxy.uv_proxy(self.root, 4096, allowed_ports=(first, second)) as proxy:
+                    proxy_port.append(urlsplit(proxy.environment['HTTPS_PROXY']).port)
+                    for port in (first, second):
+                        with connect_client(proxy, port) as client:
+                            read_header(client)
+                            self.assertEqual(read_all(client), response)
+                        proxy.check()
+        self.assertTrue(injected.is_set())
+        record = self.receipt(proxy)
+        self.assertTrue(record['complete'])
+        self.assertEqual(record['upstream_connections'], 2)
+        self.assertEqual(record['bytes_received'], 2 * len(response))
+        self.assertEqual(record['reserved_bytes'], 0)
+        self.assertEqual(record['automatic_retries'], 0)
+        self.assertEqual(budgets.budget_snapshot(self.root)['download_bytes'], 2 * len(response))
 
     def test_opaque_bidirectional_tunnel_and_deduplicated_receipt(self):
         request = b'\x16\x03\x03opaque client TLS bytes\x00\xff'

@@ -12,6 +12,7 @@ and operating-system transport buffers are not additional application reads.
 """
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import errno
 import selectors
 import socket
 import threading
@@ -159,16 +160,27 @@ class _UVProxy:
             else:
                 self._selector.unregister(endpoint)
 
+    @staticmethod
+    def _shutdown_write(tunnel, side):
+        try:
+            getattr(tunnel, side).shutdown(socket.SHUT_WR)
+        except OSError as exc:
+            if exc.errno != errno.ENOTCONN:
+                raise
+            # The opposite direction reached EOF and this output queue has
+            # drained. A peer close can finish before our half-close; retire
+            # the disconnected direction without another send or recv.
+            setattr(tunnel, side + '_eof', True)
+        setattr(tunnel, side + '_write_closed', True)
+
     def _sync(self, tunnel):
         if tunnel.upstream is None:
             self._registration(tunnel.client, selectors.EVENT_READ, (tunnel, 'client'))
             return
         if tunnel.client_eof and not tunnel.to_upstream and not tunnel.upstream_write_closed:
-            tunnel.upstream.shutdown(socket.SHUT_WR)
-            tunnel.upstream_write_closed = True
+            self._shutdown_write(tunnel, 'upstream')
         if tunnel.upstream_eof and not tunnel.to_client and not tunnel.client_write_closed:
-            tunnel.client.shutdown(socket.SHUT_WR)
-            tunnel.client_write_closed = True
+            self._shutdown_write(tunnel, 'client')
         if tunnel.client_eof and tunnel.upstream_eof and not tunnel.to_client and not tunnel.to_upstream:
             self._close(tunnel)
             return
@@ -194,14 +206,16 @@ class _UVProxy:
 
     def _event(self, tunnel, side, events):
         endpoint = getattr(tunnel, side)
-        if events & selectors.EVENT_WRITE:
+        # A different endpoint's event in this selector batch may already
+        # have closed a direction. Do not act on its stale readiness flags.
+        if events & selectors.EVENT_WRITE and not getattr(tunnel, side + '_write_closed'):
             queue = tunnel.to_client if side == 'client' else tunnel.to_upstream
             try:
                 sent = endpoint.send(queue)
             except BlockingIOError:
                 sent = 0
             del queue[:sent]
-        if events & selectors.EVENT_READ:
+        if events & selectors.EVENT_READ and not getattr(tunnel, side + '_eof'):
             if side == 'client':
                 count = min(self._CHUNK, self._BUFFER - len(tunnel.to_upstream))
                 if tunnel.upstream is None:

@@ -77,6 +77,36 @@ class RuntimeTests(unittest.TestCase):
                                  limit=0, artifact_limit=10**6)
             opened.assert_not_called()
 
+    def test_gated_download_keeps_metering_and_serializes_only_auth_boolean(self):
+        from scripts.vipe_benchmark import hf_auth
+        secret = 'hf_FAKE_TEST_CREDENTIAL_ONLY'
+        url = 'https://huggingface.co/facebook/sam3/resolve/pinned/sam3.pt'
+        request = runtime.urllib.request.Request(url)
+        request.add_unredirected_header('Authorization', 'Bearer ' + secret)
+        opener = SimpleNamespace(open=Mock(return_value=Response(b'abcd')))
+        with patch.object(hf_auth, 'build_hf_request', return_value=(request, True)) as build, \
+             patch.object(hf_auth, 'build_hf_opener', return_value=opener), \
+             patch.object(runtime.urllib.request, 'urlopen', side_effect=AssertionError('default opener used')):
+            result = runtime.download(url, self.root / 'data.bin', self.root / 'transfers',
+                                      limit=4, artifact_limit=10**6, use_hf_auth=True)
+        build.assert_called_once_with(url)
+        opener.open.assert_called_once_with(request, timeout=60)
+        verify_record(result)
+        self.assertEqual(budget_snapshot(self.root)['download_bytes'], 4)
+        receipt = read_json(next((self.root / 'transfers').glob('transfer-*.json')))
+        self.assertTrue(receipt['existing_huggingface_auth_used'])
+        self.assertEqual(receipt['url'], url)
+        self.assertFalse(any(secret in p.read_text() for p in (self.root / 'transfers').glob('*.json')))
+
+    def test_gated_download_exhausted_budget_never_looks_up_credentials(self):
+        from scripts.vipe_benchmark import hf_auth
+        with patch.object(hf_auth, 'build_hf_request') as build:
+            with self.assertRaisesRegex(ValueError, 'before opening URL'):
+                runtime.download('https://huggingface.co/facebook/sam3/resolve/pinned/sam3.pt',
+                    self.root / 'data.bin', self.root / 'transfers', limit=0,
+                    artifact_limit=10**6, use_hf_auth=True)
+        build.assert_not_called()
+
     def test_unknown_length_does_not_probe_one_byte_past_allocation(self):
         response = Response(b'abcd', declared=False)
         with patch.object(runtime.urllib.request, 'urlopen', return_value=response):
@@ -193,6 +223,29 @@ runtime.download('https://fixture.invalid/blob', root / 'data.bin', root / 'tran
         self.assertEqual({Path(r['path']).name for r in checkpoint['license_files']}, {'README.md', 'LICENSE'})
         verify_record(checkpoint['source_tree'])
 
+    def test_only_prescribed_sam3_asset_acquisition_requests_existing_auth(self):
+        payloads = {'sam3.pt': b'checkpoint', 'README.md': b'fixture model terms'}
+        tree = [dict(path=name, type='file', size=len(value),
+                     lfs={'oid': hashlib.sha256(value).hexdigest()}) for name, value in payloads.items()]
+        calls = []
+        def download(url, path, transfer_dir, *, limit, use_hf_auth=False):
+            calls.append((url, use_hf_auth))
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if '/api/models/' in url:
+                write_json(path, tree)
+            else:
+                path.write_bytes(payloads[url.rsplit('/', 1)[1]])
+            return file_record(path)
+        request = dict(components=['S3'], historical_assets={}, reuse_assets={},
+                       transfer_dir=str(self.root / 'transfers'))
+        with patch.dict(backends.REQUIRED_ASSETS, {'S3': ('sam3_checkpoint',)}), \
+             patch.object(runtime, 'download', side_effect=download):
+            assets = runtime.acquire_assets(request, self.root / 'output', self.config)
+        self.assertEqual(len(calls), 3)
+        self.assertTrue(all(auth for _, auth in calls))
+        self.assertTrue(all(url.startswith('https://huggingface.co/') for url, _ in calls))
+        self.assertEqual(assets['sam3_checkpoint']['revision'], runtime.REMOTE_ASSETS['sam3_checkpoint'][1])
+
     def test_sam2_checkpoint_metadata_serializes_without_self_reference(self):
         _, existing = self.fixture_request('E2')
         payloads = {'sam2.1_hiera_large.pt': b'sam2 checkpoint', 'README.md': b'fixture model license'}
@@ -256,6 +309,44 @@ runtime.download('https://fixture.invalid/blob', root / 'data.bin', root / 'tran
         with patch.object(runtime, 'tree_record', side_effect=AssertionError('historical traversal')):
             refreshed = runtime._refresh_sources(assets, file_record(baseline))
         self.assertEqual(refreshed['vipe_source'], historical)
+
+    def test_aot_link_preserves_populated_vendor_bytes_modes_and_provenance(self):
+        _, assets = self.fixture_request('E1')
+        source = Path(assets['samtrack_source']['path'])
+        vendored = source / 'aot'
+        (vendored / 'networks').mkdir(parents=True)
+        native = vendored / 'networks/engine.py'
+        native.write_text('vendored engine, deliberately a different revision')
+        native.chmod(0o751)
+        (vendored / 'LICENSE').write_text('vendored license')
+        (vendored / 'prompts').mkdir()  # Neither inventory nor preservation traverses this directory.
+        original = file_record(native)
+        record = runtime._aot_link(assets)
+        preserved = record['preserved_vendored']
+        destination = Path(preserved['path'])
+        self.assertTrue(vendored.is_symlink())
+        self.assertEqual(vendored.resolve(), Path(assets['aot_source']['path']).resolve())
+        self.assertEqual((destination / 'networks/engine.py').read_text(),
+                         'vendored engine, deliberately a different revision')
+        self.assertEqual((destination / 'networks/engine.py').stat().st_mode & 0o777, 0o751)
+        self.assertEqual((destination / 'LICENSE').read_text(), 'vendored license')
+        rows = preserved['inventory']['files']
+        self.assertTrue(any(r['sha256'] == original['sha256'] for r in rows))
+        self.assertFalse(any('prompts' in Path(r['path']).parts for r in rows))
+        self.assertEqual(preserved['revision'], backends.SOURCE_PINS['samtrack_source'])
+        self.assertEqual(preserved['original_path'], str(vendored))
+        write_json(self.root / 'aot-link.json', record)
+        self.assertEqual(read_json(self.root / 'aot-link.json'), record)
+
+    def test_aot_link_never_replaces_an_unrelated_existing_link(self):
+        _, assets = self.fixture_request('E1')
+        source = Path(assets['samtrack_source']['path'])
+        wrong = self.root / 'unrelated'
+        wrong.mkdir()
+        (source / 'aot').symlink_to(wrong, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'does not select'):
+            runtime._aot_link(assets)
+        self.assertEqual((source / 'aot').resolve(), wrong)
 
     def fixture_request(self, environment):
         request = dict(environment=environment, job_id=environment + '-setup',
@@ -335,6 +426,10 @@ runtime.download('https://fixture.invalid/blob', root / 'data.bin', root / 'tran
 
     def test_e1_setup_orders_torch_toolkit_correlation_and_imports_and_refreshes_sources(self):
         request, assets = self.fixture_request('E1')
+        source = Path(assets['samtrack_source']['path'])
+        (source / 'aot').mkdir()
+        (source / 'aot/__init__.py').write_text('vendored source retained by setup')
+        assets['samtrack_source'] = runtime.tree_record(source, backends.SOURCE_PINS['samtrack_source'])
         events = []
         output = self.root / 'E1'
         with self.mocked_setup(request, assets, events) as state:
@@ -358,6 +453,13 @@ runtime.download('https://fixture.invalid/blob', root / 'data.bin', root / 'tran
         changes = current['grounding_source']['generated_file_changes']
         self.assertTrue(any(Path(item['path']).name == 'generated-native.so' and item['change'] == 'added' for item in changes))
         self.assertTrue(current['samtrack_source']['generated_links'])
+        preserved = current['samtrack_source']['generated_links'][0]['preserved_vendored']
+        relocated = str(Path(preserved['path']) / '__init__.py')
+        changes = current['samtrack_source']['generated_file_changes']
+        self.assertIn(dict(path=str(source / 'aot/__init__.py'), change='removed'), changes)
+        self.assertIn(dict(path=relocated, change='added'), changes)
+        self.assertEqual(current['samtrack_source']['revision'], backends.SOURCE_PINS['samtrack_source'])
+        self.assertTrue(any(row['path'] == relocated for row in current['samtrack_source']['files']))
         for key in ('inventory', 'imports', 'dependency_lock', 'build_inputs'):
             verify_record(result['runtime'][key])
 

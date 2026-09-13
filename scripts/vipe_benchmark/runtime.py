@@ -101,15 +101,15 @@ def _file_identity(path):
     return dict(device=value.st_dev, inode=value.st_ino, size=value.st_size, mtime_ns=value.st_mtime_ns)
 
 
-def download(url, path, transfer_dir, *, limit, run_root=None, artifact_limit=None):
+def download(url, path, transfer_dir, *, limit, run_root=None, artifact_limit=None, use_hf_auth=False):
     from .budgets import download_lock
     run_root = safe_path(run_root or Path(transfer_dir).parent).absolute()
     with download_lock(run_root):
         return _download(url, path, transfer_dir, limit=limit, run_root=run_root,
-                         artifact_limit=artifact_limit)
+                         artifact_limit=artifact_limit, use_hf_auth=use_hf_auth)
 
 
-def _download(url, path, transfer_dir, *, limit, run_root, artifact_limit):
+def _download(url, path, transfer_dir, *, limit, run_root, artifact_limit, use_hf_auth=False):
     """One HTTPS operation, with counted bytes and no automatic network retries."""
     from .budgets import budget_snapshot, download_remaining, record_download_progress
     path = safe_path(path).absolute()
@@ -133,6 +133,7 @@ def _download(url, path, transfer_dir, *, limit, run_root, artifact_limit):
         return download_remaining(run_root, limit, active_output=path, bytes_received=received,
                                   artifact_limit=artifact_limit)
     received, start, error = 0, time.monotonic(), None
+    authentication_used = False
     partial_identity = None
     pending_read_upper_bound = 0
     write_json(transfer_dir / f'active-{transfer_id}.json', dict(transfer_id=transfer_id,
@@ -140,7 +141,12 @@ def _download(url, path, transfer_dir, *, limit, run_root, artifact_limit):
     try:
         if remaining() <= 0:
             raise ValueError('new download or artifact allocation exhausted before opening URL')
-        with partial.open('xb') as stream, urllib.request.urlopen(url, timeout=60) as response:
+        request, open_request = url, urllib.request.urlopen
+        if use_hf_auth:
+            from .hf_auth import build_hf_request, build_hf_opener
+            request, authentication_used = build_hf_request(url)
+            open_request = build_hf_opener().open
+        with partial.open('xb') as stream, open_request(request, timeout=60) as response:
             if not response.geturl().startswith('https://'):
                 raise ValueError('download redirected outside HTTPS')
             declared = response.headers.get('Content-Length')
@@ -182,7 +188,8 @@ def _download(url, path, transfer_dir, *, limit, run_root, artifact_limit):
             output=str(path), partial=str(partial), partial_identity=partial_identity or _file_identity(partial),
             output_identity=_file_identity(path), bytes_received=received,
             received_or_reserved_upper_bound=max(received, pending_read_upper_bound),
-            wall_seconds=time.monotonic() - start, error=error, budget_before=initial))
+            wall_seconds=time.monotonic() - start, error=error, budget_before=initial,
+            existing_huggingface_auth_used=authentication_used))
     return file_record(path)
 
 
@@ -242,10 +249,13 @@ def acquire_assets(request, output, config):
             assets[name]['license_files'] = _license_records(assets[name]['files'])
         elif name in REMOTE_ASSETS:
             repo, revision, weight_names = REMOTE_ASSETS[name]
+            # Reuse existing access only for the preregistered gated asset.
+            # Credential values never enter manifests or transfer receipts.
+            auth = {'use_hf_auth': True} if name == 'sam3_checkpoint' else {}
             snapshot = output / 'snapshots' / name
             tree_path = output / 'trees' / (name + '.json')
             download(f'https://huggingface.co/api/models/{repo}/tree/{revision}?recursive=true', tree_path,
-                     transfer_dir, limit=config['new_download_gib_limit'] * 2**30)
+                     transfer_dir, limit=config['new_download_gib_limit'] * 2**30, **auth)
             tree = read_json(tree_path)
             choices = [r['path'] for r in tree if r.get('type') == 'file' and 'prompts' not in Path(r['path']).parts and
                        (r['path'] in weight_names or Path(r['path']).suffix in ('.json', '.txt') or
@@ -256,7 +266,7 @@ def acquire_assets(request, output, config):
                     '\\' in p for p in choices):
                 raise ValueError('unsafe or duplicate pinned HF file path')
             records = [download(f'https://huggingface.co/{repo}/resolve/{revision}/{file}',
-                       snapshot / file, transfer_dir, limit=config['new_download_gib_limit'] * 2**30)
+                       snapshot / file, transfer_dir, limit=config['new_download_gib_limit'] * 2**30, **auth)
                        for file in sorted(choices)]
             for record in records:
                 relative = str(Path(record['path']).relative_to(snapshot.resolve()))
@@ -390,14 +400,30 @@ def _aot_link(assets):
     source = safe_path(assets['samtrack_source']['path'])
     aot = safe_path(assets['aot_source']['path']).resolve()
     path = source / 'aot'
+    preserved = None
     if path.is_symlink():
         if path.resolve() != aot:
             raise ValueError('SAM-Track aot link does not select its pinned source')
     else:
         if path.exists():
-            path.rmdir()  # Only an empty submodule placeholder may be replaced.
+            if not path.is_dir():
+                raise ValueError('SAM-Track aot path is neither a directory nor the pinned link')
+            # This exact SAM-Track revision vendors AOT; retain its bytes and
+            # license evidence while selecting the separately prescribed pin.
+            destination = source / ('aot.vendored-' + uuid.uuid4().hex)
+            if destination.exists() or destination.is_symlink():
+                raise ValueError('AOT preservation destination is already occupied')
+            path.rename(destination)
+            preserved = dict(path=str(destination.absolute()), original_path=str(path.absolute()),
+                             source_asset='samtrack_source', revision=assets['samtrack_source']['revision'])
+            if any(destination.iterdir()):
+                preserved['inventory'] = tree_record(destination, preserved['revision'])
+            else:
+                preserved['inventory'] = dict(path=str(destination.absolute()),
+                                              revision=preserved['revision'], files=[])
         path.symlink_to(aot, target_is_directory=True)
-    return dict(path=str(path.absolute()), target=str(aot), source_asset='aot_source')
+    return dict(path=str(path.absolute()), target=str(aot), source_asset='aot_source',
+                preserved_vendored=preserved)
 
 
 def _correlation_asset(request, output, config):

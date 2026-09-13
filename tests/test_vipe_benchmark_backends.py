@@ -2,19 +2,21 @@
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
+import os
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from vipe_benchmark.backends import (
     AssetBundle, BackendError, DA3Backend, DepthProBackend, GroundingDetector,
-    LegacyStandaloneBackend, LegacyViPESegmentationBackend, Metric3DBackend,
+    LegacyStandaloneBackend, LegacyViPESegmentationBackend, Metric3DBackend, S1TrackerBridge,
     RTDetrDetector, SAM2Backend, SAM3Backend, SOURCE_PINS, UniDepthBackend,
     build_backend, detection_rows, normalize_phrase,
-    _build_native, _sam2, _legacy_vipe_segmentation,
+    _build_native, _sam2, _legacy_vipe_segmentation, _s1_aot_module, _s1_tracker,
 )
 from vipe_benchmark.files import file_record
 
@@ -261,6 +263,171 @@ class SAM2Tests(unittest.TestCase):
             with self.subTest(frames=frames), self.assertRaises(ValueError):
                 backend.segment([rgb, rgb], [valid, valid], frame_ids=frames)
         self.assertEqual(det.calls, 0)
+
+
+class S1NativeBridgeTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.runtime = FakeRuntime()
+        self.interpolations = []
+        def interpolate(value, *, size, mode):
+            self.interpolations.append(dict(shape=tuple(value.shape), size=size, mode=mode, dtype=value.dtype))
+            self.assertEqual(mode, 'nearest')
+            y = np.arange(size[0]) * value.shape[-2] // size[0]
+            x = np.arange(size[1]) * value.shape[-1] // size[1]
+            return value[..., y[:, None], x[None, :]]
+        self.runtime.torch = SimpleNamespace(nn=SimpleNamespace(functional=SimpleNamespace(interpolate=interpolate)))
+        self.arguments = dict(phase='PRE_YTB_DAV', model='r50_deaotl', long_term_mem_gap=9999,
+                              max_len_long_term=9999, gpu_id=0, model_path=str(self.root / 'checkpoint.pth'))
+
+    def make_module(self, *, changed_kwargs=None, fail=False):
+        module = SimpleNamespace()
+        calls, tracker = [], SimpleNamespace(engine=SimpleNamespace(input_size_2d=(2, 3)))
+        tracker.restart = Mock()
+        tracker.add_reference_frame = Mock()
+        tracker.update_memory = Mock()
+        tracker.track = Mock(return_value=np.arange(24, dtype=np.float32).reshape(1, 1, 4, 6) % 2)
+        def build_engine(name, phase, *, aot_model, gpu_id, short_term_mem_skip, long_term_mem_gap):
+            calls.append(dict(name=name, phase=phase, aot_model=aot_model, gpu_id=gpu_id,
+                              short_term_mem_skip=short_term_mem_skip, long_term_mem_gap=long_term_mem_gap))
+            return tracker.engine
+        def get_aot(arguments):
+            self.assertEqual(arguments, self.arguments)
+            Path('result/model').mkdir(parents=True)
+            Path('result/model/config.txt').write_text('native relative config directory')
+            kwargs = dict(aot_model=tracker, gpu_id=0, short_term_mem_skip=1,
+                          long_term_mem_gap=9999, max_len_long_term=9999)
+            kwargs.update(changed_kwargs or {})
+            module.build_engine('deaotengine', phase='eval', **kwargs)
+            if fail:
+                raise RuntimeError('native constructor failed')
+            return tracker
+        module.build_engine, module.get_aot = build_engine, get_aot
+        return module, tracker, calls
+
+    def build(self, module):
+        with patch.dict(os.environ, {'TMPDIR': str(self.root)}):
+            tracker = _s1_tracker(module, self.runtime, self.arguments)
+        self.addCleanup(tracker._config_directory.cleanup)
+        return tracker
+
+    def test_constructor_removes_only_inert_argument_and_contains_native_config_writes(self):
+        module, native, calls = self.make_module()
+        original, cwd = module.build_engine, Path.cwd()
+        bridge = self.build(module)
+        self.assertIs(module.build_engine, original)
+        self.assertEqual(Path.cwd(), cwd)
+        self.assertEqual(calls, [dict(name='deaotengine', phase='eval', aot_model=native,
+                                    gpu_id=0, short_term_mem_skip=1, long_term_mem_gap=9999)])
+        directory = Path(bridge.metadata['config_working_directory'])
+        self.assertTrue(directory.is_relative_to(self.root))
+        self.assertEqual((directory / 'result/model/config.txt').read_text(), 'native relative config directory')
+        self.assertEqual(bridge.metadata['engine_argument_bridge']['removed'], {'max_len_long_term': 9999})
+
+    def test_constructor_failure_restores_cwd_and_native_builder(self):
+        module, _, _ = self.make_module(fail=True)
+        original, cwd = module.build_engine, Path.cwd()
+        with patch.dict(os.environ, {'TMPDIR': str(self.root)}), self.assertRaisesRegex(RuntimeError, 'constructor failed'):
+            _s1_tracker(module, self.runtime, self.arguments)
+        self.assertEqual(Path.cwd(), cwd)
+        self.assertIs(module.build_engine, original)
+        self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_constructor_rejects_changed_arguments_and_unsupervised_temporary_root(self):
+        module, _, calls = self.make_module()
+        for altered in ({'max_len_long_term': 3}, {'long_term_mem_gap': 1}, {'gpu_id': 1}, {'gpu_id': False}):
+            with self.subTest(altered=altered), self.assertRaisesRegex(BackendError, 'exact frozen'):
+                _s1_tracker(module, self.runtime, dict(self.arguments, **altered))
+        with patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(BackendError, 'TMPDIR'):
+            _s1_tracker(module, self.runtime, self.arguments)
+        self.assertEqual(calls, [])
+
+    def test_native_wrapper_argument_drift_is_rejected_before_engine_construction(self):
+        for altered in ({'max_len_long_term': 2}, {'long_term_mem_gap': 1}, {'short_term_mem_skip': 2}, {'extra': 1}):
+            module, _, calls = self.make_module(changed_kwargs=altered)
+            with self.subTest(altered=altered), patch.dict(os.environ, {'TMPDIR': str(self.root)}), \
+                 self.assertRaisesRegex(BackendError, 'constructor contract'):
+                _s1_tracker(module, self.runtime, self.arguments)
+            self.assertEqual(calls, [])
+
+    def test_memory_update_uses_exact_native_nearest_grid_and_keeps_original_export(self):
+        module, native, _ = self.make_module()
+        bridge = self.build(module)
+        rgb, valid = image()
+        prediction = native.track.return_value.copy()
+        class SAM:
+            def set_image(self, image):
+                pass
+            def predict(self, **kwargs):
+                return np.ones((1, *valid.shape), bool), np.ones(1), np.zeros((1, 2, 2))
+        backend = LegacyStandaloneBackend(detector(detection_rows([[0, 0, 2, 2]], [.7], ['person'])),
+                                           SAM(), bridge, self.runtime)
+        rows = backend.segment([rgb, rgb], [valid, valid], frame_ids=[20, 21])
+        np.testing.assert_array_equal(native.update_memory.call_args.args[0], prediction[..., ::2, ::2])
+        np.testing.assert_array_equal(rows[1].labels, prediction[0, 0])
+        self.assertEqual(native.restart.call_count, 2)
+        self.assertEqual(self.interpolations, [dict(shape=(1, 1, 4, 6), size=(2, 3), mode='nearest', dtype=np.dtype('float32'))])
+        self.assertEqual(rows[1].metadata['tracker_bridge']['memory_update'],
+                         dict(original_shape=[4, 6], internal_shape=[2, 3], mode='nearest'))
+
+    def test_pair_bridge_rejects_extra_frames_reference_and_propagation(self):
+        module, native, _ = self.make_module()
+        bridge = self.build(module)
+        rgb, valid = image()
+        for ids in ([0, 1, 2], [20, 22], [49, 50], [200]):
+            with self.subTest(ids=ids), self.assertRaises(BackendError), bridge.pair(ids):
+                self.fail('invalid pair admitted')
+        with self.assertRaisesRegex(BackendError, 'outside'):
+            bridge.restart()
+        with bridge.pair([20, 21]):
+            bridge.restart()
+            with self.assertRaisesRegex(BackendError, 'step zero'):
+                bridge.add_reference_frame(rgb, valid, 1, 1)
+            bridge.add_reference_frame(rgb, valid, 1, 0)
+            with self.assertRaisesRegex(BackendError, 'one reference'):
+                bridge.add_reference_frame(rgb, valid, 1, 0)
+            value = bridge.track(rgb)
+            with self.assertRaisesRegex(BackendError, 'exactly one successor'):
+                bridge.track(rgb)
+            bridge.update_memory(value)
+            with self.assertRaisesRegex(BackendError, 'single tracked successor'):
+                bridge.update_memory(value)
+            bridge.restart()
+        self.assertEqual(native.track.call_count, 1)
+
+    def test_pair_bridge_rejects_missing_resets_and_singleton_tracking(self):
+        module, _, _ = self.make_module()
+        bridge = self.build(module)
+        rgb, valid = image()
+        with self.assertRaisesRegex(BackendError, 'both resets'), bridge.pair([20, 21]):
+            bridge.restart()
+        with bridge.pair([100]):
+            bridge.restart()
+            with self.assertRaisesRegex(BackendError, 'one reference'):
+                bridge.add_reference_frame(rgb, valid, 1, 0)
+            bridge.restart()
+
+    def test_native_palette_import_preserves_seed_state_on_success_and_failure(self):
+        original_state = np.random.get_state()
+        self.addCleanup(np.random.set_state, original_state)
+        for fail in (False, True):
+            np.random.seed(0)
+            expected = np.random.RandomState(0).random_sample(4)
+            sentinel = object()
+            def module(*args):
+                np.random.seed(200)
+                np.random.random(765)
+                if fail:
+                    raise RuntimeError('import failed')
+                return sentinel
+            if fail:
+                with self.assertRaisesRegex(RuntimeError, 'import failed'):
+                    _s1_aot_module(SimpleNamespace(module=module))
+            else:
+                self.assertIs(_s1_aot_module(SimpleNamespace(module=module)), sentinel)
+            np.testing.assert_array_equal(np.random.random(4), expected)
 
 
 class LegacyAndSAM3Tests(unittest.TestCase):

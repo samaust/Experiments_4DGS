@@ -12,7 +12,7 @@ files, identities, RGB/config hashes, budget accounting and completion status.
 Constructors accept native objects and a tensor runtime to allow CPU fake tests
 without importing any model implementation or executing model inference.
 """
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack, contextmanager, nullcontext
 from dataclasses import dataclass, field
 import importlib
 import os
@@ -444,6 +444,125 @@ class SAM2Backend:
         return results
 
 
+class S1TrackerBridge:
+    """Bridge the pinned SAM-Track wrapper to AOT for one reset pair only."""
+    def __init__(self, native, runtime, config_directory):
+        self._native, self.runtime = native, runtime
+        self._config_directory = config_directory  # Keep native config directories alive.
+        self._active = False
+        self.metadata = dict(
+            engine_argument_bridge=dict(removed={'max_len_long_term': 9999},
+                engine='deaotengine', phase='eval', long_term_mem_gap=9999, short_term_mem_skip=1,
+                reason='memory truncation unreachable after reset and at most one successor'),
+            contract=dict(maximum_frames=2, one_reference_at_step=0, resets_per_group=2),
+            memory_grid_bridge=dict(mode='nearest', target='native engine.input_size_2d'),
+            numpy_import_state_restored=True,
+            config_working_directory=str(Path(config_directory.name).absolute()))
+
+    @contextmanager
+    def pair(self, frame_ids):
+        ids = list(frame_ids)
+        if (self._active or len(ids) not in (1, 2) or
+                any(type(i) is not int or not 0 <= i < 200 for i in ids) or
+                (len(ids) == 2 and (ids[1] != ids[0] + 1 or ids[1] > 49))):
+            raise BackendError('S1 AOT bridge requires a fresh singleton or one reconstruction pair')
+        self._active, self._frames, self._resets = True, len(ids), 0
+        self._state, self._referenced, self._updated = 'new', False, False
+        self.metadata['memory_update'] = None
+        try:
+            yield
+            if self._resets != 2 or self._referenced != self._updated:
+                raise BackendError('S1 AOT bridge requires both resets and one update per reference')
+        finally:
+            self._active = False
+
+    def restart(self):
+        if not self._active or self._resets >= 2:
+            raise BackendError('S1 AOT reset is outside its admitted pair')
+        self._native.restart()
+        self._resets += 1
+        self._state = 'ready' if self._resets == 1 else 'closed'
+
+    def add_reference_frame(self, image, mask, obj_nums, frame_step, incremental=False):
+        if (not self._active or self._frames != 2 or self._state != 'ready' or
+                type(frame_step) is not int or frame_step != 0 or incremental or
+                type(obj_nums) is not int or not 1 <= obj_nums <= 255):
+            raise BackendError('S1 AOT bridge permits one reference at step zero after reset')
+        self._native.add_reference_frame(image, mask, obj_nums, frame_step)
+        self._original_shape = tuple(image.shape[:2])
+        self._state, self._referenced = 'referenced', True
+
+    def track(self, image):
+        if (not self._active or self._state != 'referenced' or
+                tuple(image.shape[:2]) != self._original_shape):
+            raise BackendError('S1 AOT bridge permits exactly one successor on the reference grid')
+        result = self._native.track(image)
+        self._state = 'tracked'
+        return result
+
+    def update_memory(self, labels):
+        if not self._active or self._state != 'tracked':
+            raise BackendError('S1 AOT memory update requires its single tracked successor')
+        if tuple(labels.shape) != (1, 1, *self._original_shape):
+            raise BackendError('S1 AOT returned labels outside the original image grid')
+        shape = tuple(self._native.engine.input_size_2d)
+        if len(shape) != 2 or any(type(i) is not int or i <= 0 for i in shape):
+            raise BackendError('S1 AOT engine has an invalid internal image grid')
+        resized = self.runtime.torch.nn.functional.interpolate(labels, size=shape, mode='nearest')
+        self._native.update_memory(resized)
+        self.metadata['memory_update'] = dict(original_shape=list(labels.shape[-2:]),
+                                             internal_shape=list(shape), mode='nearest')
+        self._state, self._updated = 'updated', True
+
+
+def _s1_aot_module(bundle):
+    # Its palette initialization seeds NumPy to 200 as an import side effect.
+    state = np.random.get_state()
+    try:
+        return bundle.module('aot_tracker', 'samtrack_source')
+    finally:
+        np.random.set_state(state)
+
+
+def _s1_tracker(aot_module, runtime, arguments):
+    prescribed = dict(phase='PRE_YTB_DAV', model='r50_deaotl', long_term_mem_gap=9999,
+                      max_len_long_term=9999, gpu_id=0)
+    if (set(arguments) != set(prescribed) | {'model_path'} or
+            any(arguments.get(k) != v for k, v in prescribed.items()) or
+            any(type(arguments[k]) is not int for k in ('long_term_mem_gap', 'max_len_long_term', 'gpu_id')) or
+            not Path(arguments['model_path']).is_absolute()):
+        raise BackendError('S1 AOT engine bridge requires the exact frozen tracker settings')
+    temporary_root = os.environ.get('TMPDIR')
+    if not temporary_root or not safe_path(temporary_root).is_dir():
+        raise BackendError('S1 AOT construction requires the supervised job TMPDIR')
+    original_builder = aot_module.build_engine
+    builder_calls = 0
+    def build_engine(name, phase='train', **kwargs):
+        nonlocal builder_calls
+        required = dict(gpu_id=0, short_term_mem_skip=1, long_term_mem_gap=9999, max_len_long_term=9999)
+        if (builder_calls or name != 'deaotengine' or phase != 'eval' or
+                set(kwargs) != set(required) | {'aot_model'} or
+                any(type(kwargs[k]) is not int or kwargs[k] != v for k, v in required.items())):
+            raise BackendError('S1 AOT wrapper changed its frozen engine constructor contract')
+        builder_calls += 1
+        del kwargs['max_len_long_term']
+        return original_builder(name, phase=phase, **kwargs)
+    directory = tempfile.TemporaryDirectory(prefix='s1-aot-config-', dir=Path(temporary_root).resolve())
+    previous = Path.cwd()
+    try:
+        os.chdir(directory.name)
+        with patch.object(aot_module, 'build_engine', build_engine):
+            native = aot_module.get_aot(dict(arguments))
+        if builder_calls != 1:
+            raise BackendError('S1 AOT wrapper did not construct exactly one native engine')
+        return S1TrackerBridge(native, runtime, directory)
+    except BaseException:
+        directory.cleanup()
+        raise
+    finally:
+        os.chdir(previous)
+
+
 class LegacyStandaloneBackend:
     """Native upstream detector + SAM box refinement + DeAOT, SegTracker merge."""
     def __init__(self, detector, sam_predictor, tracker, runtime, provenance=None):
@@ -456,7 +575,8 @@ class LegacyStandaloneBackend:
         labels = np.zeros(valid[0].shape, np.int32)
         semantics, skipped = {}, []
         h, w = labels.shape
-        with self.runtime.inference():
+        pair_scope = self.tracker.pair(frame_ids) if isinstance(self.tracker, S1TrackerBridge) else nullcontext()
+        with self.runtime.inference(), pair_scope:
             self.tracker.restart()
             try:
                 object_id = 0
@@ -504,6 +624,8 @@ class LegacyStandaloneBackend:
             sam_box_refinement_passes=2, skipped_box_indices=skipped,
             detections=rows, diagnostics_source_frame=frame_ids[0],
             successor_detector_rerun=False, empty_keyframe='empty successor; native zero-object tracker skipped')
+        if isinstance(self.tracker, S1TrackerBridge):
+            metadata['tracker_bridge'] = self.tracker.metadata.copy()
         results = [_segmentation(output, semantics, footprint, dict(metadata, frame_id=f))
                    for output, footprint, f in zip(outputs, valid, frame_ids)]
         results[0].diagnostics = getattr(self.detector, 'diagnostics', {}).copy()
@@ -936,17 +1058,17 @@ def _build_native(component, bundle, runtime):
         sam = bundle.module('segment_anything', 'sam_source')
         predictor = sam.SamPredictor(sam.sam_model_registry['vit_b'](
             checkpoint=bundle['sam_checkpoint']).to(device=runtime.device, dtype=torch.float32).eval())
-        # SAM-Track's native get_aot imports aot.* and configs.*. The checkout
-        # must expose its pinned AOT subtree (usually its upstream submodule).
+        # Setup preserves SAM-Track's vendored tree and exposes the separate
+        # prescribed AOT revision through its package namespace.
         bundle.source('aot_source')
         bundle.source('samtrack_source')
-        aot_module = bundle.module('aot_tracker', 'samtrack_source')
+        aot_module = _s1_aot_module(bundle)
         aot_package = importlib.import_module('aot')
         locations = [safe_path(p).resolve() for p in getattr(aot_package, '__path__', [])]
         if bundle.paths['aot_source'] not in locations:
             raise BackendError('SAM-Track aot import is not the declared pinned AOT source')
         gpu_id = 0 if runtime.device == 'cuda' else int(runtime.device.split(':')[1])
-        tracker = aot_module.get_aot(dict(phase='PRE_YTB_DAV', model='r50_deaotl',
+        tracker = _s1_tracker(aot_module, runtime, dict(phase='PRE_YTB_DAV', model='r50_deaotl',
             model_path=bundle['aot_checkpoint'], long_term_mem_gap=9999, max_len_long_term=9999,
             gpu_id=gpu_id))
         attention = bundle.module('networks.layers.attention', 'aot_source')
