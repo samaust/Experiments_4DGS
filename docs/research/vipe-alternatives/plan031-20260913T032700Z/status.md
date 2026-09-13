@@ -1,3 +1,13 @@
+# Current: approved S3 memory repair and reconstruction complete
+
+[Recovery003 completed all 840 outputs](s3-reconstruction-recovery-results-003.md) in **894.108 seconds**. Device peaks were **11.782 GiB** from supervisor samples and **13.521 GiB** from phase probes, below the unchanged 22-GiB cap. Post-pair live/reserved memory remained constant across all 420 pairs. Output/source/helper hashes and host/GPU cleanup are verified. All 510 calibration outputs remain, and S3 is engineering-qualified.
+
+[Assessment007](assessment-007.md) and [accounting007](matrix-accounting-007.json) are current. Implementation `d747a16` passed 331 CPU tests; diagnostic evidence is `3ae5ec9`. The approved diagnostic and full attempt are consumed, and the requested recovery is complete. The broader benchmark remains incomplete; unrelated work stays stopped. Historical failures, charges and earlier status sections below are preserved.
+
+# Current: full reconstruction recovery003 running
+
+The approved full reconstruction has passed [first-pair qualification](s3-reconstruction-recovery-first-pair-003.json) and is progressing toward 840 outputs. The validated cleanup sequence is active under the 5,400-second reservation and unchanged 22-GiB cap. Diagnostic evidence is committed as `3ae5ec9`; implementation is `d747a16`. Final completion and cleanup are not yet claimed. Other stopped work remains stopped. Earlier sections are historical.
+
 # Current: memory diagnostic passed; approved full reconstruction ready
 
 [The diagnostic completed 48 pairs](sam3-memory-diagnostic-results-001.md) with exact agreement on all 82 saved outputs. Post-cleanup live/reserved memory stayed constant at 4.717/4.852 GiB; device observations stayed below 22 GiB and cleanup is confirmed. [The passed gate](sam3-memory-diagnostic-review-001.json) admits [the already approved 90-minute recovery003](s3-reconstruction-recovery-authorization-003.json). Next: commit the diagnostic evidence, then dispatch the single full reconstruction automatically. Other stopped work remains stopped. Earlier sections are historical.
