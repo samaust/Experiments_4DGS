@@ -1,0 +1,68 @@
+{
+  "status": "blocked_internal_isolation",
+  "allocation_consumed": true,
+  "supervisor": {
+    "cleanup_confirmed": true,
+    "deadline_exceeded": false,
+    "elapsed_seconds": 11.236293156049214,
+    "error": "RuntimeError: worker exited 1",
+    "event": "finish",
+    "failure_kind": "worker_failure",
+    "job_id": "S3-reconstruction",
+    "peak": {
+      "artifact_bytes": 34587684864,
+      "device_bytes": 1780482048,
+      "download_bytes": 14775188913
+    },
+    "previous_sha256": "8b6142afb6ad867e75545db9bbb4e08f3a9973da1dba9388b0f2e0a018338fb9",
+    "recorded_unix": 1789289663.331573,
+    "resource": "gpu",
+    "result": null,
+    "sequence": 186,
+    "status": "failed",
+    "stop_required": false,
+    "surviving_pids": [],
+    "event_sha256": "ac232a3b686710eaf17e5c7c04d346dba60cf1400b9104acb674418fbfcb4c43"
+  },
+  "failure": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S3-reconstruction/failure.json",
+    "sha256": "c42b0f891494f9e1aacc9cf7c018556f081afe95b78354c052505200c68bb39b",
+    "bytes": 9529
+  },
+  "log": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S3-reconstruction.log",
+    "sha256": "c8a5aa80b7e3178cc0dc0eef9b986f8b7f2463e0cf5bafd77486677f1c49a151",
+    "bytes": 10244
+  },
+  "command": ".local/envs/stg-colmap/bin/python scripts/basketball_vipe_benchmark.py --run-id plan031-20260913T032700Z stage --job S3-reconstruction --validation docs/research/vipe-alternatives/plan031-20260913T032700Z/implementation-validation-008.json",
+  "blocked_child_command": [
+    "/sbin/ldconfig",
+    "-p"
+  ],
+  "exact_error": "PermissionError: standalone model worker subprocesses are prohibited",
+  "cause": "The benchmark Python audit hook in scripts/vipe_benchmark/isolation.py rejected Triton 3.6.0 native CUDA driver setup from SAM3 video mask NMS. This is a confirmed application-level guard denial, not a Codex sandbox/approval denial or a Hugging Face access failure.",
+  "approval_rule_status": "Host controller execution was already approved; no missing Codex allow rule was reported. A duplicate Codex rule would not change this Python audit hook.",
+  "review": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/triton-subprocess-isolation-review-001.md",
+    "sha256": "bcdad4e7c9ca10246de08d71ee9098d57b7e7acdd41dfb5bca32d5730f6d5a4d",
+    "bytes": 7907
+  },
+  "exported_pair_rows": 0,
+  "first_result_qualification_completed": false,
+  "checkpoint_access": "resolved; pinned assets verified",
+  "next_action": "Stop affected reconstruction work. Preserve its consumed GPU attempt. The saved review identifies native-helper support and isolation evidence required before a separately authorized single reconstruction retry; no such retry or guard relaxation has been performed.",
+  "proposed_reconstruction_recovery": {
+    "additional_attempts": 1,
+    "seconds_limit": 5400,
+    "source": "same pinned original SAM3 video model, inputs and native numerical settings",
+    "cumulative_gpu_seconds_limit": 93600,
+    "limits_unchanged": [
+      "22 GiB total device memory",
+      "one exclusive RTX4090 process group",
+      "eight CPU workers",
+      "60 GiB new downloads",
+      "150 GiB new artifacts"
+    ],
+    "authorization_status": "required before additional attempt"
+  }
+}
