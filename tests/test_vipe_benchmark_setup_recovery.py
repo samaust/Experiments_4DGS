@@ -313,6 +313,78 @@ class SetupRecoveryTests(unittest.TestCase):
             self.ledger.authorize_setup_recovery(self.authorization(
                 schema='vipe-benchmark-setup-recovery/v1', environment='E5'))
 
+    def e4_amendment_authorization(self, **changes):
+        if self.ledger.states()['E4-setup']['status'] == 'blocked':
+            self.ledger.resume_unstarted(['E4-setup'], 'Synthetic resume')
+            self.ledger.reserve('E4-setup', [], {})
+            self.ledger.finish('E4-setup', 'failed', 11., cleanup_confirmed=True)
+        validation = self.root / 'e4-validation.json'
+        if not validation.exists():
+            write_json(validation, dict(status='passed', source_files=[file_record(__file__)]))
+        args = dict(schema='vipe-benchmark-setup-recovery/v1', environment='E4',
+            original_job_id='E4-setup', job_id='E4-setup-recovery-001',
+            repair_validation=file_record(validation),
+            original_failure_event_sha256=self.ledger.states()['E4-setup']['event_sha256'],
+            changes_to_prescribed_runtime=True, runtime_amendment='plan031-e4-cu130-20260919')
+        args.update(changes)
+        return self.authorization(**args)
+
+    def test_e4_amendment_records_authority_preserves_history_and_exact_recipe(self):
+        authorization = self.e4_amendment_authorization()
+        history = self.ledger.path.read_bytes()
+        elapsed = self.ledger.totals()['setup']['elapsed_seconds']
+        event = self.ledger.authorize_setup_recovery(authorization)
+        self.assertEqual(event['authorization'], authorization)
+        self.assertTrue(self.ledger.path.read_bytes().startswith(history))
+        self.assertEqual(self.ledger.totals()['setup']['elapsed_seconds'], elapsed)
+        with patch('vipe_benchmark.setup_recipes.shutil.which', return_value='/fixture/uv'):
+            request = setup_recipes.recovery_request(self.root, authorization)
+            runtime._validate_setup_request(request)
+            for pin in ('torch==2.13.0+cu130', 'torchvision==0.28.0+cu130',
+                        'torchaudio==2.13.0+cu130', 'numpy==2.1.3'):
+                self.assertIn(pin, request['requirements'])
+        with self.assertRaisesRegex(ValueError, 'already allocated'):
+            self.ledger.authorize_setup_recovery(authorization)
+        with self.assertRaisesRegex(ValueError, 'previous cleaned-up'):
+            self.ledger.authorize_setup_recovery(self.e4_amendment_authorization(
+                job_id='E4-setup-recovery-002'))
+
+    def test_e4_runtime_change_requires_exact_amendment_and_active_targets(self):
+        for amendment in (None, '', 'plan031-e4-cu124-20260919'):
+            with self.subTest(amendment=amendment), self.assertRaisesRegex(ValueError, 'exact explicit E4'):
+                self.ledger.authorize_setup_recovery(self.e4_amendment_authorization(
+                    runtime_amendment=amendment))
+        for key, value in dict(python='3.12', torch='2.5.1+cu124',
+                               torchvision='0.20.1+cu124', numpy='1.26.4').items():
+            with self.subTest(target=key), patch.dict(runtime.TARGETS['E4'], {key: value}):
+                with self.assertRaisesRegex(ValueError, 'exact explicit E4'):
+                    self.ledger.authorize_setup_recovery(self.e4_amendment_authorization())
+
+    def test_e4_amendment_cannot_change_other_environments(self):
+        for environment in ('E1', 'E2', 'E3'):
+            schema = {'E1': 'vipe-benchmark-e1-recovery/v1',
+                      'E2': 'vipe-benchmark-setup-recovery/v1',
+                      'E3': 'vipe-benchmark-sam3-recovery/v1'}[environment]
+            with self.subTest(environment=environment), self.assertRaisesRegex(ValueError, 'exact explicit'):
+                self.ledger.authorize_setup_recovery(self.e4_amendment_authorization(
+                    environment=environment, schema=schema, original_job_id=f'{environment}-setup',
+                    job_id=f'{environment}-setup-recovery-001'))
+
+    def test_e4_amendment_preserves_scope_failure_binding_and_validation_guards(self):
+        for changes, error in [
+                (dict(recovery_attempts_limit=2), 'exact explicit'),
+                (dict(reset_previous_consumption=True), 'exact explicit'),
+                (dict(unrelated_attempts_reopened=True), 'exact explicit'),
+                (dict(setup_wall_seconds_limit=60000), 'exact explicit'),
+                (dict(authorization=''), 'exact explicit'),
+                (dict(original_failure_event_sha256='0' * 64), 'preserved, cleaned-up')]:
+            with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, error):
+                self.ledger.authorize_setup_recovery(self.e4_amendment_authorization(**changes))
+        authorization = self.e4_amendment_authorization()
+        (self.root / 'e4-validation.json').write_text('{}')
+        with self.assertRaisesRegex(ValueError, 'changed file'):
+            self.ledger.authorize_setup_recovery(authorization)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -396,11 +396,21 @@ class Ledger:
                 preparation_evidence=document['asset_preparation']))
 
     def _authorize_e1_recovery(self, authorization, document, environment="E1"):
-        """One explicitly requested fixed-runtime retry; preserve every historical charge."""
+        """One explicit retry, with only the recorded E4 amendment permitted."""
+        from .runtime import TARGETS
+
+        # This is a dated, E4-only exception, not general runtime-change authority.
+        # The immutable authorization record retained in the event names the amendment.
+        e4_cu130_amendment = (
+            environment == 'E4' and
+            document.get('runtime_amendment') == 'plan031-e4-cu130-20260919' and
+            document.get('changes_to_prescribed_runtime') is True and
+            TARGETS['E4'] == dict(python='3.11', torch='2.13.0+cu130',
+                                  torchvision='0.28.0+cu130', numpy='2.1.3'))
         required = dict(original_job_id=f'{environment}-setup',
             environment=environment, recovery_attempts_limit=1,
             setup_wall_seconds_limit=self.config['setup_wall_seconds_limit'],
-            reset_previous_consumption=False, changes_to_prescribed_runtime=False,
+            reset_previous_consumption=False, changes_to_prescribed_runtime=e4_cu130_amendment,
             unrelated_attempts_reopened=False)
         if any(document.get(k) != v for k, v in required.items()) or not document.get('authorization'):
             raise ValueError(f'recovery requires the exact explicit {environment} authorization scope')

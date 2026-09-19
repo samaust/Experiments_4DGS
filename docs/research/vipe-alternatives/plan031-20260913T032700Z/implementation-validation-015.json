@@ -1,0 +1,17 @@
+{
+  "status": "passed",
+  "created_utc": "2026-09-19T00:00:00Z",
+  "tests": 1,
+  "wall_seconds": 0.2,
+  "command": "PYTHONPATH=scripts .local/envs/stg-colmap/bin/python -c 'from vipe_benchmark.config import load, derive; from vipe_benchmark.runtime import TARGETS; from vipe_benchmark.setup_recipes import recipe; load(); _, c=derive(); assert TARGETS[\"E4\"][\"torch\"]==\"2.13.0+cu130\"; assert TARGETS[\"E4\"][\"torchvision\"]==\"0.28.0+cu130\"; assert \"torchaudio==2.13.0+cu130\" in recipe(\"E4\")[\"requirements\"]; assert \"2.13.0+cu130\" in c[\"runtimes\"][\"E4\"][\"target\"]'",
+  "scope": "E4 cu130 migration syntax, configuration derivation, target pins and setup recipe",
+  "source_files": [
+    {"path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_031.md", "sha256": "5b2c3eec431337e720cad0dae60738b4040045d25815a790f8534e79eaa6dcd8", "bytes": 33102},
+    {"path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/runtime.py", "sha256": "db273218609cc071c12e15c96a240b66d4b02c9058850896d85b02f1b68efa41", "bytes": 44386},
+    {"path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/setup_recipes.py", "sha256": "a0431c780e0d43555f9e3e89f5f24fe34981225a4b0fb65ab0ade39eb76fe00a", "bytes": 8328},
+    {"path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/config.py", "sha256": "2e49f4ee5febbaeb37d2d3ba777cb7b6e0a5b882d218585d111c264363f82abe", "bytes": 7264},
+    {"path": "/home/auss/git_repos/samaust/Experiments_4DGS/configs/vipe-alternatives/components-v1.json", "sha256": "f7dfc9f4ab5d539a74fa35ac9da965245ceea8adaddfcb290e071152a0b53ee6", "bytes": 11395},
+    {"path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/native-runtime-recommendations.md", "sha256": "68065d3721378aae4d24f7917689198c8d209363f31679570a70343b1b301c68", "bytes": 15595}
+  ],
+  "notes": "Focused migration validation passed. Full historical unittest discovery remains affected by two annotation fixtures whose preserved policy binds the pre-amendment plan hash; those fixtures are outside E4 setup admission."
+}
