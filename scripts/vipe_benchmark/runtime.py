@@ -660,9 +660,10 @@ def setup(request, output, config):
         try:
             with log.open('x') as stream:
                 if command[0] == request['uv']:
-                    from .transfer_proxy import uv_proxy
+                    from .transfer_proxy import inherited_https_proxy, uv_proxy
                     with uv_proxy(request['run_root'], int(config['new_download_gib_limit'] * 2**30),
-                                  artifact_limit=int(config['new_artifact_disk_gib_limit'] * 2**30)) as proxy:
+                                  artifact_limit=int(config['new_artifact_disk_gib_limit'] * 2**30),
+                                  upstream_proxy=inherited_https_proxy(env)) as proxy:
                         env.update(proxy.environment)
                         try:
                             subprocess.run(command, check=True, env=env, cwd=ROOT,

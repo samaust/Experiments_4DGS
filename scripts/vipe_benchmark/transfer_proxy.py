@@ -6,18 +6,22 @@ upstream recv. Before each recv it persists a reservation; a crash retains that
 charge instead of losing an unrecorded read. The received counter is monotonic.
 No connection or request is retried. All UV invocations must use environment.
 
-Wire accounting includes TLS overhead. Acquisition is the larger of cumulative
+Wire accounting includes TLS overhead and inherited proxy response headers.
+An inherited HTTP proxy is reached with CONNECT, never bypassed on failure.
+Acquisition is the larger of cumulative
 metered bytes and the retained extracted cache/managed-Python footprint. Socket
 and operating-system transport buffers are not additional application reads.
 """
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import base64
 import errno
 import selectors
 import socket
 import threading
 import time
 import uuid
+from urllib.parse import unquote, urlsplit
 
 from .budgets import _publish_counter, download_lock, download_remaining
 from .files import safe_path, write_json
@@ -25,6 +29,13 @@ from .files import safe_path, write_json
 
 class TransferProxyError(RuntimeError):
     pass
+
+
+def inherited_https_proxy(environment):
+    """Retain the HTTPS egress route before replacing UV's proxy variables."""
+    return next((environment[name] for name in
+                 ('https_proxy', 'HTTPS_PROXY', 'all_proxy', 'ALL_PROXY')
+                 if environment.get(name)), None)
 
 
 def _atomic_counter(path, value):
@@ -50,7 +61,8 @@ class _UVProxy:
     _BUFFER = 2**21
     _HEADERS = 2**16
 
-    def __init__(self, run_root, download_limit, artifact_limit=None, *, allowed_ports=(443,)):
+    def __init__(self, run_root, download_limit, artifact_limit=None, *, allowed_ports=(443,),
+                 upstream_proxy=None):
         self.run_root = safe_path(run_root).resolve()
         if type(download_limit) is not int or download_limit < 0:
             raise ValueError('download_limit must be a nonnegative integer')
@@ -58,6 +70,22 @@ class _UVProxy:
             raise ValueError('artifact_limit must be a nonnegative integer')
         self.download_limit, self.artifact_limit = download_limit, artifact_limit
         self.allowed_ports = frozenset(allowed_ports)
+        self._upstream_proxy = None
+        if upstream_proxy is not None:
+            try:
+                parsed = urlsplit(upstream_proxy)
+                if (parsed.scheme != 'http' or not parsed.hostname or parsed.path not in ('', '/')
+                        or parsed.query or parsed.fragment):
+                    raise ValueError()
+                port = parsed.port or 80
+                authorization = None
+                if parsed.username is not None:
+                    credentials = unquote(parsed.username) + ':' + unquote(parsed.password or '')
+                    authorization = base64.b64encode(credentials.encode()).decode('ascii')
+                self._upstream_proxy = (parsed.hostname, port, authorization)
+            except ValueError:
+                # Never include a proxy URL: it may contain credentials.
+                raise TransferProxyError('inherited HTTPS route requires a valid HTTP CONNECT proxy') from None
         if not self.allowed_ports or any(type(p) is not int or not 1 <= p <= 65535 for p in self.allowed_ports):
             raise ValueError('allowed_ports must contain valid TCP ports')
         self.transfer_id = uuid.uuid4().hex
@@ -134,7 +162,8 @@ class _UVProxy:
         if self._remaining() <= 0:
             raise TransferProxyError('download or artifact allocation exhausted before CONNECT')
         # Exactly one address/connection attempt. No hidden multi-address retry.
-        addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        route_host, route_port = (host, port) if self._upstream_proxy is None else self._upstream_proxy[:2]
+        addresses = socket.getaddrinfo(route_host, route_port, type=socket.SOCK_STREAM)
         if not addresses:
             raise TransferProxyError('CONNECT target has no stream address')
         family, kind, protocol, _, address = addresses[0]
@@ -143,8 +172,30 @@ class _UVProxy:
         upstream.settimeout(5)
         self.connections += 1
         upstream.connect(address)
+        if self._upstream_proxy is not None:
+            authorization = self._upstream_proxy[2]
+            header = f'CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\n'
+            if authorization is not None:
+                header += f'Proxy-Authorization: Basic {authorization}\r\n'
+            upstream.sendall((header + '\r\n').encode('ascii'))
+            response = bytearray()
+            while b'\r\n\r\n' not in response:
+                if len(response) >= self._HEADERS:
+                    raise TransferProxyError('upstream proxy CONNECT headers exceed the admitted size')
+                block = self._recv(upstream, self._HEADERS - len(response))
+                if not block:
+                    raise TransferProxyError('upstream proxy ended before completing CONNECT')
+                response.extend(block)
+            response_header, response_body = bytes(response).split(b'\r\n\r\n', 1)
+            status = response_header.split(b'\r\n', 1)[0].split()
+            if (len(status) < 2 or status[0] not in (b'HTTP/1.0', b'HTTP/1.1')
+                    or status[1] != b'200'):
+                raise TransferProxyError('upstream proxy rejected CONNECT')
+            tunnel.to_client.extend(b'HTTP/1.1 200 Connection Established\r\n\r\n')
+            tunnel.to_client.extend(response_body)
+        else:
+            tunnel.to_client.extend(b'HTTP/1.1 200 Connection Established\r\n\r\n')
         upstream.setblocking(False)
-        tunnel.to_client.extend(b'HTTP/1.1 200 Connection Established\r\n\r\n')
         tunnel.to_upstream.extend(remainder)
         tunnel.request.clear()
 
@@ -246,6 +297,9 @@ class _UVProxy:
             raise TransferProxyError('UV meter directory cannot use a symbolic link')
         self._meter.parent.mkdir(parents=True, exist_ok=True)
         self._publish()
+        # Inventory can be slower than the client's connection timeout on a
+        # large run. Complete its initial scan before UV is allowed to start.
+        self._remaining()
         self._selector = selectors.DefaultSelector()
         self._listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._listener.bind(('127.0.0.1', 0))
@@ -334,11 +388,13 @@ class _UVProxy:
         return False
 
 
-def uv_proxy(run_root, download_limit, artifact_limit=None, *, allowed_ports=(443,)):
+def uv_proxy(run_root, download_limit, artifact_limit=None, *, allowed_ports=(443,), upstream_proxy=None):
     """Context for one UV command; call check after its subprocess completes.
 
     Passing the environment is mandatory. Non-443 allowed_ports are intended
     only for explicit localhost fixture tests; production defaults admit HTTPS.
+    Pass upstream_proxy from inherited_https_proxy before replacing that environment.
     The proxy consumes one worker thread while the command runs.
     """
-    return _UVProxy(run_root, download_limit, artifact_limit, allowed_ports=allowed_ports)
+    return _UVProxy(run_root, download_limit, artifact_limit, allowed_ports=allowed_ports,
+                    upstream_proxy=upstream_proxy)

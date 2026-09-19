@@ -1,4 +1,14 @@
-# Current: isolated geometry and bounded report complete
+# Current: E4 network diagnosis complete; sandbox package access blocked
+
+See [E4 transfer proxy diagnosis](e4-transfer-proxy-diagnosis.md). The sandbox
+explicitly denied `download.pytorch.org` because it is absent from the active
+domain allowlist. Host direct HEAD succeeded. The worker now preserves inherited
+HTTP CONNECT routing and prewarms its optimized, exact accounting scan; 83 local
+tests pass. No new E4 installation or model job ran, and no study allocation or
+historical evidence was reset. Package access remains blocked pending a domain
+policy change; no automatic study resume is authorized by this diagnosis.
+
+# Previous: isolated geometry and bounded report complete
 
 The authorized continuation completed the prescribed R-G repeat, recorded G-S1
 as blocked for its missing S1 reconstruction source, and completed G-S0/S2/S3/S4,

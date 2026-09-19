@@ -168,15 +168,19 @@ def record_download_progress(run_root, transfer_id, output, bytes_received, rese
 
 def _snapshot_once(root):
     files = _inventory(root)
+    # Inventory paths are constructed underneath this root without following
+    # symlinks. Classify by their first relative component once; repeatedly
+    # constructing/relativizing Paths across a large environment dominates scans.
+    root_depth = len(root.parts)
+    scopes = {path: path.parts[root_depth] for path in files}
     receipts, active, uv_sessions, direct_progress = [], [], {}, {}
     for path, info in files.items():
-        relative = path.relative_to(root)
-        parts, name = relative.parts, path.name
-        direct = ((parts[0] == 'transfers' and name.startswith('transfer-')) or
-                  (parts[0] == 'assets' and '.transfer-' in name)) and name.endswith('.json')
-        intent = parts[0] == 'transfers' and name.startswith('active-') and name.endswith('.json')
-        progress_record = parts[0] == 'transfers' and name.startswith('progress-') and name.endswith('.json')
-        uv = parts[0] == 'uv-transfers' and name.startswith(('active-', 'transfer-')) and name.endswith('.json')
+        scope, name = scopes[path], path.name
+        direct = ((scope == 'transfers' and name.startswith('transfer-')) or
+                  (scope == 'assets' and '.transfer-' in name)) and name.endswith('.json')
+        intent = scope == 'transfers' and name.startswith('active-') and name.endswith('.json')
+        progress_record = scope == 'transfers' and name.startswith('progress-') and name.endswith('.json')
+        uv = scope == 'uv-transfers' and name.startswith(('active-', 'transfer-')) and name.endswith('.json')
         if not (direct or intent or uv or progress_record):
             continue
         value = _document(path, info, mutable=progress_record or (uv and name.startswith('active-')))
@@ -243,12 +247,12 @@ def _snapshot_once(root):
         progress[output] = max(progress.get(output, 0), size, recorded_charge)
         claimed.update((partial, output))
 
-    cache_roots = (root / 'setup-cache', root / 'managed-python')
+    cache_scopes = ('setup-cache', 'managed-python')
     direct_paths = claimed | known_outputs | {_partial(p) for p in known_outputs}
     for path, info in files.items():
         if path in claimed or not path.name.endswith('.partial'):
             continue
-        if any(path.is_relative_to(cache) for cache in cache_roots) and path not in direct_paths:
+        if scopes[path] in cache_scopes and path not in direct_paths:
             continue  # Already in the retained package/cache acquisition proxy.
         matching = [r for r in receipts if r['output_path'] and _partial(r['output_path']) == path]
         covered = 0
@@ -270,12 +274,12 @@ def _snapshot_once(root):
     # Legacy teacher acquisition can rename its payload before the attempt
     # receipt exists. Count unreceipted non-JSON asset payloads conservatively.
     for path, info in files.items():
-        if (path.is_relative_to(root / 'assets') and path not in direct_paths and
+        if (scopes[path] == 'assets' and path not in direct_paths and
                 not path.name.endswith(('.json', '.partial')) and not path.name.startswith('.')):
             total += info.st_size
 
     cache_bytes = sum(info.st_size for path, info in files.items() if path not in direct_paths and
-                      any(path.is_relative_to(cache) for cache in cache_roots))
+                      scopes[path] in cache_scopes)
     uv_bytes = sum(uv_sessions.values())
     return dict(download_bytes=total + max(uv_bytes, cache_bytes),
                 artifact_bytes=_footprint(files), logical_artifact_bytes=sum(info.st_size for info in files.values()),

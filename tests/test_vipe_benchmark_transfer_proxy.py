@@ -283,6 +283,110 @@ class TransferProxyTests(unittest.TestCase):
             self.assertEqual(environment['no_proxy'], '')
         self.assertTrue(self.receipt(proxy)['complete'])
 
+    def test_inherited_https_route_precedence_and_unsupported_scheme_fail_closed(self):
+        choose = transfer_proxy.inherited_https_proxy
+        self.assertEqual(choose(dict(https_proxy='lower', HTTPS_PROXY='upper', ALL_PROXY='all')), 'lower')
+        self.assertEqual(choose(dict(HTTPS_PROXY='upper', ALL_PROXY='all')), 'upper')
+        self.assertEqual(choose(dict(ALL_PROXY='all')), 'all')
+        self.assertIsNone(choose(dict(HTTP_PROXY='http-only')))
+        with mock.patch.object(socket, 'getaddrinfo', side_effect=AssertionError('unexpected DNS')):
+            with self.assertRaisesRegex(transfer_proxy.TransferProxyError, 'HTTP CONNECT') as caught:
+                transfer_proxy.uv_proxy(self.root, 100, upstream_proxy='socks5h://secret:password@localhost:1')
+        self.assertNotIn('secret', str(caught.exception))
+        self.assertNotIn('password', str(caught.exception))
+
+    def test_initial_slow_inventory_completes_before_client_connection_timeout_starts(self):
+        scanned = threading.Event()
+        original = budgets._snapshot
+        def slow_snapshot(root):
+            threading.Event().wait(.2)
+            result = original(root)
+            scanned.set()
+            return result
+        def serve(connection):
+            connection.sendall(b'ok')
+            connection.shutdown(socket.SHUT_WR)
+        with local_server(serve) as port, mock.patch.object(budgets, '_snapshot', side_effect=slow_snapshot) as scan:
+            with transfer_proxy.uv_proxy(self.root, 4096, allowed_ports=(port,)) as proxy:
+                self.assertTrue(scanned.is_set())
+                with connect_client(proxy, port) as client:
+                    client.settimeout(.1)
+                    read_header(client)
+                    self.assertEqual(read_all(client), b'ok')
+                proxy.check()
+                self.assertEqual(scan.call_count, 1)
+        self.assertEqual(self.receipt(proxy)['bytes_received'], 2)
+
+    def test_chained_connect_uses_inherited_route_and_meters_handshake_and_payload(self):
+        header = b'HTTP/1.1 200 Connection Established\r\n\r\n'
+        request, response, observed = b'opaque client bytes', b'opaque server bytes', []
+        def serve(connection):
+            observed.append(read_header(connection))
+            connection.sendall(header)
+            data = bytearray()
+            while len(data) < len(request):
+                data.extend(connection.recv(len(request) - len(data)))
+            observed.append(bytes(data))
+            connection.sendall(response)
+            connection.shutdown(socket.SHUT_WR)
+        original_dns = socket.getaddrinfo
+        dns_hosts = []
+        def dns(host, *args, **kwargs):
+            dns_hosts.append(host)
+            self.assertEqual(host, '127.0.0.1')
+            return original_dns(host, *args, **kwargs)
+        with local_server(serve) as port, mock.patch.object(socket, 'getaddrinfo', side_effect=dns):
+            with transfer_proxy.uv_proxy(self.root, 4096,
+                    upstream_proxy=f'http://user:pass@127.0.0.1:{port}') as proxy:
+                with connect_client(proxy, 443,
+                        request=b'CONNECT unresolved.invalid:443 HTTP/1.1\r\n\r\n') as client:
+                    self.assertEqual(read_header(client), header)
+                    client.sendall(request)
+                    client.shutdown(socket.SHUT_WR)
+                    self.assertEqual(read_all(client), response)
+                proxy.check()
+        self.assertEqual(dns_hosts, ['127.0.0.1'])
+        self.assertIn(b'CONNECT unresolved.invalid:443', observed[0])
+        self.assertIn(b'Proxy-Authorization: Basic dXNlcjpwYXNz', observed[0])
+        self.assertEqual(observed[1], request)
+        record = self.receipt(proxy)
+        self.assertTrue(record['complete'])
+        self.assertEqual(record['upstream_connections'], 1)
+        self.assertEqual(record['bytes_received'], len(header) + len(response))
+        self.assertEqual(record['reserved_bytes'], 0)
+        self.assertEqual(record['automatic_retries'], 0)
+        self.assertNotIn('pass', json.dumps(record))
+        self.assertEqual(budgets.budget_snapshot(self.root)['download_bytes'], len(header) + len(response))
+
+    def test_rejected_upstream_connect_is_charged_without_direct_fallback(self):
+        response = b'HTTP/1.1 407 Proxy Authentication Required\r\n\r\n'
+        def serve(connection):
+            read_header(connection)
+            connection.sendall(response)
+        with local_server(serve) as port:
+            with self.assertRaisesRegex(transfer_proxy.TransferProxyError, 'rejected CONNECT'):
+                with transfer_proxy.uv_proxy(self.root, 4096,
+                        upstream_proxy=f'http://127.0.0.1:{port}') as proxy:
+                    with connect_client(proxy, 443) as client:
+                        self.assertEqual(read_all(client), b'')
+                    proxy.check()
+        self.assertEqual(self.receipt(proxy)['upstream_connections'], 1)
+        self.assertEqual(self.receipt(proxy)['bytes_received'], len(response))
+
+    def test_upstream_connect_response_obeys_existing_download_cap(self):
+        def serve(connection):
+            read_header(connection)
+            connection.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
+        with local_server(serve) as port:
+            with self.assertRaisesRegex(transfer_proxy.TransferProxyError, 'exhausted'):
+                with transfer_proxy.uv_proxy(self.root, 7,
+                        upstream_proxy=f'http://127.0.0.1:{port}') as proxy:
+                    with connect_client(proxy, 443) as client:
+                        self.assertEqual(read_all(client), b'')
+                    proxy.check()
+        self.assertEqual(self.receipt(proxy)['bytes_received'], 7)
+        self.assertEqual(budgets.budget_snapshot(self.root)['download_bytes'], 7)
+
     def test_non_connect_http_is_rejected_without_an_upstream_attempt(self):
         with self.assertRaisesRegex(transfer_proxy.TransferProxyError, 'CONNECT'):
             with transfer_proxy.uv_proxy(self.root, 100) as proxy:

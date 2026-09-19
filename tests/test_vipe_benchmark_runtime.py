@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 import hashlib
 import io
+import os
 from pathlib import Path
 import signal
 import subprocess
@@ -408,8 +409,11 @@ runtime.download('https://fixture.invalid/blob', root / 'data.bin', root / 'tran
         @contextmanager
         def proxy(*args, **kwargs):
             entries.append((args, kwargs))
+            self.assertEqual(kwargs['upstream_proxy'], inherited_https_proxy(os.environ))
             yield SimpleNamespace(environment={'HTTPS_PROXY': 'http://fixture-proxy'}, check=lambda: checks.append(True))
         module.uv_proxy = proxy
+        from scripts.vipe_benchmark.transfer_proxy import inherited_https_proxy
+        module.inherited_https_proxy = inherited_https_proxy
         build_env = dict(CUDA_HOME=request['toolkit_directory'], CPATH='fixture-headers',
                          SAM2_BUILD_CUDA='1', SAM2_BUILD_ALLOW_ERRORS='0', TORCH_CUDA_ARCH_LIST='8.9', MAX_JOBS='8')
         def correlation(req, output, config):
