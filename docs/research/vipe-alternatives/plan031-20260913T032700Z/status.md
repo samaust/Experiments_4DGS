@@ -231,3 +231,8 @@ Cleanup is confirmed and no model forward or native import qualification ran.
 The cu130 attempt is therefore consumed and E4/D1 remain unqualified. Under
 AGENTS.md this is the required stop for the affected network setup; no further
 retry or downstream D1 dispatch was attempted.
+# Current: explicit outside-sandbox E4 retry authorized
+
+The user explicitly authorized one fresh outside-sandbox retry as
+`E4-setup-recovery-004`, preserving all prior cu130 failures and setup charges.
+Dispatch is the next action; no result is claimed yet.
