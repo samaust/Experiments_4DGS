@@ -221,3 +221,13 @@ Current totals: four GPU attempts / 646.942 seconds, five setup attempts / 3,565
 # Current stop: E4 recovery-002 failed during host network setup
 
 The user explicitly requested one further bounded E4 installation retry and continuation of Plan 031. Authorization [E4 recovery 003](e4-recovery-authorization-003.json) was registered and consumed as `E4-setup-recovery-002`; cleanup is confirmed after 57.083 seconds. The setup failed while `uv pip install` fetched the prescribed PyTorch cu124 packages and returned exit status 2; see the preserved [failure](../../../../.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-002/failure.json), [log](../../../../.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-002/commands/01-base.log), and ledger finish event. No model forward ran. Under AGENTS.md this is the required stop for affected network setup; no further retry or downstream D1 dispatch was attempted. D1–D4 remain blocked on unqualified runtimes.
+# Current stop: E4 cu130 recovery failed on PyTorch index timeout
+
+Plan 031 now records the explicit E4-only cu130 amendment. The fresh
+`E4-setup-recovery-003` authorization was registered and consumed; its setup
+used `https://download.pytorch.org/whl/cu130` and failed after 56.505 seconds
+while fetching the Torch index (`client error (Connect): operation timed out`).
+Cleanup is confirmed and no model forward or native import qualification ran.
+The cu130 attempt is therefore consumed and E4/D1 remain unqualified. Under
+AGENTS.md this is the required stop for the affected network setup; no further
+retry or downstream D1 dispatch was attempted.
