@@ -6,13 +6,14 @@ are retained as unknown, including in otherwise mechanically valid images.
 """
 import copy
 from pathlib import Path
+import re
 import time
 
 import numpy as np
 
 from .access import Identity
 from .annotations import IMAGE_FLAGS, template
-from .files import file_record, load_array, object_hash, read_json, verify_record, write_json
+from .files import file_record, load_array, object_hash, read_json, safe_path, verify_record, write_json
 from .metrics import instance_matching
 
 SCHEMA = 'vipe-benchmark-automated-annotations/v1'
@@ -27,7 +28,22 @@ def check_policy(record):
             policy.get('human_ground_truth') is not False or not policy.get('authorization')):
         raise ValueError('explicit automated-annotation amendment required')
     for field in ('original_plan', 'original_protocol', 'historical_authorization'):
-        verify_record(policy[field])
+        parent = policy[field]
+        # Only historical plan/authorization parents may have been superseded.
+        # Preserve the policy and bundle hashes; verify exact archived bytes,
+        # never substitute the current document or relax live run admission.
+        safe_path(parent['path'])
+        try:
+            verify_record(parent)
+        except (ValueError, FileNotFoundError):
+            if field == 'original_protocol' or not re.fullmatch(r'[0-9a-f]{64}', parent['sha256']):
+                raise
+            archive = safe_path(Path(record['path']).parent / 'annotation-policy-parents' / parent['sha256'])
+            if not archive.is_file():
+                raise
+            saved = file_record(archive, parent['sha256'])
+            if saved['bytes'] != parent['bytes']:
+                raise ValueError('historical annotation policy parent size changed')
     primary = policy['primary']
     expected = dict(device='cpu', dtype='float32', batch_size=1, threads=8,
                     score_threshold=.5, mask_threshold=.5, min_size=800, max_size=1333,

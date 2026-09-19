@@ -1,0 +1,211 @@
+{
+  "schema": "vipe-benchmark-authorization/v1",
+  "run_id": "plan031-20260913T032700Z",
+  "created_utc": "2026-09-13T03:23:12.990610+00:00",
+  "request": "Implement plans/plan_031.md.",
+  "basis": "Explicit user implementation request; AGENTS.md standing approval for plan-specific allocations and local commits.",
+  "continuous_improvement_loop": false,
+  "plan": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_031.md",
+    "sha256": "27f3f284886f1af7e19602d0b21a2494ac1c5cbab1878b8e73b25874d43db74b",
+    "bytes": 31274
+  },
+  "protocol": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/benchmark-protocol.md",
+    "sha256": "6d32683e3d351f8f19afffa11fe5664c5a15515f84a2b9380f86a39a757072f5",
+    "bytes": 49712
+  },
+  "source_hashes": {
+    "study": "6fbb6e55dedf444766c75e946c3d5099426839e0df158706d98d28b635353e8e",
+    "protocol": "6d32683e3d351f8f19afffa11fe5664c5a15515f84a2b9380f86a39a757072f5"
+  },
+  "configuration": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/configs/vipe-alternatives/benchmark-v1.json",
+    "sha256": "298e0a3a6c6c30b92dbfd7c8fa55a3dfbca1dff801a67c0830cf47db0bd9f823",
+    "bytes": 2625
+  },
+  "repository_commit": "a6f24bd5caf97b3d2b4a01ff07a8fe43ad27b87e",
+  "limits": {
+    "schema": "vipe-alternatives-benchmark/v1",
+    "scene": "Basketball_dg",
+    "seed": 0,
+    "held_out_cameras": [
+      0,
+      10,
+      20,
+      30
+    ],
+    "fit_snapshots": [
+      50,
+      62,
+      75,
+      87,
+      99,
+      100,
+      112,
+      125,
+      137,
+      149
+    ],
+    "selection_snapshots": [
+      150,
+      162,
+      175,
+      187,
+      199
+    ],
+    "validation_history_snapshots": [
+      200,
+      212,
+      225,
+      237,
+      249
+    ],
+    "scale_fit_frame": 100,
+    "scale_check_frame": 175,
+    "pair_starts": [
+      0,
+      5,
+      10,
+      15,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      30,
+      35,
+      40,
+      45
+    ],
+    "diagnostic_cameras": [
+      1,
+      6,
+      11,
+      16,
+      21,
+      26,
+      31,
+      33
+    ],
+    "diagnostic_pair_starts": [
+      0,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      45
+    ],
+    "annotation_calibration_cameras": [
+      0,
+      1,
+      10,
+      11,
+      20,
+      21,
+      30,
+      31
+    ],
+    "annotation_calibration_frames": [
+      50,
+      100,
+      149,
+      150,
+      175,
+      199
+    ],
+    "neighbors_per_reference": 3,
+    "samples_per_neighbor": 5000,
+    "gpu_concurrency": 1,
+    "gpu_peak_device_gib_limit": 22,
+    "gpu_total_seconds_limit": 93600,
+    "gpu_jobs": [
+      {
+        "scope": "S0-S4 calibration",
+        "attempts": 5,
+        "seconds_each": 3600
+      },
+      {
+        "scope": "S0-S4 reconstruction pairs",
+        "attempts": 5,
+        "seconds_each": 5400
+      },
+      {
+        "scope": "D0-D4 frame100 fit",
+        "attempts": 5,
+        "seconds_each": 900
+      },
+      {
+        "scope": "D0-D4 frame175 check if fit passes",
+        "attempts": 5,
+        "seconds_each": 900
+      },
+      {
+        "scope": "five segmentation geometry arms",
+        "attempts": 5,
+        "seconds_each": 1800
+      },
+      {
+        "scope": "two additional motion geometry arms",
+        "attempts": 2,
+        "seconds_each": 1800
+      },
+      {
+        "scope": "two additional neighbor geometry arms",
+        "attempts": 2,
+        "seconds_each": 1800
+      },
+      {
+        "scope": "C0-C3 combined cropped geometry",
+        "attempts": 4,
+        "seconds_each": 5400
+      },
+      {
+        "scope": "R-S R-D R-G repeats",
+        "attempts": 3,
+        "seconds_each": 600
+      }
+    ],
+    "cpu_motion_jobs": {
+      "attempts": 3,
+      "seconds_each": 1800
+    },
+    "cpu_neighbor_jobs": {
+      "attempts": 3,
+      "seconds_each": 300
+    },
+    "cpu_prepare_score_report_seconds_limit": 57600,
+    "cpu_max_workers": 8,
+    "environment_builds_limit": 7,
+    "setup_wall_seconds_limit": 57600,
+    "annotation_person_hours_limit": 112,
+    "new_download_gib_limit": 60,
+    "new_artifact_disk_gib_limit": 150,
+    "calibration_runs": 0,
+    "training_updates": 0,
+    "new_final_window_evaluations": 0
+  },
+  "expected_counts": {
+    "calibration_fit": 340,
+    "calibration_selection": 170,
+    "reconstruction_pairs": 420,
+    "reconstruction_contexts": 840,
+    "reconstruction_rgb": 690,
+    "geometry_contexts": 64,
+    "geometry_edges": 192,
+    "depth_inputs": 60,
+    "annotation_images": 232,
+    "motion_rgb": 6600,
+    "primary_mask_rows": 6750,
+    "primary_depths": 300,
+    "isolated_matches": 1728,
+    "combined_matches": 768,
+    "max_person_crops": 195840,
+    "gpu_jobs": 36,
+    "gpu_seconds": 93600
+  },
+  "inherited_ledger_reset": false
+}

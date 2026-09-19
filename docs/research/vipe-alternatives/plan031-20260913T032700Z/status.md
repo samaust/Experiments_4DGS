@@ -19,6 +19,17 @@ followed immediately by R-D and then D1-check only if the fit passes. All earlie
 entries below remain historical evidence, including the consumed recovery-005
 failure.
 
+The D1 readiness repair is now source-bound and tested. Exact historical plan
+and authorization parents were archived under
+`annotation-policy-parents/` and verified by the updated annotation policy
+checker; the live protocol and forbidden-path checks remain strict. The frozen
+proxy bundle validates with 232 images and 112 pairs, and the focused annotation
+and execution tests pass (21 tests). See
+`d1-readiness-review-001.md`, `d1-readiness-validation-001.json`, and
+`d1-readiness-proxy-check-001.json`. The next state-changing step is live D1
+admission, followed by the existing scoped resume for `D1-fit R-D D1-check`;
+no D1 slot has been reserved yet.
+
 # Current stop: E4 cu130 dependency resolution is unavailable
 
 The user-directed `E4-setup-recovery-005` attempt was dispatched outside the

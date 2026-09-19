@@ -7,12 +7,63 @@ import unittest
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from vipe_benchmark.auto_annotations import PRIMARY_ID, SCHEMA, finish_review, merge_teacher, validate
+from vipe_benchmark.auto_annotations import PRIMARY_ID, SCHEMA, check_policy, finish_review, merge_teacher, validate
 from vipe_benchmark.annotations import template
 from vipe_benchmark.access import annotation_identities
 from vipe_benchmark.config import ROOT, load
 from vipe_benchmark.files import file_record, read_json, write_json
 from vipe_benchmark.ledger import Ledger
+
+
+class PolicyHistoryTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.policy = read_json(ROOT / 'docs/research/vipe-alternatives/plan031-20260913T032700Z/annotation-amendment-001.json')
+        self.archive = self.root / 'annotation-policy-parents'
+        self.archive.mkdir()
+        for field in ('original_plan', 'original_protocol', 'historical_authorization'):
+            path = self.root / field
+            path.write_text('original ' + field)
+            self.policy[field] = file_record(path)
+            (self.archive / self.policy[field]['sha256']).write_bytes(path.read_bytes())
+
+    def check(self):
+        write_json(self.root / 'policy.json', self.policy)
+        return check_policy(file_record(self.root / 'policy.json'))
+
+    def test_exact_historical_parents_survive_amendments_without_rewriting_policy(self):
+        for field in ('original_plan', 'historical_authorization'):
+            (self.root / field).write_text('amended current document')
+        self.assertEqual(self.check(), self.policy)
+        self.assertFalse(self.policy['human_ground_truth'])
+
+    def test_missing_original_requires_exact_archive(self):
+        (self.root / 'original_plan').unlink()
+        self.assertEqual(self.check(), self.policy)
+
+    def test_changed_parent_without_archive_is_rejected(self):
+        (self.root / 'original_plan').write_text('changed')
+        (self.archive / self.policy['original_plan']['sha256']).unlink()
+        with self.assertRaisesRegex(ValueError, 'changed file'):
+            self.check()
+
+    def test_tampered_archive_is_rejected(self):
+        (self.root / 'historical_authorization').write_text('changed')
+        (self.archive / self.policy['historical_authorization']['sha256']).write_text('fabricated')
+        with self.assertRaisesRegex(ValueError, 'changed file'):
+            self.check()
+
+    def test_protocol_remains_live_even_with_exact_archive(self):
+        (self.root / 'original_protocol').write_text('changed')
+        with self.assertRaisesRegex(ValueError, 'changed file'):
+            self.check()
+
+    def test_archive_cannot_hide_forbidden_original_path(self):
+        self.policy['original_plan']['path'] = str(self.root / 'prompts' / 'never-read')
+        with self.assertRaisesRegex(ValueError, 'prompts access is prohibited'):
+            self.check()
 
 
 class MergeTests(unittest.TestCase):
