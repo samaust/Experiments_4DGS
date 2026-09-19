@@ -231,8 +231,11 @@ Cleanup is confirmed and no model forward or native import qualification ran.
 The cu130 attempt is therefore consumed and E4/D1 remain unqualified. Under
 AGENTS.md this is the required stop for the affected network setup; no further
 retry or downstream D1 dispatch was attempted.
-# Current: explicit outside-sandbox E4 retry authorized
+# Current stop: outside-sandbox E4 cu130 retry timed out
 
 The user explicitly authorized one fresh outside-sandbox retry as
 `E4-setup-recovery-004`, preserving all prior cu130 failures and setup charges.
-Dispatch is the next action; no result is claimed yet.
+The attempt reached the cu130 Torch index but timed out after 56.683 seconds;
+cleanup is confirmed and no model forward or native import qualification ran.
+The exact failure is preserved in the E4-setup-recovery-004 failure artifact and
+ledger finish event. No further retry was attempted.
