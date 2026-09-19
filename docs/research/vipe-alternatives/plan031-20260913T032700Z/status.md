@@ -1,3 +1,21 @@
+# Current: isolated geometry and bounded report complete
+
+The authorized continuation completed the prescribed R-G repeat, recorded G-S1
+as blocked for its missing S1 reconstruction source, and completed G-S0/S2/S3/S4,
+G-M1/G-M2 and G-N1/G-N2. All completed geometry jobs have confirmed cleanup and
+remain within the one-process GPU and 22-GiB device limits. The repeat matched all
+three G-S0 edges exactly: 5,000 sampled coordinates per edge, zero acceptance or
+numerical-validity disagreements.
+
+The staged finalists checkpoint completed. C0 (S0+D0+M0+N0) completed all 64
+contexts and 192 full-image matches plus 2,868 crop matches. C1, C2 and C3 were
+accounted as blocked because D1/D2 current passing fit/check evidence is absent;
+C2 also lacks the required exact license/dependency evidence. The final aggregate
+and report completed without fabricating unavailable arms. See
+[geometry continuation audit](geometry-continuation-audit-001.md),
+[final accounting](matrix-accounting-final.json), [report](report.md), and
+[assessment-017](assessment-017.md).
+
 # Current: neighbors complete; coarse reference geometry dispatched
 
 [Assessment016](assessment-016.md) and [neighbor results](neighbor-results-001.json) are current. N0/N1/N2 all selected three neighbors for 30 training references with cleanup confirmed. G-S0 is next/running under validation014; R-G follows only a complete reference result. E4/E5–E7 network setup remains paused.
