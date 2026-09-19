@@ -18,7 +18,7 @@ EXTRAS = {
            'huggingface_hub', 'tqdm', 'einops', 'scipy', 'pycocotools', 'psutil', 'opencv-python', 'pillow'],
     # E4 cu130 amendment: resolve upstream's xformers floor against the exact
     # Torch constraints, then freeze the selected wheel/version in the lock.
-    'E4': ['xformers>=0.0.26', 'torchaudio==2.13.0+cu130', 'einops>=0.7.0', 'gradio',
+    'E4': ['xformers>=0.0.26', 'torchaudio==2.11.0+cu130', 'einops>=0.7.0', 'gradio',
            'h5py>=3.10.0', 'huggingface-hub>=0.22.0', 'imageio', 'matplotlib', 'opencv-python',
            'pandas', 'pillow>=10.2.0', 'protobuf>=4.25.3', 'scipy', 'tables', 'tabulate',
            'termcolor', 'timm', 'tqdm', 'trimesh', 'triton>=2.4.0', 'wandb'],

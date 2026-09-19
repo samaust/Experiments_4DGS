@@ -277,6 +277,9 @@ class SetupRecoveryTests(unittest.TestCase):
                     environment=environment, original_job_id=original,
                     job_id=original + '-recovery-001', repair_validation=file_record(validation),
                     original_failure_event_sha256=failed['event_sha256'])
+                if environment == 'E4':
+                    args.update(changes_to_prescribed_runtime=True,
+                                runtime_amendment='plan031-e4-torchaudio-211-20260919')
                 with self.assertRaisesRegex(ValueError, 'exact explicit'):
                     self.ledger.authorize_setup_recovery(self.authorization(**args, recovery_attempts_limit=2))
                 history = self.ledger.path.read_bytes()
@@ -325,7 +328,7 @@ class SetupRecoveryTests(unittest.TestCase):
             original_job_id='E4-setup', job_id='E4-setup-recovery-001',
             repair_validation=file_record(validation),
             original_failure_event_sha256=self.ledger.states()['E4-setup']['event_sha256'],
-            changes_to_prescribed_runtime=True, runtime_amendment='plan031-e4-cu130-20260919')
+            changes_to_prescribed_runtime=True, runtime_amendment='plan031-e4-torchaudio-211-20260919')
         args.update(changes)
         return self.authorization(**args)
 
@@ -341,7 +344,7 @@ class SetupRecoveryTests(unittest.TestCase):
             request = setup_recipes.recovery_request(self.root, authorization)
             runtime._validate_setup_request(request)
             for pin in ('torch==2.13.0+cu130', 'torchvision==0.28.0+cu130',
-                        'torchaudio==2.13.0+cu130', 'numpy==2.1.3'):
+                        'torchaudio==2.11.0+cu130', 'numpy==2.1.3'):
                 self.assertIn(pin, request['requirements'])
         with self.assertRaisesRegex(ValueError, 'already allocated'):
             self.ledger.authorize_setup_recovery(authorization)
@@ -350,7 +353,7 @@ class SetupRecoveryTests(unittest.TestCase):
                 job_id='E4-setup-recovery-002'))
 
     def test_e4_runtime_change_requires_exact_amendment_and_active_targets(self):
-        for amendment in (None, '', 'plan031-e4-cu124-20260919'):
+        for amendment in (None, '', 'plan031-e4-cu124-20260919', 'plan031-e4-cu130-20260919'):
             with self.subTest(amendment=amendment), self.assertRaisesRegex(ValueError, 'exact explicit E4'):
                 self.ledger.authorize_setup_recovery(self.e4_amendment_authorization(
                     runtime_amendment=amendment))
@@ -359,6 +362,27 @@ class SetupRecoveryTests(unittest.TestCase):
             with self.subTest(target=key), patch.dict(runtime.TARGETS['E4'], {key: value}):
                 with self.assertRaisesRegex(ValueError, 'exact explicit E4'):
                     self.ledger.authorize_setup_recovery(self.e4_amendment_authorization())
+
+    def test_e4_amendment_rejects_wrong_missing_or_duplicate_audio_pin_without_ledger_write(self):
+        authorization = self.e4_amendment_authorization()
+        history = self.ledger.path.read_bytes()
+        extras = setup_recipes.EXTRAS['E4']
+        without_audio = [r for r in extras if not r.startswith('torchaudio')]
+        for audio in ([], ['torchaudio==2.13.0+cu130'], ['torchaudio>=2.4.0'],
+                      ['torchaudio==2.11.0+cu130'] * 2):
+            with self.subTest(audio=audio), patch.dict(setup_recipes.EXTRAS, E4=without_audio + audio):
+                with self.assertRaisesRegex(ValueError, 'exact explicit E4'):
+                    self.ledger.authorize_setup_recovery(authorization)
+            self.assertEqual(self.ledger.path.read_bytes(), history)
+
+    def test_e4_amendment_cannot_bypass_guard_by_claiming_no_runtime_change(self):
+        for amendment in (None, 'plan031-e4-cu130-20260919', 'plan031-e4-torchaudio-211-20260919'):
+            authorization = self.e4_amendment_authorization(
+                changes_to_prescribed_runtime=False, runtime_amendment=amendment)
+            history = self.ledger.path.read_bytes()
+            with self.subTest(amendment=amendment), self.assertRaisesRegex(ValueError, 'exact explicit E4'):
+                self.ledger.authorize_setup_recovery(authorization)
+            self.assertEqual(self.ledger.path.read_bytes(), history)
 
     def test_e4_amendment_cannot_change_other_environments(self):
         for environment in ('E1', 'E2', 'E3'):

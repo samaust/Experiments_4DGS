@@ -1,3 +1,24 @@
+# Current: E4 torchaudio 2.11 setup qualified; D1 pending
+
+E4 now requests `torchaudio==2.11.0+cu130`, preserving Python 3.11,
+Torch 2.13.0+cu130, torchvision 0.28.0+cu130, NumPy 2.1.3, the official
+cu130 index and `xformers>=0.0.26`. See the source-bound
+[validation and readiness](e4-torchaudio-211-validation.json).
+The immutable plan remains at its admitted 33,102-byte hash; the follow-up
+`plan031-e4-torchaudio-211-20260919` amendment is recorded in this status,
+source/configuration and the linked validation evidence.
+The user-authorized `E4-setup-recovery-006` completed in 119.038566505 seconds.
+The hash-locked environment resolved and installed successfully, with exact
+Torch/torchvision/torchaudio/NumPy versions, UniDepthV2 and `xformers.ops`
+imports, inventory/license evidence, and confirmed cleanup. The ledger records
+sequence 429, result hash `f2c95988151e276cd7a1182c989c7e6efbb8fae016e20d6c8bf14e341e996937`,
+and setup consumption of 14 attempts / 5316.549373747828 seconds. This qualifies
+the E4 setup target; it does not qualify D1 model inference or CUDA/native
+compatibility in the allocated first-result job. D1-fit remains the next stage,
+followed immediately by R-D and then D1-check only if the fit passes. All earlier
+entries below remain historical evidence, including the consumed recovery-005
+failure.
+
 # Current stop: E4 cu130 dependency resolution is unavailable
 
 The user-directed `E4-setup-recovery-005` attempt was dispatched outside the

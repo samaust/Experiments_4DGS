@@ -398,19 +398,24 @@ class Ledger:
     def _authorize_e1_recovery(self, authorization, document, environment="E1"):
         """One explicit retry, with only the recorded E4 amendment permitted."""
         from .runtime import TARGETS
+        from .setup_recipes import recipe
 
         # This is a dated, E4-only exception, not general runtime-change authority.
         # The immutable authorization record retained in the event names the amendment.
-        e4_cu130_amendment = (
+        e4_audio_amendment = (
             environment == 'E4' and
-            document.get('runtime_amendment') == 'plan031-e4-cu130-20260919' and
+            document.get('runtime_amendment') == 'plan031-e4-torchaudio-211-20260919' and
             document.get('changes_to_prescribed_runtime') is True and
             TARGETS['E4'] == dict(python='3.11', torch='2.13.0+cu130',
-                                  torchvision='0.28.0+cu130', numpy='2.1.3'))
+                                  torchvision='0.28.0+cu130', numpy='2.1.3') and
+            [r for r in recipe('E4')['requirements'] if r.startswith('torchaudio')]
+            == ['torchaudio==2.11.0+cu130'])
+        if environment == 'E4' and not e4_audio_amendment:
+            raise ValueError('recovery requires the exact explicit E4 authorization scope')
         required = dict(original_job_id=f'{environment}-setup',
             environment=environment, recovery_attempts_limit=1,
             setup_wall_seconds_limit=self.config['setup_wall_seconds_limit'],
-            reset_previous_consumption=False, changes_to_prescribed_runtime=e4_cu130_amendment,
+            reset_previous_consumption=False, changes_to_prescribed_runtime=e4_audio_amendment,
             unrelated_attempts_reopened=False)
         if any(document.get(k) != v for k, v in required.items()) or not document.get('authorization'):
             raise ValueError(f'recovery requires the exact explicit {environment} authorization scope')

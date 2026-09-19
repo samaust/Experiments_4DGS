@@ -18,7 +18,7 @@ SOURCE_HASHES = {
 # documents and their hashes, as well as every prior run's recorded targets.
 E4_RUNTIME_AMENDMENT = (
     'Python 3.11 / torch 2.13.0+cu130 / torchvision 0.28.0+cu130; '
-    'torchaudio 2.13.0+cu130; NumPy 2.1.3; xFormers >=0.0.26 resolved once '
+    'torchaudio 2.11.0+cu130; NumPy 2.1.3; xFormers >=0.0.26 resolved once '
     'under exact Torch constraints and hash-locked. E4-only cu130 amendment '
     'in Plan 031; package availability and native compatibility unqualified.'
 )

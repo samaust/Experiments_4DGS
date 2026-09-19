@@ -1,0 +1,281 @@
+{
+  "schema": "plan031-e4-torchaudio-amendment-validation/v1",
+  "created_utc": "2026-09-19T18:01:15.720626+00:00",
+  "base_commit": "b4aae4f69b8abfc9a26604ea07b8c14036df80be",
+  "status": "passed",
+  "runtime_qualification": "unqualified pending this allocated setup attempt",
+  "user_amendment": "E4 torchaudio==2.11.0+cu130 only; no setup or authorization creation in this task",
+  "target": {
+    "python": "3.11",
+    "torch": "2.13.0+cu130",
+    "torchvision": "0.28.0+cu130",
+    "numpy": "2.1.3",
+    "torchaudio": "2.11.0+cu130",
+    "xformers": ">=0.0.26",
+    "torch_index": "https://download.pytorch.org/whl/cu130"
+  },
+  "source_files": [
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_031.md",
+      "sha256": "5b2c3eec431337e720cad0dae60738b4040045d25815a790f8534e79eaa6dcd8",
+      "bytes": 33102
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/runtime.py",
+      "sha256": "89b0ca22c4730964feb00e60cebb371c654e3f8d339eac748448c468f75b0166",
+      "bytes": 44486
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/setup_recipes.py",
+      "sha256": "03850f57c595e867f230a9fc6a76b90aa87284e8b6600b3e54b27bb6f37778de",
+      "bytes": 8328
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/config.py",
+      "sha256": "8660d808890bbc009dfb401b63cb2742b51ea63ac34ac2457086e4ef916b2ef4",
+      "bytes": 7264
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/ledger.py",
+      "sha256": "10c560edc5143bce9ee40fb8f9524d350295dbcd7e7a575a22b11ca9d114368f",
+      "bytes": 30123
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/configs/vipe-alternatives/components-v1.json",
+      "sha256": "4c850b7f26e45ce74f2ee9fec8eba49546be73385b78c69da5c65006b1605f67",
+      "bytes": 11395
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_runtime.py",
+      "sha256": "c3972e5776134409f00244996aabec9646cffc97ea4d895917e64f7e3d675e71",
+      "bytes": 36596
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_setup_recovery.py",
+      "sha256": "be02d47b0d640d56f645a67fc21c5330f59bb5f7e00dd07c66e6966985a7c1b6",
+      "bytes": 27057
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/status.md",
+      "sha256": "37e680c3354d386c60d85b312d32f8bc1eccd9bd9035e755f23e77d215309742",
+      "bytes": 34131
+    }
+  ],
+  "source_contract": {
+    "requirements": "torchaudio>=2.4.0; torch>=2.4.0; torchvision>=0.19.0; numpy>=2.0.0; xformers>=0.0.26",
+    "metadata": "Pinned UniDepth pyproject.toml loads dependencies from requirements.txt; no matching-release constraint declared.",
+    "conclusion": "Representable by the E4 recipe without any runtime.py or unrelated target changes."
+  },
+  "commands": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 .local/envs/stg-colmap/bin/python -m unittest discover -s tests -p 'test_vipe_benchmark_runtime.py'",
+      "exit_code": 0,
+      "tests": 28,
+      "outcome": "OK",
+      "output_sha256": "df750e07757e6db072d1b317a1730c4e3be033c456677826a2aa7a25b2a6f8b9"
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 .local/envs/stg-colmap/bin/python -m unittest discover -s tests -p 'test_vipe_benchmark_setup_recovery.py'",
+      "exit_code": 0,
+      "tests": 25,
+      "outcome": "OK",
+      "output_sha256": "9a93e4e5dc9989003f5a20abc852c2b6e02e39ab959e8462a0df1e5a73b99a4a"
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0,
+      "outcome": "passed"
+    }
+  ],
+  "initial_test_outcomes": [
+    {
+      "interpreter": "python3",
+      "suite": "runtime",
+      "outcome": "Import failed: ModuleNotFoundError: No module named 'numpy'"
+    },
+    {
+      "interpreter": "python3",
+      "suite": "setup_recovery",
+      "outcome": "23 tests, 6 errors: NumPy unavailable"
+    }
+  ],
+  "review_notes": [
+    "Initial setup.py read returned No such file or directory; inspected pyproject.toml instead. Initial setup_recovery.py search likewise referenced an absent file; recovery guards are in ledger.py. Neither was a permission failure.",
+    "An initial tail -25 command failed with option used in invalid context; tail -n 25 succeeded."
+  ],
+  "assertions": [
+    "config.load() and derived checked configuration agree; original study/protocol hashes verified",
+    "All runtime.TARGETS unchanged byte-for-byte; all EXTRAS unchanged except E4 audio pin; all derived component fields unchanged except E4 target text",
+    "Mocked setup emits exact audio pin once in requirements.txt and constraints.txt; preserves Torch/vision/NumPy and official cu130 index",
+    "Simulated resolver failure halts after one resolution, with no lock or success result; inventory rejects substituted audio version",
+    "Previous status bytes retained as suffix; ledger and all E4 failure.json hashes captured before editing remain unchanged"
+  ],
+  "limitations": [
+    "No package installation, network availability probe, real setup, native qualification, model/GPU job, delegation, staging or commit performed.",
+    "Mocked subprocess tests establish control flow only; they do not establish wheel existence, metadata compatibility, ABI compatibility or model correctness.",
+    "The requested torchaudio wheel may be unavailable or require a different Torch release. Resolve under exact unchanged constraints; failure remains a setup gate with no fallback.",
+    "New recovery authorization and dispatch belong to the main agent. Bind current source hashes and latest recovery-005 failure; retain prior consumed attempts. This compact artifact is not a controller admission/authorization record.",
+    "E4 and D1 remain unqualified; hash-locked resolution, inventory/licenses, native imports and allocated D1 CUDA evidence remain pending."
+  ],
+  "source_sha256": {
+    "scripts/vipe_benchmark/runtime.py": "89b0ca22c4730964feb00e60cebb371c654e3f8d339eac748448c468f75b0166",
+    "scripts/vipe_benchmark/setup_recipes.py": "03850f57c595e867f230a9fc6a76b90aa87284e8b6600b3e54b27bb6f37778de",
+    "scripts/vipe_benchmark/config.py": "8660d808890bbc009dfb401b63cb2742b51ea63ac34ac2457086e4ef916b2ef4",
+    "configs/vipe-alternatives/components-v1.json": "4c850b7f26e45ce74f2ee9fec8eba49546be73385b78c69da5c65006b1605f67",
+    "plans/plan_031.md": "5b2c3eec431337e720cad0dae60738b4040045d25815a790f8534e79eaa6dcd8",
+    "tests/test_vipe_benchmark_runtime.py": "c3972e5776134409f00244996aabec9646cffc97ea4d895917e64f7e3d675e71",
+    "tests/test_vipe_benchmark_setup_recovery.py": "be02d47b0d640d56f645a67fc21c5330f59bb5f7e00dd07c66e6966985a7c1b6",
+    "docs/research/vipe-alternatives/plan031-20260913T032700Z/status.md": "37e680c3354d386c60d85b312d32f8bc1eccd9bd9035e755f23e77d215309742",
+    "docs/research/vipe-alternatives/plan031-20260913T032700Z/native-runtime-recommendations.md": "8d3fc392bdfb449620dbe1c57de46139077b696f9f959cc0d70b541dc8b2e7bd",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/ledger.jsonl": "b8e6856b0733bb049d7f41a7be3a39b1ae0492291a31cabaa8a863db4db26400",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-004-manual/failure.json": "cacdd29fad3343ca645d00f61c62abce0c671f34e0fae33c17b162ae489167cd",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-005/failure.json": "ad7daabefc408a72fa466a31cdccd4525d1af210b8b8ff22bdf838bb9166024e",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-001/failure.json": "31930d621b680c09274561cf1083d5e8d02fbb91ece22e36d915f350b49e86cd",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup/failure.json": "f2cf51094feed643620e7d9954ffca624901ed849e03cdc884547918b375de1b",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-004/failure.json": "5b64b6ae6bbe80ae8ad722817ae2a5936fa369e8fde48112c04b330411679a6b",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-003/failure.json": "6b5f27bb7367b57c269e3b3016b1ceca33967b7b45a768fb511615c3159a4f79",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-002/failure.json": "04eb04d62627c1e193fbc3a1087ade5d3e30e284a3ae1dbdec2f55021bb94e6e",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-005/commands/02-resolve.log": "05395d3ed1d2e138655e279cfc03a205db7ede8806116ddde0440c3637bae93d",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-005/sources/unidepth_source/requirements.txt": "efa2ac530f88cef1d4fb73ab15d9a326ed66679857ccb01f4730636cb58d2402",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-005/sources/unidepth_source/pyproject.toml": "6e8bcbb97f9c17fc084052f4ee1e6af30445fca98674fe55f4b266c638a3910d",
+    "scripts/vipe_benchmark/ledger.py": "10c560edc5143bce9ee40fb8f9524d350295dbcd7e7a575a22b11ca9d114368f",
+    "scripts/vipe_benchmark/backends.py": "cc32fa43fc2e1734fdbb900a1812dcc1c2c9f9041fc76d8b4ecfd993126910df",
+    "configs/vipe-alternatives/benchmark-v1.json": "298e0a3a6c6c30b92dbfd7c8fa55a3dfbca1dff801a67c0830cf47db0bd9f823",
+    "docs/research/vipe-alternatives.md": "6fbb6e55dedf444766c75e946c3d5099426839e0df158706d98d28b635353e8e",
+    "docs/research/vipe-alternatives/benchmark-protocol.md": "6d32683e3d351f8f19afffa11fe5664c5a15515f84a2b9380f86a39a757072f5"
+  },
+  "preserved_evidence_sha256": {
+    ".local/vipe-alternatives/plan031-20260913T032700Z/ledger.jsonl": "b8e6856b0733bb049d7f41a7be3a39b1ae0492291a31cabaa8a863db4db26400",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-004-manual/failure.json": "cacdd29fad3343ca645d00f61c62abce0c671f34e0fae33c17b162ae489167cd",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-005/failure.json": "ad7daabefc408a72fa466a31cdccd4525d1af210b8b8ff22bdf838bb9166024e",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-001/failure.json": "31930d621b680c09274561cf1083d5e8d02fbb91ece22e36d915f350b49e86cd",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup/failure.json": "f2cf51094feed643620e7d9954ffca624901ed849e03cdc884547918b375de1b",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-004/failure.json": "5b64b6ae6bbe80ae8ad722817ae2a5936fa369e8fde48112c04b330411679a6b",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-003/failure.json": "6b5f27bb7367b57c269e3b3016b1ceca33967b7b45a768fb511615c3159a4f79",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-002/failure.json": "04eb04d62627c1e193fbc3a1087ade5d3e30e284a3ae1dbdec2f55021bb94e6e",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-005/commands/02-resolve.log": "05395d3ed1d2e138655e279cfc03a205db7ede8806116ddde0440c3637bae93d",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-005/sources/unidepth_source/requirements.txt": "efa2ac530f88cef1d4fb73ab15d9a326ed66679857ccb01f4730636cb58d2402",
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-005/sources/unidepth_source/pyproject.toml": "6e8bcbb97f9c17fc084052f4ee1e6af30445fca98674fe55f4b266c638a3910d"
+  },
+  "updated_utc": "2026-09-19T18:06:19.208741+00:00",
+  "runtime_amendment": "plan031-e4-torchaudio-211-20260919",
+  "follow_up_validation": {
+    "scope": "Exact new E4 amendment authorization guard; no setup or real authorization created",
+    "prior_source_sha256": {
+      "scripts/vipe_benchmark/ledger.py": "f55c88f0147332ff95ff05dc951ff8eb1504e3193aa7c6b00916ea58c431bab6",
+      "tests/test_vipe_benchmark_setup_recovery.py": "22b0e7d2ac3f698394340b1318ffd7c1e93b8a4240f17a1f7ce3a39e2fa7fd06",
+      "plans/plan_031.md": "94e5181e0082508723b063b75be34e214808c22fe2b7686ed6021ed5cb93a5c8"
+    },
+    "prior_test_commands": [
+      {
+        "command": "PYTHONDONTWRITEBYTECODE=1 .local/envs/stg-colmap/bin/python -m unittest discover -s tests -p 'test_vipe_benchmark_runtime.py'",
+        "exit_code": 0,
+        "tests": 28,
+        "outcome": "OK",
+        "output_sha256": "bafb3ee5aec29b42e3b93beabade5adbbc932aeced47179c2fc8367348eaed19"
+      },
+      {
+        "command": "PYTHONDONTWRITEBYTECODE=1 .local/envs/stg-colmap/bin/python -m unittest discover -s tests -p 'test_vipe_benchmark_setup_recovery.py'",
+        "exit_code": 0,
+        "tests": 23,
+        "outcome": "OK",
+        "output_sha256": "aff315ef17d0534d48c205e82c4d266f29a2f790546bdcf9a245d8526e02aae7"
+      },
+      {
+        "command": "git diff --check",
+        "exit_code": 0,
+        "outcome": "passed"
+      }
+    ],
+    "historical_authorizations_sha256": {
+      "docs/research/vipe-alternatives/plan031-20260913T032700Z/e4-recovery-authorization-002.json": "0fb6583740119a1794eaf1c3479e416e767e8b27434c4c42a2c9d86761be4c1b",
+      "docs/research/vipe-alternatives/plan031-20260913T032700Z/e4-recovery-authorization-006.json": "a43fa6a28b0fbfbb410c52d85471e3def27d44a394cfa147a20e300860e16406",
+      "docs/research/vipe-alternatives/plan031-20260913T032700Z/e4-recovery-authorization-003.json": "2dcff9c2e4b1ed3d135e0c26df4fe8e10f141f2fd2060ba94b5624b1c65af3ec",
+      "docs/research/vipe-alternatives/plan031-20260913T032700Z/e4-recovery-authorization-001.json": "bc6d1e4ea62b4909046e3064dba5523df82a65929299636c29a0c1d07c79df62",
+      "docs/research/vipe-alternatives/plan031-20260913T032700Z/e4-recovery-authorization-004.json": "183a077b9f31f9d217d1b06db3caed7b2421570555999b4e8ae899789b0aa14f",
+      "docs/research/vipe-alternatives/plan031-20260913T032700Z/e4-recovery-authorization-005.json": "d11e160986384c3756ca0061d6f3454eaa5eadc443fc6dfef9c7c4614cc1070b"
+    },
+    "checks": [
+      "New E4 authorization requires the new identifier and changes_to_prescribed_runtime=true; old/missing/wrong identifier is rejected.",
+      "Exact unchanged Python/Torch/torchvision/NumPy target and single torchaudio==2.11.0+cu130 recipe requirement are mandatory.",
+      "Missing, duplicate, range and old audio requirements fail without ledger writes; false runtime-change flag cannot bypass the guard.",
+      "Real historical authorization files and consumed ledger/failure evidence retain their recorded hashes. Existing history is read without reauthorizing old amendments."
+    ]
+  },
+  "immutable_plan_validation": {
+    "status": "passed",
+    "plan": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_031.md",
+      "sha256": "5b2c3eec431337e720cad0dae60738b4040045d25815a790f8534e79eaa6dcd8",
+      "bytes": 33102
+    },
+    "admission": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/authorization.json",
+      "sha256": "f2bf1ffff3722b12154a7113421db5d81b0575bab63ca6add9c72f590b112f54",
+      "bytes": 4876
+    },
+    "removed_only": "E4 torchaudio follow-up amendment block added by this task; no git checkout used",
+    "superseded_working_plan_sha256": "78b8e684e0dec496c70308aac3c1522c9f397821ca5c37a544595b2f31f03d27",
+    "check_run": "passed read-only with current config.load(); no registration/setup invoked",
+    "preserved_authorizations_and_ledger_sha256": {
+      "docs/research/vipe-alternatives/plan031-20260913T032700Z/e4-recovery-authorization-007.json": "5a90bd27d1f31f6f0624a377e0f64c6c1a79dcd199dd5fef44102bacb03435f0",
+      "docs/research/vipe-alternatives/plan031-20260913T032700Z/e4-recovery-authorization-002.json": "0fb6583740119a1794eaf1c3479e416e767e8b27434c4c42a2c9d86761be4c1b",
+      "docs/research/vipe-alternatives/plan031-20260913T032700Z/e4-recovery-authorization-006.json": "a43fa6a28b0fbfbb410c52d85471e3def27d44a394cfa147a20e300860e16406",
+      "docs/research/vipe-alternatives/plan031-20260913T032700Z/e4-recovery-authorization-003.json": "2dcff9c2e4b1ed3d135e0c26df4fe8e10f141f2fd2060ba94b5624b1c65af3ec",
+      "docs/research/vipe-alternatives/plan031-20260913T032700Z/e4-recovery-authorization-001.json": "bc6d1e4ea62b4909046e3064dba5523df82a65929299636c29a0c1d07c79df62",
+      "docs/research/vipe-alternatives/plan031-20260913T032700Z/e4-recovery-authorization-004.json": "183a077b9f31f9d217d1b06db3caed7b2421570555999b4e8ae899789b0aa14f",
+      "docs/research/vipe-alternatives/plan031-20260913T032700Z/e4-recovery-authorization-005.json": "d11e160986384c3756ca0061d6f3454eaa5eadc443fc6dfef9c7c4614cc1070b",
+      ".local/vipe-alternatives/plan031-20260913T032700Z/ledger.jsonl": "b8e6856b0733bb049d7f41a7be3a39b1ae0492291a31cabaa8a863db4db26400"
+    },
+    "prior_test_commands": [
+      {
+        "command": "PYTHONDONTWRITEBYTECODE=1 .local/envs/stg-colmap/bin/python -m unittest discover -s tests -p 'test_vipe_benchmark_runtime.py'",
+        "exit_code": 0,
+        "tests": 28,
+        "outcome": "OK",
+        "output_sha256": "df750e07757e6db072d1b317a1730c4e3be033c456677826a2aa7a25b2a6f8b9"
+      },
+      {
+        "command": "PYTHONDONTWRITEBYTECODE=1 .local/envs/stg-colmap/bin/python -m unittest discover -s tests -p 'test_vipe_benchmark_setup_recovery.py'",
+        "exit_code": 0,
+        "tests": 25,
+        "outcome": "OK",
+        "output_sha256": "9a93e4e5dc9989003f5a20abc852c2b6e02e39ab959e8462a0df1e5a73b99a4a"
+      },
+      {
+        "command": "git diff --check",
+        "exit_code": 0,
+        "outcome": "passed"
+      }
+    ],
+    "amendment_location": "source/configuration, status.md and this artifact; admitted plan bytes remain frozen",
+    "limitation": "Any pending authorization binding the prior validation artifact hash must be refreshed by its owner; authorization files were not edited."
+  },
+  "source_bytes": {
+    "scripts/vipe_benchmark/runtime.py": 44486,
+    "scripts/vipe_benchmark/setup_recipes.py": 8328,
+    "scripts/vipe_benchmark/config.py": 7264,
+    "configs/vipe-alternatives/components-v1.json": 11395,
+    "plans/plan_031.md": 33102,
+    "tests/test_vipe_benchmark_runtime.py": 36596,
+    "tests/test_vipe_benchmark_setup_recovery.py": 27057,
+    "docs/research/vipe-alternatives/plan031-20260913T032700Z/status.md": 34131,
+    "docs/research/vipe-alternatives/plan031-20260913T032700Z/native-runtime-recommendations.md": 15595,
+    ".local/vipe-alternatives/plan031-20260913T032700Z/ledger.jsonl": 313778,
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-004-manual/failure.json": 2728,
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-005/failure.json": 3270,
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-001/failure.json": 2698,
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup/failure.json": 2367,
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-004/failure.json": 2700,
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-003/failure.json": 2700,
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-002/failure.json": 2698,
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-005/commands/02-resolve.log": 232,
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-005/sources/unidepth_source/requirements.txt": 280,
+    ".local/vipe-alternatives/plan031-20260913T032700Z/jobs/E4-setup-recovery-005/sources/unidepth_source/pyproject.toml": 618,
+    "scripts/vipe_benchmark/ledger.py": 30123,
+    "scripts/vipe_benchmark/backends.py": 73082,
+    "configs/vipe-alternatives/benchmark-v1.json": 2625,
+    "docs/research/vipe-alternatives.md": 46322,
+    "docs/research/vipe-alternatives/benchmark-protocol.md": 49712
+  }
+}

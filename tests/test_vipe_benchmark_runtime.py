@@ -480,6 +480,47 @@ runtime.download('https://fixture.invalid/blob', root / 'data.bin', root / 'tran
         self.assertIn('transformers==4.51.3', (self.root / 'E2/constraints.txt').read_text())
         self.assertTrue(read_json(self.root / 'E2/imports.json')['cuda_context_initialized'])
 
+    def test_e4_audio_amendment_reaches_generated_files_and_resolution_gate(self):
+        from scripts.vipe_benchmark.config import derive, load, ROOT
+        load()
+        components = derive()[1]
+        self.assertEqual(components, read_json(ROOT / 'configs/vipe-alternatives/components-v1.json'))
+        self.assertIn('torchaudio 2.11.0+cu130', components['runtimes']['E4']['target'])
+        self.assertEqual(runtime.TARGETS['E4'], dict(python='3.11', torch='2.13.0+cu130',
+            torchvision='0.28.0+cu130', numpy='2.1.3'))
+        request, assets = self.fixture_request('E4')
+        self.assertIn('xformers>=0.0.26', request['requirements'])
+        events = []
+        output = self.root / 'E4'
+        # Simulate an unavailable/conflicting wheel without invoking a resolver.
+        with self.mocked_setup(request, assets, events, fail_label='compile'):
+            with self.assertRaises(subprocess.CalledProcessError):
+                runtime.setup(request, output, self.config)
+        for name in ('requirements.txt', 'constraints.txt'):
+            lines = (output / name).read_text().splitlines()
+            for pin in ('torch==2.13.0+cu130', 'torchvision==0.28.0+cu130',
+                        'torchaudio==2.11.0+cu130', 'numpy==2.1.3'):
+                self.assertEqual(lines.count(pin), 1)
+            self.assertNotIn('torchaudio==2.13.0+cu130', lines)
+        commands = [command for command, _ in events]
+        self.assertEqual(len(commands), 3)  # venv, base, one failed resolution
+        for command in commands[1:]:
+            self.assertEqual(command[command.index('--extra-index-url') + 1],
+                             'https://download.pytorch.org/whl/cu130')
+        self.assertIn('--generate-hashes', commands[-1])
+        self.assertFalse((output / 'requirements.lock').exists())
+        self.assertFalse((output / 'result.json').exists())
+
+    def test_e4_inventory_rejects_substituted_audio_version(self):
+        request, _ = self.fixture_request('E4')
+        packages = [dict(name=name, version=version)
+                    for name, version in runtime._fixed_versions(request['requirements']).items()]
+        inventory = dict(versions=runtime.TARGETS['E4'], packages=packages)
+        runtime._check_inventory(inventory, request)
+        next(p for p in packages if p['name'] == 'torchaudio')['version'] = '2.13.0+cu130'
+        with self.assertRaisesRegex(ValueError, r'torchaudio==2\.11\.0\+cu130'):
+            runtime._check_inventory(inventory, request)
+
     def test_failed_build_has_no_success_and_never_restarts_existing_attempt(self):
         request, assets = self.fixture_request('E2')
         events = []
