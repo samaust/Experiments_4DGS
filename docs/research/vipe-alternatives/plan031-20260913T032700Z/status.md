@@ -1,3 +1,24 @@
+# Current stop: E4 cu130 dependency resolution is unavailable
+
+The user-directed `E4-setup-recovery-005` attempt was dispatched outside the
+sandbox after the cu130 package domain became reachable. The fresh Python 3.11
+environment and pinned Torch `2.13.0+cu130`, torchvision `0.28.0+cu130`, and
+NumPy `2.1.3` base installation completed. Resolution then failed after
+181.615356613 seconds because the official cu130 index has no
+`torchaudio==2.13.0+cu130`. The exact resolver output is preserved in
+`jobs/E4-setup-recovery-005/commands/02-resolve.log`; the ledger records
+sequence 424, cleanup confirmed, zero surviving processes, and cumulative setup
+consumption of 13 attempts / 5197.510807242827 seconds.
+
+This is a dependency availability failure, not a sandbox denial. The attempt is
+consumed and no runtime version, precision, index, or fallback may be changed by
+this continuation. E4 is unqualified, so D1-fit, R-D, and D1-check remain
+blocked; E5-E7 and C1-C3 retain their recorded states. Preserve the completed
+base environment as failed evidence and stop until a new explicit runtime
+amendment and bounded setup allocation are provided. The readiness review is
+`e4-recovery-readiness-review-20260919.md`; current source-bound focused
+validation is `implementation-validation-016.json`.
+
 # Current: E4 network diagnosis complete; sandbox package access blocked
 
 See [E4 transfer proxy diagnosis](e4-transfer-proxy-diagnosis.md). The sandbox
