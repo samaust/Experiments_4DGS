@@ -30,6 +30,17 @@ and execution tests pass (21 tests). See
 admission, followed by the existing scoped resume for `D1-fit R-D D1-check`;
 no D1 slot has been reserved yet.
 
+The live D1 continuation then completed all three reopened jobs. D1-fit produced
+30 training-camera outputs and passed the fit gates at scale 1.3145860504 with
+bootstrap relative half-width 0.0128201. The immediate R-D repeat completed its
+camera-1/frame-100 output and first-result qualification. Conditional D1-check
+also completed 30 outputs and passed at the frozen fit scale with bootstrap
+relative half-width 0.0180379. Compact receipts are `D1-fit.json`, `R-D.json`,
+and `D1-check.json`; their detailed outputs remain under the ignored `.local`
+run directory. These first-result records establish CUDA/native inference for
+this runtime and satisfy the D1 component gates, while physical metric accuracy
+remains unverified. The aggregate and report are unchanged and are not rerun.
+
 # Current stop: E4 cu130 dependency resolution is unavailable
 
 The user-directed `E4-setup-recovery-005` attempt was dispatched outside the
