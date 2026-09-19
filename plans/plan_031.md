@@ -40,6 +40,34 @@ validation-consumption markers and environments.
 
 ## Experiment matrix and dependencies
 
+### E4 runtime amendment — 2026-09-19
+
+The user-directed E4 migration supersedes only E4's original cu124 runtime
+proposal: Python 3.11, torch **2.13.0+cu130**, torchvision **0.28.0+cu130**,
+torchaudio **2.13.0+cu130**, NumPy **2.1.3**, and the official
+`https://download.pytorch.org/whl/cu130` package index. The Torch/torchvision
+pair follows the repository's cu130 constraints. Torchaudio follows the matching
+Torch release; availability of these wheels for Python 3.11 remains unverified.
+Replace E4's old xFormers 0.0.28.post3 pin with the pinned UniDepth source's
+`xformers>=0.0.26` requirement, resolved once under the exact Torch constraints
+and frozen with wheel hashes. No locally verified compatible exact xFormers
+release is available; failure to resolve or qualify blocks E4/D1.
+
+Preserve the original study/protocol bytes and hashes above; the configuration
+derivation applies this explicit E4-only amendment after reading them. Preserve
+historical failures, setup requests, ledger events and environments. Other
+runtime targets, model contracts, precision, scientific gates and budgets remain
+as allocated. The amendment alone does not create a new setup attempt or clear
+the previously recorded network stop; affected execution requires separately
+recorded recovery authorization and resolved access.
+
+Acceptance requires configuration derivation and focused runtime checks, exact
+resolved torch/torchvision/torchaudio versions, a frozen dependency lock and
+license inventory, successful UniDepthV2 and xformers.ops import qualification,
+and actual CUDA/native compatibility evidence in the allocated D1 job before
+claiming runtime success. No extra model smoke job or fallback is authorized.
+See the [migration audit](../docs/research/vipe-alternatives/plan031-20260913T032700Z/e4-cu130-migration-audit.md).
+
 Implement every configuration exactly as defined in
 [protocol section 5](../docs/research/vipe-alternatives/benchmark-protocol.md#5-frozen-configurations),
 including precision, processors, thresholds, merge rules and pair resets.

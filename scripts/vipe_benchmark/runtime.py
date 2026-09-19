@@ -21,7 +21,7 @@ TARGETS = {
     'E1': dict(python='3.11', torch='2.5.1+cu124', torchvision='0.20.1+cu124', numpy='1.26.4'),
     'E2': dict(python='3.11', torch='2.5.1+cu124', torchvision='0.20.1+cu124', numpy='1.26.4'),
     'E3': dict(python='3.12', torch='2.10.0+cu128', torchvision='0.25.0+cu128', numpy='1.26.4'),
-    'E4': dict(python='3.11', torch='2.5.1+cu124', torchvision='0.20.1+cu124', numpy='2.1.3'),
+    'E4': dict(python='3.11', torch='2.13.0+cu130', torchvision='0.28.0+cu130', numpy='2.1.3'),
     'E5': dict(python='3.11', torch='2.5.1+cu124', torchvision='0.20.1+cu124', numpy='1.26.4'),
     'E6': dict(python='3.10', torch='2.0.1+cu118', torchvision='0.15.2+cu118', numpy='1.23.1'),
     'E7': dict(python='3.11', torch='2.5.1+cu124', torchvision='0.20.1+cu124', numpy='1.26.4'),

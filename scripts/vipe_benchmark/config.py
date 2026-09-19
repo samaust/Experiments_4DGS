@@ -14,6 +14,15 @@ SOURCE_HASHES = {
     'protocol': '6d32683e3d351f8f19afffa11fe5664c5a15515f84a2b9380f86a39a757072f5',
 }
 
+# User-directed E4 amendment recorded in Plan 031. Preserve the frozen source
+# documents and their hashes, as well as every prior run's recorded targets.
+E4_RUNTIME_AMENDMENT = (
+    'Python 3.11 / torch 2.13.0+cu130 / torchvision 0.28.0+cu130; '
+    'torchaudio 2.13.0+cu130; NumPy 2.1.3; xFormers >=0.0.26 resolved once '
+    'under exact Torch constraints and hash-locked. E4-only cu130 amendment '
+    'in Plan 031; package availability and native compatibility unqualified.'
+)
+
 
 def source_documents():
     for name, path in [('study', STUDY), ('protocol', PROTOCOL)]:
@@ -45,6 +54,7 @@ def derive():
                              selected_file=cells[2] if len(cells) == 3 else None))
     if len(settings) != 16 or len(runtimes) != 9 or len(pins) != 19:
         raise ValueError('missing component settings, runtime targets or pins')
+    runtimes['E4']['target'] = E4_RUNTIME_AMENDMENT
     return config, dict(schema='vipe-benchmark-components/v1', source_hashes=SOURCE_HASHES,
                         settings=settings, runtimes=runtimes, pins=pins)
 
