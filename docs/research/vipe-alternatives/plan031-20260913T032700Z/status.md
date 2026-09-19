@@ -239,3 +239,13 @@ The attempt reached the cu130 Torch index but timed out after 56.683 seconds;
 cleanup is confirmed and no model forward or native import qualification ran.
 The exact failure is preserved in the E4-setup-recovery-004 failure artifact and
 ledger finish event. No further retry was attempted.
+# Current stop: manual E4 setup also timed out
+
+The user-authorized manual worker ran in
+`jobs/E4-setup-recovery-004-manual`. It created the Python 3.11 environment,
+verified the pinned UniDepth source, and saved the source archive,
+`assets-before-build.json`, constraints, command records, log, and
+`failure.json`. Base dependency installation then timed out at the cu130 Torch
+index before producing `result.json`, a resolved lock, runtime inventory, or
+import qualification. D1 remains blocked. See
+[continuation audit](plan031-continuation-audit-002.md).
