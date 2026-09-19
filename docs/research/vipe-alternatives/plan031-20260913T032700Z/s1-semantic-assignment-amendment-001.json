@@ -1,0 +1,110 @@
+{
+  "schema": "plan031-s1-semantic-assignment-amendment/v1",
+  "amendment_id": "plan031-s1-s0-token-sum-v1",
+  "date": "2026-09-19",
+  "status": "implemented_cpu_validated_not_execution_authorized",
+  "scope": [
+    "S1-calibration",
+    "S1-reconstruction"
+  ],
+  "policy": "S0 period-delimited sigmoid-token sums; first maximum wins; native text threshold does not select derived class",
+  "changes_to_semantic_protocol": true,
+  "unchanged": [
+    "weights",
+    "native boxes/order",
+    "preprocessing",
+    "caption person.basketball.",
+    "box threshold 0.35 strict greater-than",
+    "text threshold 0.5",
+    "native phrase",
+    "native max-token score",
+    "precision",
+    "SAM refinement/merge",
+    "DeAOT tracking"
+  ],
+  "execution_authorized": false,
+  "additional_attempts_authorized": 0,
+  "original_failures": [
+    {
+      "branch": "calibration",
+      "failure": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration/failure.json",
+        "sha256": "80b50f5414245d3e84d9da8dafdcbf323753e00f0675d8702bb990dacfe8c13a",
+        "bytes": 2111
+      },
+      "event_sha256": "102e7c7cc33e8a6d2b4107b69fad0ef577b36a901b59c133d99e811f36665d71",
+      "elapsed_seconds": 10.414188402937725,
+      "cleanup_confirmed": true
+    },
+    {
+      "branch": "reconstruction",
+      "failure": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-reconstruction/failure.json",
+        "sha256": "e830980672436577136b98584a359ecd3aabf545c1597b1e11d1d40b47b9c1d5",
+        "bytes": 2114
+      },
+      "event_sha256": "2124a4c0c3a8439e697c04c293ef5f2dfe62cea0dd56a7f638e56f91cdad9b54",
+      "elapsed_seconds": 10.50047472200822,
+      "cleanup_confirmed": true
+    }
+  ],
+  "frozen_parents": [
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_031.md",
+      "sha256": "5b2c3eec431337e720cad0dae60738b4040045d25815a790f8534e79eaa6dcd8",
+      "bytes": 33102
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives.md",
+      "sha256": "6fbb6e55dedf444766c75e946c3d5099426839e0df158706d98d28b635353e8e",
+      "bytes": 46322
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/benchmark-protocol.md",
+      "sha256": "6d32683e3d351f8f19afffa11fe5664c5a15515f84a2b9380f86a39a757072f5",
+      "bytes": 49712
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/report.md",
+      "sha256": "c2b495b203b36181b5e065d5fc2e4ac419275ed1a39cac17b26d07587daf613a",
+      "bytes": 53017
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/status.md",
+      "sha256": "60cbf7d605c90d0eba2c94642fa10a1379ae85c8dbb6952da8ca46965e76916f",
+      "bytes": 35917
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/S1-calibration-failure.json",
+      "sha256": "06248d252ba1e023a9eea833b676c638e281ba0c9ea111f36399c204b5e6c9ef",
+      "bytes": 1793
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/S1-reconstruction-failure.json",
+      "sha256": "4c6b71d9799775bc54e780b8db89b3490f97755aa532589fafb72f60e2433329",
+      "bytes": 1797
+    }
+  ],
+  "verified_s0_sources": [
+    {
+      "path": "/home/auss/git_repos/samaust/Tridi/vipe/vipe/priors/track_anything/detector.py",
+      "sha256": "2871bc0118f8b300b1c40e27b9415b9b497965cedee9c3cd0f78f478d68f79af",
+      "bytes": 7335
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Tridi/vipe/vipe/priors/track_anything/groundingdino/util/utils.py",
+      "sha256": "da33aea2aaa849634e17f55e8713f9f2bd07c74f45cc740dfa75a79ac9e1d79c",
+      "bytes": 16598
+    }
+  ],
+  "native_predict_source": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/sources/grounding_source/groundingdino/util/inference.py",
+    "sha256": "0c06c5dd2fa46ae89a9fa376c0eaa383d12e7fc21aa65d662bcf3e758d26b598",
+    "bytes": 9395
+  },
+  "limitations": [
+    "original failed query token scores unavailable",
+    "no repaired model output or quality claim",
+    "current fixed-configuration recovery schema does not admit this semantic amendment"
+  ]
+}

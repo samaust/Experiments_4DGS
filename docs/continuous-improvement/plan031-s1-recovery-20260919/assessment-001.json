@@ -1,0 +1,2200 @@
+{
+  "schema": "plan031-s1-recovery-assessment/v1",
+  "stage": "REVIEW",
+  "iteration": 1,
+  "recorded_utc": "2026-09-19T19:02:15.638803+00:00",
+  "objective": "docs/continuous-improvement/plan031-s1-recovery-20260919/objective.md",
+  "repository": "/home/auss/git_repos/samaust/Experiments_4DGS",
+  "head": "0184cef74548261d4444ed9ee1e0464da1561b5e",
+  "review": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/review-001.md",
+    "sha256": "9700775cbf10e093f484dc4ae07ed2d7968c964d322ffdb484e91d5b6cf37df0",
+    "bytes": 16614
+  },
+  "review_stage_status": "complete",
+  "objective_status": "incomplete",
+  "decision": "Continue with the bounded admission/evidence plan; no GPU execution in this review.",
+  "criteria": [
+    {
+      "id": "S1-1",
+      "status": "met",
+      "reason": "Source-bound semantic amendment implements the verified S0 period-delimited probability-sum rule for every retained S1 detection while preserving native data and downstream behavior. Semantic source/test hashes match validation-001; all 68 focused CPU tests pass on the reviewed tree.",
+      "evidence": [
+        "s1-semantic-assignment-amendment-001.json",
+        "s1-semantic-assignment-review-001.md",
+        "s1-semantic-assignment-validation-001.json",
+        "scripts/vipe_benchmark/backends.py",
+        "scripts/vipe_benchmark/contracts.py",
+        "tests/test_vipe_benchmark_s1_semantics.py"
+      ],
+      "limitations": [
+        "Source/CPU criterion only; no repaired real-model result, quality improvement, or numerical S1/S0 output equivalence established."
+      ]
+    },
+    {
+      "id": "S1-2",
+      "status": "not met",
+      "reason": "Interrupted amendment-aware admission draft exists but has no compatible current validation, S1 recovery lifecycle tests, or ledger authorization record.",
+      "evidence": [
+        "scripts/vipe_benchmark/s1_recovery.py:51",
+        "scripts/basketball_vipe_benchmark.py:162",
+        "scripts/vipe_benchmark/execution.py:272",
+        "scripts/vipe_benchmark/ledger.py:228",
+        "ledger.jsonl"
+      ]
+    },
+    {
+      "id": "S1-3",
+      "status": "not met",
+      "reason": "No calibration recovery authorization/reservation/request/job directory/first-result qualification/terminal receipt exists. Original failures are not recovery outcomes.",
+      "evidence": [
+        "ledger.jsonl",
+        "original S1 failure artifacts"
+      ],
+      "limitations": [
+        "Actual repaired calibration outcome is unverified.",
+        "Early alignment/assignment/contract failures can discard available raw arrays before serialization."
+      ]
+    },
+    {
+      "id": "S1-4",
+      "status": "met",
+      "reason": "Frozen parents and original failures retain their recorded hashes; aggregate/report records verify against the ledger; ledger matches the semantic-validation snapshot; current source diff and index are unchanged during review.",
+      "evidence": [
+        "preservation_checks",
+        "verified_result_records",
+        "git_diff_sha256",
+        "ledger_snapshot"
+      ],
+      "limitations": [
+        "Scoped to this S1 amendment/review; does not erase historical P31-5 overruns."
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "blocking",
+      "title": "Truthful semantic-amendment admission remains incomplete",
+      "detail": "Generic component recovery requires changes_to_prescribed_configuration=false. Dedicated S1 calibration schema and hooks exist in the dirty tree and require true, but are unfinished and unvalidated. Never disguise the amendment as a fixed-configuration retry."
+    },
+    {
+      "id": "F2",
+      "severity": "blocking",
+      "title": "Saved validation does not match the new guard or current source",
+      "location": "scripts/vipe_benchmark/s1_recovery.py:51",
+      "expected_amendment_field": "semantic_amendment",
+      "existing_amendment_field": "amendment",
+      "expected_source_files": 68,
+      "recorded_source_files": 45,
+      "missing_source_files": [
+        "configs/vipe-alternatives/benchmark-v1.json",
+        "scripts/vipe_benchmark/s1_recovery.py",
+        "tests/test_vipe_benchmark_aggregation.py",
+        "tests/test_vipe_benchmark_annotations.py",
+        "tests/test_vipe_benchmark_auto_annotations.py",
+        "tests/test_vipe_benchmark_budgets.py",
+        "tests/test_vipe_benchmark_diagnostics.py",
+        "tests/test_vipe_benchmark_hf_auth.py",
+        "tests/test_vipe_benchmark_licenses.py",
+        "tests/test_vipe_benchmark_metrics.py",
+        "tests/test_vipe_benchmark_native_helpers.py",
+        "tests/test_vipe_benchmark_reporting.py",
+        "tests/test_vipe_benchmark_review_annotations.py",
+        "tests/test_vipe_benchmark_runtime.py",
+        "tests/test_vipe_benchmark_runtime_capture.py",
+        "tests/test_vipe_benchmark_sam2_postprocessing.py",
+        "tests/test_vipe_benchmark_sam3_memory.py",
+        "tests/test_vipe_benchmark_scale_motion.py",
+        "tests/test_vipe_benchmark_setup_recovery.py",
+        "tests/test_vipe_benchmark_source_archives.py",
+        "tests/test_vipe_benchmark_supervisor.py",
+        "tests/test_vipe_benchmark_toolkit.py",
+        "tests/test_vipe_benchmark_transfer_proxy.py"
+      ],
+      "stale_source_records": [
+        {
+          "group": "sources",
+          "expected": {
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_benchmark.py",
+            "sha256": "bbf8cb9920e3ca2feedd25b966ea954f1953d45a6d50fc29ff7355d8a9c07aab",
+            "bytes": 14959
+          },
+          "current": {
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_benchmark.py",
+            "sha256": "5529dddbb1a9cab63526fc6448bf976377114ae61ad39a09d19e5cbf48cccaa6",
+            "bytes": 15204
+          },
+          "matches": false
+        },
+        {
+          "group": "sources",
+          "expected": {
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/execution.py",
+            "sha256": "72f85996360d01c7f21dc49a0356a2b5795c6f0756e184061e899263fea8453f",
+            "bytes": 32499
+          },
+          "current": {
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/execution.py",
+            "sha256": "bcaa0cb36f99dd8f92e9e50a7d2f093c9138952b5bb12f81f53416989f4f0d74",
+            "bytes": 33499
+          },
+          "matches": false
+        },
+        {
+          "group": "sources",
+          "expected": {
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/ledger.py",
+            "sha256": "10c560edc5143bce9ee40fb8f9524d350295dbcd7e7a575a22b11ca9d114368f",
+            "bytes": 30123
+          },
+          "current": {
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/ledger.py",
+            "sha256": "2afe4d43fe82fa1c35dc89f63fb849e2520a7095454583cc335428abd71a0a19",
+            "bytes": 30513
+          },
+          "matches": false
+        }
+      ],
+      "first_expected_error": "complete current amendment-bound source validation required",
+      "remedy": "Preserve validation-001; emit new plan031-s1-recovery-validation/v1 evidence after completing and testing admission, using semantic_amendment and the complete then-current source set."
+    },
+    {
+      "id": "F3",
+      "severity": "blocking",
+      "title": "No S1 admission lifecycle tests or registered authorization",
+      "detail": "Existing component-recovery fixtures exercise S2. The 68 passing tests do not exercise s1_recovery/schema/S1 recovery identity. No component_recovery_authorized event targets S1 and no live request or job directory exists."
+    },
+    {
+      "id": "F4",
+      "severity": "required_before_recovery",
+      "title": "Early failure does not durably preserve captured detector evidence",
+      "locations": [
+        "scripts/vipe_benchmark/backends.py:379",
+        "scripts/vipe_benchmark/stages.py:134"
+      ],
+      "detail": "Detector alignment/assignment can raise before self.diagnostics is assigned; stage output diagnostics are serialized only after adapter return and contract validation.",
+      "remedy": "Add S1-only structured failure evidence propagation/serialization and CPU fixtures for alignment, token-layout and contract failures; save available numeric arrays and native metadata without another forward or changed model behavior."
+    }
+  ],
+  "validation": {
+    "command": [
+      ".local/envs/stg-colmap/bin/python",
+      "-B",
+      "-"
+    ],
+    "stdin": "import unittest,sys\nsuite=unittest.TestSuite()\nfor pattern in ['test_vipe_benchmark_s1_semantics.py','test_vipe_benchmark_backends.py','test_vipe_benchmark_contracts.py','test_vipe_benchmark_component_recovery.py','test_vipe_benchmark_execution.py']:\n suite.addTests(unittest.defaultTestLoader.discover('tests',pattern=pattern))\nr=unittest.TextTestRunner(verbosity=1).run(suite)\nsys.exit(not r.wasSuccessful())\n",
+    "exit_code": 0,
+    "tests_run": 68,
+    "elapsed_seconds_reported": 0.208,
+    "result": "OK",
+    "stub_progress_message": "S1-calibration: 1/1 outputs",
+    "gpu_execution": false,
+    "diff_check": {
+      "command": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "exit_code": 0
+    },
+    "note": "Tests rerun on current tree. This review assessment is not the future implementation repair_validation document."
+  },
+  "ledger_snapshot": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/ledger.jsonl",
+    "sha256": "2a0f66e38911b0ed029eb9dd0cf4bbd5da4a3b67abb577fbfe9ad67e6a888990",
+    "bytes": 332437,
+    "events": 447,
+    "last_sequence": 446,
+    "last_event_sha256": "00cab019d73b6a3205f676b54cfb2f745f492fa5cca5c69b4567087cea62172b",
+    "hash_chain_valid": true,
+    "unchanged_from_semantic_validation": true,
+    "active_jobs": [],
+    "s1_recovery_authorization_events": 0,
+    "s1_recovery_reservations": 0,
+    "s1_recovery_directory_exists": false
+  },
+  "consumption": {
+    "gpu": {
+      "attempts": 30,
+      "elapsed_seconds": 4374.044265462899,
+      "reserved_seconds": 0.0
+    },
+    "cpu": {
+      "attempts": 4,
+      "elapsed_seconds": 13753.206793547044,
+      "reserved_seconds": 0.0
+    },
+    "setup": {
+      "attempts": 14,
+      "elapsed_seconds": 5316.549373747828,
+      "reserved_seconds": 0.0
+    },
+    "motion": {
+      "attempts": 3,
+      "elapsed_seconds": 254.51461822795682,
+      "reserved_seconds": 0.0
+    },
+    "neighbor": {
+      "attempts": 3,
+      "elapsed_seconds": 36.09751573391259,
+      "reserved_seconds": 0.0
+    }
+  },
+  "gpu_time_remaining_seconds": 89225.9557345371,
+  "original_failures": [
+    {
+      "cleanup_confirmed": true,
+      "deadline_exceeded": false,
+      "elapsed_seconds": 10.414188402937725,
+      "error": "RuntimeError: worker exited 1",
+      "event": "finish",
+      "event_sha256": "102e7c7cc33e8a6d2b4107b69fad0ef577b36a901b59c133d99e811f36665d71",
+      "failure_kind": "worker_failure",
+      "job_id": "S1-calibration",
+      "peak": {
+        "artifact_bytes": 44024754176,
+        "device_bytes": 606076928,
+        "download_bytes": 20702036241
+      },
+      "previous_sha256": "775acffcd4b9a92c01dfa5e4ba85314a3f905d46bb1bba1ecff1cb7879b94b2c",
+      "recorded_unix": 1789299188.3311865,
+      "resource": "gpu",
+      "result": null,
+      "sequence": 250,
+      "status": "failed",
+      "stop_required": false,
+      "surviving_pids": []
+    },
+    {
+      "cleanup_confirmed": true,
+      "deadline_exceeded": false,
+      "elapsed_seconds": 10.50047472200822,
+      "error": "RuntimeError: worker exited 1",
+      "event": "finish",
+      "event_sha256": "2124a4c0c3a8439e697c04c293ef5f2dfe62cea0dd56a7f638e56f91cdad9b54",
+      "failure_kind": "worker_failure",
+      "job_id": "S1-reconstruction",
+      "peak": {
+        "artifact_bytes": 44097495040,
+        "device_bytes": 606076928,
+        "download_bytes": 20704590783
+      },
+      "previous_sha256": "3788226a786eb12a205e5e44c8c8c26fd039c5880a82adcbe73b28004cec2850",
+      "recorded_unix": 1789299278.296064,
+      "resource": "gpu",
+      "result": null,
+      "sequence": 255,
+      "status": "failed",
+      "stop_required": false,
+      "surviving_pids": []
+    }
+  ],
+  "r_s_state": {
+    "event": "account",
+    "event_sha256": "8c0c8b68ee0d0901c3a96b685cd18c64e1555515569ee9e40229fb380e768bba",
+    "job_id": "R-S",
+    "previous_sha256": "2124a4c0c3a8439e697c04c293ef5f2dfe62cea0dd56a7f638e56f91cdad9b54",
+    "reason": "S1 reconstruction failed the prescribed unresolved-phrase semantic gate; no completed repeat source.",
+    "recorded_unix": 1789299298.0305884,
+    "sequence": 256,
+    "status": "skipped"
+  },
+  "bindings": {
+    "e1_qualification": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/result.json",
+      "sha256": "d983f409c56f6d388fc09aab4be59d1257dc0a3a4da02d982d8b9b3b4d03565d",
+      "bytes": 9794
+    },
+    "e1_assets": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/assets.json",
+      "sha256": "9aa66c929cce4ece69d482022e3aeb02aad389435d379c7dc159b616f79063bf",
+      "bytes": 338844
+    },
+    "e1_runtime": {
+      "python": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/environment/bin/python",
+      "versions": {
+        "python": "3.11",
+        "torch": "2.5.1+cu124",
+        "torchvision": "0.20.1+cu124",
+        "numpy": "1.26.4"
+      },
+      "inventory": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/inventory.json",
+        "sha256": "0fa8d45c523c08092eda80f2aee4e79b1a991980c1f6a8ea984b8fb802980500",
+        "bytes": 8093767
+      },
+      "imports": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/imports.json",
+        "sha256": "0cb759b295dd0b2b11c2571a1919b2d4dd1faab7b2967ca65338696129817ef8",
+        "bytes": 4300
+      },
+      "dependency_lock": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/requirements.lock",
+        "sha256": "c93be23a51ab7a64ad048530d1f89c3d472ecec0916be9e4fef1f15ffb3c29b4",
+        "bytes": 111678
+      },
+      "build_inputs": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/build-inputs.json",
+        "sha256": "c409433653c20ae60eab9ff99d8ab0603705a61ea73edf0a410ce69e174dda3d",
+        "bytes": 38576
+      }
+    },
+    "e1_import_qualification": {
+      "status": "complete",
+      "forwards": 0,
+      "cuda_context_initialized": false
+    },
+    "inputs": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/prepare/inputs.json",
+      "sha256": "8bffd5ee620860dff0ded5bc5a5b70d1e424a5bc88d2bd8e937e70a94163466b",
+      "bytes": 11597582
+    },
+    "annotations": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/annotations/annotations.json",
+      "sha256": "ece14f11d7c8f6df584cb6dcd74a600acc874d88ff1a0704b98aca89c98436bc",
+      "bytes": 6088355
+    }
+  },
+  "verified_result_records": [
+    {
+      "sequence": 198,
+      "job_id": "E1-setup-recovery-002",
+      "result": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/result.json",
+        "sha256": "d983f409c56f6d388fc09aab4be59d1257dc0a3a4da02d982d8b9b3b4d03565d",
+        "bytes": 9794
+      }
+    },
+    {
+      "sequence": 303,
+      "job_id": "aggregate",
+      "result": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/aggregate-masks/result.json",
+        "sha256": "04ccffdcfce98012f5641023e1ac5e1fc96560c619f84ae435cd66c974f64d0a",
+        "bytes": 771
+      }
+    },
+    {
+      "sequence": 389,
+      "job_id": "aggregate",
+      "result": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/aggregate-finalists/result.json",
+        "sha256": "7d3d2822f212ee1c39383b964f025c0593f876d58cb44ab391d9065bcf8712e3",
+        "bytes": 483
+      }
+    },
+    {
+      "sequence": 400,
+      "job_id": "aggregate",
+      "result": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/aggregate-final/result.json",
+        "sha256": "44116b1b7a17fcaf548ff4c093be1ade22a02e84cd86ea214e18950e6b851598",
+        "bytes": 482
+      }
+    },
+    {
+      "sequence": 404,
+      "job_id": "report",
+      "result": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/report/result.json",
+        "sha256": "9a10eb071336297a056db5b580f947e2502dbec5d414bc095e66e0d8870dfba1",
+        "bytes": 7999
+      }
+    }
+  ],
+  "source_and_parent_checks": [
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_benchmark.py",
+        "sha256": "bbf8cb9920e3ca2feedd25b966ea954f1953d45a6d50fc29ff7355d8a9c07aab",
+        "bytes": 14959
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_benchmark.py",
+        "sha256": "5529dddbb1a9cab63526fc6448bf976377114ae61ad39a09d19e5cbf48cccaa6",
+        "bytes": 15204
+      },
+      "matches": false
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_worker.py",
+        "sha256": "d13bc918b4cf1d2c240663e753da50099e9d52349a980e98b63ef8aea4f7392c",
+        "bytes": 3481
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_worker.py",
+        "sha256": "d13bc918b4cf1d2c240663e753da50099e9d52349a980e98b63ef8aea4f7392c",
+        "bytes": 3481
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/__init__.py",
+        "sha256": "c85315fbe798b7b027f69aed6dc758496ddbb8cd7b2897901d7caeffa9abcc21",
+        "bytes": 82
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/__init__.py",
+        "sha256": "c85315fbe798b7b027f69aed6dc758496ddbb8cd7b2897901d7caeffa9abcc21",
+        "bytes": 82
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/access.py",
+        "sha256": "e34949d97a4d1f0165db3c0640e7ad30f3594ba9e2b78ed6087f51f9054a2ece",
+        "bytes": 6069
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/access.py",
+        "sha256": "e34949d97a4d1f0165db3c0640e7ad30f3594ba9e2b78ed6087f51f9054a2ece",
+        "bytes": 6069
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/aggregation.py",
+        "sha256": "79ba26254cea4c4fa0e9084c6f08fe1307aa06257139f0d13bf17f112c5f0abf",
+        "bytes": 69923
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/aggregation.py",
+        "sha256": "79ba26254cea4c4fa0e9084c6f08fe1307aa06257139f0d13bf17f112c5f0abf",
+        "bytes": 69923
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/annotations.py",
+        "sha256": "3f744704e4a4a7357c6e2ce9274572cf438d0f25450148f67ad61dc3c2ebf6ea",
+        "bytes": 8026
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/annotations.py",
+        "sha256": "3f744704e4a4a7357c6e2ce9274572cf438d0f25450148f67ad61dc3c2ebf6ea",
+        "bytes": 8026
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/assets.py",
+        "sha256": "218186a4443d5a0e8efaedc034c82487bccfd48af41e9c2ba83edc40994464ac",
+        "bytes": 3356
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/assets.py",
+        "sha256": "218186a4443d5a0e8efaedc034c82487bccfd48af41e9c2ba83edc40994464ac",
+        "bytes": 3356
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/auto_annotations.py",
+        "sha256": "22c80c8ec798fa9cc5fcab9f726dea0a52e91adf8b4df46c6f210fcf4f0c99c4",
+        "bytes": 19587
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/auto_annotations.py",
+        "sha256": "22c80c8ec798fa9cc5fcab9f726dea0a52e91adf8b4df46c6f210fcf4f0c99c4",
+        "bytes": 19587
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/backends.py",
+        "sha256": "6ecb266010d32e7437a4dec993dd640cfa0b34ea86780496513f20352978f7d8",
+        "bytes": 76970
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/backends.py",
+        "sha256": "6ecb266010d32e7437a4dec993dd640cfa0b34ea86780496513f20352978f7d8",
+        "bytes": 76970
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/budgets.py",
+        "sha256": "2fbb10e6e2adb201c071945c050f5b19acf4d053f58e338ad71f9ec588943a45",
+        "bytes": 17279
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/budgets.py",
+        "sha256": "2fbb10e6e2adb201c071945c050f5b19acf4d053f58e338ad71f9ec588943a45",
+        "bytes": 17279
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/config.py",
+        "sha256": "8660d808890bbc009dfb401b63cb2742b51ea63ac34ac2457086e4ef916b2ef4",
+        "bytes": 7264
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/config.py",
+        "sha256": "8660d808890bbc009dfb401b63cb2742b51ea63ac34ac2457086e4ef916b2ef4",
+        "bytes": 7264
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/contracts.py",
+        "sha256": "15950cbe4e4a34c68418b83aa8b5c482a5f284b9cc43a9d1f0f039b13b487d75",
+        "bytes": 9695
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/contracts.py",
+        "sha256": "15950cbe4e4a34c68418b83aa8b5c482a5f284b9cc43a9d1f0f039b13b487d75",
+        "bytes": 9695
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/diagnostics.py",
+        "sha256": "3bcb7b09a805ea058bb1ce144836ff66975debf42677c64d2ba5bfca7c2f3da1",
+        "bytes": 37096
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/diagnostics.py",
+        "sha256": "3bcb7b09a805ea058bb1ce144836ff66975debf42677c64d2ba5bfca7c2f3da1",
+        "bytes": 37096
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/execution.py",
+        "sha256": "72f85996360d01c7f21dc49a0356a2b5795c6f0756e184061e899263fea8453f",
+        "bytes": 32499
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/execution.py",
+        "sha256": "bcaa0cb36f99dd8f92e9e50a7d2f093c9138952b5bb12f81f53416989f4f0d74",
+        "bytes": 33499
+      },
+      "matches": false
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/files.py",
+        "sha256": "6731caae7af2e561233fc0ac847f6111922ca0f2a01a2f2eacd150e81056641b",
+        "bytes": 2229
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/files.py",
+        "sha256": "6731caae7af2e561233fc0ac847f6111922ca0f2a01a2f2eacd150e81056641b",
+        "bytes": 2229
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/geometry.py",
+        "sha256": "563d853981d1adf554a205daaffab90ade4686a9ef7c6d55c14d0e9967ff9586",
+        "bytes": 2840
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/geometry.py",
+        "sha256": "563d853981d1adf554a205daaffab90ade4686a9ef7c6d55c14d0e9967ff9586",
+        "bytes": 2840
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/hf_auth.py",
+        "sha256": "6107dc7b3314638b9f9deb6542924e516e5b6446f25ce261c44ab06df107e5b8",
+        "bytes": 6919
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/hf_auth.py",
+        "sha256": "6107dc7b3314638b9f9deb6542924e516e5b6446f25ce261c44ab06df107e5b8",
+        "bytes": 6919
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/isolation.py",
+        "sha256": "b4184a260710efc2d25dd65ab098af27f10cc0488eacd10bfee5133a616eb43c",
+        "bytes": 2305
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/isolation.py",
+        "sha256": "b4184a260710efc2d25dd65ab098af27f10cc0488eacd10bfee5133a616eb43c",
+        "bytes": 2305
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/ledger.py",
+        "sha256": "10c560edc5143bce9ee40fb8f9524d350295dbcd7e7a575a22b11ca9d114368f",
+        "bytes": 30123
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/ledger.py",
+        "sha256": "2afe4d43fe82fa1c35dc89f63fb849e2520a7095454583cc335428abd71a0a19",
+        "bytes": 30513
+      },
+      "matches": false
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/licenses.py",
+        "sha256": "ac1615a8610212f626627bda4fcdb74497642c0f5cbf93205a6e4117c51c84c3",
+        "bytes": 3736
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/licenses.py",
+        "sha256": "ac1615a8610212f626627bda4fcdb74497642c0f5cbf93205a6e4117c51c84c3",
+        "bytes": 3736
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/metrics.py",
+        "sha256": "639a96f6db7de127c4ee3bc3f00489f42895dbf966a3d87c88cfb36344dbef84",
+        "bytes": 10662
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/metrics.py",
+        "sha256": "639a96f6db7de127c4ee3bc3f00489f42895dbf966a3d87c88cfb36344dbef84",
+        "bytes": 10662
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/motion.py",
+        "sha256": "c2f8c30de3942ba7a6bf89cea51116694d3f1d42c6636bf5f28e4ec8e430242f",
+        "bytes": 3131
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/motion.py",
+        "sha256": "c2f8c30de3942ba7a6bf89cea51116694d3f1d42c6636bf5f28e4ec8e430242f",
+        "bytes": 3131
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/native_helpers.py",
+        "sha256": "8e0f3d8dbb38a96bce59871ad19cb19a781ac7ccc13aee3125f239a0c4ef9fd8",
+        "bytes": 18077
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/native_helpers.py",
+        "sha256": "8e0f3d8dbb38a96bce59871ad19cb19a781ac7ccc13aee3125f239a0c4ef9fd8",
+        "bytes": 18077
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/neighbors.py",
+        "sha256": "215f5fcea9a56b90486713bf1e5ac95f4d6fc649b22b3682bbf3c078c682960d",
+        "bytes": 4638
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/neighbors.py",
+        "sha256": "215f5fcea9a56b90486713bf1e5ac95f4d6fc649b22b3682bbf3c078c682960d",
+        "bytes": 4638
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/prepare.py",
+        "sha256": "7fed08252faee19bc165c47d3ec71abe5fe8ac407629976cbf1fb49e5d369381",
+        "bytes": 18796
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/prepare.py",
+        "sha256": "7fed08252faee19bc165c47d3ec71abe5fe8ac407629976cbf1fb49e5d369381",
+        "bytes": 18796
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/proxy_diagnostic.py",
+        "sha256": "eb95cbe87035bee4ba5279a3d16beac249693811b06ad80f1d8f69afe824079d",
+        "bytes": 1974
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/proxy_diagnostic.py",
+        "sha256": "eb95cbe87035bee4ba5279a3d16beac249693811b06ad80f1d8f69afe824079d",
+        "bytes": 1974
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/reporting.py",
+        "sha256": "2eea5f2745e7a3b08bd090a4b370569f62687123fdb27cfe7e94f69fb8e744eb",
+        "bytes": 38486
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/reporting.py",
+        "sha256": "2eea5f2745e7a3b08bd090a4b370569f62687123fdb27cfe7e94f69fb8e744eb",
+        "bytes": 38486
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/review_annotations.py",
+        "sha256": "18cf36442f912a43fac44ce6633589d81ed1709e4e56fee4090a39f4fd20717f",
+        "bytes": 23814
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/review_annotations.py",
+        "sha256": "18cf36442f912a43fac44ce6633589d81ed1709e4e56fee4090a39f4fd20717f",
+        "bytes": 23814
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/runtime.py",
+        "sha256": "89b0ca22c4730964feb00e60cebb371c654e3f8d339eac748448c468f75b0166",
+        "bytes": 44486
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/runtime.py",
+        "sha256": "89b0ca22c4730964feb00e60cebb371c654e3f8d339eac748448c468f75b0166",
+        "bytes": 44486
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/runtime_capture.py",
+        "sha256": "28c5bf953ddea75ff6e74c515173aea18eb9667f9d2c6e8280aec0647287ef03",
+        "bytes": 1819
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/runtime_capture.py",
+        "sha256": "28c5bf953ddea75ff6e74c515173aea18eb9667f9d2c6e8280aec0647287ef03",
+        "bytes": 1819
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/runtime_inventory.py",
+        "sha256": "a363162262d9eaa26b5bd2b7122d87b926d6b027168eb19bf2e3e363de0d168e",
+        "bytes": 2171
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/runtime_inventory.py",
+        "sha256": "a363162262d9eaa26b5bd2b7122d87b926d6b027168eb19bf2e3e363de0d168e",
+        "bytes": 2171
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/sam2_postprocessing.py",
+        "sha256": "e2bdf1e49fd5bb47145dcbab8f789c9e56fb6a078cd58b9bd53e2dc4b1a841d6",
+        "bytes": 1586
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/sam2_postprocessing.py",
+        "sha256": "e2bdf1e49fd5bb47145dcbab8f789c9e56fb6a078cd58b9bd53e2dc4b1a841d6",
+        "bytes": 1586
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/sam3_memory.py",
+        "sha256": "09f19b9ed5e476df3fdf104bf6cdac6c8e23f3c8027273e15bf98e60d2313afe",
+        "bytes": 6670
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/sam3_memory.py",
+        "sha256": "09f19b9ed5e476df3fdf104bf6cdac6c8e23f3c8027273e15bf98e60d2313afe",
+        "bytes": 6670
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/scale.py",
+        "sha256": "00c45fa0deab90ea924bebd291c0ebf75484483201fdcc3abe4058e039e97ca2",
+        "bytes": 3542
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/scale.py",
+        "sha256": "00c45fa0deab90ea924bebd291c0ebf75484483201fdcc3abe4058e039e97ca2",
+        "bytes": 3542
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/selection.py",
+        "sha256": "533a36658d2da0963d9d60dd647b552bd43cd5c43bb9268a7e4b123237d95c3d",
+        "bytes": 3812
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/selection.py",
+        "sha256": "533a36658d2da0963d9d60dd647b552bd43cd5c43bb9268a7e4b123237d95c3d",
+        "bytes": 3812
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/setup_recipes.py",
+        "sha256": "03850f57c595e867f230a9fc6a76b90aa87284e8b6600b3e54b27bb6f37778de",
+        "bytes": 8328
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/setup_recipes.py",
+        "sha256": "03850f57c595e867f230a9fc6a76b90aa87284e8b6600b3e54b27bb6f37778de",
+        "bytes": 8328
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/stages.py",
+        "sha256": "9df821187e7872cfcb386e19a4e4d6a0a9a03d594ae85d79c33f61d97984ec2c",
+        "bytes": 17638
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/stages.py",
+        "sha256": "9df821187e7872cfcb386e19a4e4d6a0a9a03d594ae85d79c33f61d97984ec2c",
+        "bytes": 17638
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py",
+        "sha256": "cc45c7089127b71a8b189f4a6e97b4588b87b571837172f03ddc66909ecad358",
+        "bytes": 10819
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py",
+        "sha256": "cc45c7089127b71a8b189f4a6e97b4588b87b571837172f03ddc66909ecad358",
+        "bytes": 10819
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/toolkit.py",
+        "sha256": "a0a3a39b32f02e389d6fd9ec49f6f13f87fcafd1d39533a2bc667ea04c3becbf",
+        "bytes": 15057
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/toolkit.py",
+        "sha256": "a0a3a39b32f02e389d6fd9ec49f6f13f87fcafd1d39533a2bc667ea04c3becbf",
+        "bytes": 15057
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/transfer_proxy.py",
+        "sha256": "550b9a7d42998a22c558cd6dc215d7e69d648478edae33f2a8265662e25c9f8b",
+        "bytes": 18913
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/transfer_proxy.py",
+        "sha256": "550b9a7d42998a22c558cd6dc215d7e69d648478edae33f2a8265662e25c9f8b",
+        "bytes": 18913
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_semantics.py",
+        "sha256": "4479d9722299d67e36044dbf73a379489ffe874d9461efa8da9875bd23ae5fb1",
+        "bytes": 6915
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_semantics.py",
+        "sha256": "4479d9722299d67e36044dbf73a379489ffe874d9461efa8da9875bd23ae5fb1",
+        "bytes": 6915
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_backends.py",
+        "sha256": "29b7161ac2cf656e80d09be96a1eca2429dab20d8ce79975a49e0c9b5ad80748",
+        "bytes": 44269
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_backends.py",
+        "sha256": "29b7161ac2cf656e80d09be96a1eca2429dab20d8ce79975a49e0c9b5ad80748",
+        "bytes": 44269
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_contracts.py",
+        "sha256": "160908e4b5d09405d7f519b2f4a1a887098778c0483b7faf3fbf941ddd61d09a",
+        "bytes": 11204
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_contracts.py",
+        "sha256": "160908e4b5d09405d7f519b2f4a1a887098778c0483b7faf3fbf941ddd61d09a",
+        "bytes": 11204
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_component_recovery.py",
+        "sha256": "0b2375562c92bb86fb5e6437744f2feb6a48b21fa62a809c3fca749b0c2cec4e",
+        "bytes": 4955
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_component_recovery.py",
+        "sha256": "0b2375562c92bb86fb5e6437744f2feb6a48b21fa62a809c3fca749b0c2cec4e",
+        "bytes": 4955
+      },
+      "matches": true
+    },
+    {
+      "group": "sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_execution.py",
+        "sha256": "1323c8343d0faacbdfc4c61c99e6538d72e231bc0a23f9acc96be5de77556ed9",
+        "bytes": 11572
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_execution.py",
+        "sha256": "1323c8343d0faacbdfc4c61c99e6538d72e231bc0a23f9acc96be5de77556ed9",
+        "bytes": 11572
+      },
+      "matches": true
+    },
+    {
+      "group": "preservation",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_031.md",
+        "sha256": "5b2c3eec431337e720cad0dae60738b4040045d25815a790f8534e79eaa6dcd8",
+        "bytes": 33102,
+        "unchanged_from_head": true
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_031.md",
+        "sha256": "5b2c3eec431337e720cad0dae60738b4040045d25815a790f8534e79eaa6dcd8",
+        "bytes": 33102
+      },
+      "matches": true
+    },
+    {
+      "group": "preservation",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives.md",
+        "sha256": "6fbb6e55dedf444766c75e946c3d5099426839e0df158706d98d28b635353e8e",
+        "bytes": 46322,
+        "unchanged_from_head": true
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives.md",
+        "sha256": "6fbb6e55dedf444766c75e946c3d5099426839e0df158706d98d28b635353e8e",
+        "bytes": 46322
+      },
+      "matches": true
+    },
+    {
+      "group": "preservation",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/benchmark-protocol.md",
+        "sha256": "6d32683e3d351f8f19afffa11fe5664c5a15515f84a2b9380f86a39a757072f5",
+        "bytes": 49712,
+        "unchanged_from_head": true
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/benchmark-protocol.md",
+        "sha256": "6d32683e3d351f8f19afffa11fe5664c5a15515f84a2b9380f86a39a757072f5",
+        "bytes": 49712
+      },
+      "matches": true
+    },
+    {
+      "group": "preservation",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/report.md",
+        "sha256": "c2b495b203b36181b5e065d5fc2e4ac419275ed1a39cac17b26d07587daf613a",
+        "bytes": 53017,
+        "unchanged_from_head": true
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/report.md",
+        "sha256": "c2b495b203b36181b5e065d5fc2e4ac419275ed1a39cac17b26d07587daf613a",
+        "bytes": 53017
+      },
+      "matches": true
+    },
+    {
+      "group": "preservation",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/status.md",
+        "sha256": "60cbf7d605c90d0eba2c94642fa10a1379ae85c8dbb6952da8ca46965e76916f",
+        "bytes": 35917,
+        "unchanged_from_head": true
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/status.md",
+        "sha256": "60cbf7d605c90d0eba2c94642fa10a1379ae85c8dbb6952da8ca46965e76916f",
+        "bytes": 35917
+      },
+      "matches": true
+    },
+    {
+      "group": "preservation",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/S1-calibration-failure.json",
+        "sha256": "06248d252ba1e023a9eea833b676c638e281ba0c9ea111f36399c204b5e6c9ef",
+        "bytes": 1793,
+        "unchanged_from_head": true
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/S1-calibration-failure.json",
+        "sha256": "06248d252ba1e023a9eea833b676c638e281ba0c9ea111f36399c204b5e6c9ef",
+        "bytes": 1793
+      },
+      "matches": true
+    },
+    {
+      "group": "preservation",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/S1-reconstruction-failure.json",
+        "sha256": "4c6b71d9799775bc54e780b8db89b3490f97755aa532589fafb72f60e2433329",
+        "bytes": 1797,
+        "unchanged_from_head": true
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/S1-reconstruction-failure.json",
+        "sha256": "4c6b71d9799775bc54e780b8db89b3490f97755aa532589fafb72f60e2433329",
+        "bytes": 1797
+      },
+      "matches": true
+    },
+    {
+      "group": "s0_sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Tridi/vipe/vipe/priors/track_anything/detector.py",
+        "sha256": "2871bc0118f8b300b1c40e27b9415b9b497965cedee9c3cd0f78f478d68f79af",
+        "bytes": 7335
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Tridi/vipe/vipe/priors/track_anything/detector.py",
+        "sha256": "2871bc0118f8b300b1c40e27b9415b9b497965cedee9c3cd0f78f478d68f79af",
+        "bytes": 7335
+      },
+      "matches": true
+    },
+    {
+      "group": "s0_sources",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Tridi/vipe/vipe/priors/track_anything/groundingdino/util/utils.py",
+        "sha256": "da33aea2aaa849634e17f55e8713f9f2bd07c74f45cc740dfa75a79ac9e1d79c",
+        "bytes": 16598
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Tridi/vipe/vipe/priors/track_anything/groundingdino/util/utils.py",
+        "sha256": "da33aea2aaa849634e17f55e8713f9f2bd07c74f45cc740dfa75a79ac9e1d79c",
+        "bytes": 16598
+      },
+      "matches": true
+    },
+    {
+      "group": "native",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/sources/grounding_source/groundingdino/util/inference.py",
+        "sha256": "0c06c5dd2fa46ae89a9fa376c0eaa383d12e7fc21aa65d662bcf3e758d26b598",
+        "bytes": 9395
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/sources/grounding_source/groundingdino/util/inference.py",
+        "sha256": "0c06c5dd2fa46ae89a9fa376c0eaa383d12e7fc21aa65d662bcf3e758d26b598",
+        "bytes": 9395
+      },
+      "matches": true
+    },
+    {
+      "group": "failures",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration/failure.json",
+        "sha256": "80b50f5414245d3e84d9da8dafdcbf323753e00f0675d8702bb990dacfe8c13a",
+        "bytes": 2111
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration/failure.json",
+        "sha256": "80b50f5414245d3e84d9da8dafdcbf323753e00f0675d8702bb990dacfe8c13a",
+        "bytes": 2111
+      },
+      "matches": true
+    },
+    {
+      "group": "failures",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-reconstruction/failure.json",
+        "sha256": "e830980672436577136b98584a359ecd3aabf545c1597b1e11d1d40b47b9c1d5",
+        "bytes": 2114
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-reconstruction/failure.json",
+        "sha256": "e830980672436577136b98584a359ecd3aabf545c1597b1e11d1d40b47b9c1d5",
+        "bytes": 2114
+      },
+      "matches": true
+    },
+    {
+      "group": "amendment_review",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-semantic-assignment-amendment-001.json",
+        "sha256": "67de90737094ec751d49036be5cef46ee6dea84d40a8ff2475fc79e1623bfb4a",
+        "bytes": 4558
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-semantic-assignment-amendment-001.json",
+        "sha256": "67de90737094ec751d49036be5cef46ee6dea84d40a8ff2475fc79e1623bfb4a",
+        "bytes": 4558
+      },
+      "matches": true
+    },
+    {
+      "group": "amendment_review",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-semantic-assignment-review-001.md",
+        "sha256": "90359bbbf7539ab0e51264a95fa24bfd4c4ce7e8f94da8547d7980ac93208894",
+        "bytes": 6843
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-semantic-assignment-review-001.md",
+        "sha256": "90359bbbf7539ab0e51264a95fa24bfd4c4ce7e8f94da8547d7980ac93208894",
+        "bytes": 6843
+      },
+      "matches": true
+    },
+    {
+      "group": "ledger",
+      "expected": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/ledger.jsonl",
+        "sha256": "2a0f66e38911b0ed029eb9dd0cf4bbd5da4a3b67abb577fbfe9ad67e6a888990",
+        "bytes": 332437
+      },
+      "current": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/ledger.jsonl",
+        "sha256": "2a0f66e38911b0ed029eb9dd0cf4bbd5da4a3b67abb577fbfe9ad67e6a888990",
+        "bytes": 332437
+      },
+      "matches": true
+    }
+  ],
+  "preservation_checks": [
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/result.json",
+        "sha256": "d983f409c56f6d388fc09aab4be59d1257dc0a3a4da02d982d8b9b3b4d03565d",
+        "bytes": 9794
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/sources/grounding_source/groundingdino/util/inference.py",
+        "sha256": "0c06c5dd2fa46ae89a9fa376c0eaa383d12e7fc21aa65d662bcf3e758d26b598",
+        "bytes": 9395
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration/failure.json",
+        "sha256": "80b50f5414245d3e84d9da8dafdcbf323753e00f0675d8702bb990dacfe8c13a",
+        "bytes": 2111
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-reconstruction/failure.json",
+        "sha256": "e830980672436577136b98584a359ecd3aabf545c1597b1e11d1d40b47b9c1d5",
+        "bytes": 2114
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/aggregate-final/aggregate-final.json",
+        "sha256": "b5453b8d9cacd92fd807449504d13ebc65ca36b5cf4294b5e74beb955d181b46",
+        "bytes": 151843
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/aggregate-final/result.json",
+        "sha256": "44116b1b7a17fcaf548ff4c093be1ade22a02e84cd86ea214e18950e6b851598",
+        "bytes": 482
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/aggregate-finalists/finalists.json",
+        "sha256": "def580a52fe3036371eeeb0ace25501d20404b7740e931258f9942f631abcb29",
+        "bytes": 2037929
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/aggregate-finalists/result.json",
+        "sha256": "7d3d2822f212ee1c39383b964f025c0593f876d58cb44ab391d9065bcf8712e3",
+        "bytes": 483
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/aggregate-masks/mask-metrics.json",
+        "sha256": "ba0e46962b6c63285ff9d947311df5ceacf392e4bd2b4db0dee97952f6f0329b",
+        "bytes": 3545542
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/aggregate-masks/result.json",
+        "sha256": "04ccffdcfce98012f5641023e1ac5e1fc96560c619f84ae435cd66c974f64d0a",
+        "bytes": 771
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/report/result.json",
+        "sha256": "9a10eb071336297a056db5b580f947e2502dbec5d414bc095e66e0d8870dfba1",
+        "bytes": 7999
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/ledger.jsonl",
+        "sha256": "2a0f66e38911b0ed029eb9dd0cf4bbd5da4a3b67abb577fbfe9ad67e6a888990",
+        "bytes": 332437
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/AGENTS.md",
+        "sha256": "3d09a19b0bf8e4bfcf7c25f5b001a769f2cce372a425fc1dd1a14fc299ef620f",
+        "bytes": 4485
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/configs/vipe-alternatives/benchmark-v1.json",
+        "sha256": "298e0a3a6c6c30b92dbfd7c8fa55a3dfbca1dff801a67c0830cf47db0bd9f823",
+        "bytes": 2625
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/objective.md",
+        "sha256": "da40b707c0b4f73cf5200bf9bcf6eab310944763d4d4d9c2542e8d2e839eed99",
+        "bytes": 1679
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/status.md",
+        "sha256": "9816f2324668da37b6673284ff244263b1b41197241485d167c769da224d5b86",
+        "bytes": 327
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/benchmark-protocol.md",
+        "sha256": "6d32683e3d351f8f19afffa11fe5664c5a15515f84a2b9380f86a39a757072f5",
+        "bytes": 49712
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/S1-calibration-failure.json",
+        "sha256": "06248d252ba1e023a9eea833b676c638e281ba0c9ea111f36399c204b5e6c9ef",
+        "bytes": 1793
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/S1-reconstruction-failure.json",
+        "sha256": "4c6b71d9799775bc54e780b8db89b3490f97755aa532589fafb72f60e2433329",
+        "bytes": 1797
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/aggregate-final.json",
+        "sha256": "bad18b1a5e168f1569d19a7e977d6399dd0babfb24dc0cccc4b785543135ac8c",
+        "bytes": 289
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/aggregate-masks.json",
+        "sha256": "4f48e20ffc6467327646d3911faa6d903075fb193f93ea588d18811977f39601",
+        "bytes": 289
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/matrix-accounting-final.json",
+        "sha256": "0ab2054eb9309cef591fa88cbb6c94c34ed7830a2c5d350c976175582f57af3c",
+        "bytes": 66737
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/report.md",
+        "sha256": "c2b495b203b36181b5e065d5fc2e4ac419275ed1a39cac17b26d07587daf613a",
+        "bytes": 53017
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-semantic-assignment-amendment-001.json",
+        "sha256": "67de90737094ec751d49036be5cef46ee6dea84d40a8ff2475fc79e1623bfb4a",
+        "bytes": 4558
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-semantic-assignment-review-001.md",
+        "sha256": "90359bbbf7539ab0e51264a95fa24bfd4c4ce7e8f94da8547d7980ac93208894",
+        "bytes": 6843
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/status.md",
+        "sha256": "60cbf7d605c90d0eba2c94642fa10a1379ae85c8dbb6952da8ca46965e76916f",
+        "bytes": 35917
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives.md",
+        "sha256": "6fbb6e55dedf444766c75e946c3d5099426839e0df158706d98d28b635353e8e",
+        "bytes": 46322
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_031.md",
+        "sha256": "5b2c3eec431337e720cad0dae60738b4040045d25815a790f8534e79eaa6dcd8",
+        "bytes": 33102
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_benchmark.py",
+        "sha256": "5529dddbb1a9cab63526fc6448bf976377114ae61ad39a09d19e5cbf48cccaa6",
+        "bytes": 15204
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_worker.py",
+        "sha256": "d13bc918b4cf1d2c240663e753da50099e9d52349a980e98b63ef8aea4f7392c",
+        "bytes": 3481
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/__init__.py",
+        "sha256": "c85315fbe798b7b027f69aed6dc758496ddbb8cd7b2897901d7caeffa9abcc21",
+        "bytes": 82
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/access.py",
+        "sha256": "e34949d97a4d1f0165db3c0640e7ad30f3594ba9e2b78ed6087f51f9054a2ece",
+        "bytes": 6069
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/aggregation.py",
+        "sha256": "79ba26254cea4c4fa0e9084c6f08fe1307aa06257139f0d13bf17f112c5f0abf",
+        "bytes": 69923
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/annotations.py",
+        "sha256": "3f744704e4a4a7357c6e2ce9274572cf438d0f25450148f67ad61dc3c2ebf6ea",
+        "bytes": 8026
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/assets.py",
+        "sha256": "218186a4443d5a0e8efaedc034c82487bccfd48af41e9c2ba83edc40994464ac",
+        "bytes": 3356
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/auto_annotations.py",
+        "sha256": "22c80c8ec798fa9cc5fcab9f726dea0a52e91adf8b4df46c6f210fcf4f0c99c4",
+        "bytes": 19587
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/backends.py",
+        "sha256": "6ecb266010d32e7437a4dec993dd640cfa0b34ea86780496513f20352978f7d8",
+        "bytes": 76970
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/budgets.py",
+        "sha256": "2fbb10e6e2adb201c071945c050f5b19acf4d053f58e338ad71f9ec588943a45",
+        "bytes": 17279
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/config.py",
+        "sha256": "8660d808890bbc009dfb401b63cb2742b51ea63ac34ac2457086e4ef916b2ef4",
+        "bytes": 7264
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/contracts.py",
+        "sha256": "15950cbe4e4a34c68418b83aa8b5c482a5f284b9cc43a9d1f0f039b13b487d75",
+        "bytes": 9695
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/diagnostics.py",
+        "sha256": "3bcb7b09a805ea058bb1ce144836ff66975debf42677c64d2ba5bfca7c2f3da1",
+        "bytes": 37096
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/execution.py",
+        "sha256": "bcaa0cb36f99dd8f92e9e50a7d2f093c9138952b5bb12f81f53416989f4f0d74",
+        "bytes": 33499
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/files.py",
+        "sha256": "6731caae7af2e561233fc0ac847f6111922ca0f2a01a2f2eacd150e81056641b",
+        "bytes": 2229
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/geometry.py",
+        "sha256": "563d853981d1adf554a205daaffab90ade4686a9ef7c6d55c14d0e9967ff9586",
+        "bytes": 2840
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/hf_auth.py",
+        "sha256": "6107dc7b3314638b9f9deb6542924e516e5b6446f25ce261c44ab06df107e5b8",
+        "bytes": 6919
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/isolation.py",
+        "sha256": "b4184a260710efc2d25dd65ab098af27f10cc0488eacd10bfee5133a616eb43c",
+        "bytes": 2305
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/ledger.py",
+        "sha256": "2afe4d43fe82fa1c35dc89f63fb849e2520a7095454583cc335428abd71a0a19",
+        "bytes": 30513
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/licenses.py",
+        "sha256": "ac1615a8610212f626627bda4fcdb74497642c0f5cbf93205a6e4117c51c84c3",
+        "bytes": 3736
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/metrics.py",
+        "sha256": "639a96f6db7de127c4ee3bc3f00489f42895dbf966a3d87c88cfb36344dbef84",
+        "bytes": 10662
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/motion.py",
+        "sha256": "c2f8c30de3942ba7a6bf89cea51116694d3f1d42c6636bf5f28e4ec8e430242f",
+        "bytes": 3131
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/native_helpers.py",
+        "sha256": "8e0f3d8dbb38a96bce59871ad19cb19a781ac7ccc13aee3125f239a0c4ef9fd8",
+        "bytes": 18077
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/neighbors.py",
+        "sha256": "215f5fcea9a56b90486713bf1e5ac95f4d6fc649b22b3682bbf3c078c682960d",
+        "bytes": 4638
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/prepare.py",
+        "sha256": "7fed08252faee19bc165c47d3ec71abe5fe8ac407629976cbf1fb49e5d369381",
+        "bytes": 18796
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/proxy_diagnostic.py",
+        "sha256": "eb95cbe87035bee4ba5279a3d16beac249693811b06ad80f1d8f69afe824079d",
+        "bytes": 1974
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/reporting.py",
+        "sha256": "2eea5f2745e7a3b08bd090a4b370569f62687123fdb27cfe7e94f69fb8e744eb",
+        "bytes": 38486
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/review_annotations.py",
+        "sha256": "18cf36442f912a43fac44ce6633589d81ed1709e4e56fee4090a39f4fd20717f",
+        "bytes": 23814
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/runtime.py",
+        "sha256": "89b0ca22c4730964feb00e60cebb371c654e3f8d339eac748448c468f75b0166",
+        "bytes": 44486
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/runtime_capture.py",
+        "sha256": "28c5bf953ddea75ff6e74c515173aea18eb9667f9d2c6e8280aec0647287ef03",
+        "bytes": 1819
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/runtime_inventory.py",
+        "sha256": "a363162262d9eaa26b5bd2b7122d87b926d6b027168eb19bf2e3e363de0d168e",
+        "bytes": 2171
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_recovery.py",
+        "sha256": "918ad9fed9da0eb32f36864fd31b8bfa9e54533e7e2d6f78434c114e9a64a129",
+        "bytes": 4692
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/sam2_postprocessing.py",
+        "sha256": "e2bdf1e49fd5bb47145dcbab8f789c9e56fb6a078cd58b9bd53e2dc4b1a841d6",
+        "bytes": 1586
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/sam3_memory.py",
+        "sha256": "09f19b9ed5e476df3fdf104bf6cdac6c8e23f3c8027273e15bf98e60d2313afe",
+        "bytes": 6670
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/scale.py",
+        "sha256": "00c45fa0deab90ea924bebd291c0ebf75484483201fdcc3abe4058e039e97ca2",
+        "bytes": 3542
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/selection.py",
+        "sha256": "533a36658d2da0963d9d60dd647b552bd43cd5c43bb9268a7e4b123237d95c3d",
+        "bytes": 3812
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/setup_recipes.py",
+        "sha256": "03850f57c595e867f230a9fc6a76b90aa87284e8b6600b3e54b27bb6f37778de",
+        "bytes": 8328
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/stages.py",
+        "sha256": "9df821187e7872cfcb386e19a4e4d6a0a9a03d594ae85d79c33f61d97984ec2c",
+        "bytes": 17638
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py",
+        "sha256": "cc45c7089127b71a8b189f4a6e97b4588b87b571837172f03ddc66909ecad358",
+        "bytes": 10819
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/toolkit.py",
+        "sha256": "a0a3a39b32f02e389d6fd9ec49f6f13f87fcafd1d39533a2bc667ea04c3becbf",
+        "bytes": 15057
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/transfer_proxy.py",
+        "sha256": "550b9a7d42998a22c558cd6dc215d7e69d648478edae33f2a8265662e25c9f8b",
+        "bytes": 18913
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_backends.py",
+        "sha256": "29b7161ac2cf656e80d09be96a1eca2429dab20d8ce79975a49e0c9b5ad80748",
+        "bytes": 44269
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_component_recovery.py",
+        "sha256": "0b2375562c92bb86fb5e6437744f2feb6a48b21fa62a809c3fca749b0c2cec4e",
+        "bytes": 4955
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_contracts.py",
+        "sha256": "160908e4b5d09405d7f519b2f4a1a887098778c0483b7faf3fbf941ddd61d09a",
+        "bytes": 11204
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_execution.py",
+        "sha256": "1323c8343d0faacbdfc4c61c99e6538d72e231bc0a23f9acc96be5de77556ed9",
+        "bytes": 11572
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_semantics.py",
+        "sha256": "4479d9722299d67e36044dbf73a379489ffe874d9461efa8da9875bd23ae5fb1",
+        "bytes": 6915
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Tridi/vipe/vipe/priors/track_anything/detector.py",
+        "sha256": "2871bc0118f8b300b1c40e27b9415b9b497965cedee9c3cd0f78f478d68f79af",
+        "bytes": 7335
+      },
+      "unchanged_during_review": true
+    },
+    {
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Tridi/vipe/vipe/priors/track_anything/groundingdino/util/utils.py",
+        "sha256": "da33aea2aaa849634e17f55e8713f9f2bd07c74f45cc740dfa75a79ac9e1d79c",
+        "bytes": 16598
+      },
+      "unchanged_during_review": true
+    }
+  ],
+  "tracked_comparison_to_head": [
+    {
+      "path": "AGENTS.md",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "configs/vipe-alternatives/benchmark-v1.json",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "docs/research/vipe-alternatives/benchmark-protocol.md",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "docs/research/vipe-alternatives/plan031-20260913T032700Z/S1-calibration-failure.json",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "docs/research/vipe-alternatives/plan031-20260913T032700Z/S1-reconstruction-failure.json",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "docs/research/vipe-alternatives/plan031-20260913T032700Z/aggregate-final.json",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "docs/research/vipe-alternatives/plan031-20260913T032700Z/aggregate-masks.json",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "docs/research/vipe-alternatives/plan031-20260913T032700Z/matrix-accounting-final.json",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "docs/research/vipe-alternatives/plan031-20260913T032700Z/report.md",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "docs/research/vipe-alternatives/plan031-20260913T032700Z/status.md",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "docs/research/vipe-alternatives.md",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "plans/plan_031.md",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/basketball_vipe_benchmark.py",
+      "unchanged_from_head": false
+    },
+    {
+      "path": "scripts/basketball_vipe_worker.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/__init__.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/access.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/aggregation.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/annotations.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/assets.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/auto_annotations.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/backends.py",
+      "unchanged_from_head": false
+    },
+    {
+      "path": "scripts/vipe_benchmark/budgets.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/config.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/contracts.py",
+      "unchanged_from_head": false
+    },
+    {
+      "path": "scripts/vipe_benchmark/diagnostics.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/execution.py",
+      "unchanged_from_head": false
+    },
+    {
+      "path": "scripts/vipe_benchmark/files.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/geometry.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/hf_auth.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/isolation.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/ledger.py",
+      "unchanged_from_head": false
+    },
+    {
+      "path": "scripts/vipe_benchmark/licenses.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/metrics.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/motion.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/native_helpers.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/neighbors.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/prepare.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/proxy_diagnostic.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/reporting.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/review_annotations.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/runtime.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/runtime_capture.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/runtime_inventory.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/sam2_postprocessing.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/sam3_memory.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/scale.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/selection.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/setup_recipes.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/supervisor.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/toolkit.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "scripts/vipe_benchmark/transfer_proxy.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "tests/test_vipe_benchmark_backends.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "tests/test_vipe_benchmark_component_recovery.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "tests/test_vipe_benchmark_contracts.py",
+      "unchanged_from_head": true
+    },
+    {
+      "path": "tests/test_vipe_benchmark_execution.py",
+      "unchanged_from_head": true
+    }
+  ],
+  "git_diff_sha256": "3344963b1913c86e996041507969244b9611227d430e148b9ad70a40121b3b54",
+  "git_index_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "limitations": [
+    "No live GPU/device/runtime availability or fresh storage/download measurement; refresh before authorized execution.",
+    "No repaired real-model output or measured quality/equivalence evidence.",
+    "Top-level E1 evidence hashes checked; no fresh import/model qualification or full rehash of every weight/environment member.",
+    "Prior research status includes historical P31-5 failures; scoped S1-4 integrity does not reverse them."
+  ],
+  "next_plan": {
+    "title": "Complete S1 amendment-bound admission and failure evidence, then one calibration recovery",
+    "recommended_next_stage": "PLAN",
+    "execution_authorized_by_this_review": false,
+    "steps": [
+      {
+        "id": "P1",
+        "changes": [
+          "Complete scripts/vipe_benchmark/s1_recovery.py validation schema, exact complete source-set checks, current configuration/resource constraints, frozen S0/native source and parent hashes, live original-failure/cleanup binding, E1/input/annotation and canonical request binding.",
+          "Retain calibration-only schema, fixed recovery-001 identity and typed flags; do not weaken generic recovery."
+        ]
+      },
+      {
+        "id": "P2",
+        "changes": [
+          "Complete existing controller/execution/ledger integration so one immutable authorization and validation bind admission, registration and dispatch.",
+          "Recheck state under locks, reject duplicate/changed/consumed requests, preserve original failure, and admit recovered results only after supervised completion and all 510 rows."
+        ]
+      },
+      {
+        "id": "P3",
+        "changes": [
+          "Add S1-only early-failure raw-evidence propagation in backends.py and serialization in stages.py; worker handling only if necessary.",
+          "Keep assignments, thresholds, SAM, tracking, precision and normal successful outputs unchanged."
+        ]
+      },
+      {
+        "id": "P4",
+        "changes": [
+          "Add tests/test_vipe_benchmark_s1_recovery.py and targeted failure-evidence fixtures.",
+          "Save new s1-recovery-validation-001.json and s1-recovery-implementation-review-001.md in the research run directory; preserve semantic validation-001."
+        ],
+        "validation": [
+          "Valid full binding; wrong schema/amendment/flags/branch/job; stale/missing/extra/duplicate sources; changed E1/runtime/config/input/annotation bindings.",
+          "Wrong failure hash/event, unconfirmed cleanup, active attempt, duplicate registration/reservation, second recovery identity, exhausted cumulative time, request mutation and failed/partial result rejection.",
+          "Early alignment/layout/contract errors preserve available evidence with no second forward; generic S2 regression behavior remains intact.",
+          "Run five existing focused suites plus new S1 recovery, budgets, supervisor and annotation-review suites using fake workers/injected GPU readings only.",
+          "git diff --check and frozen-parent/ledger preservation hashes."
+        ]
+      },
+      {
+        "id": "P5",
+        "changes": [
+          "In a later execution-authorized stage only, record applicable actual user approval in s1-calibration-recovery-authorization-001.json, binding fresh validation/amendment/failure/E1/input/annotation/config/resource/request evidence.",
+          "Recheck identity, resources and exclusive host GPU access; use existing controller component-recovery path exactly once, with fresh output and one atomic reservation."
+        ],
+        "command_shape": ".local/envs/stg-colmap/bin/python scripts/basketball_vipe_benchmark.py --run-id plan031-20260913T032700Z component-recovery --authorization <future-approved-s1-calibration-recovery-authorization-001.json>"
+      },
+      {
+        "id": "P6",
+        "changes": [
+          "Save compact S1-calibration-recovery-001.json and a recovery-results review plus detailed first-result/raw/output/runtime/resource/cleanup evidence.",
+          "Success requires 510 complete validated calibration rows; failure must record exact error, available evidence, explicit first-result status, charged time and cleanup status. Either consumes the only attempt.",
+          "Review calibration and stop; reconstruction requires separate later authorization and an explicit R-S disposition."
+        ]
+      }
+    ],
+    "limits": {
+      "cpu_implementation_validation_wall_seconds": 1800,
+      "cpu_workers_max": 8,
+      "additional_calibration_attempts": 1,
+      "calibration_job_id": "S1-calibration-recovery-001",
+      "gpu_job_seconds_max": 3600,
+      "cleanup_reserve_seconds_within_job": 30,
+      "gpu_total_seconds_max": 93600,
+      "gpu_process_groups_max": 1,
+      "gpu_peak_total_device_gib_max": 22,
+      "new_download_gib_total_max": 60,
+      "new_artifact_disk_gib_total_max": 150,
+      "cpu_prepare_score_report_seconds_total_max": 57600,
+      "new_setup_attempts": 0,
+      "new_downloads_proposed": 0,
+      "extra_smoke_jobs": 0,
+      "reconstruction_attempts_in_next_allocation": 0
+    },
+    "authorization_boundaries": [
+      "This REVIEW permits only the two requested artifacts and grants no live recovery authorization or registration.",
+      "Later implementation/execution must use applicable actual user authority; reuse explicit prior approval when it covers the semantic amendment and additional attempt rather than requesting duplicate approval.",
+      "No reconstruction until calibration review and separate later authorization; prospective reconstruction cap is one attempt/5400 seconds with explicit R-S disposition.",
+      "No source/model threshold/precision/resolution/weight changes beyond the existing semantic amendment and evidence/admission work; no CPU fallback, rebuild or extra probe.",
+      "No unrelated allocation reopening, report/aggregation rerun, geometry/finalists/combined/D1 rerun, training, calibration regeneration or final-window evaluation.",
+      "No delegation, staging or commits in REVIEW; future main-agent milestone commits depend on the instructions then in force.",
+      "Follow AGENTS.md single safe escalated permission retry without restarting a consumed model attempt; no bypass of denial."
+    ]
+  },
+  "changes_made_by_this_review": {
+    "created": [
+      "docs/continuous-improvement/plan031-s1-recovery-20260919/review-001.md",
+      "docs/continuous-improvement/plan031-s1-recovery-20260919/assessment-001.json"
+    ],
+    "source_edits": 0,
+    "ledger_mutations": 0,
+    "gpu_jobs": 0,
+    "delegations": 0,
+    "staging_operations": 0,
+    "commits": 0,
+    "prompts_content_read": false,
+    "preexisting_source_changes_preserved": true,
+    "temporary_snapshot": "/tmp/plan031-s1-review-snapshot.json"
+  },
+  "stop_reason": "User requested completion of REVIEW and stop; no further implementation or GPU execution."
+}

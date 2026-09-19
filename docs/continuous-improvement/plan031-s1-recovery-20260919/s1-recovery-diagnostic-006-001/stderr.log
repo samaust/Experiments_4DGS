@@ -1,0 +1,51 @@
+test_bootstrap_failure_and_eof_preserve_child (test_vipe_benchmark_supervisor.HelperIntegrationTests.test_bootstrap_failure_and_eof_preserve_child) ... ok
+test_cleanup_failures (test_vipe_benchmark_supervisor.HelperIntegrationTests.test_cleanup_failures) ... ok
+test_cleanup_matrix (test_vipe_benchmark_supervisor.HelperIntegrationTests.test_cleanup_matrix) ... ok
+test_foreign_only_pid (test_vipe_benchmark_supervisor.HelperIntegrationTests.test_foreign_only_pid) ... ERROR
+test_importable_guarded_file_control (test_vipe_benchmark_supervisor.HelperIntegrationTests.test_importable_guarded_file_control) ... ok
+test_mixed_owned_foreign_pid (test_vipe_benchmark_supervisor.HelperIntegrationTests.test_mixed_owned_foreign_pid) ... ERROR
+test_owned_live_pid (test_vipe_benchmark_supervisor.HelperIntegrationTests.test_owned_live_pid) ... ok
+test_owned_unreaped_exited_pid (test_vipe_benchmark_supervisor.HelperIntegrationTests.test_owned_unreaped_exited_pid) ... ok
+test_prelaunch_empty_ownership (test_vipe_benchmark_supervisor.HelperIntegrationTests.test_prelaunch_empty_ownership) ... ERROR
+test_primary_survives_secondary_cleanup_error (test_vipe_benchmark_supervisor.HelperIntegrationTests.test_primary_survives_secondary_cleanup_error) ... ok
+test_real_close_repeated_and_descendant_cleanup (test_vipe_benchmark_supervisor.HelperIntegrationTests.test_real_close_repeated_and_descendant_cleanup) ... ok
+test_spawn_constant_reaped_under_actual_runner (test_vipe_benchmark_supervisor.HelperIntegrationTests.test_spawn_constant_reaped_under_actual_runner) ... ok
+test_supervisor_worker_context_and_consumed_cleanup_stop (test_vipe_benchmark_supervisor.HelperIntegrationTests.test_supervisor_worker_context_and_consumed_cleanup_stop) ... ok
+
+======================================================================
+ERROR: test_foreign_only_pid (test_vipe_benchmark_supervisor.HelperIntegrationTests.test_foreign_only_pid)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py", line 305, in test_foreign_only_pid
+    self.rejected()
+    ~~~~~~~~~~~~~^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py", line 289, in rejected
+    self.reading['gpu_pids'] = pids or [os.getpid()]
+                                        ^^
+NameError: name 'os' is not defined. Did you forget to import 'os'?
+
+======================================================================
+ERROR: test_mixed_owned_foreign_pid (test_vipe_benchmark_supervisor.HelperIntegrationTests.test_mixed_owned_foreign_pid)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py", line 309, in test_mixed_owned_foreign_pid
+    self.rejected(worker,[worker.pid,os.getpid()])
+                                     ^^
+NameError: name 'os' is not defined. Did you forget to import 'os'?
+
+======================================================================
+ERROR: test_prelaunch_empty_ownership (test_vipe_benchmark_supervisor.HelperIntegrationTests.test_prelaunch_empty_ownership)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py", line 313, in test_prelaunch_empty_ownership
+    self.rejected(phase='prelaunch')
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py", line 289, in rejected
+    self.reading['gpu_pids'] = pids or [os.getpid()]
+                                        ^^
+NameError: name 'os' is not defined. Did you forget to import 'os'?
+
+----------------------------------------------------------------------
+Ran 13 tests in 2.910s
+
+FAILED (errors=3)

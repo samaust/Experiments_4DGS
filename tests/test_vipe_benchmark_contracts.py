@@ -44,7 +44,7 @@ class AccessTests(unittest.TestCase):
                Identity('reconstruction', 1, 21), Identity('reconstruction', 1, 22, 20),
                Identity('calibration', 1, 21), Identity('calibration', True, 100)]
         for item in bad:
-            with self.subTest(item=item), self.assertRaises(ValueError):
+            with self.subTest(item=item.record()), self.assertRaises(ValueError):
                 guard(item, self.config)
 
     def test_motion_context_roles_and_ends(self):

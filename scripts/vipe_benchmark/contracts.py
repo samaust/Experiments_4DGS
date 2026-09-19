@@ -4,6 +4,36 @@ import numpy as np
 SHAPE = (540, 960)
 
 
+def s1_assignment(item):
+    """Validate the explicit amendment before accepting unresolved native text."""
+    assignment = item['class_assignment']
+    try:
+        scores = assignment['phrase_token_scores']
+        spans = assignment['phrase_token_indices']
+        sums = [sum(row) for row in scores]
+        winner = sums.index(max(sums))
+        valid = (
+            assignment['policy'] == 'plan031-s1-s0-token-sum-v1'
+            and assignment['phrase_classes'] == ['person', 'basketball']
+            and len(scores) == len(spans) == 2
+            and all(len(row) == len(span) > 0 for row, span in zip(scores, spans))
+            and all(np.isfinite(v) and 0 <= v <= 1 for row in scores for v in row)
+            and assignment['phrase_token_sums'] == sums
+            and assignment['winner_index'] == winner
+            and assignment['derived_class'] == item['class'] == ['person', 'basketball'][winner]
+            and assignment['margin'] == abs(sums[0] - sums[1])
+            and assignment['tie_break'] == 'first_caption_phrase'
+            and isinstance(assignment['ambiguity_reasons'], list)
+            and assignment['ambiguous'] is bool(assignment['ambiguity_reasons'])
+            and isinstance(item.get('native_class'), str)
+            and (item['native_class'] != '' or
+                 'native_phrase_unresolved' in assignment['ambiguity_reasons']))
+    except (KeyError, TypeError, ValueError, IndexError):
+        valid = False
+    if not valid:
+        raise ValueError('invalid S1 derived semantic assignment evidence')
+
+
 def footprint(valid, shape=SHAPE):
     if valid.dtype != np.bool_ or valid.shape != shape or not valid.any():
         raise ValueError('invalid boolean image footprint')
@@ -23,7 +53,10 @@ def instances(labels, semantics, valid, shape=SHAPE):
     for item in semantics.values():
         if item.get('class') not in ('person', 'basketball'):
             raise ValueError('unresolved semantics cannot become static evidence')
-        if not item.get('native_class') or not np.isfinite(item.get('score', np.nan)):
+        if 'class_assignment' in item:
+            s1_assignment(item)
+        if ((not item.get('native_class') and 'class_assignment' not in item)
+                or not np.isfinite(item.get('score', np.nan))):
             raise ValueError('native class and finite score required')
     return ids
 

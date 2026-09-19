@@ -1,4 +1,5 @@
 import copy
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -196,3 +197,239 @@ class SupervisorTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+HELPER_CASES = {
+    'test_vipe_benchmark_supervisor.HelperIntegrationTests.test_cleanup_matrix': (
+        {'role': 'task', 'outcome': 'success'}, {'role': 'sample', 'outcome': 'success'},
+        {'role': 'task', 'outcome': 'error'}, {'role': 'sample', 'outcome': 'error'},
+        {'role': 'task', 'outcome': 'timeout'}, {'role': 'sample', 'outcome': 'timeout'},
+    ),
+    'test_vipe_benchmark_supervisor.HelperIntegrationTests.test_cleanup_failures': (
+        {'mode': 'false_then_reaped'}, {'mode': 'false'}, {'mode': 'close_exception'},
+        {'mode': 'enumeration_exception'}, {'mode': 'kill_exception'}, {'mode': 'reap_exception'},
+    ),
+}
+
+
+class HelperIntegrationTests(unittest.TestCase):
+    def setUp(self):
+        import time
+        from vipe_benchmark import supervisor as sup
+        self.sup = sup
+        self.time = time
+        self.config = load()
+        self.reading = dict(device_bytes=3, artifact_bytes=5, download_bytes=7, gpu_pids=[])
+        self.operation = dict(operation='constant', args=dict(value=37))
+        self.sampler = dict(operation='constant', args=dict(value=self.reading))
+        self.life = sup.HelperLifecycle()
+
+    def call(self, **kwargs):
+        return self.sup.monitored_call(self.operation, self.time.monotonic()+kwargs.pop('seconds', 2),
+            self.sampler, self.config, kwargs.pop('peak', {}), lifecycle=self.life, **kwargs)
+
+    def test_spawn_constant_reaped_under_actual_runner(self):
+        self.assertEqual(self.call(), 37)
+        self.assertEqual(self.life.helpers, [])
+
+    def test_importable_guarded_file_control(self):
+        command = [sys.executable, '-B', '-m', 'vipe_benchmark.s1_validation_runner', '--helper-probe']
+        import os
+        env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]/'scripts'))
+        result = subprocess.run(command, capture_output=True, text=True, timeout=5, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('37; reaped', result.stdout)
+
+    def test_bootstrap_failure_and_eof_preserve_child(self):
+        from unittest.mock import patch
+        import multiprocessing.process
+        with patch.object(multiprocessing.process.BaseProcess, 'start', side_effect=OSError('bootstrap failed')):
+            with self.assertRaises(self.sup.HelperFailure) as caught:
+                self.call()
+        self.assertEqual(caught.exception.failure['phase'], 'startup')
+        self.assertEqual(self.life.helpers, [])
+        helper = self.life.start(self.operation)
+        helper.process.kill()
+        limit = self.time.monotonic()+2
+        try:
+            with self.assertRaises(self.sup.HelperFailure) as caught:
+                while self.time.monotonic() < limit:
+                    helper.poll()
+                    self.time.sleep(.005)
+            self.assertEqual(caught.exception.failure['phase'], 'transport')
+            self.assertEqual(caught.exception.failure['ownership']['pid'], helper.pid)
+        finally:
+            self.assertTrue(self.life.reap(limit))
+
+    def worker(self, code):
+        process = subprocess.Popen([sys.executable, '-c', code], start_new_session=True)
+        self.addCleanup(lambda: self.sup.stop_group(process, self.time.monotonic()+1))
+        return process
+
+    def owned(self, exited=False):
+        worker = self.worker('pass' if exited else 'import time; time.sleep(10)')
+        if exited:
+            limit = self.time.monotonic()+2
+            while self.time.monotonic() < limit:
+                if Path(f'/proc/{worker.pid}/stat').read_text().rsplit(')',1)[1].split()[0] == 'Z':
+                    break
+                self.time.sleep(.005)
+            self.assertNotIn(worker.pid, self.sup.group_processes(worker.pid))
+        self.reading['gpu_pids'] = [worker.pid]
+        peak = dict(device_bytes=11, artifact_bytes=2, download_bytes=13)
+        self.assertEqual(self.call(worker=worker, peak=peak, phase='worker_sample'),37)
+        self.assertEqual(peak,dict(device_bytes=11,artifact_bytes=5,download_bytes=13))
+
+    def test_owned_live_pid(self):
+        self.owned()
+
+    def test_owned_unreaped_exited_pid(self):
+        self.owned(exited=True)
+
+    def rejected(self, worker=None, pids=None, phase='worker_sample'):
+        self.reading['gpu_pids'] = pids or [os.getpid()]
+        from unittest.mock import patch
+        original = os.killpg
+        signaled = []
+        def kill(pgid, sig):
+            signaled.append(pgid)
+            return original(pgid,sig)
+        with patch.object(os,'killpg',side_effect=kill):
+            with self.assertRaises(self.sup.HelperFailure) as caught:
+                self.call(worker=worker,phase=phase)
+        self.assertEqual(caught.exception.failure['error_class'],'GPUOwnershipError')
+        self.assertEqual(caught.exception.failure['phase'],phase)
+        self.assertNotIn(os.getpgrp(),signaled)
+        self.assertEqual(self.life.helpers,[])
+
+    def test_foreign_only_pid(self):
+        self.rejected()
+
+    def test_mixed_owned_foreign_pid(self):
+        worker = self.worker('import time; time.sleep(10)')
+        self.rejected(worker,[worker.pid,os.getpid()])
+
+    def test_prelaunch_empty_ownership(self):
+        self.assertEqual(self.call(phase='prelaunch'),37)
+        self.rejected(phase='prelaunch')
+
+    def fake_class(self, role='task', outcome='success', mode='normal'):
+        reading = self.reading
+        class Fake:
+            def __init__(self, operation):
+                self.pid = 987654321
+                self.phase = 'fixture'
+                self.value = operation['args']['value']
+                self.selected = (isinstance(self.value, dict)) == (role == 'sample')
+                self.calls = 0
+            def poll(self):
+                if self.selected and outcome == 'error':
+                    raise ValueError('primary fixture error')
+                if self.selected and outcome == 'timeout':
+                    return False, None
+                return True, self.value
+            def close(self):
+                self.calls += 1
+                if self.selected:
+                    if mode == 'false' or (mode=='false_then_reaped' and self.calls==1):
+                        return False
+                    if mode.endswith('exception'):
+                        raise OSError(mode)
+                return True
+        return Fake
+
+    def test_cleanup_matrix(self):
+        from unittest.mock import patch
+        for case in HELPER_CASES[self.id()]:
+            with self.subTest(**case):
+                self.life = self.sup.HelperLifecycle()
+                start = self.time.monotonic()
+                with patch.object(self.sup,'_Helper',self.fake_class(**case)):
+                    if case['outcome']=='success':
+                        self.assertEqual(self.call(seconds=.12),37)
+                    else:
+                        expected = ValueError if case['outcome']=='error' else TimeoutError
+                        with self.assertRaises(expected): self.call(seconds=.12)
+                self.assertEqual(self.life.helpers,[])
+                self.assertLess(self.time.monotonic()-start,.25)
+
+    def test_cleanup_failures(self):
+        from unittest.mock import patch
+        for case in HELPER_CASES[self.id()]:
+            with self.subTest(**case):
+                self.life = self.sup.HelperLifecycle()
+                with patch.object(self.sup,'_Helper',self.fake_class(mode=case['mode'])):
+                    if case['mode']=='false_then_reaped':
+                        self.assertEqual(self.call(seconds=.12),37)
+                        self.assertEqual(self.life.helpers,[])
+                    else:
+                        with self.assertRaises(self.sup.HelperCleanupFailure): self.call(seconds=.12)
+                        self.assertTrue(self.life.helpers)
+                        if case['mode'].endswith('exception'):
+                            self.assertEqual(self.life.errors[0]['error_class'],'OSError')
+                        with patch.object(self.life.helpers[0],'close',return_value=True):
+                            self.assertTrue(self.life.reap(self.time.monotonic()+.1))
+
+    def test_primary_survives_secondary_cleanup_error(self):
+        from unittest.mock import patch
+        with patch.object(self.sup,'_Helper',self.fake_class(outcome='error',mode='close_exception')):
+            with self.assertRaisesRegex(ValueError,'primary fixture error') as caught:
+                self.call(seconds=.12)
+        self.assertTrue(caught.exception.cleanup_uncertain)
+        self.assertEqual(caught.exception.helper_cleanup_errors[0]['message'],'close_exception')
+        self.assertTrue(self.life.helpers)
+
+    def test_real_close_repeated_and_descendant_cleanup(self):
+        # A real group with a descendant exercises enumeration and group termination.
+        process = self.worker('import subprocess,sys,time; subprocess.Popen([sys.executable,"-c","import time; time.sleep(10)"]); time.sleep(10)')
+        limit = self.time.monotonic()+2
+        while len(self.sup.group_processes(process.pid))<2 and self.time.monotonic()<limit:
+            self.time.sleep(.005)
+        self.assertGreaterEqual(len(self.sup.group_processes(process.pid)),2)
+        self.assertEqual(self.sup.stop_group(process,limit),[])
+        helper = self.life.start(self.operation)
+        self.assertTrue(self.life.reap(self.time.monotonic()+2))
+        self.assertTrue(helper.close())
+        self.assertTrue(helper.close())
+
+    def test_supervisor_worker_context_and_consumed_cleanup_stop(self):
+        from unittest.mock import patch
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            events = []
+            class Disposable:
+                path = root/'ledger.jsonl'
+                jobs = {'S1-calibration-recovery-001':dict(resource='gpu')}
+                config = self.config
+                def reserve(inner,*args,**kwargs):
+                    events.append('reserve')
+                    return dict(monotonic_start=self.time.monotonic(),seconds=.6,sequence=0,event_sha256='fixture')
+                def note(inner,*args,**kwargs): pass
+                def finish(inner,job,status,elapsed,**evidence):
+                    events.append(dict(status=status,**evidence))
+            actual = self.sup.monitored_call
+            peaks=[]
+            def monitor(function,deadline,sampler,config,peak,**kwargs):
+                peaks.append(peak)
+                if kwargs['phase']=='initial_sample': return self.reading
+                if kwargs['phase']=='worker_sample':
+                    self.assertIsNotNone(kwargs['worker'])
+                    self.reading['gpu_pids']=[kwargs['worker'].pid]
+                    with patch.object(self.sup,'_Helper',self.fake_class(mode='false')):
+                        return actual(self.operation,deadline,self.sampler,config,peak,**kwargs)
+                return None
+            with patch.object(self.sup,'monitored_call',side_effect=monitor):
+                with self.assertRaises(self.sup.SupervisionFailure) as caught:
+                    self.sup.supervise(Disposable(),'S1-calibration-recovery-001',
+                        [sys.executable,'-c','import time; time.sleep(10)'],root/'out',evidence={},
+                        sample_resources=self.sampler,terminal_publisher=True,terminal_docs=root)
+            self.assertEqual(events[0],'reserve')
+            self.assertEqual(events[-1]['status'],'failed')
+            self.assertFalse(events[-1]['cleanup_confirmed'])
+            self.assertTrue(events[-1]['cleanup_uncertain'])
+            self.assertTrue(events[-1]['stop_required'])
+            self.assertEqual(events[-1]['surviving_pids'],[])
+            self.assertTrue(events[-1]['helper_ownership'])
+            self.assertTrue(all(p is peaks[0] for p in peaks))
+            self.assertTrue(caught.exception.stop_required)

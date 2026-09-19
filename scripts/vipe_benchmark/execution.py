@@ -24,6 +24,8 @@ def result_record(local, job):
     if state.get('event') != 'finish' or state.get('status') != 'complete' or not state.get('result'):
         recoveries = [e for e in ledger.events() if e['event'] == 'component_recovery_authorized'
                       and e['original_job_id'] == job]
+        if job == 'S1-calibration' and len(recoveries) > 1:
+            raise ValueError('S1 recovery must have one authorization')
         if recoveries:
             record = result_record(local, recoveries[-1]['job_id'])
             if record:
@@ -43,6 +45,9 @@ def result_record(local, job):
                         raise ValueError('recovery result differs from S3 reconstruction contract')
                     return record
         return None
+    if job == 'S1-calibration-recovery-001':
+        from .s1_recovery import resolved_result
+        resolved_result(local, load(), ledger.events(), state)
     record = state['result']
     if Path(record['path']).resolve() != path.resolve():
         raise ValueError('ledger result identity differs from allocated job')
@@ -269,10 +274,22 @@ def setup_result_record(local, environment):
     return recovered
 
 
-def common_admission(local, docs, config, validation):
+def common_admission(local, docs, config, validation, *, recovery_authorization=None):
     from .auto_annotations import validate as validate_proxy
     from .annotations import validate as validate_human
     reasons, evidence = [], {}
+    if recovery_authorization is not None:
+        from .s1_recovery import validate_binding
+        document, _ = validate_binding(local, config, recovery_authorization)
+        if file_record(validation) != document['repair_validation']:
+            raise ValueError('admission validation differs from S1 recovery authorization')
+        evidence['s1_recovery_authorization'] = recovery_authorization
+        for key in ('semantic_amendment', 'configuration', 'original_failure', 'e1_qualification',
+                    'e1_assets', 'e1_runtime', 'inputs', 'annotations', 'annotation_policy', 'annotation_review',
+                    'baseline_correction'):
+            evidence[key] = document[key]
+        evidence['original_failure_event'] = document['original_failure_event_sha256']
+        evidence['ledger_before'] = file_record(local / 'ledger.jsonl')
     for name, record in [('inputs', result_artifact(local, 'prepare', 'inputs')),
                          ('annotations', result_artifact(local, 'annotations', 'annotations')),
                          ('runtime', qualification_record(local))]:
@@ -308,10 +325,21 @@ def common_admission(local, docs, config, validation):
     result = dict(status='blocked' if reasons else 'admitted', reasons=reasons, evidence=evidence,
                   gpu=host, resources=storage, candidates={k: v['status'] for k, v in components(local).items()},
                   consumption=Ledger(local / 'ledger.jsonl', config).totals())
-    sequence = len(list(docs.glob('admission-*.json'))) + 1
-    path = docs / f'admission-{sequence:03d}.json'
-    write_json(path, result)
-    Ledger(local / 'ledger.jsonl', config).note('admission', evidence=file_record(path))
+    ledger = Ledger(local / 'ledger.jsonl', config)
+    with ledger.locked() as (stream, events):
+        if recovery_authorization is not None:
+            # Recheck under the append lock; only one successful admission wins.
+            document, _ = validate_binding(local, config, recovery_authorization, events=events)
+            prior = [e for e in events if e['event'] == 'admission'
+                     and read_json(e['evidence']['path']).get('evidence', {}).get(
+                         's1_recovery_authorization') == recovery_authorization
+                     and read_json(e['evidence']['path']).get('status') == 'admitted']
+            if prior:
+                raise ValueError('S1 successful admission already exists')
+        sequence = len(list(docs.glob('admission-*.json'))) + 1
+        path = docs / f'admission-{sequence:03d}.json'
+        write_json(path, result)
+        ledger._append(stream, events, dict(event='admission', evidence=file_record(path)))
     return result
 
 
@@ -411,6 +439,18 @@ def component_recovery_request(local, config, job):
     if len(registered) != 1:
         raise ValueError('component recovery lacks registered authorization')
     event = registered[0]
+    if event['original_job_id'].startswith('S1-'):
+        from .s1_recovery import validate_binding
+        document, request = validate_binding(local, config, event['authorization'])
+        if (job != document['job_id'] or event['original_job_id'] != document['original_job_id']
+                or event['original_failure_event_sha256'] != document['original_failure_event_sha256']):
+            raise ValueError('registered S1 recovery binding differs from authorization')
+        from .s1_recovery import BINDINGS, admitted_event
+        if any(event.get(k) != document[k] for k in BINDINGS):
+            raise ValueError('registered S1 evidence changed')
+        if admitted_event(events, event['authorization'], document) != event['admission']:
+            raise ValueError('registered S1 admission changed')
+        return dict(request, job_id=job, recovery_authorization=event['authorization'])
     request, reasons = make_request(local, event['original_job_id'], config)
     if reasons:
         raise ValueError('; '.join(reasons))
@@ -435,6 +475,10 @@ def reconstruction_request(local, config, job):
         validate_diagnostic_review(document['memory_diagnostic_review'])
         request.update(memory_cleanup=CLEANUP, memory_diagnostic_review=document['memory_diagnostic_review'])
     return request
+
+
+def s1_sampling_operation(local):
+    return dict(operation='resources', args=dict(local=str(local)))
 
 
 def dispatch(local, docs, config, request, *, operation='component', checkpoint=False, resume_checkpoint=False):
@@ -472,6 +516,9 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
         result = read_json(output / 'result.json')
         if result.get('status') != 'complete':
             raise ValueError('worker did not complete its explicit result contract')
+        if job == 'S1-calibration-recovery-001':
+            from .s1_recovery import accept_result
+            return accept_result(local, config, request, result, output)
         if operation == 'component' and request['component'].startswith(('S', 'D')):
             expected = (96 if job == 'S3-memory-diagnostic-001' else 2 if job == 'R-S' else 1 if job == 'R-D' else
                         510 if request.get('branch') == 'calibration' else 840 if request.get('branch') == 'reconstruction' else 30)
@@ -481,11 +528,23 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
                 for field in ('instances', 'semantic_static', 'static', 'depth'):
                     if field in row:
                         verify_record(row[field])
+    evidence = dict(request=file_record(request_path), worker=file_record(ROOT / 'scripts/basketball_vipe_worker.py'))
+    if job == 'S1-calibration-recovery-001':
+        from .s1_recovery import event_ref
+        event = next(e for e in ledger.events() if e['event'] == 'component_recovery_authorized' and e['job_id'] == job)
+        evidence.update({k: event[k] for k in ('authorization', 'admission', 'semantic_amendment', 'repair_validation', 'configuration', 'baseline_correction')})
+        evidence['authorization_event'] = event_ref(event)
+    def publish(reservation, outcome):
+        from .s1_recovery import terminal_receipt
+        return terminal_receipt(local, docs, config, request['recovery_authorization'],
+                                reservation=reservation, outcome=outcome)
     result = supervise(ledger, job, command, local / 'jobs' / suffix,
-        evidence=dict(request=file_record(request_path), worker=file_record(ROOT / 'scripts/basketball_vipe_worker.py')),
-        sample_resources=lambda: resources(local, gpu=device_monitored),
-        validate_result=validate, poll_seconds=2., checkpoint=checkpoint, resume_checkpoint=resume_checkpoint)
-    write_json(docs / (suffix + '.json'), dict(status='complete', result=file_record(local / 'jobs' / suffix / 'result.json')))
+        evidence=evidence,
+        sample_resources=s1_sampling_operation(local) if job == 'S1-calibration-recovery-001' else lambda: resources(local, gpu=device_monitored),
+        validate_result=validate, poll_seconds=.1 if job == 'S1-calibration-recovery-001' else 2., checkpoint=checkpoint, resume_checkpoint=resume_checkpoint,
+        terminal_publisher=publish if job == 'S1-calibration-recovery-001' else None, terminal_docs=docs)
+    if job != 'S1-calibration-recovery-001':
+        write_json(docs / (suffix + '.json'), dict(status='complete', result=file_record(local / 'jobs' / suffix / 'result.json')))
     return result
 
 
@@ -580,3 +639,40 @@ def execute_matrix(local, docs, config, validation):
         component_recovery_authorizations=component_recoveries))
     shutil.copyfile(result['report']['path'], docs / 'report.md')
     return result
+
+
+def execute_s1_recovery(local, docs, config, authorization):
+    """One controller lifecycle; no matrix/report follow-up and no replay."""
+    from .s1_recovery import JOB, validate_binding, terminal_receipt
+    ledger = Ledger(local / 'ledger.jsonl', config)
+    # Replay is rejected before publishing another admission/receipt.
+    error = None
+    primary = None
+    supplied = authorization
+    try:
+        if not isinstance(authorization, dict):
+            authorization = file_record(authorization)
+        document, _ = validate_binding(local, config, authorization)
+        registered = [e for e in ledger.events() if e['event'] == 'component_recovery_authorized' and e['job_id'] == JOB]
+        if not registered:
+            admission = common_admission(local, docs, config,
+                Path(document['repair_validation']['path']), recovery_authorization=authorization)
+            if admission['status'] != 'admitted':
+                raise ValueError('; '.join(admission['reasons']))
+            ledger.authorize_component_recovery(authorization)
+        elif len(registered) != 1 or registered[0]['authorization'] != authorization:
+            raise ValueError('different S1 authorization already registered')
+        return dispatch(local, docs, config, component_recovery_request(local, config, JOB))
+    except BaseException as exc:
+        primary = exc
+        error = f'{type(exc).__name__}: {exc}'
+        raise
+    finally:
+        try:
+            # Consumed outcomes belong exclusively to the charged supervisor.
+            if not any(e.get('job_id') == JOB and e['event'] == 'reserve' for e in ledger.events()):
+                terminal_receipt(local, docs, config, authorization if isinstance(authorization, dict) else supplied, error=error)
+        except BaseException as publication_error:
+            if primary is None:
+                raise
+            primary.add_note(f'S1 terminal publication failed: {publication_error}')

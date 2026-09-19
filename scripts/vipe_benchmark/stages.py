@@ -117,6 +117,8 @@ def segment(request, output, config):
         if component != 'S3' or branch != 'reconstruction' or request['memory_cleanup'] != CLEANUP:
             raise ValueError('unadmitted memory cleanup recipe')
         observer = MemoryObserver(torch, output, diagnostic=diagnostic)
+    if request['job_id'] == 'S1-calibration-recovery-001':
+        write_json(output / 'initial-runtime.json', runtime)
     adapter = build_backend(component, request['assets'], device='cuda')
     if observer:
         adapter.memory_observer = observer
@@ -124,50 +126,84 @@ def segment(request, output, config):
     size = 1 if branch == 'calibration' else 2
     for offset in range(0, len(identities), size):
         group = identities[offset:offset + size]
-        rgbs = [loader.load(i) for i in group]
-        footprints = [load_array(loader.row(i)['valid']) for i in group]
-        torch.cuda.synchronize()
-        tick = time.monotonic()
-        if observer:
-            observer.pair = offset//2+1
-            observer.phase('before_pair')
-        predictions = adapter.segment(rgbs, footprints, frame_ids=[i.frame for i in group])
-        if observer:
-            observer.cleanup()
-            observer.phase('after_pair_cleanup')
-        torch.cuda.synchronize()
-        elapsed = time.monotonic() - tick
-        native_seconds += elapsed
-        if len(predictions) != size:
-            raise ValueError('missing singleton/pair output')
-        for identity, prediction, valid in zip(group, predictions, footprints):
-            parent = loader.row(identity)
-            validate_instances(prediction.labels, prediction.semantics, valid)
-            usable = prediction.static(np.zeros_like(valid))
-            validate_static(usable, valid)
-            stem = output / identity.key()
-            row = source_row(identity, parent)
-            row.update(instances=array_file(stem.with_suffix('.npy'), prediction.labels),
-                semantics=prediction.semantics, semantic_static=png_file(stem.with_suffix('.png'), usable),
-                metadata=prediction.metadata, final_static='assembled once in mask aggregation with M0',
-                native_group_wall_seconds=elapsed, group_size=size)
-            if getattr(prediction, 'diagnostics', None):
-                path = stem.with_name(stem.name + '-intermediates.npz')
-                arrays = prediction.diagnostics
-                if any(np.asarray(v).dtype.hasobject for v in arrays.values()):
-                    raise ValueError('native intermediates must be non-pickled numeric arrays')
-                with path.open('xb') as stream:
-                    np.savez_compressed(stream, **arrays)
-                row['diagnostics'] = file_record(path)
-            rows.append(row)
-        if offset == 0:
-            if request.get('runtime', {}).get('inventory'):
-                from .runtime_capture import loaded_runtime
-                runtime['loaded_files'] = loaded_runtime(output / 'loaded-runtime.json')
-                runtime['installed_inventory'] = verify_record(request['runtime']['inventory'])
-            write_json(output / 'first-result-qualification.json', dict(status='passed',
-                count=len(rows), rows=rows, runtime=runtime,
-                note='first real predictions validated inside the allocated job'))
+        prediction = None
+        failure_stage = 'input_load'
+        if component == 'S1' and hasattr(getattr(adapter, 'detector', None), 'reset_capture'):
+            adapter.detector.reset_capture()
+        try:
+            rgbs = [loader.load(i) for i in group]
+            footprints = [load_array(loader.row(i)['valid']) for i in group]
+            torch.cuda.synchronize()
+            tick = time.monotonic()
+            if observer:
+                observer.pair = offset//2+1
+                observer.phase('before_pair')
+            failure_stage = 'adapter'
+            predictions = adapter.segment(rgbs, footprints, frame_ids=[i.frame for i in group])
+            if observer:
+                observer.cleanup()
+                observer.phase('after_pair_cleanup')
+            torch.cuda.synchronize()
+            elapsed = time.monotonic() - tick
+            native_seconds += elapsed
+            failure_stage = 'output_contract'
+            if len(predictions) != size:
+                raise ValueError('missing singleton/pair output')
+            for identity, prediction, valid in zip(group, predictions, footprints):
+                parent = loader.row(identity)
+                validate_instances(prediction.labels, prediction.semantics, valid)
+                usable = prediction.static(np.zeros_like(valid))
+                validate_static(usable, valid)
+                stem = output / identity.key()
+                row = source_row(identity, parent)
+                failure_stage = 'serialization'
+                row.update(instances=array_file(stem.with_suffix('.npy'), prediction.labels),
+                    semantics=prediction.semantics, semantic_static=png_file(stem.with_suffix('.png'), usable),
+                    metadata=prediction.metadata, final_static='assembled once in mask aggregation with M0',
+                    native_group_wall_seconds=elapsed, group_size=size)
+                if getattr(prediction, 'diagnostics', None):
+                    path = stem.with_name(stem.name + '-intermediates.npz')
+                    arrays = prediction.diagnostics
+                    if any(np.asarray(v).dtype.hasobject for v in arrays.values()):
+                        raise ValueError('native intermediates must be non-pickled numeric arrays')
+                    with path.open('xb') as stream:
+                        np.savez_compressed(stream, **arrays)
+                    row['diagnostics'] = file_record(path)
+                if request['job_id'] == 'S1-calibration-recovery-001':
+                    write_json(stem.with_name(stem.name + '-produced-row.json'), row)
+                    from .s1_evidence import qualify_row
+                    failure_stage = 'first_result' if offset == 0 else 'output_qualification'
+                    checks = qualify_row(row, request, first=offset == 0, loader=loader)
+                    failure_stage = 'partial_publication'
+                    write_json(stem.with_name(stem.name + '-qualified-row.json'), row)
+                rows.append(row)
+            if offset == 0:
+                if request.get('runtime', {}).get('inventory'):
+                    from .runtime_capture import loaded_runtime
+                    runtime['loaded_files'] = loaded_runtime(output / 'loaded-runtime.json')
+                    runtime['installed_inventory'] = verify_record(request['runtime']['inventory'])
+                if request['job_id'] == 'S1-calibration-recovery-001':
+                    from .s1_evidence import first_record, qualify_runtime
+                    failure_stage = 'runtime_qualification'
+                    write_json(output / 'partial-runtime.json', runtime)
+                    qualify_runtime(runtime, request)
+                    failure_stage = 'first_result_publication'
+                    first_record(request, output, 'passed', rows=rows, runtime=runtime,
+                                 checks=checks, raw=[rows[0]['diagnostics']])
+                else:
+                    write_json(output / 'first-result-qualification.json', dict(status='passed',
+                        count=len(rows), rows=rows, runtime=runtime,
+                        note='first real predictions validated inside the allocated job'))
+        except BaseException as exc:
+            if component == 'S1':
+                from .s1_evidence import preserve_failure
+                try:
+                    preserve_failure(request, output, group[0], exc, adapter=adapter,
+                                     prediction=prediction, stage=failure_stage,
+                                     parent=loader.row(group[0]), runtime=runtime)
+                except BaseException as persistence_error:
+                    exc.add_note(f'S1 evidence publication failed: {persistence_error}')
+            raise
         print(f'{request["job_id"]}: {len(rows)}/{len(identities)} outputs', flush=True)
     validate_membership(rows, identities)
     from .native_helpers import finalize_evidence
@@ -175,6 +211,10 @@ def segment(request, output, config):
     result = dict(status='complete', component=component, branch=branch, job_id=request['job_id'], rows=rows,
         configuration=file_record(output / 'config.json'), runtime=runtime, native_wall_seconds=native_seconds,
         peak_allocated_bytes=torch.cuda.max_memory_allocated(), peak_reserved_bytes=torch.cuda.max_memory_reserved())
+    if request['job_id'] == 'S1-calibration-recovery-001':
+        result['first_result'] = file_record(output / 'first-result-qualification.json')
+        from .s1_evidence import validate_result
+        validate_result(result, request, config)
     if observer:
         result['memory'] = observer.finish()
         result['timing_scope'] = 'memory diagnostic only; excluded from benchmark timing' if diagnostic else 'reconstruction including validated lifecycle cleanup and memory observation'
@@ -208,6 +248,8 @@ def predict_depth(request, output, config):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=False)
     write_json(output / 'config.json', request)
+    if request['job_id'] == 'S1-calibration-recovery-001':
+        write_json(output / 'initial-runtime.json', runtime)
     adapter = build_backend(component, request['assets'], device='cuda')
     predictions, result_rows = {}, []
     for row in sorted(rows, key=lambda r: r['identity']['camera']):

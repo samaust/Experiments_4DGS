@@ -161,8 +161,30 @@ def execute(args, config):
         dispatch(local, docs, config, recovery_request(local, authorization), operation='setup')
     elif args.command == 'component-recovery':
         from vipe_benchmark.execution import common_admission, component_recovery_request
-        authorization = file_record(args.authorization)
-        document = read_json(args.authorization)
+        from vipe_benchmark.s1_recovery import JOB, terminal_receipt
+        if getattr(args, 'job', None) == JOB:
+            from vipe_benchmark.execution import execute_s1_recovery
+            return execute_s1_recovery(local, docs, config, args.authorization)
+        try:
+            authorization = file_record(args.authorization)
+            document = read_json(args.authorization)
+            if (not isinstance(document, dict)
+                    or not isinstance(document.get('original_job_id'), str)
+                    or not isinstance(document.get('job_id'), str)
+                    or not isinstance(document.get('schema'), str)):
+                raise ValueError('typed recovery authorization object required')
+        except (OSError, ValueError, TypeError) as exc:
+            try:
+                terminal_receipt(local, docs, config, args.authorization, error=str(exc))
+            except Exception as secondary:
+                exc.add_note(f'block publication failed: {type(secondary).__name__}: {secondary}')
+            raise
+        from vipe_benchmark.s1_recovery import SCHEMA
+        s1 = document.get('original_job_id', '').startswith('S1-') or document.get('schema') == SCHEMA
+        if s1:
+            from vipe_benchmark.execution import execute_s1_recovery
+            execute_s1_recovery(local, docs, config, authorization)
+            return
         record = common_admission(local, docs, config, Path(verify_record(document['repair_validation'])['path']))
         if record['status'] != 'admitted':
             raise ValueError('; '.join(record['reasons']))
@@ -239,6 +261,7 @@ def main():
     p = sub.add_parser('setup-recovery')
     p.add_argument('--authorization', type=Path, required=True)
     p = sub.add_parser('component-recovery')
+    p.add_argument('--job', choices=['S1-calibration-recovery-001'])
     p.add_argument('--authorization', type=Path, required=True)
     p = sub.add_parser('reconstruction-recovery')
     p.add_argument('--authorization', type=Path, required=True)

@@ -192,7 +192,51 @@ def normalize_phrase(phrase):
     raise BackendError(f'unresolved native semantic phrase: {phrase!r}')
 
 
-def detection_rows(boxes, scores, phrases):
+def s1_class_assignments(token_scores, tokenized, tokenizer, native_phrases, text_threshold):
+    """S0's period-delimited token sums, recorded separately from native phrases."""
+    values = np.asarray(token_scores)
+    ids = tokenized['input_ids']
+    if (values.ndim != 2 or values.shape[0] != len(native_phrases)
+            or values.shape[1] < len(ids) or not np.isfinite(values).all()
+            or np.any((values < 0) | (values > 1))):
+        raise BackendError('invalid S1 token score evidence')
+    spans, current = [], []
+    for index, token in enumerate(ids):
+        if token in (101, 102):
+            continue
+        if token == 1012 and current:
+            spans.append(current)
+            current = []
+        else:
+            current.append(index)
+    classes = [normalize_phrase(tokenizer.decode([ids[i] for i in span])) for span in spans]
+    if current or classes != ['person', 'basketball']:
+        raise BackendError('S1 tokenizer does not match the verified S0 phrase layout')
+    results = []
+    for scores, native in zip(values, native_phrases):
+        sums = [sum(float(scores[i]) for i in span) for span in spans]
+        winner = sums.index(max(sums))  # S0: first phrase wins exact ties.
+        reasons = []
+        try:
+            normalized = normalize_phrase(native)
+        except BackendError:
+            normalized = None
+            reasons.append('native_phrase_unresolved')
+        if normalized is not None and normalized != classes[winner]:
+            reasons.append('native_derived_disagreement')
+        if sums[0] == sums[1]:
+            reasons.append('exact_phrase_sum_tie')
+        if not any(float(scores[i]) > text_threshold for i in spans[winner]):
+            reasons.append('winner_below_native_text_threshold')
+        results.append(dict(policy='plan031-s1-s0-token-sum-v1', derived_class=classes[winner],
+            phrase_classes=classes, phrase_token_indices=spans, phrase_token_sums=sums,
+            phrase_token_scores=[[float(scores[i]) for i in span] for span in spans],
+            winner_index=winner, margin=abs(sums[0] - sums[1]), tie_break='first_caption_phrase',
+            ambiguous=bool(reasons), ambiguity_reasons=reasons))
+    return results
+
+
+def detection_rows(boxes, scores, phrases, assignments=None):
     boxes, scores = np.asarray(boxes, np.float64), np.asarray(scores, np.float64)
     if boxes.size == 0:
         boxes = boxes.reshape(0, 4)
@@ -202,8 +246,11 @@ def detection_rows(boxes, scores, phrases):
         raise BackendError('255-object capacity exceeded before native integer casting')
     if not np.isfinite(boxes).all() or not np.isfinite(scores).all() or np.any(boxes[:, 2:] <= boxes[:, :2]):
         raise BackendError('native detector returned nonfinite or degenerate evidence')
+    if assignments is not None and len(assignments) != len(phrases):
+        raise BackendError('derived assignments differ in length')
     return [dict(id=i + 1, index=i, box=box.tolist(), score=float(score),
-                 native_class=str(phrase), **{'class': normalize_phrase(phrase)})
+                 native_class=str(phrase), **({'class': normalize_phrase(phrase)} if assignments is None
+                    else {'class': assignments[i]['derived_class'], 'class_assignment': assignments[i]}))
             for i, (box, score, phrase) in enumerate(zip(boxes, scores, phrases))]
 
 
@@ -316,34 +363,89 @@ def lossless_pair_files(images):
 
 
 class GroundingDetector:
-    def __init__(self, model, transform, predict, runtime, text_threshold):
+    def __init__(self, model, transform, predict, runtime, text_threshold, *, s1_assignment=False):
         self.model, self.transform, self.native_predict = model, transform, predict
         self.runtime, self.text_threshold = runtime, text_threshold
+        self.s1_assignment = s1_assignment
         self.diagnostics = {}
         self.metadata = dict(processor='native PIL RandomResize([800], max_size=1333), ImageNet',
                              caption='person.basketball.', box_threshold=.35, text_threshold=text_threshold,
                              invocation_precision='float32')
 
+    def reset_capture(self):
+        self.diagnostics = {}
+        self.failure_stage = 'pre_forward'
+        self.forward_count = 0
+        self.native_phrases = []
+        self.assignments = []
+        for key in ('caption_token_ids', 'actual_processed_shape'):
+            self.metadata.pop(key, None)
+
     def __call__(self, rgb):
+        self.reset_capture()
+        try:
+            return self._predict(rgb)
+        except BaseException as exc:
+            if self.s1_assignment:
+                exc.s1_evidence = self.evidence()
+            raise
+
+    def evidence(self):
+        return dict(arrays=self.diagnostics.copy(), failure_stage=self.failure_stage,
+                    native_phrases=self.native_phrases, assignments=self.assignments,
+                    forward_count=self.forward_count)
+
+    def _predict(self, rgb):
         from PIL import Image
         image, _ = self.transform(Image.fromarray(rgb), None)
-        captured = {}
+        captured = self.diagnostics
+        captured['detector_rgb'] = _numpy(image).copy()
+        self.failure_stage = 'native_forward'
         def observe(_args, _kwargs, output):
+            self.forward_count += 1
             captured['detector_raw_token_logits'] = _numpy(output['pred_logits'])[0].copy()
             captured['detector_raw_boxes_cxcywh'] = _numpy(output['pred_boxes'])[0].copy()
+            if self.s1_assignment:
+                captured['detector_token_scores'] = _numpy(output['pred_logits'].cpu().sigmoid())[0].copy()
         with _capture_method(self.model, 'forward', observe), self.runtime.inference():
             boxes, scores, phrases = self.native_predict(
                 self.model, image, 'person.basketball.', .35, self.text_threshold,
                 device=self.runtime.device)
-        boxes = _numpy(boxes).astype(np.float64).reshape(-1, 4)
+        self.failure_stage = 'native_alignment'
+        captured['detector_native_boxes_cxcywh'] = _numpy(boxes).copy()
+        captured['detector_selected_scores'] = _numpy(scores).reshape(-1).copy()
+        self.native_phrases = list(phrases)
+        if self.s1_assignment:
+            encoded = [p.encode('utf-8') for p in phrases]
+            captured['detector_native_phrase_utf8'] = np.frombuffer(b''.join(encoded), dtype=np.uint8).copy()
+            captured['detector_native_phrase_offsets'] = np.asarray([0, *np.cumsum([len(p) for p in encoded])], dtype=np.int64)
+        native_boxes = _numpy(boxes).reshape(-1, 4)
+        assignments = None
+        if self.s1_assignment:
+            token_scores = captured['detector_token_scores']
+            selected = np.flatnonzero(token_scores.max(axis=1) > .35)
+            captured['detector_selected_query_indices'] = selected
+            if (self.forward_count != 1
+                    or not np.array_equal(captured['detector_raw_boxes_cxcywh'][selected], native_boxes)
+                    or not np.array_equal(token_scores[selected].max(axis=1), _numpy(scores).reshape(-1))):
+                raise BackendError('S1 native query/box/score alignment changed')
+            self.failure_stage = 'token_layout_assignment'
+            tokenized = self.model.tokenizer('person.basketball.')
+            captured['detector_token_ids'] = np.asarray(tokenized['input_ids'], dtype=np.int64)
+            assignments = s1_class_assignments(token_scores[selected], tokenized,
+                self.model.tokenizer, phrases, self.text_threshold)
+            self.assignments = assignments
+            self.metadata['class_assignment_policy'] = 'plan031-s1-s0-token-sum-v1'
+            self.metadata['caption_token_ids'] = list(tokenized['input_ids'])
+        boxes = native_boxes.astype(np.float64)
         h, w = rgb.shape[:2]
         boxes *= [w, h, w, h]
         center, size = boxes[:, :2].copy(), boxes[:, 2:].copy()
         boxes = np.concatenate((center - size / 2, center + size / 2), axis=1)
         self.metadata['actual_processed_shape'] = list(image.shape[-2:])
-        self.diagnostics = dict(captured, detector_rgb=_numpy(image).copy(),
-            detector_selected_boxes_xyxy=boxes.copy(), detector_selected_scores=_numpy(scores).reshape(-1).copy())
-        return detection_rows(boxes, _numpy(scores).reshape(-1), phrases)
+        captured['detector_selected_boxes_xyxy'] = boxes.copy()
+        self.failure_stage = 'detection_contract'
+        return detection_rows(boxes, _numpy(scores).reshape(-1), phrases, assignments)
 
 
 class RTDetrDetector:
@@ -576,8 +678,19 @@ class LegacyStandaloneBackend:
         self.runtime, self.provenance = runtime, provenance or {}
 
     def segment(self, images, valid, *, frame_ids):
+        if hasattr(self.detector, 'reset_capture'):
+            self.detector.reset_capture()
+        try:
+            return self._segment(images, valid, frame_ids=frame_ids)
+        except BaseException as exc:
+            if hasattr(self.detector, 'evidence') and not hasattr(exc, 's1_evidence'):
+                exc.s1_evidence = self.detector.evidence()
+            raise
+
+    def _segment(self, images, valid, *, frame_ids):
         _pair(images, valid, frame_ids)
         rows = self.detector(images[0])
+        self.detector.failure_stage = 'sam_tracking_contract'
         labels = np.zeros(valid[0].shape, np.int32)
         semantics, skipped = {}, []
         h, w = labels.shape
@@ -597,12 +710,18 @@ class LegacyStandaloneBackend:
                     self.sam.set_image(images[0])  # historical reset_image=True
                     masks, scores, logits = self.sam.predict(
                         point_coords=None, point_labels=None, box=box, multimask_output=True)
+                    if hasattr(self.detector, 'diagnostics'):
+                        for key, value in [('masks', masks), ('scores', scores), ('logits', logits)]:
+                            self.detector.diagnostics[f'sam_{object_id}_initial_{key}'] = _numpy(value).copy()
                     scores = _numpy(scores).reshape(-1)
                     if not len(scores) or not np.isfinite(scores).all():
                         raise BackendError('SAM-B returned invalid mask IoU scores')
                     selected = int(np.argmax(scores))
                     masks, scores, _ = self.sam.predict(point_coords=None, point_labels=None,
                         box=box[None], mask_input=_numpy(logits)[selected][None], multimask_output=True)
+                    if hasattr(self.detector, 'diagnostics'):
+                        self.detector.diagnostics[f'sam_{object_id}_refined_masks'] = _numpy(masks).copy()
+                        self.detector.diagnostics[f'sam_{object_id}_refined_scores'] = _numpy(scores).copy()
                     scores = _numpy(scores).reshape(-1)
                     if not len(scores) or not np.isfinite(scores).all():
                         raise BackendError('SAM-B returned invalid refined mask IoU scores')
@@ -1006,7 +1125,7 @@ class DepthProBackend:
         return _finish_depth(values, valid, raw, metadata)
 
 
-def _grounding(bundle, runtime, text_threshold):
+def _grounding(bundle, runtime, text_threshold, *, s1_assignment=False):
     source = 'grounding_source'
     models = bundle.module('groundingdino.models', source)
     config = bundle.module('groundingdino.util.slconfig', source).SLConfig.fromfile(bundle['grounding_config'])
@@ -1023,7 +1142,8 @@ def _grounding(bundle, runtime, text_threshold):
     transform = transforms.Compose([transforms.RandomResize([800], max_size=1333), transforms.ToTensor(),
         transforms.Normalize([.485, .456, .406], [.229, .224, .225])])
     predict = bundle.module('groundingdino.util.inference', source).predict
-    detector = GroundingDetector(model, transform, predict, runtime, text_threshold)
+    detector = GroundingDetector(model, transform, predict, runtime, text_threshold,
+                                 s1_assignment=s1_assignment)
     detector.metadata['state_dict_missing_keys'] = list(incompatible.missing_keys)
     detector.metadata['state_dict_unexpected_keys'] = list(incompatible.unexpected_keys)
     return detector
@@ -1122,7 +1242,7 @@ def _build_native(component, bundle, runtime):
     if component == 'S0':
         return _legacy_vipe_segmentation(bundle, runtime)
     if component == 'S1':
-        detector = _grounding(bundle, runtime, .5)
+        detector = _grounding(bundle, runtime, .5, s1_assignment=True)
         sam = bundle.module('segment_anything', 'sam_source')
         predictor = sam.SamPredictor(sam.sam_model_registry['vit_b'](
             checkpoint=bundle['sam_checkpoint']).to(device=runtime.device, dtype=torch.float32).eval())

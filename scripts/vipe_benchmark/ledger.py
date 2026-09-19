@@ -120,6 +120,9 @@ class Ledger:
                 raise ValueError('job already consumed or accounted for; no automatic retry')
             if any(r['event'] == 'reserve' for r in states.values()):
                 raise ValueError('unreconciled active attempt; refusing concurrent dispatch')
+            if job_id == 'S1-calibration-recovery-001':
+                from .s1_recovery import reservation_binding
+                reservation_binding(self.path.parent, self.config, events, evidence, command=command)
             spec = allocated[job_id]
             resource = spec['resource']
             total = self.totals(events)[resource]['elapsed_seconds']
@@ -226,16 +229,20 @@ class Ledger:
                                                      authorization=authorization))
 
     def authorize_component_recovery(self, authorization):
-        """One approved fixed-configuration retry, retaining original failures."""
+        """One explicit recovery, retaining original failures and all charges."""
+        from .s1_recovery import SCHEMA, validate_binding
         document = read_json(verify_record(authorization)['path'])
         original_id = document.get('original_job_id', '')
+        amended = document.get('schema') == SCHEMA
+        if not amended and original_id.startswith('S1-'):
+            raise ValueError('S1 requires calibration-only semantic amendment authorization; reconstruction blocked')
         if not re.fullmatch(r'S[0-4]-(calibration|reconstruction)', original_id):
             raise ValueError('component recovery requires an original segmentation matrix arm')
         spec = jobs(self.config)[original_id]
-        required = dict(schema='vipe-benchmark-component-recovery/v1', attempts_limit=1,
+        required = dict(schema=SCHEMA if amended else 'vipe-benchmark-component-recovery/v1', attempts_limit=1,
             seconds_limit=spec['seconds'], reset_previous_consumption=False,
             gpu_total_seconds_limit=self.config['gpu_total_seconds_limit'],
-            changes_to_prescribed_configuration=False, unrelated_attempts_reopened=False)
+            changes_to_prescribed_configuration=amended, unrelated_attempts_reopened=False)
         if any(document.get(k) != v for k, v in required.items()) or not document.get('authorization'):
             raise ValueError('exact explicit component recovery authorization required')
         validation = read_json(verify_record(document['repair_validation'])['path'])
@@ -244,6 +251,12 @@ class Ledger:
         for source in validation['sources']:
             verify_record(source)
         with self.locked() as (stream, events):
+            extra = {}
+            if amended:
+                from .s1_recovery import admitted_event, BINDINGS
+                document, _ = validate_binding(self.path.parent, self.config, authorization, events=events)
+                extra = {k: document[k] for k in BINDINGS}
+                extra['admission'] = admitted_event(events, authorization, document)
             prior = [e for e in events if e['event'] == 'component_recovery_authorized'
                      and e['original_job_id'] == original_id]
             if any(e['job_id'] == document.get('job_id') for e in prior):
@@ -268,7 +281,7 @@ class Ledger:
                 raise ValueError('cumulative GPU allocation exhausted')
             return self._append(stream, events, dict(event='component_recovery_authorized',
                 job_id=document['job_id'], original_job_id=original_id, authorization=authorization,
-                original_failure_event_sha256=original['event_sha256']))
+                original_failure_event_sha256=original['event_sha256'], **extra))
 
     def authorize_reconstruction_recovery(self, authorization):
         document = read_json(verify_record(authorization)['path'])

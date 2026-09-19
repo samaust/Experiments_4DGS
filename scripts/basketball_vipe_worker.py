@@ -42,12 +42,25 @@ def main():
         except BaseException as exc:
             from vipe_benchmark.files import write_json
             import traceback
-            args.output.mkdir(parents=True, exist_ok=True)
             reason = f'{type(exc).__name__}: {exc}'
-            write_json(args.output / 'failure.json', dict(status='failed', reason=reason,
-                traceback=traceback.format_exc(), job_id=request.get('job_id'),
-                requires_permission_review=isinstance(exc, (PermissionError, ConnectionError)) or
-                    any(word in reason.lower() for word in ['permission', 'network', 'connection', 'urlopen', 'cuda unavailable'])))
+            extra = {}
+            if request.get('job_id') == 'S1-calibration-recovery-001':
+                from vipe_benchmark.s1_evidence import preserve_failure
+                if not hasattr(exc, 's1_failure_record'):
+                    try:
+                        preserve_failure(request, args.output, None, exc, stage='worker_before_result')
+                    except BaseException as persistence_error:
+                        extra['evidence_publication_error'] = str(persistence_error)
+                extra.update(first_result=getattr(exc, 's1_first_result', None),
+                             failure_evidence=getattr(exc, 's1_failure_record', None))
+            try:
+                args.output.mkdir(parents=True, exist_ok=True)
+                write_json(args.output / 'failure.json', dict(status='failed', reason=reason, **extra,
+                    traceback=traceback.format_exc(), job_id=request.get('job_id'),
+                    requires_permission_review=isinstance(exc, (PermissionError, ConnectionError)) or
+                        any(word in reason.lower() for word in ['permission', 'network', 'connection', 'urlopen', 'cuda unavailable'])))
+            except BaseException as persistence_error:
+                exc.add_note(f'failure.json publication failed: {persistence_error}')
             raise
     else:
         from vipe_benchmark.annotations import validate
