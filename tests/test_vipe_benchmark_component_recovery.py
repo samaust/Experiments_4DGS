@@ -59,9 +59,9 @@ class ComponentRecoveryTests(unittest.TestCase):
             self.ledger.authorize_component_recovery(self.authorization(job_id='S2-reconstruction-recovery-002'))
 
     def test_scope_validation_and_cumulative_cap_are_not_relaxed(self):
-        for changes in (dict(attempts_limit=2), dict(seconds_limit=5401),
-                        dict(reset_previous_consumption=True), dict(changes_to_prescribed_configuration=True)):
-            with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, 'exact explicit'):
+        for case in SUBTEST_CASES[self.id()]:
+            changes = {case['field']: case['value']}
+            with self.subTest(**case), self.assertRaisesRegex(ValueError, 'exact explicit'):
                 self.ledger.authorize_component_recovery(self.authorization(**changes))
         with self.assertRaisesRegex(ValueError, 'original cleaned-up'):
             self.ledger.authorize_component_recovery(self.authorization(original_failure_event_sha256='0'*64))
@@ -79,6 +79,20 @@ class ComponentRecoveryTests(unittest.TestCase):
         with patch('vipe_benchmark.execution.make_request', return_value=(None,['runtime missing'])):
             with self.assertRaisesRegex(ValueError, 'runtime missing'):
                 component_recovery_request(self.root, self.config, 'S2-reconstruction-recovery-001')
+
+
+
+
+
+# Literal ordered callback contract consumed without importing this module.
+SUBTEST_CASES = {
+    'test_vipe_benchmark_component_recovery.ComponentRecoveryTests.test_scope_validation_and_cumulative_cap_are_not_relaxed': [
+        {'field': 'attempts_limit', 'value': 2},
+        {'field': 'seconds_limit', 'value': 5401},
+        {'field': 'reset_previous_consumption', 'value': True},
+        {'field': 'changes_to_prescribed_configuration', 'value': True},
+    ],
+}
 
 
 if __name__ == '__main__':

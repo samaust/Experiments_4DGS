@@ -163,5 +163,13 @@ class PublicationTests(unittest.TestCase):
                 finalize(audit_path, notes_path, output, PRIMARY_ID)
 
 
+
+
+
+# Literal ordered callback contract consumed without importing this module.
+SUBTEST_CASES = {
+}
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -193,5 +193,13 @@ class SegmentationWorkerTests(unittest.TestCase):
                 self.assertFalse((root / 'bad-result/result.json').exists())
 
 
+
+
+
+# Literal ordered callback contract consumed without importing this module.
+SUBTEST_CASES = {
+}
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -73,12 +73,15 @@ class S1SemanticsTests(unittest.TestCase):
         del missing['class_assignment']
         with self.assertRaises(ValueError):
             instances(labels, {'1': missing}, valid, (1, 1))
-        for field, value in [('policy', 'unknown'), ('winner_index', 0),
+        mutations = dict([('policy', 'unknown'), ('winner_index', 0),
                              ('phrase_token_sums', [9, 9]), ('ambiguity_reasons', []),
-                             ('derived_class', 'person'), ('phrase_token_scores', [[float('nan')], [.5]])]:
+                             ('derived_class', 'person'), ('phrase_token_scores', [[float('nan')], [.5]])])
+        for case in SUBTEST_CASES[self.id()]:
+            field = case['field']
+            value = mutations[field]
             bad = copy.deepcopy(item)
             bad['class_assignment'][field] = value
-            with self.subTest(field=field), self.assertRaises(ValueError):
+            with self.subTest(**case), self.assertRaises(ValueError):
                 instances(labels, {'1': bad}, valid, (1, 1))
 
     def detector(self, mismatch=False):
@@ -126,6 +129,22 @@ class S1SemanticsTests(unittest.TestCase):
         self.assertEqual(second.semantics['1']['class_assignment']['derived_class'], 'basketball')
         self.assertEqual(first.metadata['detections'][0]['score'], second.semantics['1']['score'])
         self.assertIn('detector_token_scores', first.diagnostics)
+
+
+
+
+
+# Literal ordered callback contract consumed without importing this module.
+SUBTEST_CASES = {
+    'test_vipe_benchmark_s1_semantics.S1SemanticsTests.test_contract_rejects_missing_or_tampered_assignment': [
+        {'field': 'policy'},
+        {'field': 'winner_index'},
+        {'field': 'phrase_token_sums'},
+        {'field': 'ambiguity_reasons'},
+        {'field': 'derived_class'},
+        {'field': 'phrase_token_scores'},
+    ],
+}
 
 
 if __name__ == '__main__':

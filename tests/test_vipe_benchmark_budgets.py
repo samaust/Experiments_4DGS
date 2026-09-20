@@ -370,5 +370,13 @@ class BudgetTests(unittest.TestCase):
         self.assertEqual(errors, ['cancelled'])
 
 
+
+
+
+# Literal ordered callback contract consumed without importing this module.
+SUBTEST_CASES = {
+}
+
+
 if __name__ == '__main__':
     unittest.main()

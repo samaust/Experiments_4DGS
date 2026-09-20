@@ -39,12 +39,9 @@ class AccessTests(unittest.TestCase):
             training_key(1, 21)
 
     def test_heldout_final_window_wrong_branch_and_pair_rejected(self):
-        bad = [Identity('reconstruction', 0, 0, 0), Identity('calibration', 1, 200),
-               Identity('depth', 0, 100), Identity('depth', 1, 176),
-               Identity('reconstruction', 1, 21), Identity('reconstruction', 1, 22, 20),
-               Identity('calibration', 1, 21), Identity('calibration', True, 100)]
-        for item in bad:
-            with self.subTest(item=item.record()), self.assertRaises(ValueError):
+        for case in SUBTEST_CASES[self.id()]:
+            item = Identity(**case)
+            with self.subTest(**case), self.assertRaises(ValueError):
                 guard(item, self.config)
 
     def test_motion_context_roles_and_ends(self):
@@ -202,6 +199,24 @@ class ArrayTests(unittest.TestCase):
         np.testing.assert_allclose(before[:, :2] / before[:, 2:], after[:, :2] / after[:, 2:], atol=1e-6)
         np.testing.assert_allclose(xyz @ normalization[:3, :3].T + normalization[:3, 3],
                                    scaled @ transform[:3, :3].T + transform[:3, 3], atol=1e-10)
+
+
+
+
+
+# Literal ordered callback contract consumed without importing this module.
+SUBTEST_CASES = {
+    'test_vipe_benchmark_contracts.AccessTests.test_heldout_final_window_wrong_branch_and_pair_rejected': [
+        {'branch': 'reconstruction', 'camera': 0, 'frame': 0, 'pair_start': 0},
+        {'branch': 'calibration', 'camera': 1, 'frame': 200, 'pair_start': None},
+        {'branch': 'depth', 'camera': 0, 'frame': 100, 'pair_start': None},
+        {'branch': 'depth', 'camera': 1, 'frame': 176, 'pair_start': None},
+        {'branch': 'reconstruction', 'camera': 1, 'frame': 21, 'pair_start': None},
+        {'branch': 'reconstruction', 'camera': 1, 'frame': 22, 'pair_start': 20},
+        {'branch': 'calibration', 'camera': 1, 'frame': 21, 'pair_start': None},
+        {'branch': 'calibration', 'camera': True, 'frame': 100, 'pair_start': None},
+    ],
+}
 
 
 if __name__ == '__main__':

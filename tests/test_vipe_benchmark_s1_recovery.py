@@ -103,6 +103,78 @@ def synthetic_row(root, request, *, zero=False, skip=False):
     return row,arrays
 
 
+class ReceiptFixture:
+    """Structurally coherent disposable graph; never claims observed execution."""
+    def __init__(self, root, parents=None):
+        from vipe_benchmark import s1_validation_contract as contract
+        import datetime
+        self.contract = c = contract
+        self.root = Path(root).resolve()
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.provenance = 'synthetic fixture; no execution performed'
+        def save(name, data):
+            path = self.root/name
+            path.write_bytes(data)
+            return file_record(path)
+        self.stdin = save('stdin.py', c.STDIN.encode())
+        self.runner = save('runner.py', c.RUNNER.read_bytes())
+        self.capture = save('capture.py', c.CAPTURE.read_bytes())
+        self.stdout = save('stdout.log', b'synthetic fixture only; no tests executed\n')
+        self.stderr = save('stderr.log', b'')
+        self.process_stdout = save('process-stdout.log', Path(self.stdout['path']).read_bytes())
+        self.process_stderr = save('process-stderr.log', b'')
+        def stamp(seconds):
+            return dict(utc=(datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc) + datetime.timedelta(seconds=seconds)).isoformat(), monotonic=float(seconds))
+        methods, declarations = c.collection()
+        cases = [dict(id=name, status='passed', subtests=[dict(id=c.callback_id(name, params), parameters=copy.deepcopy(params), status='passed')
+                 for params in declarations.get(name, [])]) for name in methods]
+        invocation = dict(launcher_argv=list(c.ARGV), python_argv=['-'], runpy_argv=[str(c.RUNNER.resolve())],
+            executable=str(ROOT/c.ARGV[0]), resolved_interpreter=str((ROOT/c.ARGV[0]).resolve()),
+            thread_environment={k:'1' for k in c.THREADS}, environment=dict(c.ENVIRONMENT), cwd=str(ROOT), run_directory=str(self.root))
+        sources = [file_record(p) for p in c.source_paths()]
+        suites = []
+        for index, name in enumerate(c.SUITES):
+            rows = [r for r in cases if r['id'].startswith('test_vipe_benchmark_'+name+'.')]
+            suites.append(dict(suite=name, start=stamp(index+2), end=stamp(index+2.5), elapsed_seconds=.5,
+                invocation=copy.deepcopy(invocation), collected=[r['id'] for r in rows], **c.counters(rows)))
+        self.inner = dict(schema='s1-cpu-aggregate/v2', provenance=self.provenance, diagnostic=False,
+            suite_order=list(c.SUITES), collected=methods, declarations=declarations, cases=cases, suites=suites,
+            discovery_errors=[], **c.counters(cases), expected_exit_code=0, passed=True,
+            sources_before=copy.deepcopy(sources), sources_after=copy.deepcopy(sources), run_directory=str(self.root),
+            start=stamp(1), end=stamp(20), elapsed_seconds=19., boot_id='00000000-0000-0000-0000-000000000000',
+            stdin=self.stdin, runner=self.runner, stdout=self.stdout, stderr=self.stderr,
+            interpreter=file_record(ROOT/c.ARGV[0]), invocation=invocation)
+        self.outer = dict(schema='s1-cpu-execution/v1', provenance=self.provenance, requested_argv=list(c.ARGV), cwd=str(ROOT),
+            environment=dict(c.ENVIRONMENT), run_directory=str(self.root), start=stamp(0), end=stamp(21), elapsed_seconds=21.,
+            child_pid=123, returncode=0, timed_out=False, wait_completed=True, timeout_seconds=300,
+            boot_id=self.inner['boot_id'], sources_before=copy.deepcopy(sources), sources_after=copy.deepcopy(sources),
+            stdin=self.stdin, runner=self.runner, capture=self.capture, interpreter=self.inner['interpreter'],
+            stdout=self.process_stdout, stderr=self.process_stderr)
+        if parents is None:
+            parent = save('fixture-parent.json', b'{"provenance":"synthetic parent"}\n')
+            parents = {key: parent for key in ('semantic_amendment','configuration','baseline','baseline_correction','plan')}
+        self.wrapper = dict(schema='plan031-s1-recovery-validation/v2', provenance=self.provenance, status='passed',
+            aggregate_passed=True, receipt_milestone_complete=False, implementation_acceptance_complete=False,
+            ready_for_live_admission=False, objective_complete=False, sources=copy.deepcopy(sources),
+            diff_check=dict(command='git diff --check', exit_code=0, stdout='', stderr=''), **parents)
+        self.publish()
+
+    def publish(self):
+        import json
+        def save(name, value):
+            (self.root/name).write_text(json.dumps(value, indent=2, allow_nan=True)+'\n')
+            return file_record(self.root/name)
+        inner = save('receipt.json', self.inner)
+        self.outer['receipt'] = inner
+        outer = save('execution.json', self.outer)
+        self.wrapper['tests'] = [dict(receipt=inner, execution=outer)]
+        self.record = save('validation.json', self.wrapper)
+        return self.record
+
+    def validate(self):
+        return s1.validation_record(self.record, self.wrapper['semantic_amendment'], self.wrapper['configuration'])
+
+
 class S1RecoveryTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -181,17 +253,10 @@ class S1RecoveryTests(unittest.TestCase):
             ledger_snapshot=snap, frozen_records=[frozen], bookkeeping_baseline=status,
             bookkeeping_policy='separate immutable old/new hash transitions; never scientific evidence',
             bookkeeping_transitions=[]))
-        ids, parameterized = s1.required_cases()
-        cases = [dict(id=i, status='passed', subtests=[dict(id=i+' (synthetic)', status='passed')]
-                      if i in parameterized else []) for i in ids]
-        receipt = dict(command='synthetic test-only aggregate; NOT execution evidence', stdout='', stderr='OK',
-            tests_run=len(ids), failures=0, errors=0, skipped=0, exit_code=0, collected=ids, cases=cases,
-            suite_order=list(s1.SUITES), per_suite=s1.receipt_totals(cases),
-            subtests_run=sum(len(c['subtests']) for c in cases))
-        self.validation = dict(schema='plan031-s1-recovery-validation/v1', status='passed',
-            semantic_amendment=amendment, configuration=self.configuration, sources=[file_record(p) for p in s1.source_paths()],
-            baseline=baseline, baseline_correction=correction, plan=plan, diff_check=dict(exit_code=0), tests=[receipt])
-        validation = self.put('validation.json', self.validation)
+        graph = ReceiptFixture(self.root/'receipt-fixture', dict(semantic_amendment=amendment,
+            configuration=self.configuration, baseline=baseline, baseline_correction=correction, plan=plan))
+        self.validation = graph.wrapper
+        validation = graph.record
         self.document = dict(schema=s1.SCHEMA, job_id=s1.JOB, original_job_id='S1-calibration',
             attempts_limit=1, seconds_limit=3600, gpu_total_seconds_limit=93600,
             reset_previous_consumption=False, changes_to_prescribed_configuration=True,
@@ -257,21 +322,22 @@ class S1RecoveryTests(unittest.TestCase):
             s1.validate_binding(self.root,self.config,self.auth(original_request_sha256=self.document['historical_request']['sha256']))
 
     def test_typed_scope_schema_branch_and_second_identity(self):
-        for key,value in [('schema','old'),('job_id','S1-calibration-recovery-002'),
-                ('original_job_id','S1-reconstruction'),('attempts_limit',True),('seconds_limit',3600.),
-                ('changes_to_prescribed_configuration',False),('additional_attempt_approved',1),
-                ('reconstruction_authorized',True),('branch','reconstruction')]:
-            with self.subTest(key=key),self.assertRaises(ValueError):
+        for case in SUBTEST_CASES[self.id()]:
+            key, value = case["key"], case["value"]
+            with self.subTest(**case),self.assertRaises(ValueError):
                 s1.validate_binding(self.root,self.config,self.auth(**{key:value}))
 
     def test_validation_missing_extra_duplicate_aliased_stale_and_failed_receipts(self):
-        for label,change in [('missing',dict(sources=[])),('extra',dict(sources=[self.source,self.document['plan']])),
+        mutations = dict([('missing',dict(sources=[])),('extra',dict(sources=[self.source,self.document['plan']])),
             ('duplicate',dict(sources=[self.source,self.source])),('old',dict(schema='old')),
             ('no_tests',dict(tests=[])),('failed',dict(tests=[dict(self.validation['tests'][0],failures=1)])),
             ('skipped',dict(tests=[dict(self.validation['tests'][0],skipped=1)])),
             ('alias',dict(sources=[dict(self.source,path=str(self.root/'..'/self.root.name/'source.json'))])),
-            ('bytes',dict(sources=[dict(self.source,bytes=1)]))]:
-            with self.subTest(label=label):
+            ('bytes',dict(sources=[dict(self.source,bytes=1)]))])
+        for case in SUBTEST_CASES[self.id()]:
+            label = case['label']
+            change = mutations[label]
+            with self.subTest(**case):
                 validation=self.put(label+'.json',dict(self.validation,**change))
                 with self.assertRaises(ValueError):
                     s1.validate_binding(self.root,self.config,self.auth(repair_validation=validation))
@@ -279,9 +345,9 @@ class S1RecoveryTests(unittest.TestCase):
         with self.assertRaises(ValueError): s1.validate_binding(self.root,self.config,self.auth())
 
     def test_changed_prerequisite_records_rejected(self):
-        for key in ('original_failure','e1_qualification','e1_assets','inputs','annotations',
-                    'annotation_policy','annotation_review','historical_request','configuration'):
-            with self.subTest(key=key), self.assertRaises(ValueError):
+        for case in SUBTEST_CASES[self.id()]:
+            key = case['key']
+            with self.subTest(**case), self.assertRaises(ValueError):
                 s1.validate_binding(self.root,self.config,self.auth(**{key:dict(self.document[key],sha256='0'*64)}))
         with self.assertRaises(ValueError):
             s1.validate_binding(self.root,self.config,self.auth(e1_runtime={}))
@@ -365,8 +431,11 @@ class S1RecoveryTests(unittest.TestCase):
             elif event['event']=='reserve': bound=event['evidence']
             else: continue
             self.assertEqual(bound['baseline_correction'],self.document['baseline_correction'])
-        for field,value in [('cleanup_confirmed',False),('surviving_pids',[123]),('deadline_exceeded',True),('acceptance',None)]:
-            with self.subTest(field=field), self.assertRaises((ValueError,TypeError)):
+        mutations = dict(cleanup_confirmed=False, surviving_pids=[123], deadline_exceeded=True, acceptance=None)
+        for case in SUBTEST_CASES[self.id()]:
+            field = case['field']
+            value = mutations[field]
+            with self.subTest(**case), self.assertRaises((ValueError,TypeError)):
                 s1.resolved_result(self.root,self.config,self.ledger.events(),dict(finish,**{field:value}))
         doc=read_json(result['path']);rows=doc['rows']
         for badrows in (rows[:-1],rows[:-1]+rows[:1],list(reversed(rows))):
@@ -387,8 +456,9 @@ class FailureEvidenceTests(unittest.TestCase):
         from vipe_benchmark.access import Identity
         from vipe_benchmark.s1_evidence import preserve_failure
         fixture=S1SemanticsTests()
-        for failure in ('alignment','layout','before'):
-            with self.subTest(failure=failure),tempfile.TemporaryDirectory() as temp:
+        for case in SUBTEST_CASES[self.id()]:
+            failure = case['failure']
+            with self.subTest(**case),tempfile.TemporaryDirectory() as temp:
                 detector=fixture.detector(failure=='alignment')
                 if failure=='layout':detector.model.tokenizer=lambda _:dict(input_ids=[101,10,102])
                 if failure=='before':
@@ -411,8 +481,9 @@ class FailureEvidenceTests(unittest.TestCase):
         from vipe_benchmark.access import Identity
         from vipe_benchmark.backends import SegmentationResult
         from vipe_benchmark.stages import segment
-        for kind in ('contract','serialization','qualification'):
-            with self.subTest(kind=kind),tempfile.TemporaryDirectory() as temp:
+        for case in SUBTEST_CASES[self.id()]:
+            kind = case['kind']
+            with self.subTest(**case),tempfile.TemporaryDirectory() as temp:
                 root=Path(temp);valid=np.ones((540,960),bool);np.save(root/'valid.npy',valid)
                 cv2.imwrite(str(root/'rgb.png'),np.zeros((540,960,3),np.uint8))
                 identities=[Identity('calibration',0,f) for f in (50,62)]
@@ -455,6 +526,410 @@ class FailureEvidenceTests(unittest.TestCase):
                 self.assertIn('labels', failure['available_fields'])
                 self.assertFalse((root/'output/result.json').exists())
                 self.assertFalse((root/'output/calibration/camera0/frame62.npy').exists())
+
+
+
+
+
+class ReceiptContractTests(unittest.TestCase):
+    def fixture(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        graph = ReceiptFixture(Path(temporary.name))
+        graph.validate()  # Every mutation starts with an independently passing graph.
+        return graph
+
+    def test_positive_complete_fixture(self):
+        graph = self.fixture()
+        self.assertIn('no execution performed', graph.validate()['provenance'])
+        graph.contract.validate_inner(graph.inner)
+
+    def test_typed_primitive_callbacks(self):
+        from vipe_benchmark.s1_validation_contract import identity
+        seen = set()
+        for case in SUBTEST_CASES[self.id()]:
+            with self.subTest(**case):
+                key = identity(case)
+                self.assertNotIn(key, seen)
+                seen.add(key)
+
+    def test_declaration_parser_mutations(self):
+        from vipe_benchmark.s1_validation_contract import parse_suite
+        method = 'fixture.Tests.test_case'
+        prefix = 'import unittest\nclass Tests(unittest.TestCase):\n    def test_case(self):\n        with self.subTest(**case): pass\n'
+        good = prefix + "SUBTEST_CASES = {'fixture.Tests.test_case': [{'value': 1}]}\n"
+        for case in SUBTEST_CASES[self.id()]:
+            with self.subTest(**case):
+                self.assertEqual(parse_suite(good, 'fixture')[1], {method:[dict(value=1)]})
+                label = case['mutation']
+                variants = {
+                    'missing': prefix,
+                    'dynamic': prefix + 'SUBTEST_CASES = dict()\n',
+                    'duplicate_assignment': good + 'SUBTEST_CASES = {}\n',
+                    'duplicate_method': prefix + "SUBTEST_CASES = {'fixture.Tests.test_case': [{'value':1}], 'fixture.Tests.test_case': [{'value':2}]}\n",
+                    'duplicate_field': prefix + "SUBTEST_CASES = {'fixture.Tests.test_case': [{'value':1, 'value':2}]}\n",
+                    'extraneous': good.replace('fixture.Tests.test_case', 'fixture.Tests.test_other'),
+                    'ordinary': good.replace('with self.subTest(**case): pass', 'pass'),
+                    'duplicate_tuple': good.replace("[{'value': 1}]", "[{'value': 1}, {'value': 1}]"),
+                    'nonprimitive': good.replace("'value': 1", "'value': []"),
+                    'nonfinite': good.replace("'value': 1", "'value': 1e999"),
+                    'unpacking': good.replace("{'value': 1}", "{**{'value': 1}}"),
+                    'empty': good.replace("[{'value': 1}]", '[]'),
+                    'indirect': good.replace('self.subTest', 'other.subTest'),
+                    'getattr': good.replace('self.subTest', 'getattr(self, "subTest")'),
+                    'mutation': good + "SUBTEST_CASES.update({})\n",
+                    'subscript': good + "SUBTEST_CASES['extra'] = []\n",
+                    'augmented': good + "SUBTEST_CASES |= {}\n",
+                }
+                with self.assertRaisesRegex(ValueError, case['error']):
+                    parse_suite(variants[label], 'fixture')
+
+    def test_callback_mutations(self):
+        for case in SUBTEST_CASES[self.id()]:
+            with self.subTest(**case):
+                graph = self.fixture()
+                parent = next(row for row in graph.inner['cases'] if row['id'] == 'test_vipe_benchmark_s1_recovery.ReceiptContractTests.test_typed_primitive_callbacks')
+                callbacks = parent['subtests']
+                label = case['mutation']
+                if label == 'missing': callbacks.pop()
+                elif label == 'substituted': callbacks[0] = copy.deepcopy(callbacks[-1])
+                elif label == 'reordered': callbacks.reverse()
+                elif label == 'duplicated': callbacks[1] = copy.deepcopy(callbacks[0])
+                elif label == 'removed_field': callbacks[0]['parameters'] = {}
+                elif label == 'extra_field': callbacks[0]['parameters']['extra'] = 0
+                elif label == 'bool_int': callbacks[1]['parameters']['value'] = 1
+                elif label == 'int_float': callbacks[3]['parameters']['value'] = 1.0
+                elif label == 'null_string': callbacks[5]['parameters']['value'] = 'None'
+                elif label == 'id': callbacks[0]['id'] = 'wrong'
+                elif label == 'extra_ordinary':
+                    next(row for row in graph.inner['cases'] if not row['subtests'])['subtests'] = [copy.deepcopy(callbacks[0])]
+                elif label in ('failed', 'error', 'skipped'): callbacks[0]['status'] = label
+                else: raise AssertionError(label)
+                with self.assertRaisesRegex(ValueError, case['error']): graph.contract.validate_inner(graph.inner)
+                graph.publish()
+                with self.assertRaisesRegex(ValueError, case['error']): graph.validate()
+
+    def test_accounting_mutations(self):
+        for case in SUBTEST_CASES[self.id()]:
+            with self.subTest(**case):
+                graph = self.fixture()
+                inner = graph.inner
+                label = case['mutation']
+                if label == 'missing_method': inner['collected'].pop()
+                elif label == 'extra_method': inner['collected'].append('extra')
+                elif label == 'reordered_method': inner['collected'].reverse()
+                elif label == 'duplicate_method': inner['collected'][1] = inner['collected'][0]
+                elif label == 'missing_suite': inner['suite_order'].pop()
+                elif label == 'extra_suite': inner['suite_order'].append('extra')
+                elif label == 'reordered_suite': inner['suite_order'].reverse()
+                elif label == 'duplicate_suite': inner['suite_order'][1] = inner['suite_order'][0]
+                elif label == 'discovery': inner['discovery_errors'] = ['test import failed']
+                elif label == 'count': inner['tests_run'] += 1
+                elif label == 'bool_count': inner['failures'] = False
+                elif label == 'float_count': inner['subtests_run'] = float(inner['subtests_run'])
+                elif label == 'suite_count': inner['suites'][0]['tests_run'] += 1
+                elif label == 'suite_bool': inner['suites'][0]['errors'] = False
+                elif label == 'suite_float': inner['suites'][0]['subtests_run'] = float(inner['suites'][0]['subtests_run'])
+                elif label == 'diff_bool': graph.wrapper['diff_check']['exit_code'] = False
+                elif label == 'diff_float': graph.wrapper['diff_check']['exit_code'] = 0.0
+                elif label == 'schema': inner['schema'] = 's1-cpu-aggregate/v1'
+                elif label == 'expected_bool': inner['expected_exit_code'] = False
+                elif label == 'expected_float': inner['expected_exit_code'] = 0.0
+                else: raise AssertionError(label)
+                graph.publish()
+                with self.assertRaisesRegex(ValueError, case['error']): graph.validate()
+
+    def test_binding_mutations(self):
+        for case in SUBTEST_CASES[self.id()]:
+            with self.subTest(**case):
+                graph = self.fixture()
+                label = case['mutation']
+                if label in ('stdin', 'runner', 'stdout', 'stderr'):
+                    Path(graph.inner[label]['path']).write_bytes(b'changed fixture bytes')
+                elif label == 'missing_log': Path(graph.inner['stdout']['path']).unlink()
+                elif label == 'alias':
+                    graph.inner['stdin']['path'] = str(graph.root/'..'/graph.root.name/'stdin.py')
+                elif label == 'interpreter': graph.inner['interpreter'] = graph.stdin
+                elif label == 'stale_source': graph.inner['sources_before'][0]['sha256'] = '0'*64
+                elif label == 'source_bytes': graph.inner['sources_before'][0]['bytes'] += 1
+                elif label == 'source_bool': graph.inner['sources_before'][0]['bytes'] = True
+                elif label == 'duplicate_source': graph.inner['sources_before'].append(graph.inner['sources_before'][0])
+                elif label == 'missing_source': graph.inner['sources_before'].pop()
+                elif label == 'extra_source': graph.inner['sources_before'].append(graph.stdin)
+                elif label == 'unequal_sources': graph.inner['sources_after'].reverse()
+                elif label == 'outer_source': graph.outer['sources_after'].pop()
+                elif label == 'cross_run':
+                    other = self.fixture()
+                    graph.outer = other.outer
+                elif label == 'capture': Path(graph.outer['capture']['path']).write_text('changed snapshot')
+                else: raise AssertionError(label)
+                graph.publish()
+                with self.assertRaisesRegex(ValueError, case['error']): graph.validate()
+
+    def test_artifact_record_matrix(self):
+        for case in SUBTEST_CASES[self.id()]:
+            with self.subTest(**case):
+                graph = self.fixture()
+                kind, mutation = case['kind'], case['mutation']
+                target = graph.inner['sources_before'][0] if kind == 'source' else graph.inner[kind]
+                if mutation == 'missing': target['path'] = str(graph.root/'absent-artifact')
+                elif mutation == 'stale': target['sha256'] = '0'*64
+                elif mutation == 'alias':
+                    path = Path(target['path'])
+                    target['path'] = str(path.parent/'..'/path.parent.name/path.name)
+                else: raise AssertionError(mutation)
+                graph.publish()
+                with self.assertRaisesRegex(ValueError, case['error']): graph.validate()
+
+    def test_execution_mutations(self):
+        for case in SUBTEST_CASES[self.id()]:
+            with self.subTest(**case):
+                graph = self.fixture()
+                inner, outer = graph.inner, graph.outer
+                label = case['mutation']
+                if label == 'argv': inner['invocation']['launcher_argv'].append('extra')
+                elif label == 'flag': inner['invocation']['launcher_argv'][1] = '-I'
+                elif label == 'python_argv': inner['invocation']['python_argv'] = ['other']
+                elif label == 'runpy_argv': inner['invocation']['runpy_argv'] = ['other']
+                elif label == 'interpreter': inner['invocation']['executable'] = '/usr/bin/python3'
+                elif label == 'cwd': inner['invocation']['cwd'] = str(graph.root)
+                elif label == 'env': inner['invocation']['environment']['OMP_NUM_THREADS'] = '2'
+                elif label == 'diagnostic': inner['invocation']['environment']['S1_RECEIPT_DIAGNOSTIC'] = '1'
+                elif label == 'utc': inner['start']['utc'] = 'bad'
+                elif label == 'naive': inner['start']['utc'] = '2026-01-01T00:00:01'
+                elif label == 'nonfinite': inner['elapsed_seconds'] = float('nan')
+                elif label == 'negative': inner['start']['monotonic'] = -1
+                elif label == 'reversed': inner['end']['monotonic'] = 0
+                elif label == 'inconsistent': inner['elapsed_seconds'] += 1
+                elif label == 'boolean_time': inner['start']['monotonic'] = True
+                elif label == 'suite_overlap':
+                    inner['suites'][1]['start'] = copy.deepcopy(inner['suites'][0]['start'])
+                    inner['suites'][1]['elapsed_seconds'] = 1.5
+                elif label == 'envelope': outer['start']['monotonic'] = 2; outer['elapsed_seconds'] = 19.
+                elif label == 'boot': outer['boot_id'] = '11111111-1111-1111-1111-111111111111'
+                elif label == 'wait': del outer['wait_completed']
+                elif label == 'returncode': outer['returncode'] = 1
+                elif label == 'bool_returncode': outer['returncode'] = False
+                elif label == 'float_returncode': outer['returncode'] = 0.0
+                elif label == 'timeout': outer['timed_out'] = True
+                elif label == 'outer_argv': outer['requested_argv'].append('extra')
+                elif label == 'outer_env': outer['environment']['VIPE_CPU_VALIDATION'] = None
+                elif label == 'logs':
+                    Path(outer['stdout']['path']).write_text('trailing output')
+                    outer['stdout'] = file_record(outer['stdout']['path'])
+                elif label == 'cap': outer['timeout_seconds'] = 1
+                elif label == 'stdin_rehashed':
+                    Path(inner['stdin']['path']).write_text('print("wrong stdin")\n')
+                    inner['stdin'] = file_record(inner['stdin']['path'])
+                elif label == 'runner_rehashed':
+                    Path(inner['runner']['path']).write_text('print("wrong runner")\n')
+                    inner['runner'] = file_record(inner['runner']['path'])
+                else: raise AssertionError(label)
+                if label in ('argv','interpreter','utc','nonfinite'):
+                    with self.assertRaisesRegex(ValueError, case['error']): graph.contract.validate_inner(inner)
+                graph.publish()
+                with self.assertRaisesRegex(ValueError, case['error']): graph.validate()
+
+    def test_legacy_receipts_rejected(self):
+        graph = self.fixture()
+        old = copy.deepcopy(graph.wrapper)
+        old.update(schema='plan031-s1-recovery-validation/v1', tests=[dict(command='synthetic test-only aggregate; NOT execution evidence')])
+        with self.assertRaisesRegex(ValueError, 'complete current amendment-bound'):
+            graph.contract.validate_wrapper(old, old['semantic_amendment'], old['configuration'])
+        old = copy.deepcopy(graph.wrapper)
+        old['aggregate'] = old.pop('tests')
+        with self.assertRaisesRegex(ValueError, 'alternate aggregate document'):
+            graph.contract.validate_wrapper(old, old['semantic_amendment'], old['configuration'])
+
+
+# Literal ordered callback contract consumed without importing this module.
+SUBTEST_CASES = {
+    'test_vipe_benchmark_s1_recovery.S1RecoveryTests.test_typed_scope_schema_branch_and_second_identity': [
+        {'key': 'schema', 'value': 'old'},
+        {'key': 'job_id', 'value': 'S1-calibration-recovery-002'},
+        {'key': 'original_job_id', 'value': 'S1-reconstruction'},
+        {'key': 'attempts_limit', 'value': True},
+        {'key': 'seconds_limit', 'value': 3600.0},
+        {'key': 'changes_to_prescribed_configuration', 'value': False},
+        {'key': 'additional_attempt_approved', 'value': 1},
+        {'key': 'reconstruction_authorized', 'value': True},
+        {'key': 'branch', 'value': 'reconstruction'},
+    ],
+    'test_vipe_benchmark_s1_recovery.S1RecoveryTests.test_validation_missing_extra_duplicate_aliased_stale_and_failed_receipts': [
+        {'label': 'missing'},
+        {'label': 'extra'},
+        {'label': 'duplicate'},
+        {'label': 'old'},
+        {'label': 'no_tests'},
+        {'label': 'failed'},
+        {'label': 'skipped'},
+        {'label': 'alias'},
+        {'label': 'bytes'},
+    ],
+    'test_vipe_benchmark_s1_recovery.S1RecoveryTests.test_changed_prerequisite_records_rejected': [
+        {'key': 'original_failure'},
+        {'key': 'e1_qualification'},
+        {'key': 'e1_assets'},
+        {'key': 'inputs'},
+        {'key': 'annotations'},
+        {'key': 'annotation_policy'},
+        {'key': 'annotation_review'},
+        {'key': 'historical_request'},
+        {'key': 'configuration'},
+    ],
+    'test_vipe_benchmark_s1_recovery.S1RecoveryTests.test_result_requires_supervised_cleanup_and_exact_membership': [
+        {'field': 'cleanup_confirmed'},
+        {'field': 'surviving_pids'},
+        {'field': 'deadline_exceeded'},
+        {'field': 'acceptance'},
+    ],
+    'test_vipe_benchmark_s1_recovery.FailureEvidenceTests.test_alignment_layout_pre_forward_and_no_stale_capture': [
+        {'failure': 'alignment'},
+        {'failure': 'layout'},
+        {'failure': 'before'},
+    ],
+    'test_vipe_benchmark_s1_recovery.FailureEvidenceTests.test_first_result_failure_stops_before_second_input': [
+        {'kind': 'contract'},
+        {'kind': 'serialization'},
+        {'kind': 'qualification'},
+    ],
+    'test_vipe_benchmark_s1_recovery.ReceiptContractTests.test_typed_primitive_callbacks': [
+        {'value': False},
+        {'value': True},
+        {'value': 0},
+        {'value': 1},
+        {'value': 1.0},
+        {'value': None},
+        {'value': 'None'},
+    ],
+    'test_vipe_benchmark_s1_recovery.ReceiptContractTests.test_declaration_parser_mutations': [
+        {'mutation': 'missing', 'error': 'exactly one'},
+        {'mutation': 'dynamic', 'error': 'literal declaration'},
+        {'mutation': 'duplicate_assignment', 'error': 'exactly one'},
+        {'mutation': 'duplicate_method', 'error': 'duplicate declaration key'},
+        {'mutation': 'duplicate_field', 'error': 'duplicate declaration key'},
+        {'mutation': 'extraneous', 'error': 'missing or extraneous'},
+        {'mutation': 'ordinary', 'error': 'missing or extraneous'},
+        {'mutation': 'duplicate_tuple', 'error': 'duplicate declared'},
+        {'mutation': 'nonprimitive', 'error': 'primitive parameter'},
+        {'mutation': 'nonfinite', 'error': 'finite parameter'},
+        {'mutation': 'unpacking', 'error': 'unpacking'},
+        {'mutation': 'empty', 'error': 'nonempty declaration'},
+        {'mutation': 'indirect', 'error': 'indirect'},
+        {'mutation': 'getattr', 'error': 'indirect parameterization'},
+        {'mutation': 'mutation', 'error': 'dynamic declaration'},
+        {'mutation': 'subscript', 'error': 'dynamic declaration'},
+        {'mutation': 'augmented', 'error': 'dynamic declaration'},
+    ],
+    'test_vipe_benchmark_s1_recovery.ReceiptContractTests.test_callback_mutations': [
+        {'mutation': 'missing', 'error': 'callback multiplicity'},
+        {'mutation': 'substituted', 'error': 'typed callback parameters'},
+        {'mutation': 'reordered', 'error': 'typed callback parameters'},
+        {'mutation': 'duplicated', 'error': 'typed callback parameters'},
+        {'mutation': 'removed_field', 'error': 'typed callback parameters'},
+        {'mutation': 'extra_field', 'error': 'typed callback parameters'},
+        {'mutation': 'bool_int', 'error': 'typed callback parameters'},
+        {'mutation': 'int_float', 'error': 'typed callback parameters'},
+        {'mutation': 'null_string', 'error': 'typed callback parameters'},
+        {'mutation': 'id', 'error': 'canonical callback ID'},
+        {'mutation': 'extra_ordinary', 'error': 'callback multiplicity'},
+        {'mutation': 'failed', 'error': 'passing callback'},
+        {'mutation': 'error', 'error': 'passing callback'},
+        {'mutation': 'skipped', 'error': 'passing callback'},
+    ],
+    'test_vipe_benchmark_s1_recovery.ReceiptContractTests.test_accounting_mutations': [
+        {'mutation': 'missing_method', 'error': 'ordered method collection'},
+        {'mutation': 'extra_method', 'error': 'ordered method collection'},
+        {'mutation': 'reordered_method', 'error': 'ordered method collection'},
+        {'mutation': 'duplicate_method', 'error': 'ordered method collection'},
+        {'mutation': 'missing_suite', 'error': 'exact suite collection'},
+        {'mutation': 'extra_suite', 'error': 'exact suite collection'},
+        {'mutation': 'reordered_suite', 'error': 'exact suite collection'},
+        {'mutation': 'duplicate_suite', 'error': 'exact suite collection'},
+        {'mutation': 'discovery', 'error': 'exact suite collection'},
+        {'mutation': 'count', 'error': 'exact integer receipt accounting'},
+        {'mutation': 'bool_count', 'error': 'exact integer receipt accounting'},
+        {'mutation': 'float_count', 'error': 'exact integer receipt accounting'},
+        {'mutation': 'suite_count', 'error': 'exact integer receipt accounting'},
+        {'mutation': 'suite_bool', 'error': 'exact integer receipt accounting'},
+        {'mutation': 'suite_float', 'error': 'exact integer receipt accounting'},
+        {'mutation': 'diff_bool', 'error': 'exact clean diff'},
+        {'mutation': 'diff_float', 'error': 'exact clean diff'},
+        {'mutation': 'schema', 'error': 'complete v2 aggregate'},
+        {'mutation': 'expected_bool', 'error': 'passing aggregate'},
+        {'mutation': 'expected_float', 'error': 'passing aggregate'},
+    ],
+    'test_vipe_benchmark_s1_recovery.ReceiptContractTests.test_binding_mutations': [
+        {'mutation': 'stdin', 'error': 'stale file record'},
+        {'mutation': 'runner', 'error': 'stale file record'},
+        {'mutation': 'stdout', 'error': 'stale file record'},
+        {'mutation': 'stderr', 'error': 'stale file record'},
+        {'mutation': 'missing_log', 'error': 'canonical existing file'},
+        {'mutation': 'alias', 'error': 'canonical existing file'},
+        {'mutation': 'interpreter', 'error': 'interpreter file mismatch'},
+        {'mutation': 'stale_source', 'error': 'exact current ordered sources'},
+        {'mutation': 'source_bytes', 'error': 'exact current ordered sources'},
+        {'mutation': 'source_bool', 'error': 'exact current ordered sources'},
+        {'mutation': 'duplicate_source', 'error': 'exact current ordered sources'},
+        {'mutation': 'missing_source', 'error': 'exact current ordered sources'},
+        {'mutation': 'extra_source', 'error': 'exact current ordered sources'},
+        {'mutation': 'unequal_sources', 'error': 'exact current ordered sources'},
+        {'mutation': 'outer_source', 'error': 'exact current ordered sources'},
+        {'mutation': 'cross_run', 'error': 'execution run directory mismatch'},
+        {'mutation': 'capture', 'error': 'stale file record'},
+    ],
+    'test_vipe_benchmark_s1_recovery.ReceiptContractTests.test_execution_mutations': [
+        {'mutation': 'argv', 'error': 'exact launcher argv'},
+        {'mutation': 'flag', 'error': 'exact launcher argv'},
+        {'mutation': 'python_argv', 'error': 'exact launcher argv'},
+        {'mutation': 'runpy_argv', 'error': 'exact launcher argv'},
+        {'mutation': 'interpreter', 'error': 'exact interpreter'},
+        {'mutation': 'cwd', 'error': 'cwd/run directory'},
+        {'mutation': 'env', 'error': 'exact validation environment'},
+        {'mutation': 'diagnostic', 'error': 'exact validation environment'},
+        {'mutation': 'utc', 'error': 'UTC timestamp'},
+        {'mutation': 'naive', 'error': 'UTC timezone'},
+        {'mutation': 'nonfinite', 'error': 'finite nonnegative'},
+        {'mutation': 'negative', 'error': 'finite nonnegative'},
+        {'mutation': 'reversed', 'error': 'inconsistent timing'},
+        {'mutation': 'inconsistent', 'error': 'inconsistent timing'},
+        {'mutation': 'boolean_time', 'error': 'finite nonnegative'},
+        {'mutation': 'suite_overlap', 'error': 'suite intervals overlap'},
+        {'mutation': 'envelope', 'error': 'outside enclosing'},
+        {'mutation': 'boot', 'error': 'execution boot'},
+        {'mutation': 'wait', 'error': 'actual successful wait'},
+        {'mutation': 'returncode', 'error': 'actual successful wait'},
+        {'mutation': 'bool_returncode', 'error': 'actual successful wait'},
+        {'mutation': 'float_returncode', 'error': 'actual successful wait'},
+        {'mutation': 'timeout', 'error': 'actual successful wait'},
+        {'mutation': 'outer_argv', 'error': 'exact outer argv'},
+        {'mutation': 'outer_env', 'error': 'exact validation environment'},
+        {'mutation': 'logs', 'error': 'process/runner log'},
+        {'mutation': 'cap', 'error': 'invocation cap'},
+        {'mutation': 'stdin_rehashed', 'error': 'prescribed stdin'},
+        {'mutation': 'runner_rehashed', 'error': 'current runner snapshot'},
+    ],
+    'test_vipe_benchmark_s1_recovery.ReceiptContractTests.test_artifact_record_matrix': [
+        {'kind': 'stdin', 'mutation': 'missing', 'error': 'canonical existing file'},
+        {'kind': 'stdin', 'mutation': 'stale', 'error': 'stale file record'},
+        {'kind': 'stdin', 'mutation': 'alias', 'error': 'canonical existing file'},
+        {'kind': 'runner', 'mutation': 'missing', 'error': 'canonical existing file'},
+        {'kind': 'runner', 'mutation': 'stale', 'error': 'stale file record'},
+        {'kind': 'runner', 'mutation': 'alias', 'error': 'canonical existing file'},
+        {'kind': 'stdout', 'mutation': 'missing', 'error': 'canonical existing file'},
+        {'kind': 'stdout', 'mutation': 'stale', 'error': 'stale file record'},
+        {'kind': 'stdout', 'mutation': 'alias', 'error': 'canonical existing file'},
+        {'kind': 'stderr', 'mutation': 'missing', 'error': 'canonical existing file'},
+        {'kind': 'stderr', 'mutation': 'stale', 'error': 'stale file record'},
+        {'kind': 'stderr', 'mutation': 'alias', 'error': 'canonical existing file'},
+        {'kind': 'interpreter', 'mutation': 'missing', 'error': 'canonical existing file'},
+        {'kind': 'interpreter', 'mutation': 'stale', 'error': 'stale file record'},
+        {'kind': 'interpreter', 'mutation': 'alias', 'error': 'canonical existing file'},
+        {'kind': 'source', 'mutation': 'missing', 'error': 'exact current ordered sources'},
+        {'kind': 'source', 'mutation': 'stale', 'error': 'exact current ordered sources'},
+        {'kind': 'source', 'mutation': 'alias', 'error': 'exact current ordered sources'},
+    ],
+}
 
 
 if __name__=='__main__': unittest.main()

@@ -21,94 +21,13 @@ BINDINGS = ('semantic_amendment', 'repair_validation', 'configuration',
             'original_request_sha256', 'baseline_correction')
 
 
-def source_paths():
-    return sorted([ROOT / 'scripts/basketball_vipe_benchmark.py',
-                   ROOT / 'scripts/basketball_vipe_worker.py',
-                   ROOT / 'configs/vipe-alternatives/benchmark-v1.json',
-                   *(ROOT / 'scripts/vipe_benchmark').glob('*.py'),
-                   *(ROOT / 'tests').glob('test_vipe_benchmark_*.py')])
-
-
-def strict_record(record):
-    path = safe_path(record['path'])
-    if (str(path.resolve()) != record['path'] or type(record.get('bytes')) is not int
-            or verify_record(record) != record):
-        raise ValueError('exact resolved file record with matching bytes required')
-    return record
+# Compatibility exports keep admission and execution on one static contract.
+from .s1_validation_contract import (SUITES, source_paths, strict_record,
+    required_cases, receipt_totals, validate_wrapper)
 
 
 def validation_record(record, amendment, configuration):
-    value = read_json(strict_record(record)['path'])
-    sources = value.get('sources', [])
-    paths = [s['path'] for s in sources]
-    if (value.get('schema') != 'plan031-s1-recovery-validation/v1'
-            or value.get('status') != 'passed' or value.get('semantic_amendment') != amendment
-            or value.get('configuration') != configuration
-            or len(paths) != len(set(paths))
-            or set(paths) != {str(p.resolve()) for p in source_paths()}):
-        raise ValueError('complete current amendment-bound source validation required')
-    for source in sources:
-        strict_record(source)
-    tests = value.get('tests', [])
-    if not tests or any(type(t.get('tests_run')) is not int or t['tests_run'] <= 0
-            or any(type(t.get(k)) is not int or t[k] != 0
-                   for k in ('exit_code', 'failures', 'errors', 'skipped'))
-            or not t.get('command') or not isinstance(t.get('stdout'), str)
-            or not isinstance(t.get('stderr'), str) for t in tests):
-        raise ValueError('passing nonempty CPU test receipts without skips required')
-    if len(tests) != 1:
-        raise ValueError('one prescribed aggregate receipt required')
-    receipt = tests[0]
-    expected, parameterized = required_cases()
-    cases = receipt.get('cases', [])
-    ids = [case.get('id') for case in cases]
-    if (receipt.get('suite_order') != list(SUITES) or receipt.get('collected') != ids
-            or len(ids) != receipt['tests_run'] or len(ids) != len(set(ids))
-            or ids != expected or value.get('diff_check', {}).get('exit_code') != 0):
-        raise ValueError('required ordered aggregate collection and clean diff check required')
-    for case in cases:
-        subtests = case.get('subtests', [])
-        subids = [sub.get('id') for sub in subtests]
-        if (case.get('status') != 'passed' or any(sub.get('status') != 'passed' for sub in subtests)
-                or len(subids) != len(set(subids)) or any(not isinstance(i, str) for i in subids)
-                or (case['id'] in parameterized and not subtests)):
-            raise ValueError('passing method and required subtest outcomes required')
-    if receipt.get('per_suite') != receipt_totals(cases):
-        raise ValueError('per-suite receipt accounting differs')
-    if receipt.get('subtests_run') != sum(len(c.get('subtests', [])) for c in cases):
-        raise ValueError('subtest receipt accounting differs')
-    return value
-
-
-SUITES = ('s1_semantics', 's1_recovery', 'backends', 'contracts', 'component_recovery',
-          'execution', 'budgets', 'supervisor', 'review_annotations')
-
-
-def required_cases():
-    """Static collection only: do not import test modules in admission."""
-    import ast
-    expected, parameterized = [], set()
-    for name in SUITES:
-        path = ROOT / 'tests' / ('test_vipe_benchmark_' + name + '.py')
-        tree = ast.parse(path.read_text())
-        for cls in sorted((n for n in tree.body if isinstance(n, ast.ClassDef)), key=lambda n:n.name):
-            for method in sorted((n for n in cls.body if isinstance(n, ast.FunctionDef)
-                                  and n.name.startswith('test_')), key=lambda n:n.name):
-                identity = f'{path.stem}.{cls.name}.{method.name}'
-                expected.append(identity)
-                if any(isinstance(n, ast.Attribute) and n.attr == 'subTest' for n in ast.walk(method)):
-                    parameterized.add(identity)
-    return expected, parameterized
-
-
-def receipt_totals(cases):
-    result = {}
-    for suite in SUITES:
-        rows = [c for c in cases if c['id'].startswith('test_vipe_benchmark_' + suite + '.')]
-        result[suite] = dict(tests_run=len(rows), failures=sum(c['status']=='failed' for c in rows),
-            errors=sum(c['status']=='error' for c in rows), skipped=sum(c['status']=='skipped' for c in rows),
-            subtests_run=sum(len(c.get('subtests', [])) for c in rows))
-    return result
+    return validate_wrapper(read_json(strict_record(record)['path']), amendment, configuration)
 
 
 def event_ref(event):

@@ -134,8 +134,9 @@ class AssetAndDetectorTests(unittest.TestCase):
                 AssetBundle('D4', records)
 
     def test_phrase_ambiguity_and_capacity_fail_before_casting(self):
-        for phrase in ('', 'person basketball', 'ball', 'player'):
-            with self.subTest(phrase=phrase), self.assertRaises(BackendError):
+        for case in SUBTEST_CASES[self.id()]:
+            phrase = case['phrase']
+            with self.subTest(**case), self.assertRaises(BackendError):
                 normalize_phrase(phrase)
         self.assertEqual(normalize_phrase('sports ball'), 'basketball')
         with self.assertRaisesRegex(BackendError, 'capacity'):
@@ -263,8 +264,9 @@ class SAM2Tests(unittest.TestCase):
             "still use SAM 2 and it's OK to ignore the error above, although some post-processing "
             "functionality may be limited (which doesn't affect the results in most cases; see "
             "https://github.com/facebookresearch/sam2/blob/main/INSTALL.md).")
-        for component in ('S2', 'S4'):
-            with self.subTest(component=component):
+        for case in SUBTEST_CASES[self.id()]:
+            component = case['component']
+            with self.subTest(**case):
                 backend, _, video = self.make_backend()
                 backend.component = component
                 returned = []
@@ -284,8 +286,9 @@ class SAM2Tests(unittest.TestCase):
     def test_source_frames_not_internal_indices_or_cross_role_context(self):
         backend, det, _ = self.make_backend()
         rgb, valid = image()
-        for frames in ([20, 22], [49, 50], [199, 200], [21, 20]):
-            with self.subTest(frames=frames), self.assertRaises(ValueError):
+        for case in SUBTEST_CASES[self.id()]:
+            frames = [case['frame_0'], case['frame_1']]
+            with self.subTest(**case), self.assertRaises(ValueError):
                 backend.segment([rgb, rgb], [valid, valid], frame_ids=frames)
         self.assertEqual(det.calls, 0)
 
@@ -362,17 +365,19 @@ class S1NativeBridgeTests(unittest.TestCase):
 
     def test_constructor_rejects_changed_arguments_and_unsupervised_temporary_root(self):
         module, _, calls = self.make_module()
-        for altered in ({'max_len_long_term': 3}, {'long_term_mem_gap': 1}, {'gpu_id': 1}, {'gpu_id': False}):
-            with self.subTest(altered=altered), self.assertRaisesRegex(BackendError, 'exact frozen'):
+        for case in SUBTEST_CASES[self.id()]:
+            altered = {case['field']: case['value']}
+            with self.subTest(**case), self.assertRaisesRegex(BackendError, 'exact frozen'):
                 _s1_tracker(module, self.runtime, dict(self.arguments, **altered))
         with patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(BackendError, 'TMPDIR'):
             _s1_tracker(module, self.runtime, self.arguments)
         self.assertEqual(calls, [])
 
     def test_native_wrapper_argument_drift_is_rejected_before_engine_construction(self):
-        for altered in ({'max_len_long_term': 2}, {'long_term_mem_gap': 1}, {'short_term_mem_skip': 2}, {'extra': 1}):
+        for case in SUBTEST_CASES[self.id()]:
+            altered = {case['field']: case['value']}
             module, _, calls = self.make_module(changed_kwargs=altered)
-            with self.subTest(altered=altered), patch.dict(os.environ, {'TMPDIR': str(self.root)}), \
+            with self.subTest(**case), patch.dict(os.environ, {'TMPDIR': str(self.root)}), \
                  self.assertRaisesRegex(BackendError, 'constructor contract'):
                 _s1_tracker(module, self.runtime, self.arguments)
             self.assertEqual(calls, [])
@@ -401,8 +406,9 @@ class S1NativeBridgeTests(unittest.TestCase):
         module, native, _ = self.make_module()
         bridge = self.build(module)
         rgb, valid = image()
-        for ids in ([0, 1, 2], [20, 22], [49, 50], [200]):
-            with self.subTest(ids=ids), self.assertRaises(BackendError), bridge.pair(ids):
+        for case in SUBTEST_CASES[self.id()]:
+            ids = [case[f'frame_{i}'] for i in range(len(case))]
+            with self.subTest(**case), self.assertRaises(BackendError), bridge.pair(ids):
                 self.fail('invalid pair admitted')
         with self.assertRaisesRegex(BackendError, 'outside'):
             bridge.restart()
@@ -721,8 +727,9 @@ class FactoryTests(unittest.TestCase):
         self.assertNotIn('load_state_dict', model.__dict__)
 
     def test_sam3_unobserved_or_repeated_checkpoint_load_cannot_qualify(self):
-        for load_calls in (0, 2):
-            with self.subTest(load_calls=load_calls):
+        for case in SUBTEST_CASES[self.id()]:
+            load_calls = case['load_calls']
+            with self.subTest(**case):
                 _, model, builders, bundle, processor, original = self.sam3_fixture(load_calls=load_calls)
                 with self.assertRaisesRegex(BackendError, 'not observed exactly once'):
                     _sam3_image_processor(bundle, SimpleNamespace(device='cuda'), builders, processor)
@@ -839,6 +846,52 @@ class FactoryTests(unittest.TestCase):
         self.assertEqual(calls[0], ('hub', ('/explicit/metric3d_source', 'metric3d_vit_large'),
                                    {'source': 'local', 'pretrain': False}))
         self.assertEqual(calls[1][1], 'exact checkpoint')
+
+
+
+
+
+# Literal ordered callback contract consumed without importing this module.
+SUBTEST_CASES = {
+    'test_vipe_benchmark_backends.AssetAndDetectorTests.test_phrase_ambiguity_and_capacity_fail_before_casting': [
+        {'phrase': ''},
+        {'phrase': 'person basketball'},
+        {'phrase': 'ball'},
+        {'phrase': 'player'},
+    ],
+    'test_vipe_benchmark_backends.SAM2Tests.test_native_postprocessing_skip_fails_pair_and_resets_before_export': [
+        {'component': 'S2'},
+        {'component': 'S4'},
+    ],
+    'test_vipe_benchmark_backends.SAM2Tests.test_source_frames_not_internal_indices_or_cross_role_context': [
+        {'frame_0': 20, 'frame_1': 22},
+        {'frame_0': 49, 'frame_1': 50},
+        {'frame_0': 199, 'frame_1': 200},
+        {'frame_0': 21, 'frame_1': 20},
+    ],
+    'test_vipe_benchmark_backends.S1NativeBridgeTests.test_constructor_rejects_changed_arguments_and_unsupervised_temporary_root': [
+        {'field': 'max_len_long_term', 'value': 3},
+        {'field': 'long_term_mem_gap', 'value': 1},
+        {'field': 'gpu_id', 'value': 1},
+        {'field': 'gpu_id', 'value': False},
+    ],
+    'test_vipe_benchmark_backends.S1NativeBridgeTests.test_native_wrapper_argument_drift_is_rejected_before_engine_construction': [
+        {'field': 'max_len_long_term', 'value': 2},
+        {'field': 'long_term_mem_gap', 'value': 1},
+        {'field': 'short_term_mem_skip', 'value': 2},
+        {'field': 'extra', 'value': 1},
+    ],
+    'test_vipe_benchmark_backends.S1NativeBridgeTests.test_pair_bridge_rejects_extra_frames_reference_and_propagation': [
+        {'frame_0': 0, 'frame_1': 1, 'frame_2': 2},
+        {'frame_0': 20, 'frame_1': 22},
+        {'frame_0': 49, 'frame_1': 50},
+        {'frame_0': 200},
+    ],
+    'test_vipe_benchmark_backends.FactoryTests.test_sam3_unobserved_or_repeated_checkpoint_load_cannot_qualify': [
+        {'load_calls': 0},
+        {'load_calls': 2},
+    ],
+}
 
 
 if __name__ == '__main__':

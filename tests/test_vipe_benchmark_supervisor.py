@@ -195,20 +195,26 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(sorted(p.wait(timeout=10) for p in workers), [0, 1])
 
 
-if __name__ == '__main__':
-    unittest.main()
 
 
-HELPER_CASES = {
-    'test_vipe_benchmark_supervisor.HelperIntegrationTests.test_cleanup_matrix': (
-        {'role': 'task', 'outcome': 'success'}, {'role': 'sample', 'outcome': 'success'},
-        {'role': 'task', 'outcome': 'error'}, {'role': 'sample', 'outcome': 'error'},
-        {'role': 'task', 'outcome': 'timeout'}, {'role': 'sample', 'outcome': 'timeout'},
-    ),
-    'test_vipe_benchmark_supervisor.HelperIntegrationTests.test_cleanup_failures': (
-        {'mode': 'false_then_reaped'}, {'mode': 'false'}, {'mode': 'close_exception'},
-        {'mode': 'enumeration_exception'}, {'mode': 'kill_exception'}, {'mode': 'reap_exception'},
-    ),
+
+SUBTEST_CASES = {
+    'test_vipe_benchmark_supervisor.HelperIntegrationTests.test_cleanup_matrix': [
+        {'role': 'task', 'outcome': 'success'},
+        {'role': 'sample', 'outcome': 'success'},
+        {'role': 'task', 'outcome': 'error'},
+        {'role': 'sample', 'outcome': 'error'},
+        {'role': 'task', 'outcome': 'timeout'},
+        {'role': 'sample', 'outcome': 'timeout'},
+    ],
+    'test_vipe_benchmark_supervisor.HelperIntegrationTests.test_cleanup_failures': [
+        {'mode': 'false_then_reaped'},
+        {'mode': 'false'},
+        {'mode': 'close_exception'},
+        {'mode': 'enumeration_exception'},
+        {'mode': 'kill_exception'},
+        {'mode': 'reap_exception'},
+    ],
 }
 
 
@@ -340,7 +346,7 @@ class HelperIntegrationTests(unittest.TestCase):
 
     def test_cleanup_matrix(self):
         from unittest.mock import patch
-        for case in HELPER_CASES[self.id()]:
+        for case in SUBTEST_CASES[self.id()]:
             with self.subTest(**case):
                 self.life = self.sup.HelperLifecycle()
                 start = self.time.monotonic()
@@ -355,7 +361,7 @@ class HelperIntegrationTests(unittest.TestCase):
 
     def test_cleanup_failures(self):
         from unittest.mock import patch
-        for case in HELPER_CASES[self.id()]:
+        for case in SUBTEST_CASES[self.id()]:
             with self.subTest(**case):
                 self.life = self.sup.HelperLifecycle()
                 with patch.object(self.sup,'_Helper',self.fake_class(mode=case['mode'])):
@@ -433,3 +439,7 @@ class HelperIntegrationTests(unittest.TestCase):
             self.assertTrue(events[-1]['helper_ownership'])
             self.assertTrue(all(p is peaks[0] for p in peaks))
             self.assertTrue(caught.exception.stop_required)
+
+
+if __name__ == '__main__':
+    unittest.main()
