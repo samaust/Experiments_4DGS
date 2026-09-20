@@ -1,6 +1,8 @@
 """Static, typed CPU execution evidence contract; never imports test modules."""
 import ast
+import copy
 import datetime
+from functools import lru_cache
 import json
 import math
 from pathlib import Path
@@ -60,6 +62,12 @@ def callback_id(parent, parameters):
 
 
 def parse_suite(text, module):
+    """Return isolated declarations, reusing only successful exact-source parsing."""
+    return copy.deepcopy(_parse_suite_cached(text, module))
+
+
+@lru_cache(maxsize=16)
+def _parse_suite_cached(text, module):
     """Reject ambiguous/dynamic declarations before Python can collapse dict keys."""
     try:
         tree = ast.parse(text)

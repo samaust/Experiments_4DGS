@@ -1,0 +1,49 @@
+{
+  "schema": "plan042-staged-review/v1",
+  "recorded_utc": "2026-09-20T08:34:42.682194+00:00",
+  "checks": [
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--cached",
+        "--check"
+      ],
+      "exit_code": 2,
+      "stdout": "docs/continuous-improvement/plan031-s1-recovery-20260919/assessment-026-review.json:585: new blank line at EOF.\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--cached",
+        "--check",
+        "--",
+        ".",
+        ":(exclude)prompts/**",
+        ":(exclude)**/prompts/**"
+      ],
+      "exit_code": 2,
+      "stdout": "docs/continuous-improvement/plan031-s1-recovery-20260919/assessment-026-review.json:585: new blank line at EOF.\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--cached",
+        "--check",
+        "--",
+        ".",
+        ":(exclude)prompts/**",
+        ":(exclude)**/prompts/**",
+        ":(exclude)docs/continuous-improvement/plan031-s1-recovery-20260919/assessment-026-review.json"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "disposition": "Full staged and full source/document checks report one blank line at EOF in immutable assessment026-review.json. Preserve its already-bound bytes and hashes. Check excluding only that immutable assessment passes. All75 final source bindings match validation011; earlier raw-log exceptions remain immutable history."
+}

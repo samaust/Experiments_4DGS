@@ -750,6 +750,178 @@ class ReceiptContractTests(unittest.TestCase):
 
 
 
+class DeclarationCacheTests(unittest.TestCase):
+    def setUp(self):
+        from vipe_benchmark import s1_validation_contract as contract
+        self.contract = contract
+        contract._parse_suite_cached.cache_clear()
+        self.addCleanup(contract._parse_suite_cached.cache_clear)
+
+    def typed_source(self, module='fixture', integer=1):
+        return (
+            'class Tests:\n'
+            '    def test_z(self): pass\n'
+            '    def test_a(self):\n'
+            '        with self.subTest(**case): pass\n'
+            "SUBTEST_CASES = {" + repr(module + '.Tests.test_a') +
+            ": [{'boolean': True, 'integer': " + repr(integer) +
+            ", 'floating': 1.0, 'null': None, 'string': 'one'}]}\n"
+        )
+
+    def fixture_suites(self, root):
+        directory = root / 'tests'
+        directory.mkdir()
+        paths = []
+        for suite in self.contract.SUITES:
+            module = 'test_vipe_benchmark_' + suite
+            path = directory / (module + '.py')
+            path.write_text(self.typed_source(module))
+            paths.append(path)
+        return paths
+
+    def test_repeated_exact_key_reuses_parse(self):
+        c = self.contract
+        text = self.typed_source()
+        with patch.object(c.ast, 'parse', wraps=c.ast.parse) as parse:
+            first = c.parse_suite(text, 'fixture')
+            second = c.parse_suite(text, 'fixture')
+        self.assertEqual(parse.call_count, 1)
+        self.assertEqual(first, second)
+        self.assertEqual(first[0], ['fixture.Tests.test_a', 'fixture.Tests.test_z'])
+        cases = first[1]['fixture.Tests.test_a']
+        self.assertEqual(c.identity(cases[0]), c.identity(dict(boolean=True, integer=1, floating=1.0, null=None, string='one')))
+        self.assertIsNot(first[0], second[0])
+        self.assertIsNot(first[1], second[1])
+        self.assertIsNot(cases, second[1]['fixture.Tests.test_a'])
+        self.assertIsNot(cases[0], second[1]['fixture.Tests.test_a'][0])
+
+    def test_exact_text_and_module_keys(self):
+        c = self.contract
+        original, changed = self.typed_source(), self.typed_source(integer=2)
+        self.assertEqual(len(original.encode()), len(changed.encode()))
+        with patch.object(c.ast, 'parse', wraps=c.ast.parse) as parse:
+            first = c.parse_suite(original, 'fixture')
+            altered = c.parse_suite(changed, 'fixture')
+            restored = c.parse_suite(original, 'fixture')
+            self.assertEqual(parse.call_count, 2)
+            self.assertEqual(altered[1]['fixture.Tests.test_a'][0]['integer'], 2)
+            self.assertEqual(first, restored)
+            ordinary = 'class Tests:\n    def test_a(self): pass\nSUBTEST_CASES = {}\n'
+            self.assertEqual(c.parse_suite(ordinary, 'one'), (['one.Tests.test_a'], {}))
+            self.assertEqual(c.parse_suite(ordinary, 'two'), (['two.Tests.test_a'], {}))
+            self.assertEqual(parse.call_count, 4)
+            with self.assertRaisesRegex(ValueError, 'missing or extraneous parameter declarations'):
+                c.parse_suite(original, 'wrong_module')
+            self.assertEqual(parse.call_count, 5)
+
+    def test_collection_rereads_same_size_same_mtime(self):
+        import os
+        from unittest.mock import Mock
+        c = self.contract
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = self.fixture_suites(root)
+            path = paths[0]
+            original, metadata = path.read_bytes(), path.stat()
+            with patch.object(c, 'ROOT', root):
+                first = c.collection()
+                changed = original.replace(b"'integer': 1", b"'integer': 2")
+                self.assertNotEqual(original, changed)
+                path.write_bytes(changed)
+                os.utime(path, ns=(metadata.st_atime_ns, metadata.st_mtime_ns))
+                self.assertEqual(path.stat().st_size, metadata.st_size)
+                self.assertEqual(path.stat().st_mtime_ns, metadata.st_mtime_ns)
+                reads = Mock(wraps=Path.read_text)
+                with patch.object(Path, 'read_text', new=lambda p, *args, **kwargs: reads(p, *args, **kwargs)):
+                    altered = c.collection()
+                self.assertEqual([call.args[0] for call in reads.call_args_list], paths)
+                name = 'test_vipe_benchmark_' + c.SUITES[0] + '.Tests.test_a'
+                self.assertEqual(altered[1][name][0]['integer'], 2)
+                self.assertEqual(first[1][name][0]['integer'], 1)
+                path.write_bytes(original)
+                self.assertEqual(c.collection(), first)
+
+    def test_collection_warm_cache_does_not_hide_deletion(self):
+        c = self.contract
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = self.fixture_suites(root)
+            path = paths[4]
+            original = path.read_bytes()
+            with patch.object(c, 'ROOT', root):
+                first = c.collection()
+                path.unlink()
+                with self.assertRaises(FileNotFoundError) as missing:
+                    c.collection()
+                self.assertEqual(missing.exception.filename, str(path))
+                path.write_bytes(original)
+                self.assertEqual(c.collection(), first)
+
+    def test_returned_mutation_isolation(self):
+        c = self.contract
+        text = self.typed_source()
+        first = c.parse_suite(text, 'fixture')
+        other = c.parse_suite(text, 'fixture')
+        expected = copy.deepcopy(other)
+        name = 'fixture.Tests.test_a'
+        first[0].append('mutated')
+        first[1][name][0]['integer'] = False
+        first[1][name].append({'extra': 'mutation'})
+        first[1]['extra'] = []
+        self.assertEqual(other, expected)
+        later = c.parse_suite(text, 'fixture')
+        self.assertEqual(later, expected)
+        self.assertEqual(c.identity(later[1][name][0]), c.identity(dict(boolean=True, integer=1, floating=1.0, null=None, string='one')))
+        self.assertEqual({key: type(value) for key, value in later[1][name][0].items()},
+                         dict(boolean=bool, integer=int, floating=float, null=type(None), string=str))
+        self.assertIsNot(other[0], later[0])
+        self.assertIsNot(other[1][name][0], later[1][name][0])
+
+    def test_invalid_inputs_are_not_cached(self):
+        c = self.contract
+        good = self.typed_source()
+        with patch.object(c.ast, 'parse', wraps=c.ast.parse) as parse:
+            expected = c.parse_suite(good, 'fixture')
+            before = c._parse_suite_cached.cache_info()
+            for _ in range(2):
+                with self.assertRaisesRegex(ValueError, 'invalid literal declaration'):
+                    c.parse_suite('class Broken(', 'fixture')
+                with self.assertRaisesRegex(ValueError, 'missing or extraneous parameter declarations'):
+                    c.parse_suite(good.replace("'fixture.Tests.test_a'", "'wrong.Tests.test_a'"), 'fixture')
+            after = c._parse_suite_cached.cache_info()
+            self.assertEqual(parse.call_count, 5)
+            self.assertEqual(after.currsize, before.currsize)
+            self.assertEqual(after.misses - before.misses, 4)
+            self.assertEqual(after.hits, before.hits)
+            self.assertEqual(c.parse_suite(good, 'fixture'), expected)
+            self.assertEqual(parse.call_count, 5)
+            corrected = c.parse_suite(self.typed_source(integer=2), 'fixture')
+            self.assertEqual(corrected[1]['fixture.Tests.test_a'][0]['integer'], 2)
+            self.assertEqual(parse.call_count, 6)
+            self.assertEqual(c._parse_suite_cached.cache_info().currsize, 2)
+
+    def test_lru_bound_and_eviction(self):
+        c = self.contract
+        text = 'class Tests:\n    def test_a(self): pass\nSUBTEST_CASES = {}\n'
+        with patch.object(c.ast, 'parse', wraps=c.ast.parse) as parse:
+            for index in range(16):
+                self.assertEqual(c.parse_suite(text, 'module' + str(index)),
+                                 (['module' + str(index) + '.Tests.test_a'], {}))
+            info = c._parse_suite_cached.cache_info()
+            self.assertEqual((info.maxsize, info.currsize), (16, 16))
+            self.assertEqual(parse.call_count, 16)
+            self.assertEqual(c.parse_suite(text, 'module0'), (['module0.Tests.test_a'], {}))
+            c.parse_suite(text, 'module16')
+            self.assertEqual(parse.call_count, 17)
+            c.parse_suite(text, 'module0')
+            self.assertEqual(parse.call_count, 17)
+            self.assertEqual(c.parse_suite(text, 'module1'), (['module1.Tests.test_a'], {}))
+            self.assertEqual(parse.call_count, 18)
+            c.parse_suite(text, 'module0')
+            self.assertEqual(parse.call_count, 18)
+            self.assertEqual(c._parse_suite_cached.cache_info().currsize, 16)
+
+
 class ReservationClockTests(unittest.TestCase):
     def admitted(self, *, reduced=False):
         fixture = S1RecoveryTests('test_reduced_cumulative_deadline' if reduced else 'runTest')
