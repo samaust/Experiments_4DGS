@@ -14,8 +14,8 @@ def run(operation):
         from .execution import resources
         return resources(Path(args['local']), gpu=True)
     if name == 'prelaunch':
-        from .s1_recovery import active_binding
-        active_binding(Path(args['local']), args['config'], args['reservation'], args['command'])
+        from .s1_recovery import captured_clock
+        captured_clock(Path(args['local']), args['config'], args['reservation'], args['command'])
         return None
     if name == 'accept':
         from .s1_recovery import active_binding, accept_result
@@ -24,11 +24,11 @@ def run(operation):
         active_binding(local, args['config'], args['reservation'], args['command'])
         request = read_json(args['reservation']['evidence']['request']['path'])
         result = read_json(output / 'result.json')
-        accepted = accept_result(local, args['config'], request, result, output)
+        accepted = accept_result(local, args['config'], request, result, output, reservation=args['reservation'])
         return file_record(output / 'result.json'), accepted
     if name == 'reconcile':
         from .s1_recovery import prepare_terminal_evidence
-        return prepare_terminal_evidence(Path(args['local']), args['reservation'], args['outcome'], args['deadline'])
+        return prepare_terminal_evidence(Path(args['local']), args['reservation'], args['outcome'], args['deadline'], config=args['config'])
     if name == 'publish':
         from .s1_recovery import terminal_receipt
         return terminal_receipt(Path(args['local']), Path(args['docs']), args['config'],

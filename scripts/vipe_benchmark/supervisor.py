@@ -332,8 +332,13 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
     try:
         for sig in (signal.SIGTERM, signal.SIGINT):
             old_handlers[sig] = signal.signal(sig, interrupted)
-        env = dict(os.environ, VIPE_RESERVATION_START=str(start), OMP_NUM_THREADS='4' if is_s1 else '8', OPENBLAS_NUM_THREADS='4' if is_s1 else '8',
+        env = dict(os.environ, VIPE_RESERVATION_START=str(start), OMP_NUM_THREADS='1' if is_s1 else '8', OPENBLAS_NUM_THREADS='1' if is_s1 else '8',
                    HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1')
+        if is_s1:
+            env.update(MKL_NUM_THREADS='1', NUMEXPR_NUM_THREADS='1')
+            import json
+            from .s1_clock import ReservationClock
+            env['VIPE_S1_RESERVATION_CLOCK'] = json.dumps(ReservationClock.from_reservation(reservation).mapping(), allow_nan=False)
         temporary = output.with_name(output.name + '-temporary')
         temporary.mkdir(exist_ok=False)
         env['TMPDIR'] = str(temporary)
@@ -424,7 +429,7 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
             from .s1_recovery import prepare_terminal_evidence
             try:
                 evidence_summary = monitored_call(dict(operation='reconcile', args=dict(
-                    local=str(ledger.path.parent), reservation=reservation,
+                    local=str(ledger.path.parent), config=ledger.config, reservation=reservation,
                     outcome=dict(error=error, result=result_record, acceptance=acceptance), deadline=run_deadline)),
                     run_deadline, sampler, ledger.config, peak, worker=process, phase='reconciliation', lifecycle=lifecycle)
             except Exception as exc:

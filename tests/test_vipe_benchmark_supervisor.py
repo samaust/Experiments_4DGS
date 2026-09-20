@@ -400,17 +400,26 @@ class HelperIntegrationTests(unittest.TestCase):
 
     def test_supervisor_worker_context_and_consumed_cleanup_stop(self):
         from unittest.mock import patch
-        from types import SimpleNamespace
+        import json
+        from test_vipe_benchmark_s1_recovery import S1RecoveryTests
+        from vipe_benchmark.s1_clock import ReservationClock
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            fixture=S1RecoveryTests(); fixture.setUp(); self.addCleanup(fixture.doCleanups)
+            root=fixture.root
+            _,request,evidence=fixture.register()
+            command=fixture.command(evidence)
             events = []
+            captured=[]; transported=[]
             class Disposable:
                 path = root/'ledger.jsonl'
                 jobs = {'S1-calibration-recovery-001':dict(resource='gpu')}
                 config = self.config
                 def reserve(inner,*args,**kwargs):
                     events.append('reserve')
-                    return dict(monotonic_start=self.time.monotonic(),seconds=.6,sequence=0,event_sha256='fixture')
+                    kwargs['seconds_limit']=.6
+                    actual=fixture.ledger.reserve(*args,**kwargs)
+                    captured.append(actual)
+                    return actual
                 def note(inner,*args,**kwargs): pass
                 def finish(inner,job,status,elapsed,**evidence):
                     events.append(dict(status=status,**evidence))
@@ -425,11 +434,20 @@ class HelperIntegrationTests(unittest.TestCase):
                     with patch.object(self.sup,'_Helper',self.fake_class(mode='false')):
                         return actual(self.operation,deadline,self.sampler,config,peak,**kwargs)
                 return None
-            with patch.object(self.sup,'monitored_call',side_effect=monitor):
+            popen=self.sup.subprocess.Popen
+            def worker(argv,**kwargs):
+                self.assertEqual(argv,command)
+                value=json.loads(kwargs['env']['VIPE_S1_RESERVATION_CLOCK'])
+                ReservationClock.from_reservation(captured[0]).match(value)
+                self.assertTrue(all(kwargs['env'][key]=='1' for key in ('OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS','NUMEXPR_NUM_THREADS')))
+                transported.append(value)
+                return popen([sys.executable,'-c','import time; time.sleep(10)'],**kwargs)
+            with patch.object(self.sup,'monitored_call',side_effect=monitor), patch.object(self.sup.subprocess,'Popen',side_effect=worker):
                 with self.assertRaises(self.sup.SupervisionFailure) as caught:
                     self.sup.supervise(Disposable(),'S1-calibration-recovery-001',
-                        [sys.executable,'-c','import time; time.sleep(10)'],root/'out',evidence={},
+                        command,root/'jobs'/'S1-calibration-recovery-001',evidence=evidence,
                         sample_resources=self.sampler,terminal_publisher=True,terminal_docs=root)
+            self.assertEqual(len(transported),1)
             self.assertEqual(events[0],'reserve')
             self.assertEqual(events[-1]['status'],'failed')
             self.assertFalse(events[-1]['cleanup_confirmed'])

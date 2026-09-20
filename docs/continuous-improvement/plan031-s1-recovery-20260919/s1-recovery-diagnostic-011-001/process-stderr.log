@@ -1,0 +1,21 @@
+Traceback (most recent call last):
+  File "<stdin>", line 4, in <module>
+  File "<frozen runpy>", line 231, in run_module
+  File "<frozen runpy>", line 98, in _run_module_code
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_runner.py", line 150, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_runner.py", line 112, in main
+    suite = unittest.TestSuite(t for group in suite for cls in group for t in cls
+        if t.__class__.__name__ == 'ReservationClockTests')
+  File "/usr/lib/python3.14/unittest/suite.py", line 24, in __init__
+    self.addTests(tests)
+    ~~~~~~~~~~~~~^^^^^^^
+  File "/usr/lib/python3.14/unittest/suite.py", line 57, in addTests
+    for test in tests:
+                ^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_runner.py", line 112, in <genexpr>
+    suite = unittest.TestSuite(t for group in suite for cls in group for t in cls
+                                                                              ^^^
+TypeError: '_FailedTest' object is not iterable

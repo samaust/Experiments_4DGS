@@ -1,0 +1,30 @@
+test_acceptance_and_historical_authority (test_vipe_benchmark_s1_recovery.ReservationClockTests.test_acceptance_and_historical_authority) ... ok
+test_context_matrix (test_vipe_benchmark_s1_recovery.ReservationClockTests.test_context_matrix) ... ok
+test_failure_reconciliation (test_vipe_benchmark_s1_recovery.ReservationClockTests.test_failure_reconciliation) ... ok
+test_identical_reuse_and_conflicts (test_vipe_benchmark_s1_recovery.ReservationClockTests.test_identical_reuse_and_conflicts) ... ok
+test_phase_boundaries (test_vipe_benchmark_s1_recovery.ReservationClockTests.test_phase_boundaries) ... ok
+test_real_segment_publication_barriers (test_vipe_benchmark_s1_recovery.ReservationClockTests.test_real_segment_publication_barriers) ... ok
+test_worker_bootstrap (test_vipe_benchmark_s1_recovery.ReservationClockTests.test_worker_bootstrap) ... 
+  test_worker_bootstrap (test_vipe_benchmark_s1_recovery.ReservationClockTests.test_worker_bootstrap) (kind='duplicate') ... ERROR
+
+======================================================================
+ERROR: test_worker_bootstrap (test_vipe_benchmark_s1_recovery.ReservationClockTests.test_worker_bootstrap) (kind='duplicate')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_recovery.py", line 925, in test_worker_bootstrap
+    value=read_json(output/'unavailable-input-failure-evidence.json'); self.assertEqual(value['clock_status'],'unverified')
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/files.py", line 34, in read_json
+    return json.loads(safe_path(path).read_text())
+                      ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/pathlib/__init__.py", line 787, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/pathlib/__init__.py", line 771, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'component/unavailable-input-failure-evidence.json'
+
+----------------------------------------------------------------------
+Ran 7 tests in 67.801s
+
+FAILED (errors=1)

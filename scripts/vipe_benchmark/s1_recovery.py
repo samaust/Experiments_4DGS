@@ -340,17 +340,58 @@ def canonical_dispatch(document, authorization, evidence, *, command=None, reser
     return expected_command
 
 
-def active_binding(local, config, captured, command):
+def active_binding(local, config, captured, command, *, with_reservation=False):
     from .ledger import Ledger
     events = Ledger(Path(local) / 'ledger.jsonl', config).events()
-    document, _ = validate_binding(local, config, captured['evidence']['authorization'],
-                                    events=events, consumed=True)
     active = Ledger(Path(local) / 'ledger.jsonl', config).states(events).get(JOB)
     if not active or active.get('event') != 'reserve':
         raise ValueError('missing active S1 reservation')
+    from .s1_clock import typed_equal
+    captured = active if captured is None else captured
+    if not typed_equal(active, captured):
+        raise ValueError('captured active reservation changed')
+    document, _ = validate_binding(local, config, captured['evidence']['authorization'], events=events, consumed=True)
     canonical_dispatch(document, captured['evidence']['authorization'], active['evidence'],
         command=command, reservation=active, captured=captured, local=local)
-    return document
+    return (document, active) if with_reservation else document
+
+
+def captured_clock(local, config, reservation, command):
+    from .s1_clock import ReservationClock
+    if type(reservation) is not dict:
+        raise ValueError('captured reservation required for helper clock')
+    _, active = active_binding(local, config, reservation, command, with_reservation=True)
+    return ReservationClock.from_reservation(active)
+
+
+def worker_clock(args, request, config):
+    import json
+    import os
+    import sys
+    from .s1_clock import ReservationClock
+    path = args.request.resolve()
+    if path.name != JOB + '.json' or path.parent.name != 'requests':
+        raise ValueError('canonical worker request path required')
+    local = path.parent.parent
+    command = [request['runtime']['python'], str((ROOT / 'scripts/basketball_vipe_worker.py').resolve()),
+        '--operation', args.operation, '--config', str(args.config.resolve()),
+        '--request', str(path), '--output', str(args.output.resolve())]
+    if (Path(sys.executable).resolve() != Path(request['runtime']['python']).resolve()
+            or Path(sys.argv[0]).resolve() != ROOT / 'scripts/basketball_vipe_worker.py'):
+        raise ValueError('canonical worker interpreter/script changed')
+    if sys.argv[1:] != command[2:]:
+        raise ValueError('canonical worker arguments changed')
+    _, reservation = active_binding(local, config, None, command, with_reservation=True)
+    clock = ReservationClock.from_reservation(reservation)
+    if read_json(strict_record(clock.mapping()['request'])['path']) != request:
+        raise ValueError('canonical worker request changed')
+    try:
+        transported = json.loads(os.environ['VIPE_S1_RESERVATION_CLOCK'])
+    except (KeyError, ValueError) as exc:
+        raise ValueError('missing/invalid transported reservation clock') from exc
+    clock.match(transported)
+    clock.observe()
+    return clock
 
 
 def reservation_binding(local, config, events, evidence, command=None):
@@ -402,6 +443,11 @@ def resolved_result(local, config, events, finish):
     from .s1_evidence import validate_result_numerics
     validate_result_numerics(result, config)
     first = read_json(strict_record(result['first_result'])['path'])
+    from .s1_clock import ReservationClock
+    clock = ReservationClock.from_reservation(reserves[0])
+    for value in (first, result, acceptance):
+        clock.match(value.get('reservation_clock'))
+    clock.recorded(first.get('elapsed_seconds_from_reservation'), 'passed')
     if not 0 <= first['elapsed_seconds_from_reservation'] <= finish['elapsed_seconds'] <= reserves[0]['seconds']:
         raise ValueError('S1 reservation-relative timing inconsistent')
     for field, limit in [('device_bytes','gpu_peak_device_gib_limit'), ('artifact_bytes','new_artifact_disk_gib_limit'), ('download_bytes','new_download_gib_limit')]:
@@ -428,22 +474,25 @@ def referenced_records(value):
     return sorted(found.values(), key=lambda r:r['path'])
 
 
-def accept_result(local, config, request, result, output):
+def accept_result(local, config, request, result, output, *, reservation):
     from .s1_evidence import validate_result
     from .files import write_json
-    document, _ = validate_binding(local, config, request['recovery_authorization'], consumed=True)
-    validate_result(result, request, config)
+    document = active_binding(local, config, reservation, reservation['command'])
+    clock = captured_clock(local, config, reservation, reservation['command'])
+    if read_json(strict_record(clock.mapping()['request'])['path']) != request:
+        raise ValueError('accepted request differs from reservation')
+    validate_result(result, request, config, clock=clock)
     result_record = file_record(output / 'result.json')
     value = dict(schema='plan035-s1-acceptance/v1', status='passed', job_id=JOB,
         authorization=request['recovery_authorization'], baseline_correction=document['baseline_correction'],
-        result=result_record, first_result=result['first_result'],
+        result=result_record, first_result=result['first_result'], reservation_clock=clock.mapping(),
         records=referenced_records([result, request]), count=510)
     path = output / 'acceptance.json'
     write_json(path, value)
     return file_record(path)
 
 
-def prepare_terminal_evidence(local, reservation, outcome, deadline):
+def prepare_terminal_evidence(local, reservation, outcome, deadline, *, config):
     """All expensive optional evidence inspection belongs inside work time."""
     from .s1_evidence import reconcile_rows, evidence_counts, qualify_runtime, reconcile_first
     import time
@@ -457,6 +506,8 @@ def prepare_terminal_evidence(local, reservation, outcome, deadline):
         except Exception as exc:
             errors.append(dict(evidence=label, error=f'{type(exc).__name__}: {exc}'))
             return dict(status='unverified', value=None)
+    clock_state = optional('reservation_clock', lambda: captured_clock(local, config, reservation, reservation['command']))
+    clock = clock_state['value']
     request = optional('request', lambda: read_json(strict_record(reservation['evidence']['request'])['path']))['value']
     result = optional('result', lambda: read_json(output / 'result.json'))['value']
     complete = not outcome.get('error') and bool(outcome.get('acceptance'))
@@ -485,7 +536,7 @@ def prepare_terminal_evidence(local, reservation, outcome, deadline):
         if isinstance(result, dict):
             runtime['final'] = optional('final_runtime', lambda: qualify_runtime(result['runtime'], request))
         summary['first_result'] = optional('first_result', lambda: reconcile_first(request, output,
-            error=outcome.get('error') or 'worker did not publish first-result evidence'))
+            clock=clock, error=outcome.get('error') or 'worker did not publish first-result evidence'))
     summary['runtime'] = runtime
     summary['verification_errors'].extend(errors)
     return summary

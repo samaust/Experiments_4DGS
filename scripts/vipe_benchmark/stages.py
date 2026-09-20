@@ -89,7 +89,10 @@ def _model_runtime(request):
     return dict(versions=actual, cuda=torch.version.cuda, device=torch.cuda.get_device_name(), isolation=isolation)
 
 
-def segment(request, output, config):
+def segment(request, output, config, *, clock=None):
+    if request.get('job_id') == 'S1-calibration-recovery-001':
+        from .s1_clock import require_clock
+        require_clock(clock).observe()
     import torch
     from .backends import build_backend
     inputs = read_json(verify_record(request['inputs'])['path'])
@@ -131,6 +134,8 @@ def segment(request, output, config):
         if component == 'S1' and hasattr(getattr(adapter, 'detector', None), 'reset_capture'):
             adapter.detector.reset_capture()
         try:
+            if request['job_id'] == 'S1-calibration-recovery-001':
+                clock.observe()  # Every input, including a delayed loop transition.
             rgbs = [loader.load(i) for i in group]
             footprints = [load_array(loader.row(i)['valid']) for i in group]
             torch.cuda.synchronize()
@@ -174,6 +179,7 @@ def segment(request, output, config):
                     from .s1_evidence import qualify_row
                     failure_stage = 'first_result' if offset == 0 else 'output_qualification'
                     checks = qualify_row(row, request, first=offset == 0, loader=loader)
+                    clock.observe()
                     failure_stage = 'partial_publication'
                     write_json(stem.with_name(stem.name + '-qualified-row.json'), row)
                 rows.append(row)
@@ -187,8 +193,9 @@ def segment(request, output, config):
                     failure_stage = 'runtime_qualification'
                     write_json(output / 'partial-runtime.json', runtime)
                     qualify_runtime(runtime, request)
+                    clock.observe()
                     failure_stage = 'first_result_publication'
-                    first_record(request, output, 'passed', rows=rows, runtime=runtime,
+                    first_record(request, output, 'passed', clock=clock, rows=rows, runtime=runtime,
                                  checks=checks, raw=[rows[0]['diagnostics']])
                 else:
                     write_json(output / 'first-result-qualification.json', dict(status='passed',
@@ -200,7 +207,7 @@ def segment(request, output, config):
                 try:
                     preserve_failure(request, output, group[0], exc, adapter=adapter,
                                      prediction=prediction, stage=failure_stage,
-                                     parent=loader.row(group[0]), runtime=runtime)
+                                     parent=loader.row(group[0]), runtime=runtime, clock=clock)
                 except BaseException as persistence_error:
                     exc.add_note(f'S1 evidence publication failed: {persistence_error}')
             raise
@@ -214,7 +221,8 @@ def segment(request, output, config):
     if request['job_id'] == 'S1-calibration-recovery-001':
         result['first_result'] = file_record(output / 'first-result-qualification.json')
         from .s1_evidence import validate_result
-        validate_result(result, request, config)
+        result['reservation_clock'] = clock.mapping()
+        validate_result(result, request, config, clock=clock)
     if observer:
         result['memory'] = observer.finish()
         result['timing_scope'] = 'memory diagnostic only; excluded from benchmark timing' if diagnostic else 'reconstruction including validated lifecycle cleanup and memory observation'
@@ -365,10 +373,10 @@ def neighbors(request, output, config):
         all_references_have_three_neighbors=all(r['status'] == 'complete' for r in rows)))
 
 
-def run(request, output, config):
+def run(request, output, config, *, clock=None):
     component = request['component']
     if component.startswith('S'):
-        return segment(request, output, config)
+        return segment(request, output, config, clock=clock)
     if component.startswith('D'):
         return predict_depth(request, output, config)
     if component.startswith('M'):

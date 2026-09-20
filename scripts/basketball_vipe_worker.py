@@ -14,31 +14,43 @@ def main():
     parser.add_argument('--operation', choices=['prepare', 'annotations', 'auto-annotations',
                         'setup', 'component', 'geometry', 'aggregate', 'report'], required=True)
     args = parser.parse_args()
-    config = load(args.config)
+    clock = None
     request = read_json(args.request)
-    verify_record(request['configuration'])
-    if Path(request['configuration']['path']).resolve() != args.config.resolve():
-        raise ValueError('worker configuration differs from its frozen request')
-    if args.operation == 'prepare':
+    if request.get('job_id') != 'S1-calibration-recovery-001':
+        config = load(args.config)
+        verify_record(request['configuration'])
+        if Path(request['configuration']['path']).resolve() != args.config.resolve():
+            raise ValueError('worker configuration differs from its frozen request')
+    if args.operation == 'prepare' and request.get('job_id') != 'S1-calibration-recovery-001':
         from vipe_benchmark.prepare import prepare
         verify_record(request['exposure'])
         prepare(args.output, config, exposure=request['exposure'])
-    elif args.operation == 'auto-annotations':
+    elif args.operation == 'auto-annotations' and request.get('job_id') != 'S1-calibration-recovery-001':
         from vipe_benchmark.auto_annotations import run
         run(request, args.output, config)
-    elif args.operation in ('setup', 'component', 'geometry', 'aggregate', 'report'):
-        if args.operation == 'setup':
-            from vipe_benchmark.runtime import setup as operation
-        elif args.operation == 'component':
-            from vipe_benchmark.stages import run as operation
-        elif args.operation == 'geometry':
-            from vipe_benchmark.diagnostics import run as operation
-        elif args.operation == 'aggregate':
-            from vipe_benchmark.aggregation import run as operation
-        else:
-            from vipe_benchmark.reporting import run as operation
+    elif args.operation in ('setup', 'component', 'geometry', 'aggregate', 'report') or request.get('job_id') == 'S1-calibration-recovery-001':
         try:
-            operation(request, args.output, config)
+            config = load(args.config)
+            verify_record(request['configuration'])
+            if Path(request['configuration']['path']).resolve() != args.config.resolve():
+                raise ValueError('worker configuration differs from its frozen request')
+            if request.get('job_id') == 'S1-calibration-recovery-001':
+                from vipe_benchmark.s1_recovery import worker_clock
+                clock = worker_clock(args, request, config)
+            if args.operation == 'setup':
+                from vipe_benchmark.runtime import setup as operation
+            elif args.operation == 'component':
+                from vipe_benchmark.stages import run as operation
+            elif args.operation == 'geometry':
+                from vipe_benchmark.diagnostics import run as operation
+            elif args.operation == 'aggregate':
+                from vipe_benchmark.aggregation import run as operation
+            else:
+                from vipe_benchmark.reporting import run as operation
+            if clock is not None:
+                operation(request, args.output, config, clock=clock)
+            else:
+                operation(request, args.output, config)
         except BaseException as exc:
             from vipe_benchmark.files import write_json
             import traceback
@@ -48,7 +60,7 @@ def main():
                 from vipe_benchmark.s1_evidence import preserve_failure
                 if not hasattr(exc, 's1_failure_record'):
                     try:
-                        preserve_failure(request, args.output, None, exc, stage='worker_before_result')
+                        preserve_failure(request, args.output, None, exc, stage='worker_before_result', clock=clock)
                     except BaseException as persistence_error:
                         extra['evidence_publication_error'] = str(persistence_error)
                 extra.update(first_result=getattr(exc, 's1_first_result', None),

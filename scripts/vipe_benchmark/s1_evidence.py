@@ -22,72 +22,103 @@ def numeric_file(path, arrays):
     return file_record(path)
 
 
-def elapsed(request):
-    # The supervisor supplies the reservation clock in the environment; it is
-    # deliberately not part of the deterministic request hash.
-    import os
-    start = os.environ.get('VIPE_RESERVATION_START')
-    return None if start is None else time.monotonic() - float(start)
+def elapsed(clock, *, work=True):
+    from .s1_clock import require_clock
+    return require_clock(clock).observe(work=work)
 
 
-def first_record(request, output, status, *, rows=(), runtime=None, error=None,
+def verify_failure(value, request, clock):
+    from .s1_clock import require_clock
+    from .s1_recovery import strict_record
+    clock = require_clock(clock)
+    clock.match(value.get('reservation_clock'))
+    clock.recorded(value.get('elapsed_seconds_from_reservation'), value.get('status'))
+    auth = request['recovery_authorization']
+    if (value.get('schema') != 'plan032-s1-first-result/v1' or value.get('job_id') != JOB
+            or value.get('status') not in ('failed', 'not_reached')
+            or value.get('clock_status') != 'verified'
+            or value.get('authorization') != auth
+            or value.get('semantic_amendment') != read_json(strict_record(auth)['path'])['semantic_amendment']
+            or not value.get('error') or not value.get('failure_stage')
+            or read_json(strict_record(value['request'])['path']) != request):
+        raise ValueError('invalid worker first-result failure evidence')
+    for record in value.get('raw_evidence', []):
+        strict_record(record)
+    return True
+
+
+def first_record(request, output, status, *, clock, rows=(), runtime=None, error=None,
                  stage=None, raw=(), checks=()):
+    from .s1_clock import require_clock, diagnostic
     path = Path(output) / 'first-result-qualification.json'
+    # Cleanup preserves verified original bytes without taking a new live sample.
+    if path.exists() and status != 'passed':
+        existing = read_json(path)
+        if existing.get('status') == 'passed':
+            verify_first(existing, request, clock=clock)
+        else:
+            verify_failure(existing, request, clock)
+        return file_record(path)
+    try:
+        clock = require_clock(clock)
+        seconds = elapsed(clock, work=status == 'passed')
+        clock_fields = dict(reservation_clock=clock.mapping(), clock_status='verified',
+                            elapsed_seconds_from_reservation=seconds)
+    except Exception as clock_error:
+        if status == 'passed':
+            raise
+        clock_fields = diagnostic(clock, clock_error)
     auth = request.get('recovery_authorization')
-    amendment = read_json(verify_record(auth)['path'])['semantic_amendment'] if auth else None
+    try:
+        amendment = read_json(verify_record(auth)['path'])['semantic_amendment'] if auth else None
+    except Exception:
+        amendment = None
     config = Path(output) / 'config.json'
+    request_record = file_record(config) if config.exists() else (clock.mapping()['request'] if clock else None)
     value = dict(schema='plan032-s1-first-result/v1', job_id=request['job_id'],
         status=status, identity=rows[0]['identity'] if rows else None, count=len(rows),
         rows=list(rows), runtime=runtime or {}, semantic_amendment=amendment,
-        authorization=auth, request=file_record(config) if config.exists() else None,
-        checks=list(checks), raw_evidence=list(raw), error=error, failure_stage=stage,
-        elapsed_seconds_from_reservation=elapsed(request))
+        authorization=auth, request=request_record, checks=list(checks), raw_evidence=list(raw),
+        error=error, failure_stage=stage, **clock_fields)
     if path.exists():
         existing = read_json(path)
-        if existing.get('status') == 'passed':
-            verify_first(existing, request)
-            if status != 'passed':
-                return file_record(path)  # Verified prior pass survives later failure.
-            comparable = dict(value, elapsed_seconds_from_reservation=existing['elapsed_seconds_from_reservation'])
-            if comparable == existing:
-                return file_record(path)
-        elif status != 'passed' and existing == value:
-            return file_record(path)
-        raise ValueError('conflicting first-result publication')
+        verify_first(existing, request, clock=clock)
+        comparable = dict(value, elapsed_seconds_from_reservation=existing['elapsed_seconds_from_reservation'])
+        if comparable != existing:
+            raise ValueError('conflicting first-result publication')
+    else:
+        if status == 'passed':
+            verify_first(value, request, clock=clock)
+            clock.observe()  # qualification completion, before immutable publication
+        elif value['clock_status'] == 'verified':
+            verify_failure(value, request, clock)
+        write_json(path, value)
+    record = file_record(path)
+    persisted = read_json(verify_record(record)['path'])
     if status == 'passed':
-        verify_first(value, request)
-    write_json(path, value)
-    return file_record(path)
+        verify_first(persisted, request, clock=clock)
+        clock.observe()  # publication/hash/read-back/requalification completion
+    elif value['clock_status'] == 'verified':
+        verify_failure(persisted, request, clock)
+    return record
 
 
-def reconcile_first(request, output, *, error):
-    """Reuse verified worker failure evidence only for cleanup, never advancement."""
-    from .s1_recovery import strict_record
+def reconcile_first(request, output, *, clock, error):
+    """Reuse verified worker evidence only for cleanup, never advancement."""
     path = Path(output) / 'first-result-qualification.json'
     if not path.exists():
-        return first_record(request, output, 'not_reached', error=error, stage='supervisor_cleanup')
-    value = read_json(path)
+        first_record(request, output, 'not_reached', clock=clock, error=error, stage='supervisor_cleanup')
+    record = file_record(path)
+    value = read_json(verify_record(record)['path'])
     if value.get('status') == 'passed':
-        verify_first(value, request)
+        verify_first(value, request, clock=clock)
     else:
-        import math
-        seconds = value.get('elapsed_seconds_from_reservation')
-        auth = request['recovery_authorization']
-        if (value.get('schema') != 'plan032-s1-first-result/v1' or value.get('job_id') != JOB
-                or value.get('status') not in ('failed', 'not_reached')
-                or value.get('authorization') != auth
-                or value.get('semantic_amendment') != read_json(strict_record(auth)['path'])['semantic_amendment']
-                or type(seconds) not in (int, float) or not math.isfinite(seconds) or not 0 <= seconds < 3600
-                or not value.get('error') or not value.get('failure_stage')
-                or read_json(strict_record(value['request'])['path']) != request):
-            raise ValueError('invalid worker first-result failure evidence')
-        for record in value.get('raw_evidence', []):
-            strict_record(record)
-    return file_record(path)
+        verify_failure(value, request, clock)
+    return record
 
 
 def preserve_failure(request, output, identity, error, *, adapter=None, prediction=None,
-                     stage='adapter', parent=None, runtime=None):
+                     stage='adapter', parent=None, runtime=None, clock=None):
     """Best effort publication; caller always re-raises the original exception."""
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
@@ -121,7 +152,18 @@ def preserve_failure(request, output, identity, error, *, adapter=None, predicti
         if key not in records:
             unavailable[key] = serialization_error or 'not captured before failure; no additional forward'
     auth = request.get('recovery_authorization')
-    amendment = read_json(verify_record(auth)['path'])['semantic_amendment'] if auth else None
+    try:
+        amendment = read_json(verify_record(auth)['path'])['semantic_amendment'] if auth else None
+    except Exception:
+        amendment = None
+    clock_fields = {}
+    if request['job_id'] == JOB:
+        from .s1_clock import require_clock, diagnostic
+        try:
+            seconds = require_clock(clock).observe(work=False)
+            clock_fields = dict(clock_status='verified', reservation_clock=clock.mapping(), elapsed_seconds_from_reservation=seconds)
+        except Exception as clock_error:
+            clock_fields = diagnostic(clock, clock_error)
     value = dict(schema='plan032-s1-failure-evidence/v1', job_id=request['job_id'],
         identity=identity.record() if identity is not None else None,
         failure_stage=evidence.get('failure_stage', stage) if stage == 'adapter' else stage,
@@ -130,7 +172,7 @@ def preserve_failure(request, output, identity, error, *, adapter=None, predicti
         array_records=records, available_fields=sorted(records), unavailable_fields=unavailable,
         forward_count=evidence.get('forward_count', 0), inputs=request.get('inputs'),
         input=parent, request=file_record(output / 'config.json') if (output / 'config.json').exists() else None,
-        semantic_amendment=amendment, serialization_error=serialization_error)
+        semantic_amendment=amendment, serialization_error=serialization_error, **clock_fields)
     path = output / (stem + '-failure-evidence.json')
     write_json(path, value)
     record = file_record(path)
@@ -138,7 +180,7 @@ def preserve_failure(request, output, identity, error, *, adapter=None, predicti
     if request['job_id'] == JOB:
         error.s1_first_result = first_record(request, output,
             'failed' if evidence.get('forward_count', 0) else 'not_reached',
-            runtime=runtime, error=f'{type(error).__name__}: {error}', stage=value['failure_stage'], raw=[record])
+            clock=clock, runtime=runtime, error=f'{type(error).__name__}: {error}', stage=value['failure_stage'], raw=[record])
     return record
 
 
@@ -400,7 +442,9 @@ def qualify_row(row, request, *, first=False, loader=None):
             ('input_identity', 'native_query_alignment', 'all_retained_assignments', 'output_contracts', 'numeric_evidence')]
 
 
-def validate_result(result, request, config):
+def validate_result(result, request, config, *, clock):
+    from .s1_clock import require_clock
+    require_clock(clock).match(result.get('reservation_clock'))
     from .access import output_identities, validate_membership
     if (result.get('status') != 'complete' or result.get('job_id') != JOB
             or result.get('component') != 'S1' or result.get('branch') != 'calibration'):
@@ -412,7 +456,7 @@ def validate_result(result, request, config):
     qualify_runtime(result['runtime'], request)
     first = read_json(verify_record(result['first_result'])['path'])
     loader = input_loader(request)
-    verify_first(first, request, loader=loader)
+    verify_first(first, request, clock=clock, loader=loader)
     if (first['rows'] != result['rows'][:1] or first['runtime'] != result['runtime']
             or first['request'] != result['configuration']):
         raise ValueError('S1 first-result envelope differs from terminal result')
@@ -442,8 +486,11 @@ def processed_rgb(rgb):
     return (tensor - np.array([.485,.456,.406],np.float32)[:,None,None]) / np.array([.229,.224,.225],np.float32)[:,None,None]
 
 
-def verify_first(value, request, *, loader=None):
-    import math
+def verify_first(value, request, *, clock, loader=None):
+    from .s1_clock import require_clock
+    clock = require_clock(clock)
+    clock.match(value.get('reservation_clock'))
+    clock.recorded(value.get('elapsed_seconds_from_reservation'), 'passed')
     auth = request['recovery_authorization']
     amendment = read_json(verify_record(auth)['path'])['semantic_amendment']
     seconds = value.get('elapsed_seconds_from_reservation')
@@ -452,7 +499,7 @@ def verify_first(value, request, *, loader=None):
             or len(value.get('rows', [])) != 1 or value.get('authorization') != auth
             or value.get('semantic_amendment') != amendment
             or value.get('identity') != value['rows'][0]['identity']
-            or type(seconds) not in (float,int) or not math.isfinite(seconds) or not 0 <= seconds < 3600
+            or value.get('clock_status') != 'verified'
             or value.get('error') is not None or value.get('failure_stage') is not None):
         raise ValueError('passed S1 first-result envelope required')
     if read_json(verify_record(value['request'])['path']) != request:

@@ -396,14 +396,20 @@ class S1RecoveryTests(unittest.TestCase):
             self.put('jobs/'+s1.JOB+'/config.json',request)
             row,_=synthetic_row(self.root/'numeric',request)
             rows=[dict(row,identity=i.record()) for i in output_identities(self.config,'calibration')]
-            with patch.dict(os.environ,VIPE_RESERVATION_START=kwargs['env']['VIPE_RESERVATION_START']):
-                first=first_record(request,output,'passed',rows=rows[:1],runtime=self.observed,
-                    checks=qualify_row(row,request,first=True),raw=[row['diagnostics']])
+            import json
+            from vipe_benchmark.s1_clock import ReservationClock
+            reservation = self.ledger.states()[s1.JOB]
+            self.clock = s1.captured_clock(self.root, self.config, reservation, command)
+            self.clock.match(json.loads(kwargs['env']['VIPE_S1_RESERVATION_CLOCK']))
+            first=first_record(request,output,'passed',clock=self.clock,rows=rows[:1],runtime=self.observed,
+                checks=qualify_row(row,request,first=True),raw=[row['diagnostics']])
             self.put('jobs/'+s1.JOB+'/result.json',dict(status='complete',job_id=s1.JOB,
                 component='S1',branch='calibration',rows=rows,runtime=self.observed,
                 native_wall_seconds=sum(r['native_group_wall_seconds'] for r in rows),
                 peak_allocated_bytes=1024,peak_reserved_bytes=2048,
-                configuration=file_record(output/'config.json'),first_result=first))
+                configuration=file_record(output/'config.json'),first_result=first,reservation_clock=self.clock.mapping()))
+            if hasattr(self,'before_worker_return'):
+                self.before_worker_return(request,output,reservation)
             return real_popen([sys.executable,'-c','pass'],**kwargs)
         original_read=Path.read_text
         def host_read(path,*args,**kwargs):
@@ -441,7 +447,7 @@ class S1RecoveryTests(unittest.TestCase):
                 s1.resolved_result(self.root,self.config,self.ledger.events(),dict(finish,**{field:value}))
         doc=read_json(result['path']);rows=doc['rows']
         for badrows in (rows[:-1],rows[:-1]+rows[:1],list(reversed(rows))):
-            with self.assertRaises(ValueError): validate_result(dict(doc,rows=badrows),request,self.config)
+            with self.assertRaises(ValueError): validate_result(dict(doc,rows=badrows),request,self.config,clock=self.clock)
         Path(result['path']).write_text('{}')
         with self.assertRaises(ValueError):result_record(self.root,'S1-calibration')
 
@@ -486,13 +492,12 @@ class FailureEvidenceTests(unittest.TestCase):
         for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             kind = case['kind']
             with self.subTest(**case),tempfile.TemporaryDirectory() as temp:
-                root=Path(temp);valid=np.ones((540,960),bool);np.save(root/'valid.npy',valid)
-                cv2.imwrite(str(root/'rgb.png'),np.zeros((540,960,3),np.uint8))
+                fixture = S1RecoveryTests(); fixture.setUp(); self.addCleanup(fixture.doCleanups)
+                _, request, evidence = fixture.register()
+                reservation = fixture.ledger.reserve(s1.JOB, fixture.command(evidence), evidence)
+                clock = s1.captured_clock(fixture.root, fixture.config, reservation, fixture.command(evidence))
+                root=Path(temp);valid=np.ones((540,960),bool)
                 identities=[Identity('calibration',0,f) for f in (50,62)]
-                rows=[dict(identity=i.record(),rgb=file_record(root/'rgb.png'),valid=file_record(root/'valid.npy'),K=np.eye(3).tolist(),grid='distorted-opencv-integer') for i in identities]
-                write_json(root/'inputs.json',dict(rgb=rows))
-                write_json(root/'auth.json',dict(semantic_amendment={}))
-                request=dict(job_id=s1.JOB,component='S1',branch='calibration',inputs=file_record(root/'inputs.json'),assets={},recovery_authorization=file_record(root/'auth.json'))
                 labels=np.zeros(valid.shape,np.int32)
                 prediction=SegmentationResult(labels,{},valid,{})
                 if kind == 'qualification':
@@ -518,7 +523,7 @@ class FailureEvidenceTests(unittest.TestCase):
                     expected = {'contract': 'instances must be int32 on the image grid',
                                 'serialization': 'serialization failed', 'qualification': 'invalid raw S1 logits/probabilities/boxes'}[kind]
                     with self.assertRaisesRegex((ValueError,KeyError), expected):
-                        segment(request,root/'output',load())
+                        segment(request,root/'output',load(),clock=clock)
                 self.assertEqual(len(calls),1)
                 self.assertNotEqual(read_json(root/'output/first-result-qualification.json')['status'],'passed')
                 self.assertEqual(len(list((root/'output').rglob('*-failure-evidence.json'))),1)
@@ -745,6 +750,381 @@ class ReceiptContractTests(unittest.TestCase):
 
 
 
+class ReservationClockTests(unittest.TestCase):
+    def admitted(self, *, reduced=False):
+        fixture = S1RecoveryTests('test_reduced_cumulative_deadline' if reduced else 'runTest')
+        fixture.setUp(); self.addCleanup(fixture.doCleanups)
+        _, request, evidence = fixture.register()
+        reservation = fixture.ledger.reserve(s1.JOB, fixture.command(evidence), evidence)
+        clock = s1.captured_clock(fixture.root, fixture.config, reservation, fixture.command(evidence))
+        return fixture, request, reservation, clock
+
+    def test_context_matrix(self):
+        import math
+        from vipe_benchmark.s1_clock import ReservationClock
+        fixture, request, reservation, clock = self.admitted()
+        self.assertEqual(clock.effective_seconds, 3600)
+        reduced, _, actual, short = self.admitted(reduced=True)
+        self.assertEqual(short.effective_seconds, 90)
+        self.assertEqual(short.cleanup_reserve_seconds, 22.5)
+        self.assertTrue(clock.match(ReservationClock.from_reservation(reservation).mapping()))
+        with self.assertRaisesRegex(ValueError,'captured reservation required'):
+            s1.captured_clock(fixture.root,fixture.config,None,reservation['command'])
+        bad=copy.deepcopy(reservation); bad['sequence']=float(bad['sequence'])
+        with self.assertRaisesRegex(ValueError,'captured active reservation changed'):
+            s1.captured_clock(fixture.root,fixture.config,bad,reservation['command'])
+        mutations = {'null':None, 'bool':True, 'string':'1', 'nan':float('nan'),
+            'infinity':float('inf'), 'negative':-1, 'zero':0}
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
+            with self.subTest(**case):
+                value = copy.deepcopy(clock.mapping()); field, kind = case['field'], case['kind']
+                if kind == 'missing': value.pop(field)
+                elif kind in mutations: value[field] = mutations[kind]
+                elif kind == 'changed':
+                    if field == 'job_id': value[field] = 'S1-calibration'
+                    elif field == 'boot_id': value[field] = 'wrong-boot'
+                    elif field == 'request': value[field] = dict(value[field], bytes=True)
+                    elif field == 'reservation': value[field] = dict(sequence=True,event_sha256='x'*64)
+                    else: value[field] += 1
+                elif kind == 'forged':
+                    fake = copy.deepcopy(reservation)
+                    if field == 'effective_seconds': fake['seconds'] = 90
+                    elif field == 'monotonic_start': fake[field] += 10
+                    elif field == 'boot_id': fake[field] = 'other-boot'
+                    elif field == 'reservation': fake['sequence'] += 1
+                    value = ReservationClock.from_reservation(fake).mapping()
+                elif kind == 'oversized': value[field] = 3601
+                elif kind == 'overflow':
+                    value.update(monotonic_start=1e308, effective_seconds=3600,
+                        cleanup_reserve_seconds=30., total_deadline=1e308, work_deadline=1e308)
+                elif kind == 'underflow':
+                    value.update(monotonic_start=0., effective_seconds=math.nextafter(0.,1.),
+                        cleanup_reserve_seconds=0., total_deadline=math.nextafter(0.,1.),work_deadline=math.nextafter(0.,1.))
+                elif kind == 'empty': value[field] = ''
+                elif kind == 'hash': value[field]['event_sha256'] = '0'*64
+                elif kind == 'request_hash': value[field]['sha256'] = '0'*64
+                with self.assertRaises((ValueError, TypeError, KeyError)):
+                    clock.match(value)
+
+    def test_phase_boundaries(self):
+        import math
+        from vipe_benchmark import s1_clock
+        _, _, _, clock = self.admitted(reduced=True)
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
+            with self.subTest(**case):
+                kind = case['kind']; now = clock.monotonic_start
+                if kind == 'before_work': now = math.nextafter(clock.work_deadline, -math.inf)
+                elif kind == 'at_work': now = clock.work_deadline
+                elif kind == 'after_work': now = math.nextafter(clock.work_deadline, math.inf)
+                elif kind == 'at_total': now = clock.total_deadline
+                elif kind == 'after_total': now = math.nextafter(clock.total_deadline, math.inf)
+                elif kind == 'negative': now = -1
+                elif kind == 'nan': now = float('nan')
+                elif kind == 'infinity': now = float('inf')
+                elif kind == 'before_start': now -= 1
+                boot = 'different' if kind == 'wrong_boot' else clock.boot_id
+                with patch.object(s1_clock.time, 'monotonic', return_value=now), patch.object(s1_clock, 'boot_id', return_value=boot):
+                    if case['valid']:
+                        seconds = clock.observe(work=case['work'])
+                        self.assertEqual(seconds, now-clock.monotonic_start)
+                        self.assertEqual(clock.recorded(seconds, 'passed' if case['work'] else 'failed'), seconds)
+                    else:
+                        with self.assertRaisesRegex((ValueError, TimeoutError), 'reservation clock'):
+                            clock.observe(work=case['work'])
+        with patch.object(s1_clock.time, 'monotonic', side_effect=AssertionError('historical read sampled live time')), patch.object(s1_clock, 'boot_id', side_effect=AssertionError('historical read sampled boot')):
+            self.assertTrue(clock.match(clock.mapping()))
+            self.assertEqual(clock.recorded(0, 'passed'),0)
+            self.assertEqual(clock.recorded(90, 'failed'),90)
+            with self.assertRaisesRegex(ValueError,'work deadline'): clock.recorded(67.5, 'passed')
+            with self.assertRaisesRegex(ValueError,'total deadline'): clock.recorded(math.nextafter(90., math.inf),'failed')
+            with self.assertRaisesRegex(ValueError,'authoritative'): clock.match(dict(clock.mapping(),boot_id='old-wrong'))
+
+    def test_failure_reconciliation(self):
+        import os
+        from vipe_benchmark import s1_clock, s1_evidence
+        fixture, request, reservation, clock = self.admitted(reduced=True)
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
+            with self.subTest(**case):
+                kind=case['kind']; output=fixture.root/('failure-'+kind); output.mkdir()
+                write_json(output/'config.json',request)
+                observation = clock.monotonic_start + 3
+                supplied = None if kind == 'unavailable' else clock
+                if kind == 'late': observation = clock.total_deadline + 1
+                if kind == 'nan': observation = float('nan')
+                with patch.dict(os.environ,VIPE_RESERVATION_START='bogus'), patch.object(s1_clock.time,'monotonic',return_value=observation), patch.object(s1_clock,'boot_id',return_value=clock.boot_id):
+                    if kind in ('unavailable','late','nan'):
+                        primary=RuntimeError('original primary')
+                        record=s1_evidence.preserve_failure(request,output,None,primary,clock=supplied)
+                        self.assertEqual(read_json(record['path'])['error'],'original primary')
+                        value=read_json(output/'first-result-qualification.json')
+                        self.assertEqual(value['clock_status'],'unverified')
+                        with self.assertRaises((ValueError,TypeError)):
+                            s1_evidence.reconcile_first(request,output,clock=supplied,error='later error')
+                        if kind=='late': self.assertEqual(value['elapsed_seconds_from_reservation'],91)
+                        if kind=='unavailable': self.assertIsNone(value['elapsed_seconds_from_reservation'])
+                        if kind=='nan': self.assertEqual(value['clock_observation'],'nan')
+                    else:
+                        if kind != 'missing':
+                            raw=fixture.put(kind+'-raw.json',{'raw':'original'})
+                            s1_evidence.first_record(request,output,kind,clock=clock,error='original',stage='adapter',raw=[raw])
+                        before=(output/'first-result-qualification.json').read_bytes() if kind!='missing' else None
+                        with patch.object(s1_clock.time,'monotonic',return_value=clock.monotonic_start+4):
+                            record=s1_evidence.reconcile_first(request,output,clock=clock,error='cleanup')
+                        value=read_json(record['path']); self.assertEqual(value['clock_status'],'verified')
+                        self.assertEqual(value['elapsed_seconds_from_reservation'],4 if kind=='missing' else 3)
+                        if before is not None: self.assertEqual(Path(record['path']).read_bytes(),before)
+                        else: self.assertEqual(value['failure_stage'],'supervisor_cleanup')
+        # Real helper derives the captured context, with no inherited start env.
+        from vipe_benchmark.s1_cpu_helper import run
+        output=fixture.root/'jobs'/s1.JOB; output.mkdir(); write_json(output/'config.json',request)
+        with patch.dict(os.environ,{},clear=False):
+            os.environ.pop('VIPE_RESERVATION_START',None)
+            summary=run(dict(operation='reconcile',args=dict(local=str(fixture.root),config=fixture.config,
+                reservation=reservation,outcome=dict(error='prelaunch failed'),deadline=clock.work_deadline)))
+        self.assertEqual(summary['first_result']['status'],'verified')
+        first=read_json(summary['first_result']['value']['path'])
+        self.assertTrue(clock.match(first['reservation_clock']))
+        self.assertGreaterEqual(first['elapsed_seconds_from_reservation'],0)
+
+    def test_worker_bootstrap(self):
+        import json, os
+        import basketball_vipe_worker as worker
+        from vipe_benchmark import s1_clock
+        fixture, request, reservation, clock = self.admitted()
+        command=reservation['command']; args=SimpleNamespace(operation='component',config=Path(command[5]),request=Path(command[7]),output=Path(command[9]))
+        with patch.object(sys,'argv',command[1:]), patch.dict(os.environ,VIPE_S1_RESERVATION_CLOCK=json.dumps(clock.mapping())):
+            self.assertEqual(s1.worker_clock(args,request,fixture.config),clock)
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
+            with self.subTest(**case):
+                argv=command[1:].copy(); env={'VIPE_S1_RESERVATION_CLOCK':json.dumps(clock.mapping())}
+                kind=case['kind']
+                if kind=='operation': argv[2]='setup'
+                elif kind=='output': argv[-1]=str(fixture.root/'wrong-output')
+                elif kind=='request':
+                    alternate=fixture.put('other/requests/'+s1.JOB+'.json',request); argv[6]=alternate['path']
+                elif kind=='config': argv[4]=fixture.put('other-config.json',fixture.config)['path']
+                elif kind=='script': argv[0]=str(fixture.root/'other-worker.py')
+                elif kind=='missing': env['VIPE_S1_RESERVATION_CLOCK']='null'
+                elif kind=='forged':
+                    fake=copy.deepcopy(reservation); fake['monotonic_start']+=1
+                    env['VIPE_S1_RESERVATION_CLOCK']=json.dumps(s1_clock.ReservationClock.from_reservation(fake).mapping())
+                elif kind=='interpreter': pass
+                elif kind=='duplicate': argv.extend(['--operation','component'])
+                # Each invocation gets an unused failure destination. Canonical cases use
+                # the real output, whose previous diagnostic files are removed between calls.
+                output=Path(argv[argv.index('--output')+1])
+                if output.exists():
+                    import shutil; shutil.rmtree(output)
+                seen=[]
+                def premodel(req,out,cfg,*,clock):
+                    seen.append(clock)
+                    raise RuntimeError('deliberate pre-model failure')
+                with patch.object(sys,'argv',argv), patch.dict(os.environ,env), patch('vipe_benchmark.stages.run',side_effect=premodel), patch.object(sys,'executable',str(fixture.root/'wrong-python') if kind=='interpreter' else sys.executable):
+                    with self.assertRaises((ValueError,RuntimeError)) as caught:
+                        worker.main()
+                if kind=='valid':
+                    self.assertEqual(str(caught.exception),'deliberate pre-model failure'); self.assertEqual(seen,[clock])
+                    value=read_json(output/'first-result-qualification.json'); self.assertEqual(value['clock_status'],'verified')
+                else:
+                    self.assertEqual(seen,[])
+                    value=read_json(output/'unavailable-input-failure-evidence.json'); self.assertEqual(value['clock_status'],'unverified')
+                self.assertEqual(read_json(output/'failure.json')['status'],'failed')
+
+    def test_real_segment_publication_barriers(self):
+        import builtins
+        from contextlib import ExitStack
+        from vipe_benchmark import s1_clock, s1_evidence, stages
+        from vipe_benchmark.access import RGBLoader
+        from vipe_benchmark.backends import SegmentationResult
+        fixture, request, reservation, clock = self.admitted(reduced=True)
+        row, arrays = synthetic_row(fixture.root/'barrier-native',request)
+        prediction=SegmentationResult(np.load(row['instances']['path']),row['semantics'],np.ones((540,960),bool),row['metadata'],diagnostics=arrays)
+        real_load=RGBLoader.load; real_qualify=s1_evidence.qualify_row
+        real_write=s1_evidence.write_json; real_read=s1_evidence.read_json
+        real_verify=s1_evidence.verify_first; real_first=s1_evidence.first_record; real_print=builtins.print
+        real_runtime=s1_evidence.qualify_runtime; real_record=s1_evidence.file_record
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
+            with self.subTest(**case):
+                kind=case['kind']; output=fixture.root/('segment-'+kind)
+                now=[clock.monotonic_start+1]; loads=[]; calls=[]; verified=[]; published=[]
+                def load(loader, identity):
+                    loads.append(identity.frame)
+                    if identity.frame==62:
+                        record=file_record(output/'first-result-qualification.json')
+                        value=read_json(record['path']); real_verify(value,request,clock=clock)
+                        self.assertEqual(record,published[0]); self.assertLess(now[0],clock.work_deadline)
+                        raise RuntimeError('deliberate second input stop')
+                    return real_load(loader,identity)
+                def predict(*args,**kwargs): calls.append(1); return [prediction]
+                def qualify(*args,**kwargs):
+                    result=real_qualify(*args,**kwargs)
+                    if kind=='qualification': now[0]=clock.work_deadline
+                    return result
+                def write(path,value):
+                    result=real_write(path,value)
+                    if Path(path).name=='first-result-qualification.json' and value['status']=='passed':
+                        published.append(file_record(path))
+                        if kind=='write': now[0]=clock.work_deadline
+                    return result
+                def read(path):
+                    result=real_read(path)
+                    if Path(path).name=='first-result-qualification.json' and kind=='readback': now[0]=clock.work_deadline
+                    return result
+                def qualify_runtime(*args,**kwargs):
+                    result=real_runtime(*args,**kwargs)
+                    if kind=='runtime': now[0]=clock.work_deadline
+                    return result
+                def record_file(path,*args,**kwargs):
+                    result=real_record(path,*args,**kwargs)
+                    if kind=='hash' and Path(path).name=='first-result-qualification.json': now[0]=clock.work_deadline
+                    return result
+                def verify(*args,**kwargs):
+                    result=real_verify(*args,**kwargs); verified.append(now[0])
+                    if (kind=='envelope_qualification' and len(verified)==1) or (kind=='reverify' and len(verified)==2) or (kind=='reuse' and len(verified)==3): now[0]=clock.work_deadline
+                    return result
+                def first(*args,**kwargs):
+                    result=real_first(*args,**kwargs)
+                    if kind in ('reuse','reuse_positive') and args[2]=='passed': result=real_first(*args,**kwargs)
+                    return result
+                def progress(*args,**kwargs):
+                    result=real_print(*args,**kwargs)
+                    if kind=='pre_input': now[0]=clock.work_deadline
+                    return result
+                cuda=SimpleNamespace(synchronize=lambda:None,max_memory_allocated=lambda:0,max_memory_reserved=lambda:0)
+                with ExitStack() as stack:
+                    for target, replacement in [('vipe_benchmark.s1_clock.time.monotonic',lambda:now[0]),
+                        ('vipe_benchmark.s1_clock.boot_id',lambda:clock.boot_id),
+                        ('vipe_benchmark.stages._model_runtime',lambda req:copy.deepcopy(fixture.observed)),
+                        ('vipe_benchmark.backends.build_backend',lambda *a,**k:SimpleNamespace(segment=predict)),
+                        ('vipe_benchmark.runtime_capture.loaded_runtime',lambda *a,**k:fixture.observed['loaded_files']),
+                        ('vipe_benchmark.s1_evidence.qualify_row',qualify),('vipe_benchmark.s1_evidence.qualify_runtime',qualify_runtime),
+                        ('vipe_benchmark.s1_evidence.file_record',record_file),('vipe_benchmark.s1_evidence.write_json',write),
+                        ('vipe_benchmark.s1_evidence.read_json',read),('vipe_benchmark.s1_evidence.verify_first',verify),
+                        ('vipe_benchmark.s1_evidence.first_record',first),('builtins.print',progress)]:
+                        stack.enter_context(patch(target,side_effect=replacement))
+                    stack.enter_context(patch.object(RGBLoader,'load',load))
+                    stack.enter_context(patch.dict(sys.modules,{'torch':SimpleNamespace(cuda=cuda)}))
+                    with self.assertRaisesRegex((TimeoutError,RuntimeError),'second input stop' if kind in ('positive','reuse_positive') else 'work deadline'):
+                        stages.segment(request,output,fixture.config,clock=clock)
+                self.assertEqual(calls,[1])
+                self.assertEqual(loads.count(50),case['first_loads'])
+                self.assertEqual(loads.count(62),1 if kind in ('positive','reuse_positive') else 0)
+                self.assertEqual(set(loads),{50,62} if kind in ('positive','reuse_positive') else {50})
+                import json
+                real_print('S1_CLOCK_BARRIER '+json.dumps(dict(case=kind,loader_frames=loads,adapter_calls=len(calls),
+                    qualification_observations=verified,completion_observation=now[0],work_deadline=clock.work_deadline,
+                    first_publication=published[0] if published else None),sort_keys=True))
+                self.assertFalse((output/'result.json').exists())
+                produced=list(output.rglob('*-produced-row.json')); self.assertEqual(len(produced),1)
+                self.assertEqual(s1_evidence.produced_row(read_json(produced[0]),request).frame,50)
+                if published:
+                    self.assertEqual(file_record(output/'first-result-qualification.json'),published[0])
+                    value=read_json(published[0]['path']); self.assertEqual(value['status'],'passed')
+                    self.assertTrue(real_verify(value,request,clock=clock))
+                    self.assertEqual(file_record(value['raw_evidence'][0]['path']),value['raw_evidence'][0])
+                    self.assertLess(value['elapsed_seconds_from_reservation'],clock.work_deadline-clock.monotonic_start)
+                if kind=='positive': self.assertGreaterEqual(len(verified),2)
+
+    def test_identical_reuse_and_conflicts(self):
+        import os
+        from vipe_benchmark import s1_evidence, s1_clock, stages
+        fixture,request,reservation,clock=self.admitted(reduced=True)
+        row,_=synthetic_row(fixture.root/'reuse-native',request)
+        checks=s1_evidence.qualify_row(row,request,first=True)
+        now=[clock.monotonic_start+1]
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
+            with self.subTest(**case), patch.object(s1_clock.time,'monotonic',side_effect=lambda:now[0]), patch.object(s1_clock,'boot_id',return_value=clock.boot_id):
+                now[0]=clock.monotonic_start+1
+                kind=case['kind']; output=fixture.root/('reuse-'+kind); output.mkdir(); write_json(output/'config.json',request)
+                kwargs=dict(clock=clock,rows=[row],runtime=fixture.observed,checks=checks,raw=[row['diagnostics']])
+                if kind in ('failed','not_reached'):
+                    original=s1_evidence.first_record(request,output,kind,clock=clock,error='original',stage='adapter')
+                else:
+                    original=s1_evidence.first_record(request,output,'passed',**kwargs)
+                before=Path(original['path']).read_bytes()
+                now[0]+=1
+                if kind=='identical':
+                    self.assertEqual(s1_evidence.first_record(request,output,'passed',**kwargs),original)
+                    self.assertEqual(read_json(original['path'])['elapsed_seconds_from_reservation'],1)
+                elif kind=='later_failure':
+                    now[0]=clock.total_deadline+2
+                    primary=RuntimeError('later original error')
+                    raw=s1_evidence.preserve_failure(request,output,None,primary,clock=clock)
+                    self.assertEqual(primary.s1_first_result,original)
+                    self.assertEqual(read_json(raw['path'])['clock_status'],'unverified')
+                elif kind=='conflict':
+                    with self.assertRaisesRegex(ValueError,'conflicting'):
+                        s1_evidence.first_record(request,output,'passed',**dict(kwargs,checks=[]))
+                elif kind=='wrong_context':
+                    fake=copy.deepcopy(reservation);fake['seconds']=91
+                    with self.assertRaisesRegex(ValueError,'authoritative reservation'):
+                        s1_evidence.first_record(request,output,'passed',**dict(kwargs,clock=s1_clock.ReservationClock.from_reservation(fake)))
+                elif kind=='stale':
+                    Path(original['path']).write_text('{}')
+                    before=Path(original['path']).read_bytes()
+                    with self.assertRaisesRegex(ValueError,'clock'):
+                        s1_evidence.first_record(request,output,'passed',**kwargs)
+                else:
+                    with self.assertRaisesRegex(ValueError,'passed S1 first-result'):
+                        s1_evidence.first_record(request,output,'passed',**kwargs)
+                self.assertEqual(Path(original['path']).read_bytes(),before)
+        with patch.dict(os.environ,VIPE_RESERVATION_START=str(clock.monotonic_start)), patch('vipe_benchmark.stages._model_runtime',side_effect=AssertionError('setup reached')):
+            with self.assertRaisesRegex(ValueError,'trusted reservation clock required'):
+                stages.segment(request,fixture.root/'missing-context',fixture.config)
+
+    def test_acceptance_and_historical_authority(self):
+        from vipe_benchmark import s1_clock, s1_evidence
+        fixture=S1RecoveryTests(); fixture.setUp(); self.addCleanup(fixture.doCleanups)
+        active_mutations={}
+        def active_checks(request,output,reservation):
+            original=read_json(output/'result.json')
+            for kind in ('start','boot','effective','sequence','hash'):
+                fake=copy.deepcopy(reservation)
+                if kind=='start': fake['monotonic_start']+=10
+                elif kind=='boot': fake['boot_id']='wrong-historical-boot'
+                elif kind=='effective': fake['seconds']=90
+                elif kind=='sequence': fake['sequence']+=1
+                else: fake['event_sha256']='0'*64
+                value=copy.deepcopy(original); value['reservation_clock']=s1_clock.ReservationClock.from_reservation(fake).mapping()
+                with self.assertRaisesRegex(ValueError,'authoritative reservation') as caught:
+                    s1.accept_result(fixture.root,fixture.config,request,value,output,reservation=reservation)
+                active_mutations[kind]=str(caught.exception)
+            self.assertFalse((output/'acceptance.json').exists())
+        fixture.before_worker_return=active_checks
+        _,request,record=fixture.run_controller(); clock=fixture.clock
+        events=fixture.ledger.events(); finish=fixture.ledger.states()[s1.JOB]
+        result=read_json(record['path']); first=read_json(result['first_result']['path'])
+        acceptance=read_json(finish['acceptance']['path']); terminal=read_json(finish['terminal_receipt']['path'])
+        self.assertEqual(s1.resolved_result(fixture.root,fixture.config,events,finish),record)
+        with patch.object(s1_clock,'boot_id',side_effect=AssertionError('historical boot sampled')), patch.object(s1_clock.time,'monotonic',side_effect=AssertionError('historical time sampled')):
+            self.assertEqual(s1.resolved_result(fixture.root,fixture.config,events,finish),record)
+        reservation=next(e for e in events if e.get('event')=='reserve' and e.get('job_id')==s1.JOB)
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
+            with self.subTest(**case):
+                kind=case['kind']; self.assertIn('authoritative reservation',active_mutations[kind]); fake=copy.deepcopy(reservation)
+                if kind=='start': fake['monotonic_start']+=10
+                elif kind=='boot': fake['boot_id']='wrong-historical-boot'
+                elif kind=='effective': fake['seconds']=90
+                elif kind=='sequence': fake['sequence']+=1
+                elif kind=='hash': fake['event_sha256']='0'*64
+                mapping=s1_clock.ReservationClock.from_reservation(fake).mapping()
+                directory=fixture.root/('clock-mutation-'+kind)
+                changed_first=copy.deepcopy(first); changed_first['reservation_clock']=mapping
+                write_json(directory/'first.json',changed_first)
+                changed_result=copy.deepcopy(result); changed_result.update(first_result=file_record(directory/'first.json'),reservation_clock=mapping)
+                with self.assertRaisesRegex(ValueError,'authoritative reservation'):
+                    s1_evidence.validate_result(changed_result,request,fixture.config,clock=clock)
+                write_json(directory/'result.json',changed_result)
+                changed=copy.deepcopy(finish); changed['result']=file_record(directory/'result.json')
+                accepted=copy.deepcopy(acceptance); accepted.update(result=changed['result'],first_result=changed_result['first_result'],reservation_clock=mapping,
+                    records=s1.referenced_records([changed_result,request]))
+                write_json(directory/'acceptance.json',accepted); changed['acceptance']=file_record(directory/'acceptance.json')
+                receipt=copy.deepcopy(terminal); receipt['acceptance']=changed['acceptance']; receipt['outcome'].update(result=changed['result'],acceptance=changed['acceptance'])
+                write_json(directory/'terminal.json',receipt); changed['terminal_receipt']=file_record(directory/'terminal.json')
+                with self.assertRaisesRegex(ValueError,'authoritative reservation'):
+                    s1.resolved_result(fixture.root,fixture.config,events,changed)
+
+
 class NumericalEnvelopeTests(unittest.TestCase):
     def envelope(self):
         from vipe_benchmark.access import output_identities
@@ -847,7 +1227,7 @@ class NumericalEnvelopeTests(unittest.TestCase):
         _, request, record = fixture.run_controller()
         finish = fixture.ledger.states()[s1.JOB]; events = fixture.ledger.events()
         positive = read_json(record['path'])
-        self.assertTrue(validate_result(positive, request, fixture.config))
+        self.assertTrue(validate_result(positive, request, fixture.config, clock=fixture.clock))
         self.assertEqual(s1.resolved_result(fixture.root, fixture.config, events, finish), record)
         acceptance = read_json(finish['acceptance']['path'])
         terminal = read_json(finish['terminal_receipt']['path'])
@@ -860,7 +1240,7 @@ class NumericalEnvelopeTests(unittest.TestCase):
                 if field == 'native_group_wall_seconds': value['rows'][1][field] = -1
                 elif field == 'native_wall_seconds': value[field] += 1
                 else: value[field] = True
-                with self.assertRaisesRegex(ValueError, field): validate_result(value, request, fixture.config)
+                with self.assertRaisesRegex(ValueError, field): validate_result(value, request, fixture.config, clock=fixture.clock)
                 directory = fixture.root/'mutations'/field
                 paths = [directory/name for name in ('result.json','acceptance.json','receipt.json')]
                 write_json(paths[0], value); changed = dict(finish, result=file_record(paths[0]))
@@ -913,6 +1293,14 @@ class NumericalEnvelopeTests(unittest.TestCase):
 
 # Literal ordered callback contract consumed without importing this module.
 SUBTEST_CASES = {
+'test_vipe_benchmark_s1_recovery.ReservationClockTests.test_identical_reuse_and_conflicts': [{'kind': 'identical'}, {'kind': 'later_failure'}, {'kind': 'conflict'}, {'kind': 'wrong_context'}, {'kind': 'stale'}, {'kind': 'failed'}, {'kind': 'not_reached'}],
+'test_vipe_benchmark_s1_recovery.ReservationClockTests.test_context_matrix': [{'field': 'monotonic_start', 'kind': 'missing'}, {'field': 'monotonic_start', 'kind': 'null'}, {'field': 'monotonic_start', 'kind': 'bool'}, {'field': 'monotonic_start', 'kind': 'string'}, {'field': 'monotonic_start', 'kind': 'nan'}, {'field': 'monotonic_start', 'kind': 'infinity'}, {'field': 'monotonic_start', 'kind': 'negative'}, {'field': 'monotonic_start', 'kind': 'changed'}, {'field': 'effective_seconds', 'kind': 'missing'}, {'field': 'effective_seconds', 'kind': 'null'}, {'field': 'effective_seconds', 'kind': 'bool'}, {'field': 'effective_seconds', 'kind': 'string'}, {'field': 'effective_seconds', 'kind': 'nan'}, {'field': 'effective_seconds', 'kind': 'infinity'}, {'field': 'effective_seconds', 'kind': 'negative'}, {'field': 'effective_seconds', 'kind': 'changed'}, {'field': 'cleanup_reserve_seconds', 'kind': 'missing'}, {'field': 'cleanup_reserve_seconds', 'kind': 'null'}, {'field': 'cleanup_reserve_seconds', 'kind': 'bool'}, {'field': 'cleanup_reserve_seconds', 'kind': 'string'}, {'field': 'cleanup_reserve_seconds', 'kind': 'nan'}, {'field': 'cleanup_reserve_seconds', 'kind': 'infinity'}, {'field': 'cleanup_reserve_seconds', 'kind': 'negative'}, {'field': 'cleanup_reserve_seconds', 'kind': 'changed'}, {'field': 'total_deadline', 'kind': 'missing'}, {'field': 'total_deadline', 'kind': 'null'}, {'field': 'total_deadline', 'kind': 'bool'}, {'field': 'total_deadline', 'kind': 'string'}, {'field': 'total_deadline', 'kind': 'nan'}, {'field': 'total_deadline', 'kind': 'infinity'}, {'field': 'total_deadline', 'kind': 'negative'}, {'field': 'total_deadline', 'kind': 'changed'}, {'field': 'work_deadline', 'kind': 'missing'}, {'field': 'work_deadline', 'kind': 'null'}, {'field': 'work_deadline', 'kind': 'bool'}, {'field': 'work_deadline', 'kind': 'string'}, {'field': 'work_deadline', 'kind': 'nan'}, {'field': 'work_deadline', 'kind': 'infinity'}, {'field': 'work_deadline', 'kind': 'negative'}, {'field': 'work_deadline', 'kind': 'changed'}, {'field': 'effective_seconds', 'kind': 'zero'}, {'field': 'effective_seconds', 'kind': 'oversized'}, {'field': 'monotonic_start', 'kind': 'overflow'}, {'field': 'effective_seconds', 'kind': 'underflow'}, {'field': 'job_id', 'kind': 'changed'}, {'field': 'request', 'kind': 'changed'}, {'field': 'reservation', 'kind': 'changed'}, {'field': 'boot_id', 'kind': 'empty'}, {'field': 'reservation', 'kind': 'hash'}, {'field': 'request', 'kind': 'request_hash'}, {'field': 'monotonic_start', 'kind': 'forged'}, {'field': 'effective_seconds', 'kind': 'forged'}, {'field': 'boot_id', 'kind': 'forged'}, {'field': 'reservation', 'kind': 'forged'}, {'field': 'reservation', 'kind': 'missing'}, {'field': 'reservation', 'kind': 'null'}, {'field': 'reservation', 'kind': 'bool'}, {'field': 'reservation', 'kind': 'string'}, {'field': 'request', 'kind': 'missing'}, {'field': 'request', 'kind': 'null'}, {'field': 'request', 'kind': 'bool'}, {'field': 'request', 'kind': 'string'}, {'field': 'boot_id', 'kind': 'missing'}, {'field': 'boot_id', 'kind': 'null'}, {'field': 'boot_id', 'kind': 'bool'}, {'field': 'boot_id', 'kind': 'string'}],
+'test_vipe_benchmark_s1_recovery.ReservationClockTests.test_phase_boundaries': [{'kind': 'zero', 'work': True, 'valid': True}, {'kind': 'before_work', 'work': True, 'valid': True}, {'kind': 'at_work', 'work': True, 'valid': False}, {'kind': 'after_work', 'work': True, 'valid': False}, {'kind': 'at_total', 'work': False, 'valid': True}, {'kind': 'after_total', 'work': False, 'valid': False}, {'kind': 'negative', 'work': True, 'valid': False}, {'kind': 'nan', 'work': True, 'valid': False}, {'kind': 'infinity', 'work': True, 'valid': False}, {'kind': 'before_start', 'work': True, 'valid': False}, {'kind': 'wrong_boot', 'work': True, 'valid': False}],
+'test_vipe_benchmark_s1_recovery.ReservationClockTests.test_failure_reconciliation': [{'kind': 'missing'}, {'kind': 'failed'}, {'kind': 'not_reached'}, {'kind': 'unavailable'}, {'kind': 'late'}, {'kind': 'nan'}],
+'test_vipe_benchmark_s1_recovery.ReservationClockTests.test_worker_bootstrap': [{'kind': 'valid'}, {'kind': 'missing'}, {'kind': 'forged'}, {'kind': 'operation'}, {'kind': 'output'}, {'kind': 'request'}, {'kind': 'config'}, {'kind': 'script'}, {'kind': 'interpreter'}, {'kind': 'duplicate'}],
+'test_vipe_benchmark_s1_recovery.ReservationClockTests.test_real_segment_publication_barriers': [{'kind': 'positive', 'first_loads': 6}, {'kind': 'reuse_positive', 'first_loads': 8}, {'kind': 'qualification', 'first_loads': 2}, {'kind': 'runtime', 'first_loads': 2}, {'kind': 'envelope_qualification', 'first_loads': 3}, {'kind': 'hash', 'first_loads': 5}, {'kind': 'write', 'first_loads': 5}, {'kind': 'readback', 'first_loads': 5}, {'kind': 'reverify', 'first_loads': 5}, {'kind': 'reuse', 'first_loads': 7}, {'kind': 'pre_input', 'first_loads': 5}],
+'test_vipe_benchmark_s1_recovery.ReservationClockTests.test_acceptance_and_historical_authority': [{'kind': 'start'}, {'kind': 'boot'}, {'kind': 'effective'}, {'kind': 'sequence'}, {'kind': 'hash'}],
+
 'test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_typed_numerical_fields': [{'field': 'native_group_wall_seconds',
                                                                                          'kind': 'missing',
                                                                                          'valid': False},
