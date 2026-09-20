@@ -1,0 +1,125 @@
+{
+  "scenario": "L02",
+  "mode": "normal",
+  "t0": 79554.524941468,
+  "ready_deadline": 79555.524941468,
+  "setup_deadline": 79556.524941468,
+  "setup_cleanup_deadline": 79557.524941468,
+  "action_end": 79554.5824686,
+  "end": 79554.592688335,
+  "execution_seconds": 0.0575416520005092,
+  "cleanup_seconds": 0.010219735006103292,
+  "cleanup_confirmed": true,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "reaped",
+      "pid": 10,
+      "pgid": 10,
+      "start_ticks": 7955452,
+      "wait_status": 15
+    },
+    "sample": {
+      "role": "sample",
+      "state": "reaped",
+      "pid": 11,
+      "pgid": 11,
+      "start_ticks": 7955452,
+      "wait_status": 15
+    }
+  },
+  "errors": [],
+  "signals": [
+    {
+      "pid": 10,
+      "signal": 15,
+      "monotonic": 79554.58690995
+    },
+    {
+      "pid": 11,
+      "signal": 15,
+      "monotonic": 79554.58690995
+    }
+  ],
+  "ticks": [
+    79554.524941468,
+    79554.52658103,
+    79554.531643503,
+    79554.536699357,
+    79554.541754715,
+    79554.546810881,
+    79554.551867482,
+    79554.556990118,
+    79554.56209925,
+    79554.567190126,
+    79554.572245899,
+    79554.577301192,
+    79554.582394013
+  ],
+  "events": [
+    {
+      "event": "ready",
+      "role": "sample",
+      "received": 79554.557014252,
+      "identity": {
+        "pid": 11,
+        "pgid": 11,
+        "start_ticks": 7955452,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "ready",
+      "role": "work",
+      "received": 79554.557035237,
+      "identity": {
+        "pid": 10,
+        "pgid": 10,
+        "start_ticks": 7955452,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "dispatch",
+      "role": "sample",
+      "request_id": 1,
+      "dispatch": 79554.562092021
+    },
+    {
+      "event": "response",
+      "role": "sample",
+      "request_id": 1,
+      "dispatch": 79554.562092021,
+      "received": 79554.582436962,
+      "acquisition_start": 79554.563972015,
+      "acquisition_end": 79554.576126054
+    },
+    {
+      "event": "disposable_reserve_boundary",
+      "monotonic": 79554.582461982
+    }
+  ],
+  "ownership": [],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 317,
+      "blocked_writes": 0
+    },
+    "sample": {
+      "sent": 282,
+      "received": 673,
+      "blocked_writes": 0
+    }
+  }
+}

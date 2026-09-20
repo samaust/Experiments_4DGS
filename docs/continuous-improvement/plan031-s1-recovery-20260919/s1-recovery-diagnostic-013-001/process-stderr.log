@@ -1,0 +1,97 @@
+test_control_primitive_and_frame_mutations (test_vipe_benchmark_supervisor.HelperSessionTests.test_control_primitive_and_frame_mutations) ... ok
+test_envelope_correlation_mutations (test_vipe_benchmark_supervisor.HelperSessionTests.test_envelope_correlation_mutations) ... ok
+test_l01_ready_reuse (test_vipe_benchmark_supervisor.HelperSessionTests.test_l01_ready_reuse) ... ok
+test_l02_ready_and_sample_before_reserve (test_vipe_benchmark_supervisor.HelperSessionTests.test_l02_ready_and_sample_before_reserve) ... ok
+test_l03_owner_bootstrap_block (test_vipe_benchmark_supervisor.HelperSessionTests.test_l03_owner_bootstrap_block) ... ok
+test_l04_child_before_ready_block (test_vipe_benchmark_supervisor.HelperSessionTests.test_l04_child_before_ready_block) ... ok
+test_l05_error_after_spawn (test_vipe_benchmark_supervisor.HelperSessionTests.test_l05_error_after_spawn) ... ok
+test_l06_late_ready (test_vipe_benchmark_supervisor.HelperSessionTests.test_l06_late_ready) ... ok
+test_l07_cancel_during_spawn (test_vipe_benchmark_supervisor.HelperSessionTests.test_l07_cancel_during_spawn) ... ok
+test_l08_late_owner_retained (test_vipe_benchmark_supervisor.HelperSessionTests.test_l08_late_owner_retained) ... ERROR
+test_l09_partial_header (test_vipe_benchmark_supervisor.HelperSessionTests.test_l09_partial_header) ... ok
+test_l10_stalled_body (test_vipe_benchmark_supervisor.HelperSessionTests.test_l10_stalled_body) ... ok
+test_l11_eof_midframe (test_vipe_benchmark_supervisor.HelperSessionTests.test_l11_eof_midframe) ... ok
+test_l12_stalled_request_reader (test_vipe_benchmark_supervisor.HelperSessionTests.test_l12_stalled_request_reader) ... ok
+test_l13_oversized_frame (test_vipe_benchmark_supervisor.HelperSessionTests.test_l13_oversized_frame) ... ok
+test_l14_wrong_correlation (test_vipe_benchmark_supervisor.HelperSessionTests.test_l14_wrong_correlation) ... ok
+test_l15_sample_deadline (test_vipe_benchmark_supervisor.HelperSessionTests.test_l15_sample_deadline) ... ERROR
+test_l16_phase_deadline (test_vipe_benchmark_supervisor.HelperSessionTests.test_l16_phase_deadline) ... ERROR
+test_l17_post_task_acquisition (test_vipe_benchmark_supervisor.HelperSessionTests.test_l17_post_task_acquisition) ... ok
+test_l18_descendant_and_foreign_sentinel (test_vipe_benchmark_supervisor.HelperSessionTests.test_l18_descendant_and_foreign_sentinel) ... ok
+test_l19_term_resistance (test_vipe_benchmark_supervisor.HelperSessionTests.test_l19_term_resistance) ... ok
+test_l20_exit_during_transport (test_vipe_benchmark_supervisor.HelperSessionTests.test_l20_exit_during_transport) ... ok
+test_l21_enumeration_failure (test_vipe_benchmark_supervisor.HelperSessionTests.test_l21_enumeration_failure) ... ok
+test_l22_signal_failure (test_vipe_benchmark_supervisor.HelperSessionTests.test_l22_signal_failure) ... ok
+test_l23_reap_failure (test_vipe_benchmark_supervisor.HelperSessionTests.test_l23_reap_failure) ... ok
+test_l24_summary_reference_adapter (test_vipe_benchmark_supervisor.HelperSessionTests.test_l24_summary_reference_adapter) ... ok
+test_sample_typed_timing_mutations (test_vipe_benchmark_supervisor.HelperSessionTests.test_sample_typed_timing_mutations) ... ok
+
+======================================================================
+ERROR: test_l08_late_owner_retained (test_vipe_benchmark_supervisor.HelperSessionTests.test_l08_late_owner_retained)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py", line 594, in test_l08_late_owner_retained
+    with self.assertRaises(TimeoutError): session.await_ready()
+                                          ~~~~~~~~~~~~~~~~~~~^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py", line 486, in await_ready
+    self.tick(self.ready_deadline)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py", line 461, in tick
+    raise ValueError('S1 ready ownership/thread mismatch')
+ValueError: S1 ready ownership/thread mismatch
+
+======================================================================
+ERROR: test_l15_sample_deadline (test_vipe_benchmark_supervisor.HelperSessionTests.test_l15_sample_deadline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py", line 174, in monitored_call
+    responses = session.tick(deadline)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py", line 450, in tick
+    raise TimeoutError('S1 resource sample timeout' if role == 'sample' else 'S1 work timeout')
+TimeoutError: S1 resource sample timeout
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py", line 628, in test_l15_sample_deadline
+    with self.assertRaises(TimeoutError): self.work(session,seconds=1.2)
+                                          ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py", line 531, in work
+    return sup.monitored_call(operation or self.operation,self.time.monotonic()+seconds,
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sampler or self.sampler,load(),{},lifecycle=life)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py", line 207, in monitored_call
+    raise primary from exc
+vipe_benchmark.supervisor.HelperFailure: TimeoutError: S1 resource sample timeout
+
+======================================================================
+ERROR: test_l16_phase_deadline (test_vipe_benchmark_supervisor.HelperSessionTests.test_l16_phase_deadline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py", line 174, in monitored_call
+    responses = session.tick(deadline)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py", line 434, in tick
+    raise TimeoutError('S1 phase deadline reached')
+TimeoutError: S1 phase deadline reached
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py", line 634, in test_l16_phase_deadline
+    with self.assertRaises(TimeoutError): self.work(session,seconds=.12)
+                                          ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py", line 531, in work
+    return sup.monitored_call(operation or self.operation,self.time.monotonic()+seconds,
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        sampler or self.sampler,load(),{},lifecycle=life)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py", line 207, in monitored_call
+    raise primary from exc
+vipe_benchmark.supervisor.HelperFailure: TimeoutError: S1 phase deadline reached
+HelperCleanupUncertain: helper cleanup not confirmed
+
+----------------------------------------------------------------------
+Ran 27 tests in 4.291s
+
+FAILED (errors=3)

@@ -1,0 +1,140 @@
+{
+  "scenario": "L18",
+  "mode": "descendant",
+  "t0": 80043.107454179,
+  "ready_deadline": 80044.107454179,
+  "setup_deadline": 80045.107454179,
+  "setup_cleanup_deadline": 80046.107454179,
+  "action_end": 80043.164437935,
+  "end": 80043.164441587,
+  "execution_seconds": 0.0569976100086933,
+  "cleanup_seconds": 3.6519923014566302e-06,
+  "cleanup_confirmed": true,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "reaped",
+      "pid": 51,
+      "pgid": 51,
+      "start_ticks": 8004310,
+      "wait_status": 15
+    },
+    "sample": {
+      "role": "sample",
+      "state": "reaped",
+      "pid": 52,
+      "pgid": 52,
+      "start_ticks": 8004310,
+      "wait_status": 15
+    }
+  },
+  "errors": [],
+  "signals": [
+    {
+      "pid": 51,
+      "signal": 15,
+      "monotonic": 80043.149377757
+    },
+    {
+      "pid": 52,
+      "signal": 15,
+      "monotonic": 80043.149377757
+    }
+  ],
+  "ticks": [
+    80043.107454179,
+    80043.107505743,
+    80043.112566252,
+    80043.117622683,
+    80043.12267792,
+    80043.1277331,
+    80043.132827426,
+    80043.137930323,
+    80043.143049752
+  ],
+  "events": [
+    {
+      "event": "ready",
+      "role": "work",
+      "received": 80043.143081118,
+      "identity": {
+        "pid": 51,
+        "pgid": 51,
+        "start_ticks": 8004310,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "ready",
+      "role": "sample",
+      "received": 80043.143105309,
+      "identity": {
+        "pid": 52,
+        "pgid": 52,
+        "start_ticks": 8004310,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "census",
+      "processes": [
+        1,
+        2,
+        3,
+        51,
+        52,
+        53,
+        54
+      ],
+      "controller_threads": 2,
+      "process_threads": {
+        "1": 1,
+        "2": 1,
+        "3": 2,
+        "51": 1,
+        "52": 1,
+        "54": 1,
+        "53": 1
+      },
+      "total_workers": 8,
+      "ancestors": [
+        {
+          "pid": 2,
+          "executable": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python"
+        },
+        {
+          "pid": 1,
+          "executable": "codex-linux-sandbox"
+        }
+      ],
+      "opencv_threads": "1"
+    },
+    {
+      "event": "foreign_sentinel_survived",
+      "pid": 54
+    }
+  ],
+  "ownership": [],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 317,
+      "blocked_writes": 0
+    },
+    "sample": {
+      "sent": 0,
+      "received": 319,
+      "blocked_writes": 0
+    }
+  }
+}

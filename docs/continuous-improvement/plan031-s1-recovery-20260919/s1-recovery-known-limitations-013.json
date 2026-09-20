@@ -1,0 +1,36 @@
+{
+  "schema": "plan043-known-limitations/v1",
+  "recorded_utc": "2026-09-20T09:25:41.875839+00:00",
+  "prior_plan041_strict_acceptance": false,
+  "plan043_strict_acceptance": false,
+  "violations": [
+    {
+      "kind": "cpu_worker_ceiling",
+      "invocations": [
+        "diagnostic-013-001",
+        "diagnostic-013-002"
+      ],
+      "observed_ordinary_workers": 7,
+      "derived_L18_peak": 9,
+      "ceiling": 8,
+      "reason": "Sandbox wrapper plus waiting driver, capture, runner, owner thread and two roles; L18 adds descendant and sentinel simultaneously."
+    },
+    {
+      "kind": "cpu_worker_ceiling",
+      "invocations": [
+        "aggregate-013-001"
+      ],
+      "observed_L01_workers": 30,
+      "observed_controller_threads": 25,
+      "ceiling": 8,
+      "reason": "Actual new census failed. Four required thread variables1 did not constrain installed OpenCV pool."
+    }
+  ],
+  "corrections": [
+    "Remaining invocations exec the unchanged capture instead of retaining a waiting driver process.",
+    "Remaining invocations set installed OPENCV_FOR_THREADS_NUM=1 before imports and record actual all-process thread census in L01 and L18."
+  ],
+  "remaining_source_gate": "supervise checks successful initial sample against S but needs a fresh S check immediately before reserve after initial-value checks; no current test proves the adversarial scheduling interval.",
+  "no_retrospective_repair": true,
+  "all_previous_logs_immutable": true
+}

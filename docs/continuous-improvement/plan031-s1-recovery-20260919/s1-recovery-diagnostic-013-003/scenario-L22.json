@@ -1,0 +1,136 @@
+{
+  "scenario": "L22",
+  "mode": "signal_failure",
+  "t0": 80043.673680381,
+  "ready_deadline": 80044.673680381,
+  "setup_deadline": 80045.673680381,
+  "setup_cleanup_deadline": 80046.673680381,
+  "action_end": 80043.844618636,
+  "end": 80043.84462165,
+  "execution_seconds": 0.17095409899775404,
+  "cleanup_seconds": 3.0140072340145707e-06,
+  "cleanup_confirmed": true,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "reaped",
+      "pid": 65,
+      "pgid": 65,
+      "start_ticks": 8004367,
+      "wait_status": 15
+    },
+    "sample": {
+      "role": "sample",
+      "state": "reaped",
+      "pid": 66,
+      "pgid": 66,
+      "start_ticks": 8004367,
+      "wait_status": 15
+    }
+  },
+  "errors": [
+    {
+      "error_class": "OSError",
+      "message": "fixture signal failure",
+      "phase": "helper_cleanup"
+    }
+  ],
+  "signals": [
+    {
+      "pid": 65,
+      "signal": 15,
+      "monotonic": 80043.837771718
+    },
+    {
+      "pid": 66,
+      "signal": 15,
+      "monotonic": 80043.837771718
+    }
+  ],
+  "ticks": [
+    80043.673680381,
+    80043.673735003,
+    80043.678798827,
+    80043.683863203,
+    80043.688923114,
+    80043.693980847,
+    80043.699043249,
+    80043.704101246,
+    80043.709230074
+  ],
+  "events": [
+    {
+      "event": "ready",
+      "role": "work",
+      "received": 80043.709253724,
+      "identity": {
+        "pid": 65,
+        "pgid": 65,
+        "start_ticks": 8004367,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "ready",
+      "role": "sample",
+      "received": 80043.70927581,
+      "identity": {
+        "pid": 66,
+        "pgid": 66,
+        "start_ticks": 8004367,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "cleanup_uncertain_injected",
+      "ownership": [
+        {
+          "role": "work",
+          "state": "pid_owned",
+          "pid": 65,
+          "pgid": 65,
+          "start_ticks": 8004367,
+          "ownership_unknown": false
+        },
+        {
+          "role": "sample",
+          "state": "pid_owned",
+          "pid": 66,
+          "pgid": 66,
+          "start_ticks": 8004367,
+          "ownership_unknown": false
+        }
+      ],
+      "errors": [
+        {
+          "error_class": "OSError",
+          "message": "fixture signal failure",
+          "phase": "helper_cleanup"
+        }
+      ]
+    }
+  ],
+  "ownership": [],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 317,
+      "blocked_writes": 0
+    },
+    "sample": {
+      "sent": 0,
+      "received": 319,
+      "blocked_writes": 0
+    }
+  }
+}

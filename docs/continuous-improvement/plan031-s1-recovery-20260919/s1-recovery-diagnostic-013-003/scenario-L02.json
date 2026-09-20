@@ -1,0 +1,154 @@
+{
+  "scenario": "L02",
+  "mode": "normal",
+  "t0": 80040.010702219,
+  "ready_deadline": 80041.010702219,
+  "setup_deadline": 80042.010702219,
+  "setup_cleanup_deadline": 80043.010702219,
+  "action_end": 80040.100430048,
+  "end": 80040.100435218,
+  "execution_seconds": 0.089742729003774,
+  "cleanup_seconds": 5.170004442334175e-06,
+  "cleanup_confirmed": true,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "reaped",
+      "pid": 8,
+      "pgid": 8,
+      "start_ticks": 8004001,
+      "wait_status": 15
+    },
+    "sample": {
+      "role": "sample",
+      "state": "reaped",
+      "pid": 9,
+      "pgid": 9,
+      "start_ticks": 8004001,
+      "wait_status": 15
+    }
+  },
+  "errors": [],
+  "signals": [
+    {
+      "pid": 8,
+      "signal": 15,
+      "monotonic": 80040.091896332
+    },
+    {
+      "pid": 9,
+      "signal": 15,
+      "monotonic": 80040.091896332
+    }
+  ],
+  "ticks": [
+    80040.010702219,
+    80040.012265507,
+    80040.01732883,
+    80040.022387753,
+    80040.02744766,
+    80040.032516517,
+    80040.037596707,
+    80040.042683456,
+    80040.047870904,
+    80040.053074115,
+    80040.0582651,
+    80040.063340027,
+    80040.068403934,
+    80040.073462013,
+    80040.078578402,
+    80040.079914749,
+    80040.079925319,
+    80040.085010165,
+    80040.090148446
+  ],
+  "events": [
+    {
+      "event": "ready",
+      "role": "work",
+      "received": 80040.047922178,
+      "identity": {
+        "pid": 8,
+        "pgid": 8,
+        "start_ticks": 8004001,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "ready",
+      "role": "sample",
+      "received": 80040.047962172,
+      "identity": {
+        "pid": 9,
+        "pgid": 9,
+        "start_ticks": 8004001,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "dispatch",
+      "role": "sample",
+      "request_id": 1,
+      "dispatch": 80040.05303353
+    },
+    {
+      "event": "response",
+      "role": "sample",
+      "request_id": 1,
+      "dispatch": 80040.05303353,
+      "received": 80040.078621266,
+      "acquisition_start": 80040.054694283,
+      "acquisition_end": 80040.069893494
+    },
+    {
+      "event": "disposable_reserve_boundary",
+      "monotonic": 80040.078651932
+    },
+    {
+      "event": "monitor_resume",
+      "monotonic": 80040.079914425
+    },
+    {
+      "event": "dispatch",
+      "role": "sample",
+      "request_id": 2,
+      "dispatch": 80040.079915962
+    },
+    {
+      "event": "response",
+      "role": "sample",
+      "request_id": 2,
+      "dispatch": 80040.079915962,
+      "received": 80040.090186242,
+      "acquisition_start": 80040.081725509,
+      "acquisition_end": 80040.081737665
+    },
+    {
+      "event": "actual_disposable_reserve_call",
+      "monotonic": 80040.090212575
+    }
+  ],
+  "ownership": [],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 315,
+      "blocked_writes": 0
+    },
+    "sample": {
+      "sent": 564,
+      "received": 1025,
+      "blocked_writes": 0
+    }
+  }
+}

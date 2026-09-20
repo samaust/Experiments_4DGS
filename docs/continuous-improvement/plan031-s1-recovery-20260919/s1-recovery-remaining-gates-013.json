@@ -1,0 +1,54 @@
+{
+  "schema": "plan043-remaining-boundary-review/v1",
+  "recorded_utc": "2026-09-20T09:34:53.113631+00:00",
+  "assessment": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/assessment-031-implement.json",
+    "sha256": "1c8f31729917a295803011eb417910b5ee5b6cb3a05aa2f752b46e5ad52e2390",
+    "bytes": 8704
+  },
+  "final_sources": [
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py",
+      "sha256": "ec2b1fe039d1d6b2680f7a890031aa3879f2cf70650b1cd59857c43ac9f477ce",
+      "bytes": 23803
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py",
+      "sha256": "9358404e18c2eeda7198824f862cfce0ff8090e3301c5932bdaf4206cec4ce02",
+      "bytes": 24443
+    }
+  ],
+  "full_helper_milestone_complete": false,
+  "plan_acceptance_complete": false,
+  "source_unchanged_after_final_pass": true,
+  "additional_gates": [
+    {
+      "id": "R13-owner-census-authority",
+      "status": "unverified",
+      "source": "supervisor.py:186; s1_helper_session.py:330-333",
+      "finding": "monitored_call uses latest owner.groups keyed by worker PGID, with no census completion timestamp or per-PID start identity. Owner publishes groups before later ownership validation. Enumeration exceptions fail closed, but a blocked census can leave a stale snapshot and PID reuse can invalidate earlier membership.",
+      "required": "Publish one completed immutable snapshot with acquisition/completion timing and process start identities; require its freshness and correct worker/descendant identity at sample acceptance. Add blocked/stale census and reuse/correlation cases. Existing owned/foreign cases do not establish this adversarial boundary."
+    },
+    {
+      "id": "R13-constructor-handle-none",
+      "status": "unverified",
+      "source": "s1_helper_session.py:411-420,525-535; supervisor.py:95-123",
+      "finding": "Constructor failures can leave a retained lifecycle entry with owner.handle=None and owner.done=False after channels are closed or before any native handle exists. close waits to the deadline and cannot confirm retirement; if done becomes true, direct handle methods require guarding. Current actual spawn exception case does not exercise native-handle/capability/channel-construction failures.",
+      "required": "Represent no-handle/partially-constructed ownership explicitly, close only acquired descriptors, retain genuinely unknown native starts, and collect exact capability/native-create/channel failure outcomes without inventing cleanup success."
+    },
+    {
+      "id": "R13-trace-growth",
+      "status": "unverified",
+      "source": "s1_helper_session.py:255,368,397-398,439,477,489,523",
+      "finding": "events, ticks and signals append without a configured bound. Short collected scenarios do not establish memory/allocation behavior over a3600-second supervision lifetime; repeated cleanup signalling can also grow the list.",
+      "required": "Use fixed-size recent-event/tick storage with bounded cumulative counters or helper-owned durable evidence, retain deadline/primary-error authority, and validate bounded growth using collected deterministic control cases."
+    },
+    {
+      "id": "R13-transport-tick-transmission",
+      "status": "unverified",
+      "finding": "Each Wire.tick may send16KiB and separately receive16KiB. Response correlation does not explicitly require encoder/outgoing buffer completion.",
+      "required": "Clarify/enforce the combined per-role16KiB budget and complete request transmission before response acceptance; preserve the current finite control bounds and all passing cases."
+    }
+  ],
+  "interpretation": "Read-only assessment requested during evidence handoff; these are open source/coverage gates, not newly executed tests or claims of observed live failure. The helper/full-plan acceptance flags were already false. No final aggregate-bound source was changed."
+}

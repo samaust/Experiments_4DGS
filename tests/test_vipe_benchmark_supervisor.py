@@ -249,21 +249,25 @@ class HelperIntegrationTests(unittest.TestCase):
     def test_bootstrap_failure_and_eof_preserve_child(self):
         from unittest.mock import patch
         import multiprocessing.process
-        with patch.object(multiprocessing.process.BaseProcess, 'start', side_effect=OSError('bootstrap failed')):
+        import signal
+        with patch('vipe_benchmark.s1_helper_session.Owner.spawn', side_effect=OSError('bootstrap failed')):
             with self.assertRaises(self.sup.HelperFailure) as caught:
                 self.call()
         self.assertEqual(caught.exception.failure['phase'], 'startup')
         self.assertEqual(self.life.helpers, [])
-        helper = self.life.start(self.operation)
-        helper.process.kill()
+        self.life = self.sup.HelperLifecycle()
+        helper = self.life.acquire()
+        helper.await_ready()
+        killed_pid = helper.owner.records['work']['pid']
+        os.kill(killed_pid, signal.SIGKILL)
         limit = self.time.monotonic()+2
         try:
             with self.assertRaises(self.sup.HelperFailure) as caught:
                 while self.time.monotonic() < limit:
-                    helper.poll()
+                    self.call()
                     self.time.sleep(.005)
             self.assertEqual(caught.exception.failure['phase'], 'transport')
-            self.assertEqual(caught.exception.failure['ownership']['pid'], helper.pid)
+            self.assertEqual(caught.exception.failure['ownership']['pid'], killed_pid)
         finally:
             self.assertTrue(self.life.reap(limit))
 
@@ -320,27 +324,45 @@ class HelperIntegrationTests(unittest.TestCase):
         self.rejected(phase='prelaunch')
 
     def fake_class(self, role='task', outcome='success', mode='normal'):
-        reading = self.reading
+        reading, sup = self.reading, self.sup
+        import types
+        import time
         class Fake:
-            def __init__(self, operation):
-                self.pid = 987654321
-                self.phase = 'fixture'
-                self.value = operation['args']['value']
-                self.selected = (isinstance(self.value, dict)) == (role == 'sample')
+            def __init__(self):
+                self.owner = types.SimpleNamespace(errors=[], groups={})
+                self.ready = {'work':{},'sample':{}}
+                self.requests = {'work':None,'sample':None}
+                self.ticks = []
+                self.events = []
+                self.setup_deadline = self.cleanup_deadline = time.monotonic()+3
                 self.calls = 0
-            def poll(self):
-                if self.selected and outcome == 'error':
-                    raise ValueError('primary fixture error')
-                if self.selected and outcome == 'timeout':
-                    return False, None
-                return True, self.value
-            def close(self):
+                self.selected = False
+                self.closed = False
+            def await_ready(self): return self
+            def submit(self, which, operation, deadline):
+                self.requests[which] = dict(value=operation['args']['value'], dispatch=time.monotonic())
+            def tick(self, deadline):
+                if time.monotonic() >= deadline: raise TimeoutError('fixture deadline')
+                result=[]
+                self.owner.groups = {pid:sup.group_processes(pid,include_zombies=True) for pid in reading['gpu_pids']}
+                for which in ('sample','work'):
+                    request=self.requests[which]
+                    if request is None: continue
+                    selected = which == ('sample' if role == 'sample' else 'work')
+                    self.selected |= selected
+                    if selected and outcome == 'error': raise ValueError('primary fixture error')
+                    if selected and outcome == 'timeout': continue
+                    self.requests[which]=None
+                    result.append((which,request['value'],time.monotonic(),request['dispatch']))
+                return result
+            def ownership(self):
+                return [] if self.closed else [dict(pid=987654321,phase='fixture')]
+            def close(self, deadline):
                 self.calls += 1
                 if self.selected:
-                    if mode == 'false' or (mode=='false_then_reaped' and self.calls==1):
-                        return False
-                    if mode.endswith('exception'):
-                        raise OSError(mode)
+                    if mode == 'false' or (mode=='false_then_reaped' and self.calls==1): return False
+                    if mode.endswith('exception'): raise OSError(mode)
+                self.closed=True
                 return True
         return Fake
 
@@ -350,7 +372,7 @@ class HelperIntegrationTests(unittest.TestCase):
             with self.subTest(**case):
                 self.life = self.sup.HelperLifecycle()
                 start = self.time.monotonic()
-                with patch.object(self.sup,'_Helper',self.fake_class(**case)):
+                with patch.object(self.sup,'Session',self.fake_class(**case)):
                     if case['outcome']=='success':
                         self.assertEqual(self.call(seconds=.12),37)
                     else:
@@ -364,7 +386,7 @@ class HelperIntegrationTests(unittest.TestCase):
         for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             with self.subTest(**case):
                 self.life = self.sup.HelperLifecycle()
-                with patch.object(self.sup,'_Helper',self.fake_class(mode=case['mode'])):
+                with patch.object(self.sup,'Session',self.fake_class(mode=case['mode'])):
                     if case['mode']=='false_then_reaped':
                         self.assertEqual(self.call(seconds=.12),37)
                         self.assertEqual(self.life.helpers,[])
@@ -378,7 +400,7 @@ class HelperIntegrationTests(unittest.TestCase):
 
     def test_primary_survives_secondary_cleanup_error(self):
         from unittest.mock import patch
-        with patch.object(self.sup,'_Helper',self.fake_class(outcome='error',mode='close_exception')):
+        with patch.object(self.sup,'Session',self.fake_class(outcome='error',mode='close_exception')):
             with self.assertRaisesRegex(ValueError,'primary fixture error') as caught:
                 self.call(seconds=.12)
         self.assertTrue(caught.exception.cleanup_uncertain)
@@ -393,10 +415,11 @@ class HelperIntegrationTests(unittest.TestCase):
             self.time.sleep(.005)
         self.assertGreaterEqual(len(self.sup.group_processes(process.pid)),2)
         self.assertEqual(self.sup.stop_group(process,limit),[])
-        helper = self.life.start(self.operation)
+        helper = self.life.acquire()
+        helper.await_ready()
         self.assertTrue(self.life.reap(self.time.monotonic()+2))
-        self.assertTrue(helper.close())
-        self.assertTrue(helper.close())
+        self.assertTrue(helper.close(self.time.monotonic()+1))
+        self.assertTrue(helper.close(self.time.monotonic()+1))
 
     def test_supervisor_worker_context_and_consumed_cleanup_stop(self):
         from unittest.mock import patch
@@ -431,7 +454,7 @@ class HelperIntegrationTests(unittest.TestCase):
                 if kwargs['phase']=='worker_sample':
                     self.assertIsNotNone(kwargs['worker'])
                     self.reading['gpu_pids']=[kwargs['worker'].pid]
-                    with patch.object(self.sup,'_Helper',self.fake_class(mode='false')):
+                    with patch.object(self.sup,'Session',self.fake_class(mode='false')):
                         return actual(self.operation,deadline,self.sampler,config,peak,**kwargs)
                 return None
             popen=self.sup.subprocess.Popen
@@ -458,6 +481,348 @@ class HelperIntegrationTests(unittest.TestCase):
             self.assertTrue(all(p is peaks[0] for p in peaks))
             self.assertTrue(caught.exception.stop_required)
 
+
+
+class HelperSessionTests(unittest.TestCase):
+    """Twenty-four serial real-child scenarios; pure mutations add no children."""
+    def setUp(self):
+        import time
+        self.time = time
+        self.reading = dict(device_bytes=0, artifact_bytes=0, download_bytes=0, gpu_pids=[])
+        self.sampler = dict(operation='constant', args=dict(value=self.reading))
+        self.operation = dict(operation='constant', args=dict(value=37))
+
+    def scenario(self, label, mode='normal', **bounds):
+        from test_vipe_benchmark_s1_helper_fixtures import session
+        from vipe_benchmark.s1_helper_session import census
+        import json
+        import contextlib
+        @contextlib.contextmanager
+        def owned():
+            started=self.time.monotonic()
+            current=session(mode, **bounds)
+            record=dict(scenario=label, mode=mode, t0=current.t0,
+                ready_deadline=current.ready_deadline, setup_deadline=current.setup_deadline,
+                setup_cleanup_deadline=current.cleanup_deadline)
+            try:
+                yield current
+            finally:
+                action_end=self.time.monotonic()
+                current.owner.released=True
+                cleaned=current.close(min(started+3, self.time.monotonic()+1))
+                ended=self.time.monotonic()
+                record.update(action_end=action_end, end=ended, execution_seconds=action_end-started,
+                    cleanup_seconds=ended-action_end, cleanup_confirmed=cleaned,
+                    records=current.owner.records, errors=current.owner.errors,
+                    signals=current.owner.signals, ticks=current.ticks, events=current.events,
+                    ownership=current.ownership(), wire={role:dict(sent=w.sent_bytes,received=w.received_bytes,blocked_writes=w.blocked_writes) for role,w in current.wires.items()})
+                directory=Path(os.environ['S1_VALIDATION_RUN_DIRECTORY'])
+                with (directory/('scenario-'+label+'.json')).open('x') as stream:
+                    json.dump(record,stream,indent=2); stream.write('\n')
+                self.assertTrue(cleaned,record)
+                self.assertLessEqual(action_end-started,2)
+                self.assertLessEqual(ended-action_end,1)
+                self.assertLessEqual(ended-started,3)
+        return owned()
+
+    def work(self, session, operation=None, sampler=None, seconds=1.5):
+        from vipe_benchmark import supervisor as sup
+        life=sup.HelperLifecycle(retain=True)
+        life.helpers=[session]
+        return sup.monitored_call(operation or self.operation,self.time.monotonic()+seconds,
+            sampler or self.sampler,load(),{},lifecycle=life)
+
+    def reject_ready(self, label, mode):
+        with self.scenario(label,mode,ready_seconds=.08,setup_seconds=.18,total_seconds=.3) as session:
+            with self.assertRaises((ValueError,RuntimeError,TimeoutError,EOFError)):
+                session.await_ready()
+            self.assertFalse(len(session.ready)==2)
+            self.assertTrue(session.close(session.cleanup_deadline))
+            self.assertLessEqual(max(b-a for a,b in zip(session.ticks,session.ticks[1:])),.1)
+
+    def record_census(self, session, extra=()):
+        from vipe_benchmark.s1_helper_session import census
+        rows=census()
+        owned={os.getpid(),*extra,*session.owner.members}
+        current=os.getppid(); ancestors=[]
+        while current in rows:
+            command=Path('/proc',str(current),'cmdline').read_bytes().split(b'\0')
+            ancestors.append(dict(pid=current,executable=command[0].decode()))
+            owned.add(current)
+            current=rows[current]['ppid']
+        process_threads={pid:len(list(Path('/proc',str(pid),'task').iterdir())) for pid in owned}
+        count=sum(process_threads.values())
+        session.events.append(dict(event='census',processes=sorted(owned),controller_threads=process_threads[os.getpid()],
+            process_threads=process_threads,total_workers=count,ancestors=ancestors,
+            opencv_threads=os.environ.get('OPENCV_FOR_THREADS_NUM')))
+        return count,process_threads[os.getpid()]
+
+    def test_l01_ready_reuse(self):
+        from vipe_benchmark.s1_helper_session import census, THREADS
+        with self.scenario('L01') as session:
+            session.await_ready()
+            identities=dict(session.ready)
+            self.assertEqual(self.work(session),37)
+            self.assertEqual(self.work(session),37)
+            self.assertEqual(session.ready,identities)
+            self.assertEqual(len(session.owner.records),2)
+            for row in identities.values():
+                self.assertEqual(row['threads'],{key:'1' for key in THREADS})
+            count,threads=self.record_census(session)
+            self.assertLessEqual(count,8)
+            self.assertEqual(threads,2)
+            session.submit('work',self.operation,self.time.monotonic()+.2)
+            with self.assertRaisesRegex(ValueError,'busy'): session.submit('work',self.operation,self.time.monotonic()+.2)
+            session.submit('sample',self.sampler,self.time.monotonic()+.2)
+            with self.assertRaisesRegex(ValueError,'busy'): session.submit('sample',self.sampler,self.time.monotonic()+.2)
+
+    def test_l02_ready_and_sample_before_reserve(self):
+        from vipe_benchmark import supervisor as sup
+        with self.scenario('L02') as session:
+            life=sup.HelperLifecycle(retain=True); life.helpers=[session]
+            value=sup.monitored_call(self.sampler,session.setup_deadline,self.sampler,load(),{},lifecycle=life,phase='initial_sample')
+            self.assertEqual(value,self.reading)
+            reserve_observed=self.time.monotonic()
+            self.assertEqual(len(session.ready),2)
+            samples=[e for e in session.events if e['event']=='response']
+            self.assertEqual(len(samples),1)
+            self.assertLess(samples[0]['received'],reserve_observed)
+            self.assertLess(reserve_observed,session.setup_deadline)
+            session.events.append(dict(event='disposable_reserve_boundary',monotonic=reserve_observed))
+            with tempfile.TemporaryDirectory() as temp:
+                class Disposable:
+                    path=Path(temp)/'ledger.jsonl'
+                    config=load()
+                    jobs={'S1-calibration-recovery-001':dict(resource='gpu')}
+                    def reserve(inner,*args,**kwargs):
+                        self.assertEqual(len(session.ready),2)
+                        self.assertTrue(any(e['event']=='response' and e['role']=='sample' for e in session.events))
+                        session.events.append(dict(event='actual_disposable_reserve_call',monotonic=self.time.monotonic()))
+                        raise RuntimeError('stop at instrumented disposable reserve')
+                with patch.object(sup,'HelperLifecycle',return_value=life):
+                    with self.assertRaisesRegex(RuntimeError,'instrumented disposable reserve'):
+                        sup.supervise(Disposable(),'S1-calibration-recovery-001',['unused'],Path(temp)/'out',evidence={},sample_resources=self.sampler)
+                self.assertEqual(len([e for e in session.events if e['event']=='actual_disposable_reserve_call']),1)
+                self.assertEqual(len(session.owner.records),2)
+
+
+    def test_l03_owner_bootstrap_block(self): self.reject_ready('L03','owner_block')
+    def test_l04_child_before_ready_block(self): self.reject_ready('L04','child_block')
+    def test_l05_error_after_spawn(self): self.reject_ready('L05','identity_failure')
+    def test_l06_late_ready(self): self.reject_ready('L06','late_ready')
+    def test_l07_cancel_during_spawn(self): self.reject_ready('L07','held_spawn')
+
+    def test_l08_late_owner_retained(self):
+        from vipe_benchmark.s1_helper_session import OWNERS
+        with self.scenario('L08','late_spawn',ready_seconds=.06,setup_seconds=.12,total_seconds=.2) as session:
+            with self.assertRaises(TimeoutError): session.await_ready()
+            self.assertFalse(session.close(session.cleanup_deadline))
+            self.assertIn(session.owner,OWNERS)
+            self.assertTrue(session.ownership()[0]['ownership_unknown'])
+            session.events.append(dict(event='cleanup_uncertain_at_deadline',monotonic=self.time.monotonic(),ownership=session.ownership()))
+            self.assertTrue(session.close(self.time.monotonic()+.7))
+            self.assertEqual(session.owner.records['sample']['state'],'pending')
+            self.assertNotIn(session.owner,OWNERS)
+            with self.assertRaises(ValueError): session.submit('work',self.operation,self.time.monotonic()+.1)
+
+    def test_l09_partial_header(self): self.reject_ready('L09','partial_header')
+    def test_l10_stalled_body(self): self.reject_ready('L10','stalled_body')
+    def test_l11_eof_midframe(self): self.reject_ready('L11','eof_frame')
+
+    def test_l12_stalled_request_reader(self):
+        import socket
+        with self.scenario('L12','stalled_reader') as session:
+            session.await_ready()
+            session.wires['work'].channel.setsockopt(socket.SOL_SOCKET,socket.SO_SNDBUF,1024)
+            operation=dict(operation='constant',args=dict(value=['x'*1900]*32))
+            deadline=self.time.monotonic()+.15
+            session.submit('work',operation,deadline)
+            with self.assertRaises(TimeoutError):
+                while True:
+                    session.tick(deadline); self.time.sleep(.005)
+            self.assertTrue(session.wires['work'].out)
+            self.assertGreater(session.wires['work'].blocked_writes,0)
+
+    def test_l13_oversized_frame(self): self.reject_ready('L13','oversized')
+    def test_l14_wrong_correlation(self): self.reject_ready('L14','wrong_role')
+
+    def test_l15_sample_deadline(self):
+        with self.scenario('L15','sample_late') as session:
+            session.await_ready()
+            with self.assertRaises(TimeoutError): self.work(session,seconds=1.2)
+            self.assertFalse(any(e['event']=='response' and e['role']=='sample' for e in session.events))
+
+    def test_l16_phase_deadline(self):
+        with self.scenario('L16','phase_late') as session:
+            session.await_ready()
+            with self.assertRaises(TimeoutError): self.work(session,seconds=.12)
+
+    def test_l17_post_task_acquisition(self):
+        with self.scenario('L17','post_task') as session:
+            session.await_ready()
+            self.reading.update(acquisition_start=-100,acquisition_end=1e99)
+            self.assertEqual(self.work(session),37)
+            responses=[e for e in session.events if e['event']=='response']
+            finish=next(e['received'] for e in responses if e['role']=='work')
+            samples=[e for e in responses if e['role']=='sample']
+            self.assertTrue(any(e['dispatch'] < finish for e in samples))
+            self.assertGreaterEqual(samples[-1]['dispatch'],finish)
+            self.assertGreaterEqual(samples[-1]['acquisition_start'],samples[-1]['dispatch'])
+            self.assertLessEqual(samples[-1]['acquisition_end'],samples[-1]['received'])
+
+    def test_l18_descendant_and_foreign_sentinel(self):
+        import signal
+        from vipe_benchmark.s1_helper_session import census
+        with self.scenario('L18','descendant') as session:
+            session.await_ready()
+            sentinel=os.posix_spawn(sys.executable,[sys.executable,'-B','-c','import time; time.sleep(10)'],os.environ,setsid=True)
+            try:
+                deadline=self.time.monotonic()+.2
+                while len(session.owner.members)<3 and self.time.monotonic()<deadline: self.time.sleep(.005)
+                self.assertGreaterEqual(len(session.owner.members),3)
+                count,_=self.record_census(session,extra=(sentinel,))
+                self.assertLessEqual(count,8)
+                self.assertTrue(session.close(self.time.monotonic()+.4))
+                self.assertNotIn(sentinel,[e['pid'] for e in session.owner.signals])
+                os.kill(sentinel,0)
+                session.events.append(dict(event='foreign_sentinel_survived',pid=sentinel))
+            finally:
+                os.killpg(sentinel,signal.SIGKILL)
+                limit=self.time.monotonic()+.3
+                while self.time.monotonic()<limit:
+                    if os.waitpid(sentinel,os.WNOHANG)[0]: break
+                    self.time.sleep(.005)
+                else: self.fail('sentinel reap deadline')
+
+    def test_l19_term_resistance(self):
+        import signal
+        with self.scenario('L19','ignore_term') as session:
+            session.await_ready()
+            self.assertTrue(session.close(self.time.monotonic()+.5))
+            self.assertIn(int(signal.SIGKILL),[e['signal'] for e in session.owner.signals])
+
+    def test_l20_exit_during_transport(self):
+        from vipe_benchmark.supervisor import HelperFailure
+        with self.scenario('L20','exit_transport') as session:
+            session.await_ready()
+            with self.assertRaises(HelperFailure) as caught: self.work(session)
+            self.assertEqual(caught.exception.failure['phase'],'transport')
+
+    def failed_cleanup(self,label,mode):
+        with self.scenario(label,mode) as session:
+            session.await_ready()
+            self.assertFalse(session.close(self.time.monotonic()+.12))
+            self.assertTrue(session.ownership())
+            self.assertTrue(session.owner.errors)
+            session.events.append(dict(event='cleanup_uncertain_injected',ownership=session.ownership(),errors=list(session.owner.errors)))
+            session.owner.released=True
+            self.assertTrue(session.close(self.time.monotonic()+.4))
+            self.assertTrue(session.owner.errors)
+
+    def test_l21_enumeration_failure(self): self.failed_cleanup('L21','enumeration_failure')
+    def test_l22_signal_failure(self): self.failed_cleanup('L22','signal_failure')
+    def test_l23_reap_failure(self): self.failed_cleanup('L23','reap_failure')
+
+    def test_l24_summary_reference_adapter(self):
+        with tempfile.TemporaryDirectory() as temp:
+            local=Path(temp); (local/'jobs'/'S1-calibration-recovery-001').mkdir(parents=True)
+            with self.scenario('L24','artifact') as session:
+                session.await_ready()
+                operation=dict(operation='constant',args=dict(value=dict(local=str(local))))
+                result=self.work(session,operation=operation)
+                self.assertEqual(result['rejected'],['session','reservation','missing','tamper'])
+                self.assertEqual(result['counts'],dict(complete=510))
+                self.assertEqual(result['identities'],510)
+                self.assertEqual(result['reference']['session'],session.token)
+
+    def test_control_primitive_and_frame_mutations(self):
+        from vipe_benchmark.s1_helper_session import tokens,decode,Wire,MAX_FRAME
+        import socket
+        import struct
+        valid=dict(one=[None,True,False,1,1.5,'text'])
+        self.assertEqual(decode(''.join(tokens(valid)).encode()),valid)
+        for raw in (b'',b'{}'*(MAX_FRAME//2+1),b'{"x":1,"x":2}',b'{"x":NaN}',b'\xff',b'[] trailing',b'['*19+b'0'+b']'*19,b'1'*21,b'1.'+b'1'*70):
+            with self.assertRaises((ValueError,UnicodeError)): decode(raw)
+        for value in (object(),{'x':object()},'x'*2049,[0]*4097,10**20,float('inf')):
+            with self.assertRaises(ValueError): list(tokens(value))
+        for length in (0,65537):
+            a,b=socket.socketpair()
+            try:
+                wire=Wire(a); b.send(struct.pack('!I',length))
+                with self.assertRaises(ValueError): wire.tick()
+            finally: a.close(); b.close()
+        a,b=socket.socketpair()
+        try:
+            wire=Wire(a); raw=b'{"x":1}'
+            frame=struct.pack('!I',len(raw))+raw
+            for byte in frame:
+                b.send(bytes([byte])); self.assertIsNone(wire.tick())
+            self.assertEqual(wire.tick(),{'x':1})
+        finally: a.close(); b.close()
+
+    def test_exact_frame_bounds_and_trailing_data(self):
+        from vipe_benchmark.s1_helper_session import Wire,tokens,decode,MAX_FRAME
+        import socket
+        import struct
+        value=dict(data=['x'*2048]*31,pad='')
+        size=len(''.join(tokens(value)).encode())
+        value['pad']='x'*(MAX_FRAME-size)
+        raw=''.join(tokens(value)).encode()
+        self.assertEqual(len(raw),MAX_FRAME)
+        self.assertEqual(decode(raw),value)
+        a,b=socket.socketpair();b.setblocking(False)
+        try:
+            wire=Wire(a);wire.queue(value);written=bytearray()
+            while wire.encoder is not None or wire.out:
+                wire.tick()
+                try: written.extend(b.recv(65540))
+                except BlockingIOError: pass
+            self.assertEqual(bytes(written),struct.pack('!I',MAX_FRAME)+raw)
+            value['pad']+='x';wire.queue(value)
+            with self.assertRaises(ValueError):
+                while True: wire.tick()
+        finally:a.close();b.close()
+        a,b=socket.socketpair()
+        try:
+            wire=Wire(a);b.send(struct.pack('!I',2)+b'{}'+struct.pack('!I',2)+b'{}')
+            self.assertIsNone(wire.tick())
+            with self.assertRaisesRegex(ValueError,'trailing'):wire.tick()
+        finally:a.close();b.close()
+
+    def test_resource_field_mutations(self):
+        from vipe_benchmark.supervisor import validate_sample
+        validate_sample(self.reading)
+        for key in ('device_bytes','artifact_bytes','download_bytes'):
+            for value in (None,True,'0',-1,float('nan'),float('inf')):
+                bad=dict(self.reading);bad[key]=value
+                with self.assertRaises(ValueError):validate_sample(bad)
+        for pids in (None,True,[True],[0],[-1],[1,1],['1']):
+            bad=dict(self.reading,gpu_pids=pids)
+            with self.assertRaises(ValueError):validate_sample(bad)
+
+    def test_sample_typed_timing_mutations(self):
+        from vipe_benchmark.s1_helper_session import validate_acquisition
+        good=dict(acquisition_start=10.,acquisition_end=10.1)
+        validate_acquisition(good,10.,10.2,11.)
+        for value in (None,True,'10',float('nan'),float('inf'),-1,9.,11.):
+            for key in ('acquisition_start','acquisition_end'):
+                bad=dict(good); bad[key]=value
+                with self.assertRaises(ValueError): validate_acquisition(bad,10.,10.2,11.)
+        with self.assertRaises(ValueError): validate_acquisition({},10.,10.2,11.)
+        with self.assertRaises(ValueError): validate_acquisition(good,10.,11.,12.)
+        with self.assertRaises(ValueError): validate_acquisition(good,10.,10.2,10.2)
+        with self.assertRaises(ValueError): validate_acquisition(dict(acquisition_start=10.1,acquisition_end=10.),10.,10.2,11.)
+
+    def test_envelope_correlation_mutations(self):
+        from vipe_benchmark.s1_helper_session import Session
+        import types
+        session=Session.__new__(Session); session.token='a'; session.owner=types.SimpleNamespace(boot_id='b')
+        good=session.envelope('sample',1,'response',{})
+        self.assertEqual(session.correlate('sample',good,'response',1),{})
+        for key,value in (('version',True),('version',2),('session','z'),('boot_id','z'),('role','work'),('request_id',True),('request_id',0),('request_id',2),('kind','ready')):
+            bad=dict(good); bad[key]=value
+            with self.assertRaises(ValueError): session.correlate('sample',bad,'response',1)
+        with self.assertRaises(ValueError): session.correlate('sample',dict(good,extra=1),'response',1)
 
 if __name__ == '__main__':
     unittest.main()

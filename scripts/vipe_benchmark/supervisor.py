@@ -87,125 +87,52 @@ class HelperCleanupFailure(HelperFailure):
         self.lifecycle = lifecycle
 
 
-class _Helper:
-    """Spawn only importable operations; retain ownership until confirmed reaped."""
-    def __init__(self, operation):
-        import multiprocessing
-        from .s1_cpu_helper import entry
-        self.process = self.connection = None
-        self.pid = None
-        self.closed = False
-        self.signaled = False
-        self.phase = operation.get('operation', 'startup')
-        context = multiprocessing.get_context('spawn')
-        self.connection, child = context.Pipe(duplex=False)
-        self.process = context.Process(target=entry, args=(child, operation))
-        try:
-            self.process.start()
-            self.pid = self.process.pid
-        except BaseException as exc:
-            self.pid = self.process.pid
-            raise self.failure(exc, 'startup') from exc
-        finally:
-            child.close()
-
-    def failure(self, exc, phase=None):
-        return HelperFailure(dict(error_class=type(exc).__name__, message=str(exc),
-            phase=phase or self.phase, ownership=dict(pid=self.pid)))
-
-    def poll(self):
-        try:
-            if not self.connection.poll():
-                if not self.process.is_alive():
-                    raise EOFError('helper died without evidence')
-                return False, None
-            ok, value = self.connection.recv()
-        except (EOFError, OSError, ValueError) as exc:
-            raise self.failure(exc, 'transport') from exc
-        if not ok:
-            value['ownership'] = dict(pid=self.pid)
-            raise HelperFailure(value)
-        return True, value
-
-    def close(self):
-        if self.closed:
-            return True
-        if self.process is None or self.process.pid is None:
-            if self.connection is not None:
-                self.connection.close()
-            self.closed = True
-            return True
-        # The unreaped leader pins the process-group identity. Do not reap it
-        # before checking descendants; zombies cannot execute and are not survivors.
-        members = group_processes(self.pid)
-        sig = signal.SIGKILL if self.signaled else signal.SIGTERM
-        if members:
-            try:
-                os.killpg(self.pid, sig)
-            except ProcessLookupError:
-                pass
-        elif self.process.exitcode is None:
-            try:
-                os.kill(self.pid, sig)
-            except ProcessLookupError:
-                pass
-        self.signaled = True
-        survivors = group_processes(self.pid)
-        if survivors:
-            return False
-        self.process.join(timeout=0)
-        if self.process.is_alive():
-            return False
-        self.connection.close()
-        self.process.close()
-        self.closed = True
-        return True
+from .s1_helper_session import Session
 
 
 class HelperLifecycle:
-    """Shared monitor/supervisor ownership, including failed constructors."""
-    def __init__(self):
+    """A supervise call owns one persistent session; standalone calls retire it."""
+    def __init__(self, *, retain=False, session_factory=None):
         self.helpers = []
         self.errors = []
+        self.retain = retain
+        self.session_factory = session_factory
+        self.poisoned = False
 
-    def start(self, operation):
-        helper = _Helper.__new__(_Helper)
-        self.helpers.append(helper)
-        helper.__init__(operation)
-        return helper
+    def acquire(self):
+        if self.poisoned:
+            raise HelperFailure(dict(error_class='SessionPoisoned', message='helper session permanently failed', phase='startup'))
+        if not self.helpers:
+            factory = self.session_factory or Session
+            helper = factory.__new__(factory)
+            self.helpers.append(helper)
+            try:
+                helper.__init__()
+            except BaseException as exc:
+                self.poisoned = True
+                raise HelperFailure(dict(error_class=type(exc).__name__, message=str(exc), phase='startup')) from exc
+        return self.helpers[0]
 
     def ownership(self):
-        return [dict(pid=getattr(h, 'pid', None), phase=getattr(h, 'phase', 'startup'))
-                for h in self.helpers]
+        return [record for helper in self.helpers for record in helper.ownership()]
 
     def reap(self, deadline):
         while self.helpers:
             for helper in list(self.helpers):
                 try:
-                    confirmed = helper.close() is True
+                    confirmed = helper.close(deadline) is True
                 except BaseException as exc:
-                    observation = dict(error_class=type(exc).__name__, message=str(exc),
-                                       phase='helper_cleanup', pid=getattr(helper, 'pid', None))
+                    observation = dict(error_class=type(exc).__name__, message=str(exc), phase='helper_cleanup')
                     if observation not in self.errors:
                         self.errors.append(observation)
                     confirmed = False
+                self.errors.extend(e for e in helper.owner.errors if e not in self.errors)
                 if confirmed:
                     self.helpers.remove(helper)
             if not self.helpers or time.monotonic() >= deadline:
                 break
             time.sleep(min(.005, max(0., deadline-time.monotonic())))
         return not self.helpers
-
-    def settle(self, helper, deadline, phase):
-        # Only one retired helper is settled here; active helpers remain owned.
-        retired = HelperLifecycle()
-        retired.helpers = [helper]
-        confirmed = retired.reap(deadline)
-        self.errors.extend(e for e in retired.errors if e not in self.errors)
-        if confirmed:
-            self.helpers.remove(helper)
-        else:
-            raise HelperCleanupFailure(phase, self)
 
 
 def validate_sample(reading):
@@ -225,65 +152,74 @@ def validate_sample(reading):
 
 def monitored_call(function, deadline, sampler, config, peak, *, worker=None,
                    phase='acceptance', ledger=None, job_id=None, lifecycle=None):
-    """Monitor never hashes/parses/writes or invokes the sampler itself.
-
-    Exactly one sample is in flight. Both CPU helpers are independently
-    terminable even when native code or I/O blocks. No signal callback reentry.
-    """
+    """Reuse fixed roles; release work only after a newly acquired sample."""
     lifecycle = lifecycle if lifecycle is not None else HelperLifecycle()
     primary = None
-    task = sample = None
-    pending = False
-    result = None
+    session = None
     try:
+        session = lifecycle.acquire()
+        # Idle time between supervised phases is not an active monitor tick.
+        if session.ready:
+            session.events.append(dict(event='monitor_resume', monotonic=time.monotonic()))
+            session.ticks.append(time.monotonic())
+        session.await_ready()
+        if phase == 'initial_sample':
+            deadline = min(deadline, session.setup_deadline)
+        sample_only = function is sampler or function == sampler
+        session.submit('sample', sampler, deadline)
+        task_dispatched = False
+        completed = None
+        result = None
         while True:
-            now = time.monotonic()
-            if now >= deadline:
-                raise TimeoutError('S1 ' + phase + ' deadline reached')
-            if sample is None:
-                sample = lifecycle.start(sampler)
-                sample_deadline = min(deadline, now + 1.)
-            ready, reading = sample.poll()
-            if ready:
-                lifecycle.settle(sample, deadline, phase); sample = None
-                validate_sample(reading)
+            responses = session.tick(deadline)
+            for role, value, received, dispatch in responses:
+                if role == 'work':
+                    completed, result = received, value
+                    continue
+                validate_sample(value)
                 for field, key in [('device_bytes','gpu_peak_device_gib_limit'),
                                    ('artifact_bytes','new_artifact_disk_gib_limit'),
                                    ('download_bytes','new_download_gib_limit')]:
-                    peak[field] = max(peak.get(field, 0), reading.get(field, 0))
+                    peak[field] = max(peak.get(field, 0), value[field])
                     if peak[field] > config[key]*2**30:
                         raise RuntimeError('S1 resource ceiling exceeded: ' + field)
-                owned = set(group_processes(worker.pid, include_zombies=True)) if worker else set()
-                foreign = sorted(set(reading.get('gpu_pids', [])) - owned)
+                owned = set(session.owner.groups.get(worker.pid, ())) if worker else set()
+                foreign = sorted(set(value['gpu_pids']) - owned)
                 if foreign:
                     raise HelperFailure(dict(error_class='GPUOwnershipError', message='exclusive GPU access lost during ' + phase + ': ' + str(foreign), phase=phase, ownership=dict(owned=sorted(owned), foreign=foreign)))
-                if pending:
-                    return result
-                if task is None:
-                    task = lifecycle.start(function)
-            elif now >= sample_deadline:
-                raise TimeoutError('S1 resource sample timeout during ' + phase)
-            if task is not None and not pending:
-                pending, result = task.poll()
-                if pending:
-                    lifecycle.settle(task, deadline, phase); task = None
-                    # Require a sample taken after work, not just before it.
-                    if sample:
-                        lifecycle.settle(sample, deadline, phase); sample = None
-            time.sleep(min(.02, max(0., deadline - time.monotonic())))
+                if sample_only or (completed is not None and dispatch >= completed):
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError('S1 return deadline reached')
+                    return value if sample_only else result
+                if not task_dispatched:
+                    session.submit('work', function, deadline)
+                    task_dispatched = True
+            if session.requests['sample'] is None:
+                session.submit('sample', sampler, deadline)
+            time.sleep(min(.005, max(0., deadline-time.monotonic())))
     except BaseException as exc:
+        lifecycle.poisoned = True
         primary = exc
+        if (isinstance(exc, (EOFError, OSError)) and not isinstance(exc, TimeoutError)) or (session is not None and not session.ready and not isinstance(exc, TimeoutError)):
+            primary = HelperFailure(dict(error_class=type(exc).__name__, message=str(exc),
+                phase='startup' if session is None or len(session.ready) != 2 else 'transport',
+                ownership=dict(pid=getattr(exc, 'helper_pid', None))))
+            raise primary from exc
         raise
     finally:
-        if not lifecycle.reap(deadline):
-            cleanup = HelperCleanupFailure(phase, lifecycle)
-            if primary is None:
-                raise cleanup
-            primary.cleanup_uncertain = True
-            primary.lifecycle = lifecycle
-            primary.add_note(str(cleanup))
-        if primary is not None:
-            primary.helper_cleanup_errors = list(lifecycle.errors)
+        if primary is not None or not lifecycle.retain:
+            cleanup_deadline = deadline
+            if phase == 'initial_sample' and session is not None:
+                cleanup_deadline = session.cleanup_deadline
+            if not lifecycle.reap(cleanup_deadline):
+                cleanup = HelperCleanupFailure(phase, lifecycle)
+                if primary is None:
+                    raise cleanup
+                primary.cleanup_uncertain = True
+                primary.lifecycle = lifecycle
+                primary.add_note(str(cleanup))
+            if primary is not None:
+                primary.helper_cleanup_errors = list(lifecycle.errors)
 
 
 def supervise(ledger, job_id, command, output, *, evidence, sample_resources=None,
@@ -303,21 +239,29 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
         raise ValueError('GPU dispatch requires exclusive-device and resource readings')
     sampler = sample_resources or (lambda: {})
     is_s1 = job_id == 'S1-calibration-recovery-001'
-    lifecycle = HelperLifecycle()
+    lifecycle = HelperLifecycle(retain=is_s1)
     peak = dict(device_bytes=0, artifact_bytes=0, download_bytes=0)
-    initial = (monitored_call(sampler, time.monotonic()+2., sampler, ledger.config, peak,
-                              lifecycle=lifecycle, phase='initial_sample') if is_s1 else sampler())
-    if initial.get('gpu_pids'):
-        raise ValueError('GPU is already in use; no attempt dispatched')
-    for field, key in [('device_bytes', 'gpu_peak_device_gib_limit'),
-                       ('artifact_bytes', 'new_artifact_disk_gib_limit'),
-                       ('download_bytes', 'new_download_gib_limit')]:
-        if initial.get(field, 0) >= ledger.config[key] * 2**30:
-            raise ValueError(f'{field} allowance already exhausted; no attempt dispatched')
-    if (checkpoint or resume_checkpoint) and job_id != 'aggregate':
-        raise ValueError('only aggregation may pause or resume stage checkpoints')
-    reserve = ledger.resume_checkpoint if resume_checkpoint else ledger.reserve
-    reservation = reserve(job_id, command, evidence, seconds_limit=seconds_limit)
+    try:
+        initial = (monitored_call(sampler, time.monotonic()+2., sampler, ledger.config, peak,
+                                  lifecycle=lifecycle, phase='initial_sample') if is_s1 else sampler())
+        if initial.get('gpu_pids'):
+            raise ValueError('GPU is already in use; no attempt dispatched')
+        for field, key in [('device_bytes', 'gpu_peak_device_gib_limit'),
+                           ('artifact_bytes', 'new_artifact_disk_gib_limit'),
+                           ('download_bytes', 'new_download_gib_limit')]:
+            if initial.get(field, 0) >= ledger.config[key] * 2**30:
+                raise ValueError(f'{field} allowance already exhausted; no attempt dispatched')
+        if (checkpoint or resume_checkpoint) and job_id != 'aggregate':
+            raise ValueError('only aggregation may pause or resume stage checkpoints')
+        reserve = ledger.resume_checkpoint if resume_checkpoint else ledger.reserve
+        reservation = reserve(job_id, command, evidence, seconds_limit=seconds_limit)
+    except BaseException as exc:
+        if is_s1 and lifecycle.helpers:
+            cleanup_end = lifecycle.helpers[0].cleanup_deadline
+            if not lifecycle.reap(cleanup_end):
+                exc.cleanup_uncertain = True
+                exc.add_note('pre-reservation helper cleanup not confirmed')
+        raise
     start = reservation['monotonic_start']
     deadline = start + reservation['seconds']
     cleanup_reserve = min(30., reservation['seconds'] / 4)
@@ -438,7 +382,7 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
         # A second Ctrl-C must not interrupt process cleanup.
         for sig in old_handlers:
             signal.signal(sig, signal.SIG_IGN)
-        cleanup_uncertain = not lifecycle.reap(deadline)
+        cleanup_uncertain = False if is_s1 else not lifecycle.reap(deadline)
         if cleanup_uncertain:
             failure_kind, stop_required = 'cleanup', True
             error = (error or '') + '; helper cleanup not confirmed'
@@ -466,7 +410,7 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
                         stop_required=stop_required if error else False)
         if is_s1:
             evidence.update(reservation={k:reservation[k] for k in ('sequence','event_sha256')},
-                            acceptance=acceptance, evidence_summary=evidence_summary)
+                            acceptance=acceptance, evidence_summary_record=evidence_summary)
             try:
                 if terminal_publisher is None:
                     raise ValueError('S1 charged terminal publisher required')

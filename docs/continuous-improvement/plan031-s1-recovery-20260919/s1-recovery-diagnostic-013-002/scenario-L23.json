@@ -1,0 +1,136 @@
+{
+  "scenario": "L23",
+  "mode": "reap_failure",
+  "t0": 79588.52263015,
+  "ready_deadline": 79589.52263015,
+  "setup_deadline": 79590.52263015,
+  "setup_cleanup_deadline": 79591.52263015,
+  "action_end": 79588.688368565,
+  "end": 79588.688371624,
+  "execution_seconds": 0.16575182299129665,
+  "cleanup_seconds": 3.059001755900681e-06,
+  "cleanup_confirmed": true,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "reaped",
+      "pid": 70,
+      "pgid": 70,
+      "start_ticks": 7958852,
+      "wait_status": 15
+    },
+    "sample": {
+      "role": "sample",
+      "state": "reaped",
+      "pid": 71,
+      "pgid": 71,
+      "start_ticks": 7958852,
+      "wait_status": 15
+    }
+  },
+  "errors": [
+    {
+      "error_class": "OSError",
+      "message": "fixture reap failure",
+      "phase": "helper_cleanup"
+    }
+  ],
+  "signals": [
+    {
+      "pid": 70,
+      "signal": 15,
+      "monotonic": 79588.568172329
+    },
+    {
+      "pid": 71,
+      "signal": 15,
+      "monotonic": 79588.568172329
+    }
+  ],
+  "ticks": [
+    79588.52263015,
+    79588.522681223,
+    79588.527742652,
+    79588.532799021,
+    79588.537853488,
+    79588.542909196,
+    79588.547965303,
+    79588.553004351,
+    79588.558132049
+  ],
+  "events": [
+    {
+      "event": "ready",
+      "role": "work",
+      "received": 79588.558153698,
+      "identity": {
+        "pid": 70,
+        "pgid": 70,
+        "start_ticks": 7958852,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "ready",
+      "role": "sample",
+      "received": 79588.558175119,
+      "identity": {
+        "pid": 71,
+        "pgid": 71,
+        "start_ticks": 7958852,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "cleanup_uncertain_injected",
+      "ownership": [
+        {
+          "role": "work",
+          "state": "pid_owned",
+          "pid": 70,
+          "pgid": 70,
+          "start_ticks": 7958852,
+          "ownership_unknown": false
+        },
+        {
+          "role": "sample",
+          "state": "pid_owned",
+          "pid": 71,
+          "pgid": 71,
+          "start_ticks": 7958852,
+          "ownership_unknown": false
+        }
+      ],
+      "errors": [
+        {
+          "error_class": "OSError",
+          "message": "fixture reap failure",
+          "phase": "helper_cleanup"
+        }
+      ]
+    }
+  ],
+  "ownership": [],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 317,
+      "blocked_writes": 0
+    },
+    "sample": {
+      "sent": 0,
+      "received": 319,
+      "blocked_writes": 0
+    }
+  }
+}

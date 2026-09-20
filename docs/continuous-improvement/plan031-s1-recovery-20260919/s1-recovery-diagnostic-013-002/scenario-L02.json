@@ -1,0 +1,127 @@
+{
+  "scenario": "L02",
+  "mode": "normal",
+  "t0": 79584.737258396,
+  "ready_deadline": 79585.737258396,
+  "setup_deadline": 79586.737258396,
+  "setup_cleanup_deadline": 79587.737258396,
+  "action_end": 79584.804409268,
+  "end": 79584.814532644,
+  "execution_seconds": 0.06716821400914341,
+  "cleanup_seconds": 0.010123375992407091,
+  "cleanup_confirmed": true,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "reaped",
+      "pid": 10,
+      "pgid": 10,
+      "start_ticks": 7958473,
+      "wait_status": 15
+    },
+    "sample": {
+      "role": "sample",
+      "state": "reaped",
+      "pid": 11,
+      "pgid": 11,
+      "start_ticks": 7958473,
+      "wait_status": 15
+    }
+  },
+  "errors": [],
+  "signals": [
+    {
+      "pid": 10,
+      "signal": 15,
+      "monotonic": 79584.807550896
+    },
+    {
+      "pid": 11,
+      "signal": 15,
+      "monotonic": 79584.807550896
+    }
+  ],
+  "ticks": [
+    79584.737258396,
+    79584.738237307,
+    79584.743299578,
+    79584.748356134,
+    79584.753415563,
+    79584.758482,
+    79584.763543931,
+    79584.768598966,
+    79584.773723069,
+    79584.778993363,
+    79584.784085805,
+    79584.789142096,
+    79584.794197233,
+    79584.79925331,
+    79584.804347891
+  ],
+  "events": [
+    {
+      "event": "ready",
+      "role": "work",
+      "received": 79584.773744262,
+      "identity": {
+        "pid": 10,
+        "pgid": 10,
+        "start_ticks": 7958473,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "ready",
+      "role": "sample",
+      "received": 79584.773765453,
+      "identity": {
+        "pid": 11,
+        "pgid": 11,
+        "start_ticks": 7958473,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "dispatch",
+      "role": "sample",
+      "request_id": 1,
+      "dispatch": 79584.778984725
+    },
+    {
+      "event": "response",
+      "role": "sample",
+      "request_id": 1,
+      "dispatch": 79584.778984725,
+      "received": 79584.804379089,
+      "acquisition_start": 79584.781086301,
+      "acquisition_end": 79584.793377945
+    },
+    {
+      "event": "disposable_reserve_boundary",
+      "monotonic": 79584.804402851
+    }
+  ],
+  "ownership": [],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 317,
+      "blocked_writes": 0
+    },
+    "sample": {
+      "sent": 282,
+      "received": 673,
+      "blocked_writes": 0
+    }
+  }
+}
