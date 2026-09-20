@@ -1,0 +1,220 @@
+{
+  "scenario": "L31",
+  "mode": "normal",
+  "constructor_entry": 83717.06708967,
+  "action_cutoff": 83719.06708967,
+  "safety_cutoff": 83720.06708967,
+  "constructor_end": 83717.067171202,
+  "t0": 83717.067105149,
+  "ready_deadline": 83718.067105149,
+  "setup_deadline": 83719.067105149,
+  "setup_cleanup_deadline": 83720.067105149,
+  "action_end": 83717.21332358,
+  "end": 83717.213327521,
+  "execution_seconds": 0.14623390999622643,
+  "cleanup_seconds": 3.941007889807224e-06,
+  "cleanup_confirmed": true,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "reaped",
+      "pid": 151,
+      "pgid": 151,
+      "start_ticks": 8371706,
+      "wait_status": 15
+    },
+    "sample": {
+      "role": "sample",
+      "state": "reaped",
+      "pid": 152,
+      "pgid": 152,
+      "start_ticks": 8371706,
+      "wait_status": 15
+    }
+  },
+  "errors": [],
+  "signals": [
+    {
+      "pid": 151,
+      "signal": 15,
+      "monotonic": 83717.182720364
+    },
+    {
+      "pid": 152,
+      "signal": 15,
+      "monotonic": 83717.182720364
+    }
+  ],
+  "ticks": [
+    83717.067105149,
+    83717.067173361,
+    83717.072267317,
+    83717.077329385,
+    83717.082388184,
+    83717.087446138,
+    83717.092504768,
+    83717.097563635,
+    83717.102626202,
+    83717.107856102,
+    83717.112950756,
+    83717.118048452,
+    83717.124618035,
+    83717.124635313,
+    83717.129702218,
+    83717.134763921,
+    83717.139891167,
+    83717.144952351,
+    83717.150012037,
+    83717.15511892,
+    83717.160223133,
+    83717.161754793,
+    83717.161768451,
+    83717.166959529,
+    83717.172119761,
+    83717.17723579,
+    83717.182343429
+  ],
+  "events": [
+    {
+      "event": "ready",
+      "role": "work",
+      "received": 83717.107885257,
+      "identity": {
+        "pid": 151,
+        "pgid": 151,
+        "start_ticks": 8371706,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "ready",
+      "role": "sample",
+      "received": 83717.118072678,
+      "identity": {
+        "pid": 152,
+        "pgid": 152,
+        "start_ticks": 8371706,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "monitor_resume",
+      "monotonic": 83717.124618035
+    },
+    {
+      "event": "dispatch",
+      "role": "sample",
+      "request_id": 1,
+      "dispatch": 83717.12462507
+    },
+    {
+      "event": "response",
+      "role": "sample",
+      "request_id": 1,
+      "dispatch": 83717.12462507,
+      "received": 83717.160245888,
+      "acquisition_start": 83717.136745907,
+      "acquisition_end": 83717.147061721,
+      "pre_generation": 1,
+      "post_generation": 2
+    },
+    {
+      "event": "census",
+      "processes": [
+        1,
+        2,
+        3,
+        151,
+        152,
+        153
+      ],
+      "controller_threads": 2,
+      "process_threads": {
+        "1": 1,
+        "2": 1,
+        "3": 2,
+        "151": 1,
+        "152": 1,
+        "153": 1
+      },
+      "total_workers": 7,
+      "ancestors": [
+        {
+          "pid": 2,
+          "executable": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python"
+        },
+        {
+          "pid": 1,
+          "executable": "codex-linux-sandbox"
+        }
+      ],
+      "opencv_threads": "1"
+    },
+    {
+      "event": "monitor_resume",
+      "monotonic": 83717.161754793
+    },
+    {
+      "event": "dispatch",
+      "role": "sample",
+      "request_id": 2,
+      "dispatch": 83717.16176021
+    },
+    {
+      "event": "worker_retired",
+      "generation": 2
+    }
+  ],
+  "trace_facts": {
+    "capacity": 256,
+    "total": 9,
+    "dropped": 0,
+    "saturated": false,
+    "first": 83717.107892799,
+    "last": 83717.192515186
+  },
+  "max_gap": 0.005229899994446896,
+  "max_turn": 0.00010381100582890213,
+  "last_sample": null,
+  "requests": {
+    "work": null,
+    "sample": null
+  },
+  "ownership": [],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 319,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 319,
+      "last_frame": {
+        "bytes": 319,
+        "sha256": "19032cec5a30607fb00e41d5a08e0d4332f458a2a7df0f5bceef3f480bc89978",
+        "complete_observed": 83717.102684845
+      }
+    },
+    "sample": {
+      "sent": 572,
+      "received": 1037,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 1609,
+      "last_frame": {
+        "bytes": 359,
+        "sha256": "7218ea453e7f372d9aceefa09e428b670403ab2228a212c165ba34697f084b69",
+        "complete_observed": 83717.172174094
+      }
+    }
+  }
+}

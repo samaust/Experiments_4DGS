@@ -1,0 +1,20 @@
+{
+  "schema": "plan044-procedural-observations/v1",
+  "recorded_utc": "2026-09-20T10:23:57.394956+00:00",
+  "first_diagnostic": {
+    "run": "s1-recovery-diagnostic-014-001",
+    "returncode": 1,
+    "tests": 45,
+    "failures": 0,
+    "errors": 1,
+    "issue": "L31 worker invalidation raised for its failed outstanding sample before fixture stop_group could run. Its10-second sleeper could overlap later scenarios; maximum L35 topology can reach9. Namespace capture termination bounds any surviving disposable child, but timely per-scenario worker retirement and first-run CPU compliance cannot be certified.",
+    "reported_maximum_estimate": 9,
+    "cpu_compliance": false,
+    "tool_completion_retained": false,
+    "capture_runner_wait_completed": true
+  },
+  "correction": "Terminal worker invalidation retains then clears the failed sample, and fixture worker stop runs in unconditional finally. Later census includes all direct controller children to expose carryover.",
+  "historical_plan041_strict": false,
+  "historical_plan043_strict": false,
+  "plan044_strict": false
+}

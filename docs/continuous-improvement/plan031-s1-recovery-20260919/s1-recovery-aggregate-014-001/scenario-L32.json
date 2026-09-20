@@ -1,0 +1,169 @@
+{
+  "scenario": "L32",
+  "mode": "normal",
+  "constructor_entry": 83717.213596952,
+  "action_cutoff": 83719.213596952,
+  "safety_cutoff": 83720.213596952,
+  "constructor_end": 83717.213674113,
+  "t0": 83717.213611965,
+  "ready_deadline": 83718.213611965,
+  "setup_deadline": 83719.213611965,
+  "setup_cleanup_deadline": 83720.213611965,
+  "action_end": 83717.302708235,
+  "end": 83717.312831233,
+  "execution_seconds": 0.08911128299951088,
+  "cleanup_seconds": 0.010122997991857119,
+  "cleanup_confirmed": true,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "reaped",
+      "pid": 155,
+      "pgid": 155,
+      "start_ticks": 8371721,
+      "wait_status": 15
+    },
+    "sample": {
+      "role": "sample",
+      "state": "reaped",
+      "pid": 156,
+      "pgid": 156,
+      "start_ticks": 8371721,
+      "wait_status": 15
+    }
+  },
+  "errors": [],
+  "signals": [
+    {
+      "pid": 155,
+      "signal": 15,
+      "monotonic": 83717.304889877
+    },
+    {
+      "pid": 156,
+      "signal": 15,
+      "monotonic": 83717.304889877
+    }
+  ],
+  "ticks": [
+    83717.213611965,
+    83717.213675998,
+    83717.218769566,
+    83717.223831305,
+    83717.228890058,
+    83717.233947542,
+    83717.239045011,
+    83717.244121419,
+    83717.249239771,
+    83717.254437973,
+    83717.271536736,
+    83717.271551912,
+    83717.276619022,
+    83717.281750058,
+    83717.286812722,
+    83717.291871957,
+    83717.296979869,
+    83717.302085454
+  ],
+  "events": [
+    {
+      "event": "ready",
+      "role": "work",
+      "received": 83717.254475569,
+      "identity": {
+        "pid": 155,
+        "pgid": 155,
+        "start_ticks": 8371721,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "ready",
+      "role": "sample",
+      "received": 83717.254503173,
+      "identity": {
+        "pid": 156,
+        "pgid": 156,
+        "start_ticks": 8371721,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "monitor_resume",
+      "monotonic": 83717.271536736
+    },
+    {
+      "event": "dispatch",
+      "role": "sample",
+      "request_id": 1,
+      "dispatch": 83717.271543269
+    },
+    {
+      "event": "response",
+      "role": "sample",
+      "request_id": 1,
+      "dispatch": 83717.271543269,
+      "received": 83717.302104648,
+      "acquisition_start": 83717.278028503,
+      "acquisition_end": 83717.288540135,
+      "pre_generation": 1,
+      "post_generation": 2
+    },
+    {
+      "event": "worker_retired",
+      "generation": 2
+    }
+  ],
+  "trace_facts": {
+    "capacity": 256,
+    "total": 6,
+    "dropped": 0,
+    "saturated": false,
+    "first": 83717.254483525,
+    "last": 83717.302152505
+  },
+  "max_gap": 0.005198201994062401,
+  "max_turn": 9.893000242300332e-05,
+  "last_sample": null,
+  "requests": {
+    "work": null,
+    "sample": null
+  },
+  "ownership": [],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 319,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 319,
+      "last_frame": {
+        "bytes": 319,
+        "sha256": "7cf7f5b35eb1b84acc046c140494ffec96912d2dae9e9b81505aeadeb98354df",
+        "complete_observed": 83717.249337265
+      }
+    },
+    "sample": {
+      "sent": 285,
+      "received": 678,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 963,
+      "last_frame": {
+        "bytes": 357,
+        "sha256": "084b21e8a062e05abc34439fb1cdae94f33d04e91b218b543299e99aa2f96ddd",
+        "complete_observed": 83717.291920806
+      }
+    }
+  }
+}

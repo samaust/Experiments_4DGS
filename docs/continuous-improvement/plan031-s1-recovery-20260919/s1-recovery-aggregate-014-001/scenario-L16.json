@@ -1,0 +1,226 @@
+{
+  "scenario": "L16",
+  "mode": "phase_late",
+  "constructor_entry": 83714.731359551,
+  "action_cutoff": 83716.731359551,
+  "safety_cutoff": 83717.731359551,
+  "constructor_end": 83714.731441084,
+  "t0": 83714.731376032,
+  "ready_deadline": 83715.731376032,
+  "setup_deadline": 83716.731376032,
+  "setup_cleanup_deadline": 83717.731376032,
+  "action_end": 83714.902682313,
+  "end": 83714.912857211,
+  "execution_seconds": 0.17132276199117769,
+  "cleanup_seconds": 0.010174898008699529,
+  "cleanup_confirmed": true,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "reaped",
+      "pid": 104,
+      "pgid": 104,
+      "start_ticks": 8371473,
+      "wait_status": 15
+    },
+    "sample": {
+      "role": "sample",
+      "state": "reaped",
+      "pid": 105,
+      "pgid": 105,
+      "start_ticks": 8371473,
+      "wait_status": 15
+    }
+  },
+  "errors": [],
+  "signals": [
+    {
+      "pid": 104,
+      "signal": 15,
+      "monotonic": 83714.905362173
+    },
+    {
+      "pid": 105,
+      "signal": 15,
+      "monotonic": 83714.905362173
+    }
+  ],
+  "ticks": [
+    83714.731376032,
+    83714.731443242,
+    83714.736539652,
+    83714.741618326,
+    83714.746695904,
+    83714.751772118,
+    83714.756893095,
+    83714.762016404,
+    83714.767106943,
+    83714.772254982,
+    83714.777466886,
+    83714.783785024,
+    83714.783801407,
+    83714.788869837,
+    83714.793930389,
+    83714.799003742,
+    83714.804069164,
+    83714.809128795,
+    83714.814186649,
+    83714.819249044,
+    83714.824363856,
+    83714.829441983,
+    83714.834558059,
+    83714.839675449,
+    83714.844790276,
+    83714.849908076,
+    83714.855027124,
+    83714.860145887,
+    83714.865264717,
+    83714.870381848,
+    83714.875497421,
+    83714.880615647,
+    83714.885692364,
+    83714.890812557,
+    83714.895938462,
+    83714.901061216,
+    83714.902647998
+  ],
+  "events": [
+    {
+      "event": "ready",
+      "role": "work",
+      "received": 83714.772295223,
+      "identity": {
+        "pid": 104,
+        "pgid": 104,
+        "start_ticks": 8371473,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "ready",
+      "role": "sample",
+      "received": 83714.777502375,
+      "identity": {
+        "pid": 105,
+        "pgid": 105,
+        "start_ticks": 8371473,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "monitor_resume",
+      "monotonic": 83714.783785024
+    },
+    {
+      "event": "dispatch",
+      "role": "sample",
+      "request_id": 1,
+      "dispatch": 83714.78379109
+    }
+  ],
+  "trace_facts": {
+    "capacity": 256,
+    "total": 4,
+    "dropped": 0,
+    "saturated": false,
+    "first": 83714.772307406,
+    "last": 83714.78380063
+  },
+  "max_gap": 0.00521190399012994,
+  "max_turn": 0.0001143409899668768,
+  "last_sample": null,
+  "requests": {
+    "work": null,
+    "sample": {
+      "id": 1,
+      "operation": "constant",
+      "dispatch": 83714.78379109,
+      "deadline": 83714.902590751,
+      "state": "transmitted",
+      "operation_payload": {
+        "operation": "constant",
+        "args": {
+          "value": {
+            "device_bytes": 0,
+            "artifact_bytes": 0,
+            "download_bytes": 0,
+            "gpu_pids": []
+          }
+        }
+      },
+      "census_generation": 1,
+      "stage": "wire",
+      "pre": {
+        "session": "09e40d6160a54e53a32a0fb08967d235",
+        "boot_id": "87728d84-c37e-4c37-8f4a-8606d8ffdc81",
+        "generation": 1,
+        "request_id": 1,
+        "worker_generation": 0,
+        "acquisition_start": 83714.788906461,
+        "completed": 83714.789105863,
+        "status": "success",
+        "helpers": [
+          {
+            "pid": 104,
+            "start_ticks": 8371473,
+            "pgid": 104,
+            "ppid": 3,
+            "state": "S"
+          },
+          {
+            "pid": 105,
+            "start_ticks": 8371473,
+            "pgid": 105,
+            "ppid": 3,
+            "state": "S"
+          }
+        ],
+        "worker": null,
+        "rows": [],
+        "exit_code": null,
+        "exit_observed": null,
+        "error": ""
+      },
+      "first_send_entered": 83714.793986215,
+      "final_send_entered": 83714.793986215,
+      "transmitted_observed": 83714.793991637
+    }
+  },
+  "ownership": [],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 319,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 319,
+      "last_frame": {
+        "bytes": 319,
+        "sha256": "4cc3e96cd188b81ca61a02b44c35824b5c7e5097e684bbbb06470d433fceef48",
+        "complete_observed": 83714.767183327
+      }
+    },
+    "sample": {
+      "sent": 282,
+      "received": 321,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 603,
+      "last_frame": {
+        "bytes": 321,
+        "sha256": "f3e863c30ad9ab9e5841f2c63f09ec02453861712108abada73b989c918e1885",
+        "complete_observed": 83714.772367565
+      }
+    }
+  }
+}

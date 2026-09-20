@@ -1,0 +1,175 @@
+{
+  "scenario": "L18",
+  "mode": "descendant",
+  "constructor_entry": 83444.058635252,
+  "action_cutoff": 83446.058635252,
+  "safety_cutoff": 83447.058635252,
+  "constructor_end": 83444.058714906,
+  "t0": 83444.058651194,
+  "ready_deadline": 83445.058651194,
+  "setup_deadline": 83446.058651194,
+  "setup_cleanup_deadline": 83447.058651194,
+  "action_end": 83444.125429096,
+  "end": 83444.125431445,
+  "execution_seconds": 0.06679384400194976,
+  "cleanup_seconds": 2.348999259993434e-06,
+  "cleanup_confirmed": true,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "reaped",
+      "pid": 51,
+      "pgid": 51,
+      "start_ticks": 8344405,
+      "wait_status": 15
+    },
+    "sample": {
+      "role": "sample",
+      "state": "reaped",
+      "pid": 52,
+      "pgid": 52,
+      "start_ticks": 8344405,
+      "wait_status": 15
+    }
+  },
+  "errors": [],
+  "signals": [
+    {
+      "pid": 51,
+      "signal": 15,
+      "monotonic": 83444.112588138
+    },
+    {
+      "pid": 52,
+      "signal": 15,
+      "monotonic": 83444.112588138
+    }
+  ],
+  "ticks": [
+    83444.058651194,
+    83444.058716886,
+    83444.06381326,
+    83444.068937496,
+    83444.074003019,
+    83444.079068128,
+    83444.084135932,
+    83444.089198695,
+    83444.094260572,
+    83444.099377816,
+    83444.104473373
+  ],
+  "events": [
+    {
+      "event": "ready",
+      "role": "sample",
+      "received": 83444.099448411,
+      "identity": {
+        "pid": 52,
+        "pgid": 52,
+        "start_ticks": 8344405,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "ready",
+      "role": "work",
+      "received": 83444.104502381,
+      "identity": {
+        "pid": 51,
+        "pgid": 51,
+        "start_ticks": 8344405,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "census",
+      "processes": [
+        1,
+        2,
+        3,
+        51,
+        52,
+        53,
+        54
+      ],
+      "controller_threads": 2,
+      "process_threads": {
+        "1": 1,
+        "2": 1,
+        "3": 2,
+        "51": 1,
+        "52": 1,
+        "54": 1,
+        "53": 1
+      },
+      "total_workers": 8,
+      "ancestors": [
+        {
+          "pid": 2,
+          "executable": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python"
+        },
+        {
+          "pid": 1,
+          "executable": "codex-linux-sandbox"
+        }
+      ],
+      "opencv_threads": "1"
+    },
+    {
+      "event": "foreign_sentinel_survived",
+      "pid": 54
+    }
+  ],
+  "trace_facts": {
+    "capacity": 256,
+    "total": 4,
+    "dropped": 0,
+    "saturated": false,
+    "first": 83444.099455592,
+    "last": 83444.12036342
+  },
+  "max_gap": 0.005124236005940475,
+  "max_turn": 7.032199937384576e-05,
+  "last_sample": null,
+  "requests": {
+    "work": null,
+    "sample": null
+  },
+  "ownership": [],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 317,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 317,
+      "last_frame": {
+        "bytes": 317,
+        "sha256": "065692f2f9ad5306a35abdf04aaa118bca8f0d19ad6c635d16e84d54a6e4451f",
+        "complete_observed": 83444.099418407
+      }
+    },
+    "sample": {
+      "sent": 0,
+      "received": 319,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 319,
+      "last_frame": {
+        "bytes": 319,
+        "sha256": "5022f0aa035553a0ea7b60ab44321a70d4164718ea575ff05a2f770a597ae847",
+        "complete_observed": 83444.094316597
+      }
+    }
+  }
+}

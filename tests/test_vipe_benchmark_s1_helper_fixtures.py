@@ -35,6 +35,11 @@ class FaultOwner(Owner):
         return value
 
     def observe(self):
+        if self.mode == 'census_block' and getattr(self,'armed',False) and not self.released:
+            self.block_entered = time.monotonic()
+            while not self.released: time.sleep(.005)
+        if self.mode == 'census_error' and getattr(self,'armed',False) and not self.released:
+            raise OSError('fixture active census enumeration failure')
         if self.mode == 'enumeration_failure' and self.cancelled and not self.released:
             raise OSError('fixture enumeration failure')
         return super().observe()
@@ -50,11 +55,13 @@ class FaultOwner(Owner):
         return super().reap_child(pid)
 
 
-def session(mode='normal', **kwargs):
+def session(mode='normal', instance=None, **kwargs):
     class Selected(FaultOwner):
         pass
     Selected.mode = mode
-    return Session(owner_factory=Selected, **kwargs)
+    instance = Session.__new__(Session) if instance is None else instance
+    instance.__init__(owner_factory=Selected, **kwargs)
+    return instance
 
 
 def main(role, token, fd, mode):
@@ -76,6 +83,17 @@ def main(role, token, fd, mode):
                 channel.send(struct.pack('!I',65537)); time.sleep(10)
             if mode == 'wrong_role':
                 message['role'] = 'sample'
+            if mode in ('early_encoder','early_partial'):
+                raw=json.dumps(message).encode(); channel.send(struct.pack('!I',len(raw))+raw)
+                # An out-of-band fixture barrier permits deterministic early bytes
+                # while the production request remains unencoded or backpressured.
+                import socket
+                barrier=Path(os.environ['S1_EARLY_BARRIER'])
+                while not barrier.exists(): time.sleep(.001)
+                reply=dict(message,kind='response',request_id=1,payload=dict(operation='constant',ok=True,value=37,acquisition_start=None,acquisition_end=None))
+                raw=json.dumps(reply).encode(); channel.send(struct.pack('!I',len(raw))+raw)
+                barrier.with_suffix('.sent').write_text('sent')
+                time.sleep(10)
             if mode in ('stalled_reader','wrong_role'):
                 raw=json.dumps(message).encode(); channel.send(struct.pack('!I',len(raw))+raw); time.sleep(10)
             if mode == 'descendant':

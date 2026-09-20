@@ -1,0 +1,174 @@
+{
+  "scenario": "L18",
+  "mode": "descendant",
+  "constructor_entry": 83715.242332864,
+  "action_cutoff": 83717.242332864,
+  "safety_cutoff": 83718.242332864,
+  "constructor_end": 83715.242412548,
+  "t0": 83715.242348258,
+  "ready_deadline": 83716.242348258,
+  "setup_deadline": 83717.242348258,
+  "setup_cleanup_deadline": 83718.242348258,
+  "action_end": 83715.304758371,
+  "end": 83715.304765691,
+  "execution_seconds": 0.06242550699971616,
+  "cleanup_seconds": 7.320006261579692e-06,
+  "cleanup_confirmed": true,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "reaped",
+      "pid": 110,
+      "pgid": 110,
+      "start_ticks": 8371524,
+      "wait_status": 15
+    },
+    "sample": {
+      "role": "sample",
+      "state": "reaped",
+      "pid": 111,
+      "pgid": 111,
+      "start_ticks": 8371524,
+      "wait_status": 15
+    }
+  },
+  "errors": [],
+  "signals": [
+    {
+      "pid": 110,
+      "signal": 15,
+      "monotonic": 83715.293324126
+    },
+    {
+      "pid": 111,
+      "signal": 15,
+      "monotonic": 83715.293324126
+    }
+  ],
+  "ticks": [
+    83715.242348258,
+    83715.242414596,
+    83715.247508634,
+    83715.252582908,
+    83715.257649153,
+    83715.262754736,
+    83715.267872218,
+    83715.272946579,
+    83715.278003813,
+    83715.283150686
+  ],
+  "events": [
+    {
+      "event": "ready",
+      "role": "work",
+      "received": 83715.283185904,
+      "identity": {
+        "pid": 110,
+        "pgid": 110,
+        "start_ticks": 8371524,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "ready",
+      "role": "sample",
+      "received": 83715.283212247,
+      "identity": {
+        "pid": 111,
+        "pgid": 111,
+        "start_ticks": 8371524,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "census",
+      "processes": [
+        1,
+        2,
+        3,
+        110,
+        111,
+        112,
+        113
+      ],
+      "controller_threads": 2,
+      "process_threads": {
+        "112": 1,
+        "113": 1,
+        "2": 1,
+        "3": 2,
+        "1": 1,
+        "110": 1,
+        "111": 1
+      },
+      "total_workers": 8,
+      "ancestors": [
+        {
+          "pid": 2,
+          "executable": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python"
+        },
+        {
+          "pid": 1,
+          "executable": "codex-linux-sandbox"
+        }
+      ],
+      "opencv_threads": "1"
+    },
+    {
+      "event": "foreign_sentinel_survived",
+      "pid": 113
+    }
+  ],
+  "trace_facts": {
+    "capacity": 256,
+    "total": 4,
+    "dropped": 0,
+    "saturated": false,
+    "first": 83715.283193211,
+    "last": 83715.299667702
+  },
+  "max_gap": 0.0051468729943735525,
+  "max_turn": 9.282800601795316e-05,
+  "last_sample": null,
+  "requests": {
+    "work": null,
+    "sample": null
+  },
+  "ownership": [],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 319,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 319,
+      "last_frame": {
+        "bytes": 319,
+        "sha256": "05a518ec172daabeaf3cd657e53601ad8b9f9efb8e69a0a07f3ef6ef280d2ef6",
+        "complete_observed": 83715.278095234
+      }
+    },
+    "sample": {
+      "sent": 0,
+      "received": 321,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 321,
+      "last_frame": {
+        "bytes": 321,
+        "sha256": "ebfb853bbf58766199f482b4427e74288dfa1fd87b5eb68e0aee945f18119a00",
+        "complete_observed": 83715.278062412
+      }
+    }
+  }
+}

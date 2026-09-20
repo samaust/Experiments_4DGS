@@ -330,6 +330,7 @@ class HelperIntegrationTests(unittest.TestCase):
         class Fake:
             def __init__(self):
                 self.owner = types.SimpleNamespace(errors=[], groups={})
+                self.accepted_initial=False; self.last_sample=None
                 self.ready = {'work':{},'sample':{}}
                 self.requests = {'work':None,'sample':None}
                 self.ticks = []
@@ -338,6 +339,11 @@ class HelperIntegrationTests(unittest.TestCase):
                 self.calls = 0
                 self.selected = False
                 self.closed = False
+            def resume(self): self.ticks.append(time.monotonic())
+            def set_worker(self,worker): self.worker=worker
+            def retire_worker(self): self.worker=None
+            def admission_guard(self):
+                if not self.accepted_initial or time.monotonic()>=self.setup_deadline: raise ValueError('fixture admission unavailable')
             def await_ready(self): return self
             def submit(self, which, operation, deadline):
                 self.requests[which] = dict(value=operation['args']['value'], dispatch=time.monotonic())
@@ -450,7 +456,10 @@ class HelperIntegrationTests(unittest.TestCase):
             peaks=[]
             def monitor(function,deadline,sampler,config,peak,**kwargs):
                 peaks.append(peak)
-                if kwargs['phase']=='initial_sample': return self.reading
+                if kwargs['phase']=='initial_sample':
+                    helper=self.fake_class(mode='false')(); helper.accepted_initial=True
+                    kwargs['lifecycle'].helpers=[helper]
+                    return self.reading
                 if kwargs['phase']=='worker_sample':
                     self.assertIsNotNone(kwargs['worker'])
                     self.reading['gpu_pids']=[kwargs['worker'].pid]
@@ -499,26 +508,58 @@ class HelperSessionTests(unittest.TestCase):
         import contextlib
         @contextlib.contextmanager
         def owned():
-            started=self.time.monotonic()
-            current=session(mode, **bounds)
-            record=dict(scenario=label, mode=mode, t0=current.t0,
-                ready_deadline=current.ready_deadline, setup_deadline=current.setup_deadline,
-                setup_cleanup_deadline=current.cleanup_deadline)
+            from vipe_benchmark.s1_helper_session import Session,Trace
+            from dataclasses import asdict, is_dataclass
+            started=self.time.monotonic(); action_cutoff=started+2.; safety_cutoff=started+3.
+            current=Session.__new__(Session)
+            record=dict(scenario=label,mode=mode,constructor_entry=started,action_cutoff=action_cutoff,safety_cutoff=safety_cutoff)
             try:
+                session(mode,instance=current,**bounds)
+                current.fixture_action_end=action_cutoff; current.fixture_safety_end=safety_cutoff
+                observed_calls=Trace(128)
+                def observe_call(name,operation):
+                    def observed(*args,**kwargs):
+                        deadline=args[0] if name in ('tick','close') else current.ready_deadline
+                        effective=min(deadline,safety_cutoff if name=='close' else action_cutoff)
+                        if name=='tick' and current.requests['sample'] is not None:
+                            effective=min(effective,current.requests['sample']['deadline'])
+                        entered=self.time.monotonic();result=None;error=None
+                        try:
+                            result=operation(*args,**kwargs);return result
+                        except BaseException as exc:
+                            error=type(exc).__name__+': '+str(exc);raise
+                        finally:
+                            returned=self.time.monotonic()
+                            observed_calls.append(dict(operation=name,entered=entered,deadline=effective,returned=returned,
+                                confirmed=result if name=='close' else None,error=error))
+                            self.assertLessEqual(returned,effective+.1)
+                    return observed
+                current.tick=observe_call('tick',current.tick)
+                current.close=observe_call('close',current.close)
+                current.await_ready=observe_call('await_ready',current.await_ready)
+                record.update(constructor_end=self.time.monotonic(),t0=current.t0,
+                    ready_deadline=current.ready_deadline,setup_deadline=current.setup_deadline,setup_cleanup_deadline=current.cleanup_deadline)
                 yield current
             finally:
                 action_end=self.time.monotonic()
-                current.owner.released=True
-                cleaned=current.close(min(started+3, self.time.monotonic()+1))
+                if current.owner is not None: current.owner.released=True
+                cleaned=current.close(safety_cutoff)
                 ended=self.time.monotonic()
-                record.update(action_end=action_end, end=ended, execution_seconds=action_end-started,
-                    cleanup_seconds=ended-action_end, cleanup_confirmed=cleaned,
-                    records=current.owner.records, errors=current.owner.errors,
-                    signals=current.owner.signals, ticks=current.ticks, events=current.events,
-                    ownership=current.ownership(), wire={role:dict(sent=w.sent_bytes,received=w.received_bytes,blocked_writes=w.blocked_writes) for role,w in current.wires.items()})
+                owner=current.owner
+                record.update(action_end=action_end,end=ended,execution_seconds=action_end-started,
+                    cleanup_seconds=ended-action_end,cleanup_confirmed=cleaned,
+                    records={} if owner is None else owner.records,errors=[] if owner is None else list(owner.errors),
+                    signals=[] if owner is None else list(owner.signals),ticks=list(current.ticks),events=list(current.events),
+                    trace_facts=current.events.facts(),tick_facts=current.ticks.facts(),
+                    owner_error_facts=None if owner is None else owner.errors.facts(),owner_signal_facts=None if owner is None else owner.signals.facts(),
+                    request_counts={role:dict(dispatch=current.dispatch_counts[role].value,response=current.response_counts[role].value) for role in current.requests},
+                    census_request_count=current.census_requests.value,max_gap=current.max_gap,max_turn=current.max_turn,
+                    call_observations=list(observed_calls),call_observation_facts=observed_calls.facts(),
+                    last_sample=current.last_sample,requests=current.requests,
+                    ownership=current.ownership(),wire={role:dict(sent=w.sent_bytes,received=w.received_bytes,blocked_writes=w.blocked_writes,peek=w.peek_bytes.value,combined=w.combined_bytes.value,last_frame=w.last_frame) for role,w in current.wires.items()})
                 directory=Path(os.environ['S1_VALIDATION_RUN_DIRECTORY'])
                 with (directory/('scenario-'+label+'.json')).open('x') as stream:
-                    json.dump(record,stream,indent=2); stream.write('\n')
+                    json.dump(record,stream,indent=2,default=lambda v:asdict(v) if is_dataclass(v) else list(v)); stream.write('\n')
                 self.assertTrue(cleaned,record)
                 self.assertLessEqual(action_end-started,2)
                 self.assertLessEqual(ended-action_end,1)
@@ -529,7 +570,7 @@ class HelperSessionTests(unittest.TestCase):
         from vipe_benchmark import supervisor as sup
         life=sup.HelperLifecycle(retain=True)
         life.helpers=[session]
-        return sup.monitored_call(operation or self.operation,self.time.monotonic()+seconds,
+        return sup.monitored_call(operation or self.operation,min(session.fixture_action_end,self.time.monotonic()+seconds),
             sampler or self.sampler,load(),{},lifecycle=life)
 
     def reject_ready(self, label, mode):
@@ -544,6 +585,7 @@ class HelperSessionTests(unittest.TestCase):
         from vipe_benchmark.s1_helper_session import census
         rows=census()
         owned={os.getpid(),*extra,*session.owner.members}
+        owned.update(pid for pid,row in rows.items() if row['ppid']==os.getpid())
         current=os.getppid(); ancestors=[]
         while current in rows:
             command=Path('/proc',str(current),'cmdline').read_bytes().split(b'\0')
@@ -734,6 +776,402 @@ class HelperSessionTests(unittest.TestCase):
                 self.assertEqual(result['counts'],dict(complete=510))
                 self.assertEqual(result['identities'],510)
                 self.assertEqual(result['reference']['session'],session.token)
+
+    def sample(self, session, *, worker=None, seconds=.5):
+        from vipe_benchmark import supervisor as sup
+        life=sup.HelperLifecycle(retain=True); life.helpers=[session]
+        return sup.monitored_call(self.sampler,min(session.fixture_action_end,self.time.monotonic()+seconds),
+            self.sampler,load(),{},worker=worker,lifecycle=life,phase='worker_sample')
+
+    def admission_rejected(self,label,equality):
+        from vipe_benchmark import supervisor as sup
+        with self.scenario(label,ready_seconds=.15,setup_seconds=.3,total_seconds=.5) as session:
+            life=sup.HelperLifecycle(retain=True);life.helpers=[session]
+            calls=[]
+            with tempfile.TemporaryDirectory() as temp:
+                class Disposable:
+                    jobs={'S1-calibration-recovery-001':dict(resource='gpu')}
+                    config=load()
+                    @property
+                    def reserve(inner):
+                        self.assertTrue(session.accepted_initial)
+                        self.assertIsNotNone(session.last_sample)
+                        if equality: session.decision_clock=lambda:session.setup_deadline
+                        else:
+                            self.time.sleep(max(0.,session.setup_deadline-self.time.monotonic()+.005))
+                        return lambda *a,**kw:calls.append('reserve')
+                with patch.object(sup,'HelperLifecycle',return_value=life):
+                    with self.assertRaisesRegex(TimeoutError,'setup admission deadline'):
+                        sup.supervise(Disposable(),'S1-calibration-recovery-001',['unused'],Path(temp)/'out',evidence={},sample_resources=self.sampler)
+                returned=self.time.monotonic()
+                session.events.append(dict(event='rejected_admission',decision=session.decision_clock(),deadline=session.setup_deadline,returned=returned,calls=list(calls)))
+                self.assertEqual(calls,[])
+                self.assertLessEqual(returned,session.cleanup_deadline+.1)
+                self.assertTrue(session.closed)
+
+    def test_l25_delayed_actual_reserve(self): self.admission_rejected('L25',False)
+    def test_l26_equal_actual_reserve(self): self.admission_rejected('L26',True)
+
+    def early_response(self,label,mode):
+        import socket
+        with tempfile.TemporaryDirectory() as temp:
+            barrier=Path(temp)/'release'
+            with patch.dict(os.environ,S1_EARLY_BARRIER=str(barrier)),self.scenario(label,mode) as session:
+                session.await_ready(); wire=session.wires['work']
+                wire.channel.setsockopt(socket.SOL_SOCKET,socket.SO_SNDBUF,1024)
+                operation=dict(operation='constant',args=dict(value=['x'*1900]*32))
+                end=min(session.fixture_action_end,self.time.monotonic()+.3)
+                session.submit('work',operation,end)
+                if mode=='early_partial':
+                    while not wire.blocked_writes and self.time.monotonic()<end:
+                        session.tick(end);self.time.sleep(.001)
+                    self.assertTrue(wire.out);self.assertGreater(wire.sent_bytes,0)
+                else: self.assertIsNotNone(wire.encoder)
+                before=dict(encoder=wire.encoder is not None,out_bytes=len(wire.out),sent=wire.sent_bytes)
+                barrier.write_text('release')
+                while not barrier.with_suffix('.sent').exists() and self.time.monotonic()<end: self.time.sleep(.001)
+                self.assertTrue(barrier.with_suffix('.sent').exists())
+                with self.assertRaisesRegex(ValueError,'premature helper response'):
+                    session.tick(end)
+                request=session.requests['work']
+                self.assertEqual(request['early_bytes'],1)
+                self.assertNotIn('transmitted_observed',request)
+                session.events.append(dict(event='early_response_rejected',before=before,request_id=request['id'],early_observed=request['early_observed']))
+
+    def test_l27_encoder_early_response(self): self.early_response('L27','early_encoder')
+    def test_l28_partial_early_response(self): self.early_response('L28','early_partial')
+
+    def readable_equal(self,label,seconds):
+        with self.scenario(label) as session:
+            session.await_ready()
+            end=min(session.fixture_action_end,self.time.monotonic()+seconds)
+            session.submit('sample',self.sampler,end)
+            request=session.requests['sample']; observed=[]
+            def decision():
+                snap=session.owner.census_reply
+                if request.get('stage')=='post' and snap is not None:
+                    observed.append(dict(decision=request['deadline'],real=self.time.monotonic(),frame=dict(session.wires['sample'].last_frame),
+                        dispatch=request['dispatch'],deadline=request['deadline'],payload=request['candidate'],pre=request['pre'],post=snap))
+                    return request['deadline']
+                return self.time.monotonic()
+            session.decision_clock=decision
+            with self.assertRaisesRegex(TimeoutError,'sample timeout at census decision'):
+                while self.time.monotonic()<end:
+                    session.tick(end);self.time.sleep(.001)
+            self.assertEqual(len(observed),1)
+            self.assertGreater(observed[0]['frame']['bytes'],4)
+            self.assertEqual(observed[0]['decision'],request['deadline'])
+            self.assertLess(observed[0]['payload']['acquisition_end'],observed[0]['real'])
+            self.assertLess(observed[0]['pre'].generation,observed[0]['post'].generation)
+            self.assertIsNone(session.last_sample)
+            self.assertFalse(any(e['event']=='response' and e['role']=='sample' for e in session.events))
+            self.assertLessEqual(session.max_gap,.1)
+            session.events.append(dict(event='readable_deadline_equality',observation=observed[0]))
+
+    def test_l29_readable_sample_equality(self): self.readable_equal('L29',1.2)
+    def test_l30_readable_phase_equality(self): self.readable_equal('L30',.2)
+
+    def scenario_worker(self,session,code):
+        import contextlib
+        from vipe_benchmark import supervisor as sup
+        @contextlib.contextmanager
+        def managed():
+            worker=subprocess.Popen([sys.executable,'-B','-c',code],start_new_session=True,env=dict(os.environ,OPENCV_FOR_THREADS_NUM='1'))
+            try: yield worker
+            finally:
+                try: session.retire_worker()
+                finally: self.assertEqual(sup.stop_group(worker,session.fixture_action_end),[])
+        return managed()
+
+    def test_l31_live_worker_bracket_and_foreign(self):
+        from vipe_benchmark.supervisor import HelperFailure
+        with self.scenario('L31') as session:
+            session.await_ready()
+            with self.scenario_worker(session,'import time; time.sleep(10)') as worker:
+                self.reading['gpu_pids']=[worker.pid]
+                self.assertEqual(self.sample(session,worker=worker),self.reading)
+                before=session.last_sample
+                self.assertEqual(before['pre'].worker.pid,worker.pid)
+                self.assertEqual(before['pre'].worker.start_ticks,before['post'].worker.start_ticks)
+                count,_=self.record_census(session,extra=(worker.pid,));self.assertLessEqual(count,8)
+                self.reading['gpu_pids']=[worker.pid,os.getpid()]
+                with self.assertRaises(HelperFailure) as caught: self.sample(session,worker=worker)
+                self.assertEqual(caught.exception.failure['error_class'],'GPUOwnershipError')
+                self.assertEqual(before['pre'].worker.pid,worker.pid)
+
+    def test_l32_unreaped_worker_pin(self):
+        with self.scenario('L32') as session:
+            session.await_ready()
+            with self.scenario_worker(session,'pass') as worker:
+                end=min(session.fixture_action_end,self.time.monotonic()+.2)
+                while os.waitid(os.P_PID,worker.pid,os.WEXITED|os.WNOHANG|os.WNOWAIT) is None and self.time.monotonic()<end: self.time.sleep(.001)
+                self.reading['gpu_pids']=[worker.pid]
+                self.assertEqual(self.sample(session,worker=worker),self.reading)
+                self.assertIsNone(worker.returncode)
+                self.assertEqual(session.worker_exit(),0)
+                self.assertEqual(session.last_sample['post'].worker.state,'Z')
+                self.assertTrue(Path('/proc',str(worker.pid)).exists())
+
+    def test_l33_blocked_census_refuses_stale(self):
+        with self.scenario('L33','census_block') as session:
+            session.await_ready()
+            with self.scenario_worker(session,'import time; time.sleep(10)') as worker:
+                self.assertEqual(self.sample(session,worker=worker),self.reading)
+                previous=session.last_sample
+                session.owner.armed=True
+                started=self.time.monotonic(); deadline=started+.12
+                with self.assertRaises(TimeoutError) as caught: self.sample(session,worker=worker,seconds=.12)
+                returned=self.time.monotonic()
+                self.assertTrue(getattr(session.owner,'block_entered',None))
+                self.assertEqual(session.last_sample,previous)
+                self.assertTrue(caught.exception.cleanup_uncertain)
+                self.assertFalse(session.closed)
+                self.assertLessEqual(returned,deadline+.1)
+                self.assertLessEqual(session.max_gap,.1)
+                session.events.append(dict(event='blocked_census_production_return',deadline=deadline,returned=returned,cleanup_uncertain=True))
+                session.owner.released=True
+                # Do not change worker authority while the failed request remains outstanding.
+                session.requests['sample']=None
+
+    def test_l34_enumeration_error_empty_sample(self):
+        with self.scenario('L34','census_error') as session:
+            session.await_ready();session.owner.armed=True
+            with self.assertRaisesRegex((RuntimeError,ValueError),'enumeration|census'):
+                self.sample(session,seconds=.15)
+            self.assertIsNone(session.last_sample)
+            self.assertEqual(self.reading['gpu_pids'],[])
+            self.assertTrue(session.owner.errors)
+            session.owner.released=True
+
+    def test_l35_exited_leader_live_descendant(self):
+        with self.scenario('L35') as session:
+            session.await_ready()
+            code='import subprocess,sys; subprocess.Popen([sys.executable,"-B","-c","import time; time.sleep(10)"])'
+            with self.scenario_worker(session,code) as worker:
+                end=min(session.fixture_action_end,self.time.monotonic()+.3)
+                while os.waitid(os.P_PID,worker.pid,os.WEXITED|os.WNOHANG|os.WNOWAIT) is None and self.time.monotonic()<end:self.time.sleep(.001)
+                self.assertEqual(self.sample(session,worker=worker),self.reading)
+                rows=session.last_sample['post'].rows
+                self.assertGreaterEqual(len(rows),2)
+                count,_=self.record_census(session,extra=tuple(r.pid for r in rows));self.assertLessEqual(count,8)
+                with self.assertRaisesRegex(RuntimeError,'live child'):session.worker_exit()
+                self.assertIsNone(worker.returncode)
+
+    def test_l36_ambiguous_native_start_retained(self):
+        import _thread
+        from vipe_benchmark.s1_helper_session import Session,OWNERS
+        original=_thread.start_joinable_thread; handles=[];acquired=[]
+        def ambiguous(*args,**kwargs):
+            handles.append(original(*args,**kwargs))
+            owner=args[0].__self__;limit=started+.15
+            while not any(r.get('pid') for r in owner.records.values()) and self.time.monotonic()<limit:self.time.sleep(.001)
+            acquired.extend(dict(r) for r in owner.records.values() if r.get('pid'))
+            raise RuntimeError('ambiguous native creation after start')
+        started=self.time.monotonic();action_end=started+2;safety_end=started+3
+        session=Session.__new__(Session)
+        try:
+            with patch.object(_thread,'start_joinable_thread',side_effect=ambiguous):
+                with self.assertRaisesRegex(RuntimeError,'ambiguous native creation'):
+                    session.__init__(ready_seconds=.05,setup_seconds=.1,total_seconds=.2)
+            session.fixture_action_end=action_end;session.fixture_safety_end=safety_end
+            self.assertTrue(acquired)
+            self.assertEqual(session.state,'launch_unknown')
+            self.assertFalse(session.close(session.cleanup_deadline))
+            returned=self.time.monotonic()
+            self.assertLessEqual(returned,session.cleanup_deadline+.1)
+            self.assertTrue(session.ownership()[0]['ownership_unknown'])
+            self.assertIn(session.owner,OWNERS)
+            production=dict(deadline=session.cleanup_deadline,returned=returned,state=session.state,ownership=session.ownership(),primary=session.primary,actually_acquired=acquired)
+        finally:
+            session.handle=handles[0];session.owner.handle=handles[0]
+            cleaned=session.close(safety_end)
+            ended=self.time.monotonic()
+            import json
+            record=dict(scenario='L36',constructor_entry=started,action_cutoff=action_end,safety_cutoff=safety_end,
+                production=production,cleanup_confirmed=cleaned,execution_seconds=returned-started,cleanup_seconds=ended-returned,end=ended,
+                ownership=session.ownership(),records=session.owner.records,events=list(session.events),ticks=list(session.ticks),errors=list(session.owner.errors))
+            with (Path(os.environ['S1_VALIDATION_RUN_DIRECTORY'])/'scenario-L36.json').open('x') as stream:json.dump(record,stream,indent=2)
+            self.assertTrue(cleaned);self.assertLessEqual(ended-started,3);self.assertLessEqual(ended-returned,1)
+            self.assertNotIn(session.owner,OWNERS)
+
+    def control_record(self,name,value):
+        import json
+        from dataclasses import asdict,is_dataclass
+        with (Path(os.environ['S1_VALIDATION_RUN_DIRECTORY'])/(name+'.json')).open('x') as stream:
+            json.dump(value,stream,indent=2,default=lambda v:asdict(v) if is_dataclass(v) else list(v));stream.write('\n')
+
+    def test_combined_duplex_and_same_turn_bounds(self):
+        import socket,struct
+        from vipe_benchmark.s1_helper_session import Wire,tokens,IO_SLICE
+        rows=[];a,b=socket.socketpair();b.setblocking(False)
+        try:
+            wire=Wire(a);value=dict(data=['x'*1900]*16);wire.queue(value)
+            raw=''.join(tokens(value)).encode();remaining=bytearray(struct.pack('!I',len(raw))+raw)
+            outgoing=bytearray();received=None
+            for _ in range(100):
+                if remaining:
+                    try:size=b.send(remaining);del remaining[:size]
+                    except BlockingIOError:pass
+                result=wire.tick()
+                rows.append(dict(sent=wire.turn_sent,received=wire.turn_received,peek=wire.turn_peek))
+                self.assertLessEqual(sum(rows[-1].values()),IO_SLICE)
+                try:outgoing.extend(b.recv(65540))
+                except BlockingIOError:pass
+                if result is not None:received=result
+                if received is not None and wire.encoder is None and not wire.out:break
+            self.assertEqual(received,value)
+            self.assertEqual(bytes(outgoing),struct.pack('!I',len(raw))+raw)
+            self.assertTrue(any(r['sent'] and r['received'] for r in rows))
+        finally:a.close();b.close()
+        # Deterministic socket seam observes a byte in the final-send turn.
+        class Duplex:
+            def __init__(self):self.sent=False
+            def setblocking(self,value):pass
+            def send(self,value):self.sent=True;return len(value)
+            def recv(self,size,flags=0):
+                if self.sent:return b'x'
+                raise BlockingIOError()
+        wire=Wire(Duplex());wire.queue({'ok':True});request={}
+        with self.assertRaisesRegex(ValueError,'premature'):wire.tick(request)
+        self.assertIn('transmitted_observed',request)
+        self.assertIn('early_observed',request)
+        self.assertLessEqual(wire.turn_sent+wire.turn_peek,IO_SLICE)
+        self.assertTrue(any(sum(row.values())==IO_SLICE for row in rows))
+        # Exhaust a small explicit allowance after a previously completed frame's
+        # validator, then require the trailing check on the next turn.
+        a,b=socket.socketpair()
+        try:
+            rollover=Wire(a);b.send(struct.pack('!I',2)+b'{}')
+            self.assertIsNone(rollover.tick())
+            rollover.out=bytearray(b'x')
+            self.assertIsNone(rollover.tick(allowance=1))
+            self.assertEqual(rollover.turn_sent,1)
+            self.assertIsNotNone(rollover.decoded)
+            self.assertIsNone(rollover.validator)
+            self.assertEqual(rollover.tick(allowance=1),{})
+            self.assertIsNone(rollover.decoded)
+        finally:a.close();b.close()
+        self.control_record('transport-controls',dict(duplex=rows,same_turn=request,exhausted_allowance=1,validation_rollover=True))
+
+    def test_partial_constructor_boundaries(self):
+        import _thread,socket
+        from vipe_benchmark import s1_helper_session as mod
+        from vipe_benchmark import supervisor as sup
+        records=[]
+        for mode in ('capability','native_known','owner','socket1','socket2','wire1','wire2','invalid_cutoffs'):
+            before=set(os.listdir('/proc/self/fd'));calls=[]
+            pair=socket.socketpair;wire=mod.Wire
+            def socket_factory():
+                calls.append('socket')
+                if mode=='socket'+str(calls.count('socket')):raise OSError('injected '+mode)
+                return pair()
+            def wire_factory(channel):
+                calls.append('wire')
+                if mode=='wire'+str(calls.count('wire')):raise ValueError('injected '+mode)
+                return wire(channel)
+            acquired=[]
+            class Selected(mod.Session):
+                def __init__(self):
+                    acquired.append(self)
+                    kwargs=dict(owner_factory=lambda session:(_ for _ in ()).throw(ValueError('injected owner'))) if mode=='owner' else {}
+                    if mode=='invalid_cutoffs':kwargs['ready_seconds']=0
+                    super().__init__(**kwargs)
+            from contextlib import ExitStack
+            with ExitStack() as stack:
+                stack.enter_context(patch.object(socket,'socketpair',side_effect=socket_factory))
+                stack.enter_context(patch.object(mod,'Wire',side_effect=wire_factory))
+                if mode=='capability':
+                    saved=_thread.start_joinable_thread;del _thread.start_joinable_thread
+                    stack.callback(setattr,_thread,'start_joinable_thread',saved)
+                else:stack.enter_context(patch.object(_thread,'start_joinable_thread',side_effect=mod.NativeNotStarted('known native pre-entry failure')))
+                life=sup.HelperLifecycle(session_factory=Selected);start=self.time.monotonic()
+                with tempfile.TemporaryDirectory() as temp:
+                    reserves=[]
+                    class Disposable:
+                        config=load();jobs={'S1-calibration-recovery-001':dict(resource='gpu')}
+                        def reserve(inner,*args,**kwargs):reserves.append('reserve')
+                    with patch.object(sup,'HelperLifecycle',return_value=life):
+                        with self.assertRaises(sup.HelperFailure) as caught:
+                            sup.supervise(Disposable(),'S1-calibration-recovery-001',['unused'],Path(temp)/'out',evidence={},sample_resources=self.sampler)
+                    self.assertEqual(reserves,[])
+                current=acquired[0];primary=dict(current.primary)
+                self.assertTrue(life.reap(start+.1));self.assertTrue(current.close(start+.1))
+                self.assertEqual(current.primary,primary);self.assertEqual(current.state,'retired')
+                self.assertLessEqual(self.time.monotonic(),start+.1)
+                self.assertFalse(current.ownership());self.assertFalse(life.helpers)
+                self.assertEqual(caught.exception.failure['error_class'],primary['error_class'])
+            self.assertEqual(set(os.listdir('/proc/self/fd')),before)
+            records.append(dict(mode=mode,primary=primary,calls=calls,retired=current.state,descriptor_delta=0,reserve_calls=0))
+        self.control_record('construction-controls',records)
+
+    def test_census_immutable_identity_mutations(self):
+        from dataclasses import replace,FrozenInstanceError
+        import types
+        from vipe_benchmark.s1_helper_session import Session,Census,ProcessIdentity,GPUOwnershipError
+        session=Session.__new__(Session);session.token='token';session.owner=types.SimpleNamespace(boot_id='boot')
+        helper1=ProcessIdentity(1,2,1,os.getpid(),'S');helper2=ProcessIdentity(3,4,3,os.getpid(),'S');worker=ProcessIdentity(5,6,5,os.getpid(),'Z')
+        session.ready={r:dict(pid=h.pid,start_ticks=h.start_ticks,pgid=h.pgid) for r,h in zip(('work','sample'),(helper1,helper2))}
+        session.worker_pid=5;session.worker_generation=7;session.worker_root=worker;session.last_sample=None
+        pre=Census('token','boot',1,1,7,10.,10.1,'success',(helper1,helper2),worker,(worker,),helper_rows=(helper1,helper2))
+        post=replace(pre,generation=2,acquisition_start=10.4,completed=10.5)
+        request=dict(id=1,dispatch=10.,deadline=11.,census_generation=2,pre=pre,final_send_entered=10.2,transmitted_observed=10.25,response_observed=10.4,
+            candidate=dict(value=dict(gpu_pids=[5]),acquisition_start=10.2,acquisition_end=10.3))
+        self.assertEqual(session.validate_census(post,request,10.6),post)
+        session.last_sample=session.sample_authority(request,post,10.6);saved=session.last_sample
+        mutations=[dict(session='other'),dict(boot_id='other'),dict(generation=1),dict(generation=True),dict(request_id=True),dict(worker_generation=True),dict(request_id=2),dict(worker_generation=8),dict(status='failed'),dict(acquisition_start=9.),dict(completed=12.),dict(completed=True),dict(completed=float('nan')),dict(worker=replace(worker,start_ticks=7)),dict(worker=replace(worker,pgid=9)),dict(worker=replace(worker,pid=9)),dict(worker=None),dict(helper_rows=()),dict(helper_rows=(replace(helper1,start_ticks=99),helper2)),dict(helpers=(replace(helper1,start_ticks=9),helper2)),dict(exit_observed=10.7)]
+        for change in mutations:
+            with self.assertRaises(ValueError):session.validate_census(replace(post,**change),request,10.6)
+        for rows in ((),(replace(worker,start_ticks=99),),(replace(worker,pgid=99),)):
+            with self.assertRaises(GPUOwnershipError):session.sample_authority(request,replace(post,rows=rows),10.6)
+        new=ProcessIdentity(9,10,5,5,'S');request['candidate']['value']['gpu_pids']=[9]
+        with self.assertRaises(GPUOwnershipError):session.sample_authority(request,replace(post,rows=(worker,new)),10.6)
+        with self.assertRaises(FrozenInstanceError):post.generation=99
+        self.assertIs(session.last_sample,saved)
+        session.worker_pid=None
+        with self.assertRaises(ValueError):session.validate_census(post,request,10.6)
+        self.control_record('census-controls',dict(pre=pre,post=post,mutation_count=len(mutations)+5,immutable=True))
+
+    def test_bounded_traces_counters_and_authority(self):
+        from vipe_benchmark.s1_helper_session import Trace,Counter,UINT64_MAX,Session
+        import types
+        records=[]
+        for capacity,errors in ((256,False),(128,False),(128,False),(32,True),(32,True)):
+            trace=Trace(capacity,errors=errors)
+            for number in range(capacity+10):trace.append(dict(message=str(number)+'x'*2000,number=number))
+            self.assertEqual(len(trace),capacity);self.assertEqual(trace.total.value,capacity+10);self.assertEqual(trace.dropped.value,10)
+            if errors:self.assertEqual(trace.primary['number'],0);self.assertEqual(len(trace.primary['message']),1024)
+            trace.total.value=UINT64_MAX;trace.append(dict(message='saturated'))
+            self.assertTrue(trace.total.saturated);self.assertEqual(trace.total.value,UINT64_MAX)
+            self.assertLessEqual(trace.first,trace.last);records.append(trace.facts())
+        current=Session.__new__(Session)
+        # Constructor no-start seam initializes all bounded authoritative state.
+        import _thread
+        from vipe_benchmark.s1_helper_session import NativeNotStarted
+        with patch.object(_thread,'start_joinable_thread',side_effect=NativeNotStarted('primary')):
+            with self.assertRaises(NativeNotStarted):current.__init__()
+        current.requests['work']={'id':7,'deadline':0.};primary=current.primary
+        for _ in range(300):current.events.append({'event':'overflow'})
+        self.assertEqual(current.requests['work']['id'],7);self.assertIs(current.primary,primary)
+        current.poisoned=False;current.owner.cancelled=False;current.owner.errors=Trace(32,errors=True)
+        current.last_tick=self.time.monotonic()
+        with self.assertRaisesRegex(TimeoutError,'phase deadline'):current.tick(self.time.monotonic())
+        retained=current.requests['work']
+        order=[]
+        class EmptyWire:
+            def __init__(self,role):self.role=role
+            def tick(self,request=None):order.append(self.role)
+        current.requests={'work':None,'sample':None};current.wires={role:EmptyWire(role) for role in current.requests}
+        current.ready={'work':{},'sample':{}}
+        current.ticks.total.value=UINT64_MAX
+        current.last_tick=self.time.monotonic()
+        current.tick(self.time.monotonic()+.1);current.tick(self.time.monotonic()+.1)
+        self.assertEqual(order[:2],list(reversed(order[2:])))
+        self.assertTrue(current.ticks.total.saturated)
+        current.sequences['work']=UINT64_MAX
+        with self.assertRaisesRegex(ValueError,'sequence exhausted'):current.submit('work',self.operation,self.time.monotonic()+.1)
+        current.census_sequence=UINT64_MAX
+        with self.assertRaisesRegex(ValueError,'generation exhausted'):current.request_census({'id':1},'pre')
+        self.control_record('trace-controls',dict(rings=records,primary_retained=primary,request_retained=retained,role_order=order))
 
     def test_control_primitive_and_frame_mutations(self):
         from vipe_benchmark.s1_helper_session import tokens,decode,Wire,MAX_FRAME

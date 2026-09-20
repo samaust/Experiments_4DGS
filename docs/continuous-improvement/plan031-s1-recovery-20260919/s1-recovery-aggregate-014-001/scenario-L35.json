@@ -1,0 +1,205 @@
+{
+  "scenario": "L35",
+  "mode": "normal",
+  "constructor_entry": 83717.754135249,
+  "action_cutoff": 83719.754135249,
+  "safety_cutoff": 83720.754135249,
+  "constructor_end": 83717.754230859,
+  "t0": 83717.754156032,
+  "ready_deadline": 83718.754156032,
+  "setup_deadline": 83719.754156032,
+  "setup_cleanup_deadline": 83720.754156032,
+  "action_end": 83717.883066607,
+  "end": 83717.893188541,
+  "execution_seconds": 0.12893135800550226,
+  "cleanup_seconds": 0.010121933999471366,
+  "cleanup_confirmed": true,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "reaped",
+      "pid": 166,
+      "pgid": 166,
+      "start_ticks": 8371775,
+      "wait_status": 15
+    },
+    "sample": {
+      "role": "sample",
+      "state": "reaped",
+      "pid": 167,
+      "pgid": 167,
+      "start_ticks": 8371775,
+      "wait_status": 15
+    }
+  },
+  "errors": [],
+  "signals": [
+    {
+      "pid": 166,
+      "signal": 15,
+      "monotonic": 83717.883274689
+    },
+    {
+      "pid": 167,
+      "signal": 15,
+      "monotonic": 83717.883274689
+    }
+  ],
+  "ticks": [
+    83717.754156032,
+    83717.7542329,
+    83717.759305846,
+    83717.764382866,
+    83717.769460693,
+    83717.774571839,
+    83717.779647946,
+    83717.784724687,
+    83717.789850511,
+    83717.79506746,
+    83717.800236171,
+    83717.825786449,
+    83717.825801598,
+    83717.830869129,
+    83717.836002043,
+    83717.841066922,
+    83717.846126389,
+    83717.85123387,
+    83717.856305705,
+    83717.861369242
+  ],
+  "events": [
+    {
+      "event": "ready",
+      "role": "sample",
+      "received": 83717.800273821,
+      "identity": {
+        "pid": 167,
+        "pgid": 167,
+        "start_ticks": 8371775,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "ready",
+      "role": "work",
+      "received": 83717.800300729,
+      "identity": {
+        "pid": 166,
+        "pgid": 166,
+        "start_ticks": 8371775,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "monitor_resume",
+      "monotonic": 83717.825786449
+    },
+    {
+      "event": "dispatch",
+      "role": "sample",
+      "request_id": 1,
+      "dispatch": 83717.825792958
+    },
+    {
+      "event": "response",
+      "role": "sample",
+      "request_id": 1,
+      "dispatch": 83717.825792958,
+      "received": 83717.861389186,
+      "acquisition_start": 83717.832144013,
+      "acquisition_end": 83717.842706172,
+      "pre_generation": 1,
+      "post_generation": 2
+    },
+    {
+      "event": "census",
+      "processes": [
+        1,
+        2,
+        3,
+        166,
+        167,
+        168,
+        169
+      ],
+      "controller_threads": 2,
+      "process_threads": {
+        "1": 1,
+        "2": 1,
+        "3": 2,
+        "166": 1,
+        "167": 1,
+        "168": 1,
+        "169": 1
+      },
+      "total_workers": 8,
+      "ancestors": [
+        {
+          "pid": 2,
+          "executable": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python"
+        },
+        {
+          "pid": 1,
+          "executable": "codex-linux-sandbox"
+        }
+      ],
+      "opencv_threads": "1"
+    },
+    {
+      "event": "worker_retired",
+      "generation": 2
+    }
+  ],
+  "trace_facts": {
+    "capacity": 256,
+    "total": 7,
+    "dropped": 0,
+    "saturated": false,
+    "first": 83717.800281358,
+    "last": 83717.862225386
+  },
+  "max_gap": 0.005216948993620463,
+  "max_turn": 0.00011168999481014907,
+  "last_sample": null,
+  "requests": {
+    "work": null,
+    "sample": null
+  },
+  "ownership": [],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 319,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 319,
+      "last_frame": {
+        "bytes": 319,
+        "sha256": "fdb796f53c6d18fa3474c3964fd18825ed06f90f54dc386499cbeb6deee615bc",
+        "complete_observed": 83717.795143227
+      }
+    },
+    "sample": {
+      "sent": 282,
+      "received": 675,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 957,
+      "last_frame": {
+        "bytes": 354,
+        "sha256": "af42b11bc1bf47e97716c4ec787e52592c0bde52bb6a475a6b4e735af9824dfc",
+        "complete_observed": 83717.846178776
+      }
+    }
+  }
+}

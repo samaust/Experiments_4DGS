@@ -411,6 +411,39 @@ class S1RecoveryTests(unittest.TestCase):
             if hasattr(self,'before_worker_return'):
                 self.before_worker_return(request,output,reservation)
             return real_popen([sys.executable,'-c','pass'],**kwargs)
+        from vipe_benchmark import supervisor as sup
+        from vipe_benchmark.s1_helper_session import Session
+        from dataclasses import asdict, is_dataclass
+        trace=[]
+        original_monitor=sup.monitored_call; original_guard=Session.admission_guard; original_close=Session.close
+        original_reserve=Ledger.reserve
+        active=[]
+        def snapshot(phase,session,cleanup=None):
+            trace.append(dict(phase=phase,monotonic=time.monotonic(),session=session.token,boot=session.owner.boot_id,
+                identities={role:{k:row[k] for k in ('pid','start_ticks','pgid')} for role,row in session.ready.items()},
+                worker=session.worker_root,worker_generation=session.worker_generation,worker_retired=session.worker_pid is None,
+                request_sequences=dict(session.sequences),sample=session.last_sample,cleanup_confirmed=cleanup,state=session.state))
+        def monitor(*args,**kwargs):
+            result=original_monitor(*args,**kwargs)
+            session=kwargs['lifecycle'].helpers[0]; active[:]=[session]
+            snapshot(kwargs['phase'],session)
+            if kwargs['phase']=='worker_sample':
+                from vipe_benchmark.s1_helper_session import census
+                rows=census(); owned={os.getpid(),session.worker_pid,*session.owner.members}; parent=os.getppid()
+                while parent in rows: owned.add(parent); parent=rows[parent]['ppid']
+                counts={pid:len(list(Path('/proc',str(pid),'task').iterdir())) for pid in owned}
+                trace[-1]['process_threads']=counts; trace[-1]['total_workers']=sum(counts.values())
+                self.assertLessEqual(sum(counts.values()),8)
+            return result
+        def guard(session):
+            result=original_guard(session); active[:]=[session]; snapshot('reserve_guard',session); return result
+        def reserve(ledger,*args,**kwargs):
+            if active: snapshot('reserve_call',active[0])
+            return original_reserve(ledger,*args,**kwargs)
+        def close(session,deadline):
+            result=original_close(session,deadline)
+            if session.ready: snapshot('retirement',session,result)
+            return result
         original_read=Path.read_text
         def host_read(path,*args,**kwargs):
             return 'systemd' if str(path)=='/proc/1/comm' else original_read(path,*args,**kwargs)
@@ -419,8 +452,25 @@ class S1RecoveryTests(unittest.TestCase):
              patch('vipe_benchmark.execution.resources',return_value=readings), \
              patch('vipe_benchmark.execution.s1_sampling_operation',return_value=dict(operation='constant',args=dict(value=readings))), \
              patch.object(Path,'read_text',host_read), \
-             patch('vipe_benchmark.supervisor.subprocess.Popen',side_effect=worker):
+             patch('vipe_benchmark.supervisor.subprocess.Popen',side_effect=worker), \
+             patch.object(sup,'monitored_call',side_effect=monitor), patch.object(Session,'admission_guard',guard), \
+             patch.object(Session,'close',close), patch.object(Ledger,'reserve',reserve):
             execute_s1_recovery(self.root,docs,self.config,auth)
+        phases={row['phase'] for row in trace}
+        self.assertTrue({'initial_sample','reserve_guard','reserve_call','prelaunch','worker_sample','acceptance','reconciliation','publication','retirement'}<=phases)
+        identities=trace[0]['identities']
+        self.assertEqual(len(identities),2)
+        self.assertTrue(all(row['identities']==identities and row['session']==trace[0]['session'] and row['boot']==trace[0]['boot'] for row in trace))
+        self.assertTrue(trace[-1]['cleanup_confirmed'])
+        for role in ('work','sample'):
+            sequences=[row['request_sequences'][role] for row in trace]
+            self.assertEqual(sequences,sorted(sequences))
+        if self._testMethodName=='test_result_requires_supervised_cleanup_and_exact_membership':
+            import json
+            path=Path(os.environ['S1_VALIDATION_RUN_DIRECTORY'])/'controller-phase-trace.json'
+            with path.open('x') as stream:
+                json.dump(dict(phases=trace,replacements=0,scope='existing synthetic 510-row controller; not real stages.segment'),stream,indent=2,default=lambda value:asdict(value) if is_dataclass(value) else value)
+                stream.write('\n')
         return auth,read_json(output/'config.json'),file_record(output/'result.json')
 
     def test_result_requires_supervised_cleanup_and_exact_membership(self):
