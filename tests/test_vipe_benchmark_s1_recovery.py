@@ -99,7 +99,7 @@ def synthetic_row(root, request, *, zero=False, skip=False):
     row=dict(identity=parent['identity'],K=parent['K'],grid=parent['grid'],valid=parent['valid'],
         source_rgb_sha256=parent['rgb']['sha256'],instances=file_record(root/'labels.npy'),semantics=semantics,
         semantic_static=file_record(root/'static.png'),metadata=dict(detections=detections,skipped_box_indices=[0] if skip else []),
-        diagnostics=numeric_file(root/'diagnostics.npz',arrays))
+        diagnostics=numeric_file(root/'diagnostics.npz',arrays), native_group_wall_seconds=.125, group_size=1)
     return row,arrays
 
 
@@ -322,7 +322,7 @@ class S1RecoveryTests(unittest.TestCase):
             s1.validate_binding(self.root,self.config,self.auth(original_request_sha256=self.document['historical_request']['sha256']))
 
     def test_typed_scope_schema_branch_and_second_identity(self):
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             key, value = case["key"], case["value"]
             with self.subTest(**case),self.assertRaises(ValueError):
                 s1.validate_binding(self.root,self.config,self.auth(**{key:value}))
@@ -334,7 +334,7 @@ class S1RecoveryTests(unittest.TestCase):
             ('skipped',dict(tests=[dict(self.validation['tests'][0],skipped=1)])),
             ('alias',dict(sources=[dict(self.source,path=str(self.root/'..'/self.root.name/'source.json'))])),
             ('bytes',dict(sources=[dict(self.source,bytes=1)]))])
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             label = case['label']
             change = mutations[label]
             with self.subTest(**case):
@@ -345,7 +345,7 @@ class S1RecoveryTests(unittest.TestCase):
         with self.assertRaises(ValueError): s1.validate_binding(self.root,self.config,self.auth())
 
     def test_changed_prerequisite_records_rejected(self):
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             key = case['key']
             with self.subTest(**case), self.assertRaises(ValueError):
                 s1.validate_binding(self.root,self.config,self.auth(**{key:dict(self.document[key],sha256='0'*64)}))
@@ -401,6 +401,8 @@ class S1RecoveryTests(unittest.TestCase):
                     checks=qualify_row(row,request,first=True),raw=[row['diagnostics']])
             self.put('jobs/'+s1.JOB+'/result.json',dict(status='complete',job_id=s1.JOB,
                 component='S1',branch='calibration',rows=rows,runtime=self.observed,
+                native_wall_seconds=sum(r['native_group_wall_seconds'] for r in rows),
+                peak_allocated_bytes=1024,peak_reserved_bytes=2048,
                 configuration=file_record(output/'config.json'),first_result=first))
             return real_popen([sys.executable,'-c','pass'],**kwargs)
         original_read=Path.read_text
@@ -432,7 +434,7 @@ class S1RecoveryTests(unittest.TestCase):
             else: continue
             self.assertEqual(bound['baseline_correction'],self.document['baseline_correction'])
         mutations = dict(cleanup_confirmed=False, surviving_pids=[123], deadline_exceeded=True, acceptance=None)
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             field = case['field']
             value = mutations[field]
             with self.subTest(**case), self.assertRaises((ValueError,TypeError)):
@@ -456,7 +458,7 @@ class FailureEvidenceTests(unittest.TestCase):
         from vipe_benchmark.access import Identity
         from vipe_benchmark.s1_evidence import preserve_failure
         fixture=S1SemanticsTests()
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             failure = case['failure']
             with self.subTest(**case),tempfile.TemporaryDirectory() as temp:
                 detector=fixture.detector(failure=='alignment')
@@ -481,7 +483,7 @@ class FailureEvidenceTests(unittest.TestCase):
         from vipe_benchmark.access import Identity
         from vipe_benchmark.backends import SegmentationResult
         from vipe_benchmark.stages import segment
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             kind = case['kind']
             with self.subTest(**case),tempfile.TemporaryDirectory() as temp:
                 root=Path(temp);valid=np.ones((540,960),bool);np.save(root/'valid.npy',valid)
@@ -547,7 +549,7 @@ class ReceiptContractTests(unittest.TestCase):
     def test_typed_primitive_callbacks(self):
         from vipe_benchmark.s1_validation_contract import identity
         seen = set()
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             with self.subTest(**case):
                 key = identity(case)
                 self.assertNotIn(key, seen)
@@ -558,7 +560,7 @@ class ReceiptContractTests(unittest.TestCase):
         method = 'fixture.Tests.test_case'
         prefix = 'import unittest\nclass Tests(unittest.TestCase):\n    def test_case(self):\n        with self.subTest(**case): pass\n'
         good = prefix + "SUBTEST_CASES = {'fixture.Tests.test_case': [{'value': 1}]}\n"
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             with self.subTest(**case):
                 self.assertEqual(parse_suite(good, 'fixture')[1], {method:[dict(value=1)]})
                 label = case['mutation']
@@ -585,7 +587,7 @@ class ReceiptContractTests(unittest.TestCase):
                     parse_suite(variants[label], 'fixture')
 
     def test_callback_mutations(self):
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             with self.subTest(**case):
                 graph = self.fixture()
                 parent = next(row for row in graph.inner['cases'] if row['id'] == 'test_vipe_benchmark_s1_recovery.ReceiptContractTests.test_typed_primitive_callbacks')
@@ -610,7 +612,7 @@ class ReceiptContractTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, case['error']): graph.validate()
 
     def test_accounting_mutations(self):
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             with self.subTest(**case):
                 graph = self.fixture()
                 inner = graph.inner
@@ -640,7 +642,7 @@ class ReceiptContractTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, case['error']): graph.validate()
 
     def test_binding_mutations(self):
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             with self.subTest(**case):
                 graph = self.fixture()
                 label = case['mutation']
@@ -667,7 +669,7 @@ class ReceiptContractTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, case['error']): graph.validate()
 
     def test_artifact_record_matrix(self):
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             with self.subTest(**case):
                 graph = self.fixture()
                 kind, mutation = case['kind'], case['mutation']
@@ -682,7 +684,7 @@ class ReceiptContractTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, case['error']): graph.validate()
 
     def test_execution_mutations(self):
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             with self.subTest(**case):
                 graph = self.fixture()
                 inner, outer = graph.inner, graph.outer
@@ -742,8 +744,454 @@ class ReceiptContractTests(unittest.TestCase):
             graph.contract.validate_wrapper(old, old['semantic_amendment'], old['configuration'])
 
 
+
+class NumericalEnvelopeTests(unittest.TestCase):
+    def envelope(self):
+        from vipe_benchmark.access import output_identities
+        rows = [dict(native_group_wall_seconds=.125, group_size=1) for _ in output_identities(load(), 'calibration')]
+        return dict(rows=rows, native_wall_seconds=sum(r['native_group_wall_seconds'] for r in rows),
+                    peak_allocated_bytes=1024, peak_reserved_bytes=2048)
+
+    def test_typed_numerical_fields(self):
+        from vipe_benchmark.s1_evidence import validate_result_numerics
+        from decimal import Decimal
+        values = dict(null=None, string='1', boolean=True, nan=float('nan'), posinf=float('inf'),
+            neginf=-float('inf'), negative=-1, fractional=.5, integral_float=1., zero=0,
+            float_zero=0., one=1, nonzero=.125, two=2, huge=10**400,
+            foreign=Decimal('1'), numpy=np.float64(1))
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
+            with self.subTest(**case):
+                positive = self.envelope()
+                self.assertTrue(validate_result_numerics(positive, load()))
+                value = copy.deepcopy(positive)
+                field, kind = case['field'], case['kind']
+                target = value['rows'][1] if field in ('group_size', 'native_group_wall_seconds') else value
+                if kind == 'missing': target.pop(field)
+                else: target[field] = values[kind]
+                if case['valid']:
+                    if field == 'native_group_wall_seconds':
+                        value['native_wall_seconds'] = sum(r['native_group_wall_seconds'] for r in value['rows'])
+                    elif field == 'peak_reserved_bytes':
+                        value['peak_allocated_bytes'] = 0
+                    elif field == 'native_wall_seconds':
+                        for row in value['rows']: row['native_group_wall_seconds'] = 0
+                        value['rows'][1]['native_group_wall_seconds'] = target[field]
+                    self.assertTrue(validate_result_numerics(value, load()))
+                else:
+                    with self.assertRaisesRegex(ValueError, field): validate_result_numerics(value, load())
+
+    def test_sum_and_allocator_boundaries(self):
+        import math
+        from vipe_benchmark.s1_evidence import validate_result_numerics
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
+            with self.subTest(**case):
+                positive = self.envelope(); config = load()
+                self.assertTrue(validate_result_numerics(positive, config))
+                value = copy.deepcopy(positive); kind = case['kind']
+                reference = math.fsum(r['native_group_wall_seconds'] for r in value['rows'])
+                ulp = math.nextafter(reference, math.inf) - reference
+                boundary = len(value['rows']) + 1
+                if kind.startswith(('inside_', 'on_', 'outside_')):
+                    distance = {'inside': boundary-1, 'on': boundary, 'outside': boundary+1}[kind.split('_')[0]]
+                    value['native_wall_seconds'] = reference + (1 if kind.endswith('plus') else -1)*distance*ulp
+                elif kind in ('all_zero', 'zero_mismatch'):
+                    for row in value['rows']: row['native_group_wall_seconds'] = 0.
+                    value['native_wall_seconds'] = 0 if kind == 'all_zero' else math.ulp(0.)
+                elif kind == 'sequential':
+                    for row in value['rows']: row['native_group_wall_seconds'] = .1
+                    value['native_wall_seconds'] = sum(r['native_group_wall_seconds'] for r in value['rows'])
+                elif kind == 'overflow':
+                    for row in value['rows']: row['native_group_wall_seconds'] = 1e308
+                elif kind == 'changed_row': value['rows'][1]['native_group_wall_seconds'] *= 2
+                elif kind == 'wrong_total': value['native_wall_seconds'] *= 2
+                elif kind == 'allocated_gt_reserved': value['peak_allocated_bytes'] = value['peak_reserved_bytes']+1
+                elif kind in ('cap', 'reserved_over_cap', 'both_over_cap', 'smaller_cap', 'smaller_cap_excess'):
+                    if kind.startswith('smaller'): config = dict(config, gpu_peak_device_gib_limit=1/2**20)
+                    cap = int(config['gpu_peak_device_gib_limit']*2**30)
+                    value['peak_allocated_bytes'] = cap if kind in ('cap','smaller_cap') else 0
+                    value['peak_reserved_bytes'] = cap + int(kind not in ('cap','smaller_cap'))
+                    if kind == 'both_over_cap': value['peak_allocated_bytes'] = cap+1
+                elif kind == 'empty_rows': value['rows'] = []
+                elif kind == 'tuple_rows': value['rows'] = tuple(value['rows'])
+                elif kind == 'nonmapping_row': value['rows'][1] = None
+                if case['valid']: self.assertTrue(validate_result_numerics(value, config))
+                else:
+                    with self.assertRaisesRegex(ValueError, case['error']): validate_result_numerics(value, config)
+
+    def test_produced_and_qualified_numerical_rows(self):
+        from vipe_benchmark.s1_evidence import produced_row, qualify_row, reconcile_rows
+        fixture = S1RecoveryTests(); fixture.setUp(); self.addCleanup(fixture.doCleanups)
+        request = fixture.original
+        row, _ = synthetic_row(fixture.root/'numeric', request)
+        self.assertTrue(qualify_row(row, request, first=True))
+        self.assertEqual(produced_row(row, request).record(), row['identity'])
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
+            with self.subTest(**case):
+                self.assertTrue(qualify_row(row, request, first=True))
+                mutated = copy.deepcopy(row); mutated[case['field']] = case['value']
+                directory = fixture.root / case['field']; directory.mkdir()
+                path = directory/'numeric-produced-row.json'; write_json(path, mutated)
+                serialized = read_json(path)
+                self.assertEqual(produced_row(serialized, request).record(), row['identity'])
+                with self.assertRaisesRegex(ValueError, case['field']): qualify_row(serialized, request, first=True)
+                evidence = reconcile_rows(directory, request)
+                self.assertEqual(evidence['produced_identities'], [row['identity']])
+                self.assertEqual(evidence['qualified_identities'], [])
+                self.assertEqual(evidence['counts']['produced_lower_bound'], 1)
+                self.assertEqual(evidence['counts']['qualified'], 0)
+                self.assertTrue(any(case['field'] in error['error'] for error in evidence['verification_errors']))
+
+    def test_terminal_and_resolver_numerical_mutations(self):
+        from vipe_benchmark.s1_evidence import validate_result
+        fixture = S1RecoveryTests(); fixture.setUp(); self.addCleanup(fixture.doCleanups)
+        _, request, record = fixture.run_controller()
+        finish = fixture.ledger.states()[s1.JOB]; events = fixture.ledger.events()
+        positive = read_json(record['path'])
+        self.assertTrue(validate_result(positive, request, fixture.config))
+        self.assertEqual(s1.resolved_result(fixture.root, fixture.config, events, finish), record)
+        acceptance = read_json(finish['acceptance']['path'])
+        terminal = read_json(finish['terminal_receipt']['path'])
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
+            with self.subTest(**case):
+                # Keep the original event-bound files immutable. Each mutation has
+                # its own coherent enclosing graph and the same real fixture events.
+                self.assertEqual(s1.resolved_result(fixture.root, fixture.config, events, finish), record)
+                value = copy.deepcopy(positive); field = case['field']
+                if field == 'native_group_wall_seconds': value['rows'][1][field] = -1
+                elif field == 'native_wall_seconds': value[field] += 1
+                else: value[field] = True
+                with self.assertRaisesRegex(ValueError, field): validate_result(value, request, fixture.config)
+                directory = fixture.root/'mutations'/field
+                paths = [directory/name for name in ('result.json','acceptance.json','receipt.json')]
+                write_json(paths[0], value); changed = dict(finish, result=file_record(paths[0]))
+                accepted = copy.deepcopy(acceptance)
+                accepted.update(result=changed['result'], records=s1.referenced_records([value,request]))
+                write_json(paths[1], accepted); changed['acceptance'] = file_record(paths[1])
+                receipt = copy.deepcopy(terminal)
+                receipt['acceptance'] = changed['acceptance']; receipt['outcome']['result'] = changed['result']
+                receipt['outcome']['acceptance'] = changed['acceptance']
+                write_json(paths[2], receipt); changed['terminal_receipt'] = file_record(paths[2])
+                with self.assertRaisesRegex(ValueError, field): s1.resolved_result(fixture.root, fixture.config, events, changed)
+        self.assertEqual(s1.resolved_result(fixture.root, fixture.config, events, finish), record)
+
+    def test_direct_script_declaration_lookup(self):
+        import json, os, signal, subprocess, time
+        from vipe_benchmark.s1_validation_contract import parse_suite, ENVIRONMENT
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
+            with self.subTest(**case):
+                module = 'test_vipe_benchmark_' + case['suite']
+                path = ROOT/'tests'/(module+'.py')
+                methods, declarations = parse_suite(path.read_text(), module)
+                identity = module+'.'+case['selector']
+                self.assertIn(identity, methods); self.assertTrue(declarations[identity])
+                argv = [sys.executable, '-B', str(path), case['selector'], '-v']
+                env = os.environ.copy()
+                for key, value in ENVIRONMENT.items():
+                    if value is None: env.pop(key, None)
+                    else: env[key] = value
+                env.pop('S1_VALIDATION_RUN_DIRECTORY', None)
+                start = time.monotonic(); timed_out = False; process = None
+                stdout = stderr = ''; returncode = None
+                try:
+                    process = subprocess.Popen(argv, cwd=ROOT, env=env, stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE, text=True, start_new_session=True)
+                    try: stdout, stderr = process.communicate(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        timed_out = True; os.killpg(process.pid, signal.SIGKILL)
+                        stdout, stderr = process.communicate(timeout=2)
+                    returncode = process.returncode
+                finally:
+                    if process is not None and process.poll() is None:
+                        os.killpg(process.pid, signal.SIGKILL); process.wait(timeout=2)
+                    print('S1_SCRIPT_CHILD '+json.dumps(dict(argv=argv, cwd=str(ROOT),
+                        start_monotonic=start, end_monotonic=time.monotonic(),
+                        returncode=returncode, timed_out=timed_out, stdout=stdout, stderr=stderr), sort_keys=True), flush=True)
+                self.assertFalse(timed_out); self.assertEqual(returncode, 0, stdout+stderr)
+                self.assertIn('Ran 1 test', stderr); self.assertIn('\nOK\n', stderr)
+                class_name, method = case['selector'].split('.')
+                self.assertIn(method+' (__main__.'+class_name+'.'+method+') ... ok', stderr)
+
 # Literal ordered callback contract consumed without importing this module.
 SUBTEST_CASES = {
+'test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_typed_numerical_fields': [{'field': 'native_group_wall_seconds',
+                                                                                         'kind': 'missing',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_group_wall_seconds',
+                                                                                         'kind': 'null',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_group_wall_seconds',
+                                                                                         'kind': 'string',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_group_wall_seconds',
+                                                                                         'kind': 'boolean',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_group_wall_seconds',
+                                                                                         'kind': 'nan',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_group_wall_seconds',
+                                                                                         'kind': 'posinf',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_group_wall_seconds',
+                                                                                         'kind': 'neginf',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_group_wall_seconds',
+                                                                                         'kind': 'negative',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_group_wall_seconds',
+                                                                                         'kind': 'huge',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_group_wall_seconds',
+                                                                                         'kind': 'foreign',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_group_wall_seconds',
+                                                                                         'kind': 'numpy',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_group_wall_seconds',
+                                                                                         'kind': 'zero',
+                                                                                         'valid': True},
+                                                                                        {'field': 'native_group_wall_seconds',
+                                                                                         'kind': 'float_zero',
+                                                                                         'valid': True},
+                                                                                        {'field': 'native_group_wall_seconds',
+                                                                                         'kind': 'one',
+                                                                                         'valid': True},
+                                                                                        {'field': 'native_group_wall_seconds',
+                                                                                         'kind': 'nonzero',
+                                                                                         'valid': True},
+                                                                                        {'field': 'native_wall_seconds',
+                                                                                         'kind': 'missing',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_wall_seconds',
+                                                                                         'kind': 'null',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_wall_seconds',
+                                                                                         'kind': 'string',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_wall_seconds',
+                                                                                         'kind': 'boolean',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_wall_seconds',
+                                                                                         'kind': 'nan',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_wall_seconds',
+                                                                                         'kind': 'posinf',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_wall_seconds',
+                                                                                         'kind': 'neginf',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_wall_seconds',
+                                                                                         'kind': 'negative',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_wall_seconds',
+                                                                                         'kind': 'huge',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_wall_seconds',
+                                                                                         'kind': 'foreign',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_wall_seconds',
+                                                                                         'kind': 'numpy',
+                                                                                         'valid': False},
+                                                                                        {'field': 'native_wall_seconds',
+                                                                                         'kind': 'zero',
+                                                                                         'valid': True},
+                                                                                        {'field': 'native_wall_seconds',
+                                                                                         'kind': 'float_zero',
+                                                                                         'valid': True},
+                                                                                        {'field': 'native_wall_seconds',
+                                                                                         'kind': 'one',
+                                                                                         'valid': True},
+                                                                                        {'field': 'native_wall_seconds',
+                                                                                         'kind': 'nonzero',
+                                                                                         'valid': True},
+                                                                                        {'field': 'group_size',
+                                                                                         'kind': 'missing',
+                                                                                         'valid': False},
+                                                                                        {'field': 'group_size',
+                                                                                         'kind': 'null',
+                                                                                         'valid': False},
+                                                                                        {'field': 'group_size',
+                                                                                         'kind': 'string',
+                                                                                         'valid': False},
+                                                                                        {'field': 'group_size',
+                                                                                         'kind': 'boolean',
+                                                                                         'valid': False},
+                                                                                        {'field': 'group_size',
+                                                                                         'kind': 'fractional',
+                                                                                         'valid': False},
+                                                                                        {'field': 'group_size',
+                                                                                         'kind': 'integral_float',
+                                                                                         'valid': False},
+                                                                                        {'field': 'group_size',
+                                                                                         'kind': 'zero',
+                                                                                         'valid': False},
+                                                                                        {'field': 'group_size',
+                                                                                         'kind': 'negative',
+                                                                                         'valid': False},
+                                                                                        {'field': 'group_size',
+                                                                                         'kind': 'two',
+                                                                                         'valid': False},
+                                                                                        {'field': 'group_size',
+                                                                                         'kind': 'one',
+                                                                                         'valid': True},
+                                                                                        {'field': 'peak_allocated_bytes',
+                                                                                         'kind': 'missing',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_allocated_bytes',
+                                                                                         'kind': 'null',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_allocated_bytes',
+                                                                                         'kind': 'string',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_allocated_bytes',
+                                                                                         'kind': 'boolean',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_allocated_bytes',
+                                                                                         'kind': 'nan',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_allocated_bytes',
+                                                                                         'kind': 'posinf',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_allocated_bytes',
+                                                                                         'kind': 'neginf',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_allocated_bytes',
+                                                                                         'kind': 'negative',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_allocated_bytes',
+                                                                                         'kind': 'fractional',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_allocated_bytes',
+                                                                                         'kind': 'integral_float',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_allocated_bytes',
+                                                                                         'kind': 'zero',
+                                                                                         'valid': True},
+                                                                                        {'field': 'peak_allocated_bytes',
+                                                                                         'kind': 'one',
+                                                                                         'valid': True},
+                                                                                        {'field': 'peak_reserved_bytes',
+                                                                                         'kind': 'missing',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_reserved_bytes',
+                                                                                         'kind': 'null',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_reserved_bytes',
+                                                                                         'kind': 'string',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_reserved_bytes',
+                                                                                         'kind': 'boolean',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_reserved_bytes',
+                                                                                         'kind': 'nan',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_reserved_bytes',
+                                                                                         'kind': 'posinf',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_reserved_bytes',
+                                                                                         'kind': 'neginf',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_reserved_bytes',
+                                                                                         'kind': 'negative',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_reserved_bytes',
+                                                                                         'kind': 'fractional',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_reserved_bytes',
+                                                                                         'kind': 'integral_float',
+                                                                                         'valid': False},
+                                                                                        {'field': 'peak_reserved_bytes',
+                                                                                         'kind': 'zero',
+                                                                                         'valid': True},
+                                                                                        {'field': 'peak_reserved_bytes',
+                                                                                         'kind': 'one',
+                                                                                         'valid': True}],
+ 'test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_sum_and_allocator_boundaries': [{'kind': 'inside_plus',
+                                                                                               'valid': True,
+                                                                                               'error': 'native_wall_seconds'},
+                                                                                              {'kind': 'inside_minus',
+                                                                                               'valid': True,
+                                                                                               'error': 'native_wall_seconds'},
+                                                                                              {'kind': 'on_plus',
+                                                                                               'valid': True,
+                                                                                               'error': 'native_wall_seconds'},
+                                                                                              {'kind': 'on_minus',
+                                                                                               'valid': True,
+                                                                                               'error': 'native_wall_seconds'},
+                                                                                              {'kind': 'outside_plus',
+                                                                                               'valid': False,
+                                                                                               'error': 'native_wall_seconds'},
+                                                                                              {'kind': 'outside_minus',
+                                                                                               'valid': False,
+                                                                                               'error': 'native_wall_seconds'},
+                                                                                              {'kind': 'all_zero',
+                                                                                               'valid': True,
+                                                                                               'error': 'native_wall_seconds'},
+                                                                                              {'kind': 'zero_mismatch',
+                                                                                               'valid': False,
+                                                                                               'error': 'native_wall_seconds'},
+                                                                                              {'kind': 'sequential',
+                                                                                               'valid': True,
+                                                                                               'error': 'native_wall_seconds'},
+                                                                                              {'kind': 'overflow',
+                                                                                               'valid': False,
+                                                                                               'error': 'native_wall_seconds'},
+                                                                                              {'kind': 'changed_row',
+                                                                                               'valid': False,
+                                                                                               'error': 'native_wall_seconds'},
+                                                                                              {'kind': 'wrong_total',
+                                                                                               'valid': False,
+                                                                                               'error': 'native_wall_seconds'},
+                                                                                              {'kind': 'allocated_gt_reserved',
+                                                                                               'valid': False,
+                                                                                               'error': 'peak_'},
+                                                                                              {'kind': 'cap',
+                                                                                               'valid': True,
+                                                                                               'error': 'native_wall_seconds'},
+                                                                                              {'kind': 'reserved_over_cap',
+                                                                                               'valid': False,
+                                                                                               'error': 'peak_'},
+                                                                                              {'kind': 'both_over_cap',
+                                                                                               'valid': False,
+                                                                                               'error': 'peak_'},
+                                                                                              {'kind': 'smaller_cap',
+                                                                                               'valid': True,
+                                                                                               'error': 'native_wall_seconds'},
+                                                                                              {'kind': 'smaller_cap_excess',
+                                                                                               'valid': False,
+                                                                                               'error': 'peak_'},
+                                                                                              {'kind': 'empty_rows',
+                                                                                               'valid': False,
+                                                                                               'error': 'numerical '
+                                                                                                        'rows'},
+                                                                                              {'kind': 'tuple_rows',
+                                                                                               'valid': False,
+                                                                                               'error': 'numerical '
+                                                                                                        'rows'},
+                                                                                              {'kind': 'nonmapping_row',
+                                                                                               'valid': False,
+                                                                                               'error': 'numerical '
+                                                                                                        'rows'}],
+ 'test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_produced_and_qualified_numerical_rows': [{'field': 'native_group_wall_seconds',
+                                                                                                        'value': -1},
+                                                                                                       {'field': 'group_size',
+                                                                                                        'value': 2}],
+ 'test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_terminal_and_resolver_numerical_mutations': [{'field': 'native_wall_seconds'},
+                                                                                                           {'field': 'peak_allocated_bytes'},
+                                                                                                           {'field': 'peak_reserved_bytes'},
+                                                                                                           {'field': 'native_group_wall_seconds'}],
+ 'test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_direct_script_declaration_lookup': [{'suite': 's1_semantics',
+                                                                                                   'selector': 'S1SemanticsTests.test_contract_rejects_missing_or_tampered_assignment'},
+                                                                                                  {'suite': 's1_recovery',
+                                                                                                   'selector': 'ReceiptContractTests.test_typed_primitive_callbacks'},
+                                                                                                  {'suite': 'backends',
+                                                                                                   'selector': 'AssetAndDetectorTests.test_phrase_ambiguity_and_capacity_fail_before_casting'},
+                                                                                                  {'suite': 'contracts',
+                                                                                                   'selector': 'AccessTests.test_heldout_final_window_wrong_branch_and_pair_rejected'},
+                                                                                                  {'suite': 'component_recovery',
+                                                                                                   'selector': 'ComponentRecoveryTests.test_scope_validation_and_cumulative_cap_are_not_relaxed'},
+                                                                                                  {'suite': 'supervisor',
+                                                                                                   'selector': 'HelperIntegrationTests.test_cleanup_failures'}],
+
     'test_vipe_benchmark_s1_recovery.S1RecoveryTests.test_typed_scope_schema_branch_and_second_identity': [
         {'key': 'schema', 'value': 'old'},
         {'key': 'job_id', 'value': 'S1-calibration-recovery-002'},

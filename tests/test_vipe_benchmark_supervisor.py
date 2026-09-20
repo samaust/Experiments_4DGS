@@ -346,7 +346,7 @@ class HelperIntegrationTests(unittest.TestCase):
 
     def test_cleanup_matrix(self):
         from unittest.mock import patch
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             with self.subTest(**case):
                 self.life = self.sup.HelperLifecycle()
                 start = self.time.monotonic()
@@ -361,7 +361,7 @@ class HelperIntegrationTests(unittest.TestCase):
 
     def test_cleanup_failures(self):
         from unittest.mock import patch
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             with self.subTest(**case):
                 self.life = self.sup.HelperLifecycle()
                 with patch.object(self.sup,'_Helper',self.fake_class(mode=case['mode'])):

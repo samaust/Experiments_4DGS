@@ -247,11 +247,65 @@ def evidence_counts(produced=(), qualified=(), *, complete=False):
         fit_qualified=fit(qualified), selection_qualified=len(qualified)-fit(qualified))
 
 
+def numerical_duration(value, field):
+    """Accept only finite nonnegative built-in values representable in binary64."""
+    import math
+    if type(value) not in (int, float):
+        raise ValueError(f'S1 {field} requires a finite nonnegative duration')
+    try:
+        seconds = float(value)
+    except (OverflowError, ValueError):
+        raise ValueError(f'S1 {field} duration overflows binary64') from None
+    if not math.isfinite(seconds) or seconds < 0:
+        raise ValueError(f'S1 {field} requires a finite nonnegative duration')
+    return seconds
+
+
+def validate_row_numerics(row):
+    seconds = numerical_duration(row.get('native_group_wall_seconds'), 'native_group_wall_seconds')
+    if type(row.get('group_size')) is not int or row['group_size'] != 1:
+        raise ValueError('S1 group_size must be exact integer 1 for calibration')
+    return seconds
+
+
+def validate_result_numerics(result, config):
+    """Bounded local allocator and singleton-group timing consistency only."""
+    import math
+    from .access import output_identities
+    rows = result.get('rows')
+    if type(rows) is not list or len(rows) != len(output_identities(config, 'calibration')):
+        raise ValueError('S1 numerical rows require the exact calibration count')
+    if any(type(row) is not dict for row in rows):
+        raise ValueError('S1 numerical rows require mappings')
+    durations = [validate_row_numerics(row) for row in rows]
+    total = numerical_duration(result.get('native_wall_seconds'), 'native_wall_seconds')
+    cap = config['gpu_peak_device_gib_limit'] * 2**30
+    for field in ('peak_allocated_bytes', 'peak_reserved_bytes'):
+        value = result.get(field)
+        if type(value) is not int or value < 0 or value > cap:
+            raise ValueError(f'S1 {field} requires nonnegative integer bytes within configured cap')
+    if result['peak_allocated_bytes'] > result['peak_reserved_bytes']:
+        raise ValueError('S1 peak_allocated_bytes exceeds peak_reserved_bytes')
+    try:
+        reference = math.fsum(durations)
+        # n nonnegative serial additions versus fsum, plus final rounding.
+        # JSON preserves the binary64 inputs; no scientific tolerance is added.
+        tolerance = (len(rows) + 1) * math.ulp(reference)
+    except (OverflowError, ValueError):
+        raise ValueError('S1 native_wall_seconds group sum overflows binary64') from None
+    if not math.isfinite(reference) or not math.isfinite(tolerance):
+        raise ValueError('S1 native_wall_seconds group sum/tolerance is nonfinite')
+    if (reference == 0 and total != 0) or (reference != 0 and abs(total-reference) > tolerance):
+        raise ValueError('S1 native_wall_seconds differs from singleton group sum')
+    return True
+
+
 def qualify_row(row, request, *, first=False, loader=None):
     """Recompute retained-query assignments from serialized numeric evidence."""
     from .contracts import instances, validate_static
     from .backends import s1_class_assignments
     from .access import Identity, RGBLoader
+    validate_row_numerics(row)
     identity = Identity(**row['identity'])
     if first and identity.record() != dict(branch='calibration', camera=0, frame=50, pair_start=None):
         raise ValueError('first S1 input must be calibration camera 0 frame 50')
@@ -354,6 +408,7 @@ def validate_result(result, request, config):
     validate_membership(result['rows'], output_identities(config, 'calibration'))
     if [r['identity'] for r in result['rows']] != [i.record() for i in output_identities(config, 'calibration')]:
         raise ValueError('S1 calibration order changed')
+    validate_result_numerics(result, config)
     qualify_runtime(result['runtime'], request)
     first = read_json(verify_record(result['first_result'])['path'])
     loader = input_loader(request)

@@ -39,7 +39,7 @@ class AccessTests(unittest.TestCase):
             training_key(1, 21)
 
     def test_heldout_final_window_wrong_branch_and_pair_rejected(self):
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             item = Identity(**case)
             with self.subTest(**case), self.assertRaises(ValueError):
                 guard(item, self.config)

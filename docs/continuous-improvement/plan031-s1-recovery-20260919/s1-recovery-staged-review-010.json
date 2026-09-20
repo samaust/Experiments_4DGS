@@ -1,0 +1,32 @@
+{
+  "schema": "plan040-staged-review/v1",
+  "recorded_utc": "2026-09-20T07:09:41.329601+00:00",
+  "full_staged_check": {
+    "argv": [
+      "git",
+      "diff",
+      "--cached",
+      "--check"
+    ],
+    "exit_code": 2,
+    "stdout": "docs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-diagnostic-010-002/process-stderr.log:4: trailing whitespace.\n+test_terminal_and_resolver_numerical_mutations (test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_terminal_and_resolver_numerical_mutations) ... \ndocs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-diagnostic-010-002/process-stderr.log:15: trailing whitespace.\n+test_execution_mutations (test_vipe_benchmark_s1_recovery.ReceiptContractTests.test_execution_mutations) ... \ndocs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-diagnostic-010-003/process-stderr.log:4: trailing whitespace.\n+test_terminal_and_resolver_numerical_mutations (test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_terminal_and_resolver_numerical_mutations) ... \ndocs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-diagnostic-010-003/stderr.log:4: trailing whitespace.\n+test_terminal_and_resolver_numerical_mutations (test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_terminal_and_resolver_numerical_mutations) ... \n",
+    "stderr": ""
+  },
+  "source_and_document_check": {
+    "argv": [
+      "git",
+      "diff",
+      "--cached",
+      "--check",
+      "--",
+      ".",
+      ":(exclude)prompts/**",
+      ":(exclude)**/prompts/**",
+      ":(exclude)docs/continuous-improvement/plan031-s1-recovery-20260919/*/*.log"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "disposition": "Four trailing-space findings are exclusively immutable raw failed/partial diagnostic logs. Preserve their bytes and evidence hashes. Source and other documents pass the scoped check. The earlier unstaged check did not include these then-untracked logs; do not reinterpret it as a clean full staged check. No source edit or test rerun."
+}

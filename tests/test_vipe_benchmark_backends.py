@@ -134,7 +134,7 @@ class AssetAndDetectorTests(unittest.TestCase):
                 AssetBundle('D4', records)
 
     def test_phrase_ambiguity_and_capacity_fail_before_casting(self):
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             phrase = case['phrase']
             with self.subTest(**case), self.assertRaises(BackendError):
                 normalize_phrase(phrase)
@@ -264,7 +264,7 @@ class SAM2Tests(unittest.TestCase):
             "still use SAM 2 and it's OK to ignore the error above, although some post-processing "
             "functionality may be limited (which doesn't affect the results in most cases; see "
             "https://github.com/facebookresearch/sam2/blob/main/INSTALL.md).")
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             component = case['component']
             with self.subTest(**case):
                 backend, _, video = self.make_backend()
@@ -286,7 +286,7 @@ class SAM2Tests(unittest.TestCase):
     def test_source_frames_not_internal_indices_or_cross_role_context(self):
         backend, det, _ = self.make_backend()
         rgb, valid = image()
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             frames = [case['frame_0'], case['frame_1']]
             with self.subTest(**case), self.assertRaises(ValueError):
                 backend.segment([rgb, rgb], [valid, valid], frame_ids=frames)
@@ -365,7 +365,7 @@ class S1NativeBridgeTests(unittest.TestCase):
 
     def test_constructor_rejects_changed_arguments_and_unsupervised_temporary_root(self):
         module, _, calls = self.make_module()
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             altered = {case['field']: case['value']}
             with self.subTest(**case), self.assertRaisesRegex(BackendError, 'exact frozen'):
                 _s1_tracker(module, self.runtime, dict(self.arguments, **altered))
@@ -374,7 +374,7 @@ class S1NativeBridgeTests(unittest.TestCase):
         self.assertEqual(calls, [])
 
     def test_native_wrapper_argument_drift_is_rejected_before_engine_construction(self):
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             altered = {case['field']: case['value']}
             module, _, calls = self.make_module(changed_kwargs=altered)
             with self.subTest(**case), patch.dict(os.environ, {'TMPDIR': str(self.root)}), \
@@ -406,7 +406,7 @@ class S1NativeBridgeTests(unittest.TestCase):
         module, native, _ = self.make_module()
         bridge = self.build(module)
         rgb, valid = image()
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             ids = [case[f'frame_{i}'] for i in range(len(case))]
             with self.subTest(**case), self.assertRaises(BackendError), bridge.pair(ids):
                 self.fail('invalid pair admitted')
@@ -727,7 +727,7 @@ class FactoryTests(unittest.TestCase):
         self.assertNotIn('load_state_dict', model.__dict__)
 
     def test_sam3_unobserved_or_repeated_checkpoint_load_cannot_qualify(self):
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             load_calls = case['load_calls']
             with self.subTest(**case):
                 _, model, builders, bundle, processor, original = self.sam3_fixture(load_calls=load_calls)

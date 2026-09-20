@@ -1,0 +1,66 @@
+test_direct_script_declaration_lookup (test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_direct_script_declaration_lookup) ... ok
+test_produced_and_qualified_numerical_rows (test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_produced_and_qualified_numerical_rows) ... ok
+test_sum_and_allocator_boundaries (test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_sum_and_allocator_boundaries) ... ok
+test_terminal_and_resolver_numerical_mutations (test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_terminal_and_resolver_numerical_mutations) ... 
+  test_terminal_and_resolver_numerical_mutations (test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_terminal_and_resolver_numerical_mutations) (field='native_wall_seconds') ... FAIL
+  test_terminal_and_resolver_numerical_mutations (test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_terminal_and_resolver_numerical_mutations) (field='peak_allocated_bytes') ... FAIL
+  test_terminal_and_resolver_numerical_mutations (test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_terminal_and_resolver_numerical_mutations) (field='peak_reserved_bytes') ... FAIL
+  test_terminal_and_resolver_numerical_mutations (test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_terminal_and_resolver_numerical_mutations) (field='native_group_wall_seconds') ... FAIL
+test_typed_numerical_fields (test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_typed_numerical_fields) ... ok
+
+======================================================================
+FAIL: test_terminal_and_resolver_numerical_mutations (test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_terminal_and_resolver_numerical_mutations) (field='native_wall_seconds')
+----------------------------------------------------------------------
+ValueError: stale file record bytes or hash
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_recovery.py", line 874, in test_terminal_and_resolver_numerical_mutations
+    with self.assertRaisesRegex(ValueError, field): s1.resolved_result(fixture.root, fixture.config, events, changed)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "native_wall_seconds" does not match "stale file record bytes or hash"
+
+======================================================================
+FAIL: test_terminal_and_resolver_numerical_mutations (test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_terminal_and_resolver_numerical_mutations) (field='peak_allocated_bytes')
+----------------------------------------------------------------------
+ValueError: stale file record bytes or hash
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_recovery.py", line 874, in test_terminal_and_resolver_numerical_mutations
+    with self.assertRaisesRegex(ValueError, field): s1.resolved_result(fixture.root, fixture.config, events, changed)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "peak_allocated_bytes" does not match "stale file record bytes or hash"
+
+======================================================================
+FAIL: test_terminal_and_resolver_numerical_mutations (test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_terminal_and_resolver_numerical_mutations) (field='peak_reserved_bytes')
+----------------------------------------------------------------------
+ValueError: stale file record bytes or hash
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_recovery.py", line 874, in test_terminal_and_resolver_numerical_mutations
+    with self.assertRaisesRegex(ValueError, field): s1.resolved_result(fixture.root, fixture.config, events, changed)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "peak_reserved_bytes" does not match "stale file record bytes or hash"
+
+======================================================================
+FAIL: test_terminal_and_resolver_numerical_mutations (test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_terminal_and_resolver_numerical_mutations) (field='native_group_wall_seconds')
+----------------------------------------------------------------------
+ValueError: stale file record bytes or hash
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_recovery.py", line 874, in test_terminal_and_resolver_numerical_mutations
+    with self.assertRaisesRegex(ValueError, field): s1.resolved_result(fixture.root, fixture.config, events, changed)
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: "native_group_wall_seconds" does not match "stale file record bytes or hash"
+
+----------------------------------------------------------------------
+Ran 5 tests in 83.135s
+
+FAILED (failures=4)

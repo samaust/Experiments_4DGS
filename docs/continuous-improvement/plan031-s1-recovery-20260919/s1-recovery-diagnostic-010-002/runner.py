@@ -110,7 +110,7 @@ def main():
                 suite = loader.discover(str(ROOT/'tests'), pattern=f'test_vipe_benchmark_{name}.py')
                 if focus:
                     suite = unittest.TestSuite(t for group in suite for cls in group for t in cls
-                        if t.__class__.__name__ == 'NumericalEnvelopeTests')
+                        if t.__class__.__name__ in ('ReceiptContractTests', 'NumericalEnvelopeTests'))
                 discovered = ids(suite)
                 collected.extend(discovered)
                 discovery_errors.extend(loader.errors)

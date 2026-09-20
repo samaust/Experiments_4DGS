@@ -399,6 +399,8 @@ def resolved_result(local, config, events, finish):
         raise ValueError('S1 finish acceptance/receipt binding missing')
     if acceptance['records'] != referenced_records([result, request]):
         raise ValueError('S1 accepted referenced bytes changed')
+    from .s1_evidence import validate_result_numerics
+    validate_result_numerics(result, config)
     first = read_json(strict_record(result['first_result'])['path'])
     if not 0 <= first['elapsed_seconds_from_reservation'] <= finish['elapsed_seconds'] <= reserves[0]['seconds']:
         raise ValueError('S1 reservation-relative timing inconsistent')

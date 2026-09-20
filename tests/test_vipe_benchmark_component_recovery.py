@@ -59,7 +59,7 @@ class ComponentRecoveryTests(unittest.TestCase):
             self.ledger.authorize_component_recovery(self.authorization(job_id='S2-reconstruction-recovery-002'))
 
     def test_scope_validation_and_cumulative_cap_are_not_relaxed(self):
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             changes = {case['field']: case['value']}
             with self.subTest(**case), self.assertRaisesRegex(ValueError, 'exact explicit'):
                 self.ledger.authorize_component_recovery(self.authorization(**changes))

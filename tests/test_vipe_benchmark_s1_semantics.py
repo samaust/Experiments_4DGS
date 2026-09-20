@@ -76,7 +76,7 @@ class S1SemanticsTests(unittest.TestCase):
         mutations = dict([('policy', 'unknown'), ('winner_index', 0),
                              ('phrase_token_sums', [9, 9]), ('ambiguity_reasons', []),
                              ('derived_class', 'person'), ('phrase_token_scores', [[float('nan')], [.5]])])
-        for case in SUBTEST_CASES[self.id()]:
+        for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             field = case['field']
             value = mutations[field]
             bad = copy.deepcopy(item)
