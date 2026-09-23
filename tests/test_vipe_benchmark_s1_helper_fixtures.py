@@ -22,10 +22,13 @@ class FaultOwner(Owner):
     def spawn(self, role, actions, env):
         env = dict(env, PYTHONPATH=env['PYTHONPATH']+os.pathsep+str(Path(__file__).parent))
         from vipe_benchmark.s1_helper_session import create_owned_process
+        entered=time.monotonic();self.session.events.append(dict(event='fixture_spawn_entry',role=role,observed=entered,ready_deadline=self.session.ready_deadline))
         pid = create_owned_process('Owner.run '+role,os.posix_spawn,sys.executable,
             [sys.executable, '-B', '-m', 'test_vipe_benchmark_s1_helper_fixtures', role, self.session.token, '100', self.mode],
-            env,deadline=self.session.ready_deadline,file_actions=actions,setsid=True)
+            env,deadline=self.session.ready_deadline,admission_observer=lambda observed:self.session.events.append(dict(event='owned_dispatch',role=role,**observed)),file_actions=actions,setsid=True)
+        self.session.events.append(dict(event='fixture_spawn_return',role=role,pid=pid,entered=entered,observed=time.monotonic(),ready_deadline=self.session.ready_deadline))
         if role == 'work' and self.mode in ('held_spawn','late_spawn'):
+            self.session.events.append(dict(event='opaque_spawn_return_held',role=role,pid=pid,observed=time.monotonic(),mode=self.mode))
             time.sleep(.16 if self.mode == 'held_spawn' else .45)
         return pid
 
@@ -129,7 +132,10 @@ def artifact_checks(operation, token, sequence):
     from vipe_benchmark.files import read_json, write_json, file_record
     args = operation['args']
     local = Path(args['value']['local'])
-    reservation = dict(sequence=7,event_sha256='a'*64)
+    from vipe_benchmark.s1_recovery import captured_clock
+    from vipe_benchmark.config import load
+    reservation=args['value']['reservation']
+    captured_clock(local,load(),reservation,args['value']['command'])
     summary = dict(counts=dict(complete=510), produced_identities=list(range(510)),
         qualified_identities=list(range(510)), verification_errors=['raw retained error'],runtime={})
     common = dict(local=str(local), reservation=reservation, config={}, outcome={}, deadline=time.monotonic()+1)
@@ -143,7 +149,7 @@ def artifact_checks(operation, token, sequence):
             changed=json.loads(json.dumps(publish))
             ref=changed['args']['outcome']['evidence_summary_record']
             if label == 'session': ref['session']='foreign'
-            elif label == 'reservation': ref['reservation']['sequence']=8
+            elif label == 'reservation': ref['reservation']['sequence']=reservation['sequence']+1
             elif label == 'missing': ref['record']['path']=str(local/'missing.json')
             else: ref['record']['sha256']='0'*64
             try:
@@ -157,6 +163,48 @@ def artifact_checks(operation, token, sequence):
     return dict(rejected=rejected, counts=summary['counts'], identities=len(valid['evidence_summary']['produced_identities']),reference=reference)
 
 
+
+
+def fixture_interpreter_metadata(fixture):
+    """Pin only this existing fixture's invoked interpreter and manifest."""
+    from vipe_benchmark.files import file_record,read_json
+    invoked=fixture['request']['runtime']['python']
+    if invoked!=sys.executable:raise ValueError('fixture interpreter spelling differs from actual runtime')
+    target=Path(invoked).resolve(strict=True);record=file_record(target)
+    manifest=fixture['observed_runtime']['loaded_files']
+    if file_record(manifest['path'])!=manifest:raise ValueError('fixture loaded manifest bytes changed')
+    if read_json(manifest['path'])['interpreter']!=dict(invoked_executable=invoked,executable=record):raise ValueError('fixture loaded interpreter disagreement')
+    return dict(invoked=invoked,target=str(target),record=record,manifest=manifest)
+
+
+def fixture_interpreter_adapter(fixture,events,*,deadline=None):
+    """Scoped exact-spelling adapter; every use freshly verifies real bytes."""
+    import contextlib
+    from unittest.mock import patch
+    from vipe_benchmark import s1_progress as p,s1_evidence as e
+    @contextlib.contextmanager
+    def adapter():
+        metadata=fixture['interpreter_adapter'];invoked=metadata['invoked'];target=Path(metadata['target'])
+        if invoked!=sys.executable or invoked!=fixture['request']['runtime']['python']:raise ValueError('fixture interpreter spelling differs from actual runtime')
+        if metadata['manifest']!=fixture['observed_runtime']['loaded_files']:raise ValueError('fixture loaded manifest binding')
+        guarded=e.file_record
+        def interpreter_record(path,*args,**kwargs):
+            if str(path)!=invoked:return guarded(path,*args,**kwargs)
+            event=dict(operation='fixture_interpreter_target',invoked=invoked,target=str(target),entered=time.monotonic(),completed=False)
+            events.append(event)
+            try:
+                p.before(deadline)
+                if Path(sys.executable).resolve(strict=True)!=target:raise ValueError('fixture original interpreter target changed')
+                p.before(deadline)
+                manifest=p.operation(p.read_record,metadata['manifest'],deadline=deadline)
+                if manifest['interpreter']!=dict(invoked_executable=sys.executable,executable=metadata['record']):raise ValueError('fixture loaded interpreter disagreement')
+                value=p.operation(p.checked_file_record,target,*args,deadline=deadline,**kwargs)
+                if value!=metadata['record']:raise ValueError('fixture original interpreter bytes changed')
+                p.before(deadline);event.update(completed=True,record=value,manifest=metadata['manifest']);return value
+            except BaseException as error:event.update(error_class=type(error).__name__,message=str(error));raise
+            finally:event['exited']=time.monotonic()
+        with patch.object(e,'file_record',side_effect=interpreter_record):yield interpreter_record
+    return adapter()
 
 
 def progress_fixture(root,*,states=False):
@@ -178,7 +226,9 @@ def progress_fixture(root,*,states=False):
     request_record=put('request.json',request)
     row,_=synthetic_row(root/'numeric',request)
     second=copy.deepcopy(row);second['identity']['frame']=150
-    return dict(root=str(root),request=request,request_record=request_record,rows=[row,second],observed_runtime=observed)
+    fixture=dict(root=str(root),request=request,request_record=request_record,rows=[row,second],observed_runtime=observed)
+    if states:fixture['interpreter_adapter']=fixture_interpreter_metadata(fixture)
+    return fixture
 
 
 def progress_reservation(fixture,seconds=1.4):
@@ -187,7 +237,7 @@ def progress_reservation(fixture,seconds=1.4):
         evidence=dict(request=fixture['request_record'],authorization=fixture['request']['recovery_authorization']))
 
 
-def child_progress_trace(fixture,clock,session,sequence):
+def child_progress_trace(fixture,clock,session,sequence,*,adapter_events=None):
     """Bounded child evidence; missing terminal event is incomplete, never valid."""
     import contextlib
     from unittest.mock import patch
@@ -227,7 +277,7 @@ def child_progress_trace(fixture,clock,session,sequence):
                 row=dict(index=count[0],phase=phase,state=state,observed=now,session=session,
                     reservation=clock.mapping()['reservation'],work_deadline=clock.work_deadline,total_deadline=clock.total_deadline,
                     request=fixture['request_record'],pid=os.getpid(),boot_id=clock.boot_id,overflow=dropped[0],valid=dropped[0]==0,
-                    terminal=finished,late_suffix=fixture.get('late_suffix') if phase=='P01_late_suffix' else None,**publication)
+                    terminal=finished,interpreter_adapter=list(adapter_events or ()),late_suffix=fixture.get('late_suffix') if phase=='P01_late_suffix' else None,**publication)
                 gate();text=json.dumps(row,separators=(',',':'))+'\n'
                 gate();raw=text.encode()
                 gate()
@@ -276,7 +326,11 @@ def progress_operation(operation,token,sequence,mode):
         reference=data.get('progress_context',args.get('progress_context'))
         if reference is None:return _progress_operation(operation,token,sequence,mode)
         clock=ReservationClock.from_mapping(p.read_record(reference,p.SMALL_BYTES)['clock'])
-    with child_progress_trace(fixture,clock,token,sequence):return _progress_operation(operation,token,sequence,mode)
+    import contextlib
+    adapter_events=[]
+    with contextlib.ExitStack() as stack:
+        if mode=='progress_final':stack.enter_context(fixture_interpreter_adapter(fixture,adapter_events,deadline=clock.work_deadline))
+        with child_progress_trace(fixture,clock,token,sequence,adapter_events=adapter_events):return _progress_operation(operation,token,sequence,mode)
 
 
 def _progress_operation(operation,token,sequence,mode):
@@ -461,6 +515,30 @@ def plan047_full_fixture(test):
     _,request,binding=fixture.register();command=fixture.command(binding)
     reservation=fixture.ledger.reserve(recovery.JOB,command,binding)
     clock=recovery.captured_clock(fixture.root,fixture.config,reservation,command)
+    # Bind the actual original interpreter target during fixture preparation.
+    # Only this invoked spelling maps to that target; evidence aliases still
+    # traverse the production no-follow reader unchanged.
+    from unittest.mock import patch
+    from vipe_benchmark import s1_progress as progress
+    invoked=request['runtime']['python'];target=Path(invoked).resolve(strict=True);trusted=file_record(target)
+    test.assertEqual(invoked,sys.executable)
+    test.assertEqual(command[0],invoked)
+    test.assertEqual(read_json(fixture.observed['loaded_files']['path'])['interpreter']['executable'],trusted)
+    guarded_record=evidence.file_record
+    def interpreter_record(path,*args,**kwargs):
+        if str(path)==invoked:
+            progress.before()
+            if Path(invoked).resolve(strict=True)!=target:raise ValueError('fixture original interpreter target changed')
+            progress.before();value=guarded_record(target,*args,**kwargs)
+            if value!=trusted:raise ValueError('fixture original interpreter bytes changed')
+            progress.before();return value
+        return guarded_record(path,*args,**kwargs)
+    test.assertEqual(interpreter_record(invoked),trusted)
+    alias=fixture.root/'untrusted-evidence-alias';alias.symlink_to(target)
+    try:
+        with test.assertRaises(OSError):interpreter_record(alias)
+    finally:alias.unlink()
+    adapter=patch.object(evidence,'file_record',side_effect=interpreter_record);adapter.start();test.addCleanup(adapter.stop)
     output=fixture.root/'jobs'/recovery.JOB;output.mkdir();write_json(output/'config.json',request)
     row,_=synthetic_row(fixture.root/'plan047-numeric',request)
     rows=[dict(row,identity=i.record()) for i in output_identities(fixture.config,'calibration')]
@@ -587,13 +665,18 @@ def named_creation_controls(test,kind,root):
                         def close(self):events.append(dict(operation='channel_close'))
                     session=SimpleNamespace(token='0'*32,channels={role:(Channel(),Channel()) for role in ('work','sample')},
                         events=h.Trace(128),ready_deadline=time.monotonic()+1,term_grace=.2,progress_cache=p.RetainedProgress())
-                    owner=h.Owner(session)
+                    owner=h.Owner(session);gate_calls=[];actual_gate=h.predispatch_owned
+                    def audited(event):
+                        value=actual_gate(event);gate_calls.append(event);return value
+                    stack.enter_context(patch.object(h,'predispatch_owned',side_effect=audited))
                     def observe():
                         owner.cancelled=True
                         if fault=='census' and not failed[0]:failed[0]=True;raise primary
                         return {number:dict(pid=number,pgid=number,ppid=os.getpid(),start_ticks=100+number-pid,state='Z') for number in created}
                     stack.enter_context(patch.object(owner,'observe',side_effect=observe))
                     owner.run()
+                    test.assertEqual(len(gate_calls),len([event for event in session.events if event['event']=='owned_dispatch']))
+                    test.assertEqual(len(gate_calls),len(created)+(1 if fault=='creation' else 0))
                     test.assertTrue(owner.done)
                     test.assertTrue(all(r['state'] in ('pending','reaped') for r in owner.records.values()))
                     events.append(dict(operation='Owner.run_return',records=copy.deepcopy(owner.records),errors=list(owner.errors)))
@@ -934,7 +1017,7 @@ def scenario_secondary_controls(test,root):
                 def __exit__(self,*args):pass
                 def write(self,value):calls.append('write');raise failure
             def opened(path,*args,**kwargs):
-                if path.name.endswith('-secondary.json'):
+                if path.name=='scenario-pure-secondary-secondary.json' and args and args[0]=='x':
                     calls.append('open')
                     if fault=='open':raise failure
                     if fault=='write':return Sink()
@@ -1248,9 +1331,10 @@ def backend_retirement_transition_controls(test,root):
             evidence.append(dict(kind='cwd_acquisition_return',offset=offset,secondary_failure=secondary_failure,acquired=fds,close_attempts=closed,primary_class=None if caught is None else type(caught).__name__))
     # Iterator acquisition/advance/close and removal failures retain their
     # first exception; iterator-close failure cannot overwrite next() failure.
+    test.s1_retirement_resource_handoffs=[]
     for target in ('scandir_owned_fd','scandir_next','scandir_close','openat_directory_nofollow','unlinkat','rmdirat','rmdirat_root'):
         for primary_present in (False,True):
-            now=[1.];objects=[];old_owners=list(p.TEMPORARY_OWNERS);attempts=[]
+            now=[1.];objects=[];old_owners=list(p.TEMPORARY_OWNERS);attempts=[];all_attempts=[];resources=[];retained_objects=[];fd_tokens={};iterator_tokens={};selected=[None]
             pending_error=RuntimeError('pending interior primary');failure=OSError('interior '+target);secondary=OSError('iterator close secondary')
             actual_call=p.RetirementGate.call;actual_ctor=tempfile.TemporaryDirectory
             def constructor(*args,**kwargs):
@@ -1258,31 +1342,108 @@ def backend_retirement_transition_controls(test,root):
                 (Path(obj.name)/'nested').mkdir();(Path(obj.name)/'nested'/'item').write_bytes(b'owned')
                 return obj
             def call(gate,label,function,*args,**kwargs):
-                attempts.append(label)
-                if label==target:
-                    def function(*args,**kwargs):raise failure
-                elif target=='scandir_next' and label=='scandir_close':
-                    def function(*args,**kwargs):raise secondary
-                return actual_call(gate,label,function,*args,**kwargs)
-            caught=None
-            with patch.object(p.time,'monotonic',side_effect=lambda:now[0]):
-                owner=p.operation(p.owned_temporary_directory,constructor,(),dict(prefix='interior-fault-',dir=str(root)),3.,deadline=2.)
-                with patch.object(p.RetirementGate,'call',call):
-                    try:
-                        if primary_present:
-                            try:raise pending_error
-                            except RuntimeError as current:owner.cleanup();test.assertIs(current,pending_error)
-                        else:owner.cleanup()
-                    except BaseException as error:caught=error
-            test.assertEqual(attempts.count(target),1)
-            if primary_present:test.assertIsNone(caught);test.assertIn(owner,pending_error.s1_temporary_owners)
-            else:test.assertIs(caught,failure);test.assertIn(owner,caught.s1_temporary_owners)
-            test.assertTrue(owner.unresolved);test.assertEqual(owner.state,'uncertain')
-            if target=='scandir_next':
-                test.assertEqual(attempts.count('scandir_close'),1)
-                test.assertTrue(any(item['message']==str(secondary) for item in owner.events[-1]['secondary']))
-            evidence.append(dict(kind='interior_failure',target=target,primary_present=primary_present,attempts=attempts,retirement=list(owner.events),primary_preserved=True))
-            fixture_cleanup([value for value in p.TEMPORARY_OWNERS if value not in old_owners],objects)
+                # Tokens belong to retained acquisitions, never recycled fd/id alone.
+                if label in ('scandir_next','scandir_close'):
+                    handle=args[0] if label=='scandir_next' else function.__self__
+                    token=iterator_tokens[id(handle)];parent=resources[token]['parent']
+                elif label=='rmdirat_root':handle=owner.root_fd;token=fd_tokens[handle];parent=resources[token]['parent']
+                else:
+                    fd=kwargs.get('dir_fd',args[0] if args and type(args[0]) is int else None)
+                    token=fd_tokens.get(fd);parent=None if token is None else resources[token]['parent'];handle=fd
+                root_token=1  # Retained root acquisition; owner.root_fd clears on close.
+                eligible=(label==target and ((target in ('scandir_next','scandir_close') and parent==root_token)
+                    or target in ('scandir_owned_fd','openat_directory_nofollow','rmdirat','rmdirat_root') and token==root_token
+                    or target=='unlinkat' and token is not None and resources[token]['parent']==root_token))
+                if selected[0] is None and eligible:selected[0]=token
+                event=dict(operation=label,resource=token,parent=parent,root=root_token,original_handle=id(handle) if label in ('scandir_next','scandir_close') else handle,name=args[0] if args and type(args[0]) is str else args[1] if len(args)>1 and type(args[1]) is str else None,entered=now[0],completed=False)
+                all_attempts.append(event)
+                if token==selected[0] and token is not None:attempts.append(label)
+                original=function;retain=kwargs.pop('retain',None)
+                def acquired(value):
+                    if label in ('openat_directory_nofollow','scandir_owned_fd'):
+                        generation=len(resources);retained_objects.append(value)
+                        item=dict(generation=generation,kind='iterator' if label=='scandir_owned_fd' else 'directory_fd',parent=token,root=root_token,original_handle=id(value) if label=='scandir_owned_fd' else value,acquired=now[0],operation=label)
+                        resources.append(item)
+                        if label=='scandir_owned_fd':iterator_tokens[id(value)]=generation
+                        else:fd_tokens[value]=generation
+                        event['acquired_resource']=generation
+                    if retain is not None:retain(value)
+                if eligible:
+                    def function(*args,**kwargs):
+                        if target=='scandir_close':original(*args,**kwargs)
+                        raise failure
+                elif target=='scandir_next' and label=='scandir_close' and token==selected[0]:
+                    def function(*args,**kwargs):
+                        original(*args,**kwargs)
+                        raise secondary
+                try:
+                    value=actual_call(gate,label,function,*args,retain=acquired,**kwargs);event['completed']=True;return value
+                except BaseException as error:event.update(error_class=type(error).__name__,message=str(error));raise
+                finally:event['exited']=now[0]
+            caught=None;owner=None
+            # This bounded enclosing handoff survives unavailable evidence storage.
+            # Keep original exception/resource objects, not only serialized labels.
+            handoff=dict(target=target,primary_present=primary_present,primary=None,secondary=[],
+                resources=resources,all_attempts=all_attempts,selected=selected,selected_attempts=attempts,
+                retained_objects=retained_objects,objects=objects,owner=None,phase='acquisition',cleanup_complete=False)
+            test.s1_retirement_resource_handoffs.append(handoff)
+            try:
+                with patch.object(p.time,'monotonic',side_effect=lambda:now[0]):
+                    owner=p.operation(p.owned_temporary_directory,constructor,(),dict(prefix='interior-fault-',dir=str(root)),3.,deadline=2.)
+                    handoff['owner']=owner
+                    for kind,fd in (('parent',owner.parent_fd),('root',owner.root_fd)):
+                        generation=len(resources);fd_tokens[fd]=generation;retained_objects.append(owner)
+                        resources.append(dict(generation=generation,kind='directory_fd',parent=None if kind=='parent' else 0,root=1,original_handle=fd,retained_before_retirement=now[0],operation='owned_temporary_directory/'+kind))
+                    with patch.object(p.RetirementGate,'call',call):
+                        try:
+                            if primary_present:
+                                handoff['primary']=pending_error
+                                try:raise pending_error
+                                except RuntimeError as current:owner.cleanup();test.assertIs(current,pending_error)
+                            else:owner.cleanup()
+                        except BaseException as error:
+                            caught=error
+                            if handoff['primary'] is None:handoff['primary']=error
+                        finally:
+                            # Persist before any assertion can discard a failed resource witness.
+                            handoff['phase']='persistence'
+                            test.control_record('plan049-retirement-resource-'+target+'-'+str(primary_present),dict(target=target,primary_present=primary_present,selected=selected[0],resources=resources,all_attempts=all_attempts,selected_attempts=attempts,retirement=list(owner.events)))
+                handoff['phase']='assertions'
+                test.assertIsNotNone(selected[0])
+                test.assertEqual(attempts.count(target),1)
+                if primary_present:test.assertIsNone(caught);test.assertIn(owner,pending_error.s1_temporary_owners)
+                else:test.assertIs(caught,failure);test.assertIn(owner,caught.s1_temporary_owners)
+                test.assertTrue(owner.unresolved);test.assertEqual(owner.state,'uncertain')
+                if target=='scandir_next':
+                    test.assertEqual(attempts.count('scandir_close'),1)
+                    test.assertTrue(any(item['message']==str(secondary) for item in owner.events[-1]['secondary']))
+                evidence.append(dict(kind='interior_failure',target=target,primary_present=primary_present,attempts=attempts,selected=selected[0],resources=resources,all_attempts=all_attempts,retirement=list(owner.events),primary_preserved=True))
+            except BaseException as error:
+                primary=handoff['primary']
+                if primary is None:primary=error;handoff['primary']=primary
+                if error is not primary:
+                    handoff['secondary'].append(dict(operation=handoff['phase'],error=error,error_class=type(error).__name__,message=str(error)[:1024]))
+                    primary.add_note('fixture '+handoff['phase']+': '+repr(error))
+                primary.s1_retirement_resource_handoff=handoff
+                if error is primary:raise
+                raise primary from error
+            finally:
+                # Entered before acquisition; faults in observation, JSON/file
+                # persistence and assertions cannot bypass real fixture retirement.
+                pending=sys.exception()
+                try:
+                    handoff['cleanup_owners']=[value for value in p.TEMPORARY_OWNERS if value not in old_owners]
+                    fixture_cleanup(handoff['cleanup_owners'],objects)
+                    handoff['cleanup_complete']=True
+                except BaseException as cleanup:
+                    handoff['secondary'].append(dict(operation='fixture_cleanup',error=cleanup,error_class=type(cleanup).__name__,message=str(cleanup)[:1024]))
+                    primary=pending if pending is not None else handoff['primary']
+                    if primary is None:primary=cleanup;handoff['primary']=primary
+                    primary.s1_retirement_resource_handoff=handoff
+                    if cleanup is not primary:primary.add_note('fixture cleanup: '+repr(cleanup))
+                    if pending is None:
+                        if primary is cleanup:raise
+                        raise primary from cleanup
     # A root-open return crossing C followed by fstat failure must keep the
     # already-observed deadline as primary, with the safety error secondary.
     objects=[];old_owners=list(p.TEMPORARY_OWNERS);now=[1.];secondary=OSError('post-cross root fstat')

@@ -1139,7 +1139,7 @@ class HelperSessionTests(unittest.TestCase):
                         effective=min(deadline,safety_cutoff if name=='close' else action_cutoff)
                         if name=='tick' and current.requests['sample'] is not None:
                             effective=min(effective,current.requests['sample']['deadline'])
-                        entered=self.time.monotonic();result=None;error=None
+                        entered=self.time.monotonic();result=None;error=None;ready_before=sorted(getattr(current,'ready',{}))
                         try:
                             result=operation(*args,**kwargs);return result
                         except BaseException as exc:
@@ -1147,7 +1147,7 @@ class HelperSessionTests(unittest.TestCase):
                         finally:
                             returned=self.time.monotonic()
                             observed_calls.append(dict(operation=name,entered=entered,deadline=effective,returned=returned,
-                                confirmed=result if name=='close' else None,error=error))
+                                confirmed=result if name=='close' else None,error=error,ready_before=ready_before,ready_after=sorted(getattr(current,'ready',{}))))
                             # Save the original pending exception before checking timing.
                             try:self.assertLessEqual(returned,effective+.1)
                             except AssertionError as violation:
@@ -1181,6 +1181,15 @@ class HelperSessionTests(unittest.TestCase):
                 secondary_step('lifecycle_close',close_owned)
                 def assemble_record():
                     owner=getattr(current,'owner',None)
+                    if label in ('P01','P02','P03','P04','P05','P06'):
+                        final=next((event for event in reversed(list(current.events)) if event.get('event')=='progress_final_outcome'),None)
+                        if final is None:
+                            final=dict(event='progress_final_outcome',label=label,phase='startup_or_fixture_preparation',
+                                primary=None if pending is None else dict(error_class=type(pending).__name__,message=str(pending)),
+                                secondary=list(secondary),reference=None if not hasattr(current,'progress_cache') else current.progress_cache.reference(),
+                                cleanup_confirmed=cleaned,observed=ended,causal_status='actual startup failure; no inferred EPERM cause')
+                            current.events.append(final)
+                        record['progress_final_outcome']=final
                     record.update(action_end=action_end,end=ended,execution_seconds=action_end-started,
                         cleanup_seconds=ended-action_end,cleanup_confirmed=cleaned,
                         records={} if owner is None else owner.records,errors=[] if owner is None else list(owner.errors),
@@ -1312,6 +1321,7 @@ class HelperSessionTests(unittest.TestCase):
         with self.scenario('L08','late_spawn',ready_seconds=.06,setup_seconds=.12,total_seconds=.2) as session:
             with self.assertRaises(TimeoutError): session.await_ready()
             self.assertFalse(session.close(session.cleanup_deadline))
+            self.assertTrue(any(event['event']=='opaque_spawn_return_held' and event['mode']=='late_spawn' for event in session.events))
             self.assertIn(session.owner,OWNERS)
             self.assertTrue(session.ownership()[0]['ownership_unknown'])
             session.events.append(dict(event='cleanup_uncertain_at_deadline',monotonic=self.time.monotonic(),ownership=session.ownership()))
@@ -1421,11 +1431,17 @@ class HelperSessionTests(unittest.TestCase):
     def test_l23_reap_failure(self): self.failed_cleanup('L23','reap_failure')
 
     def test_l24_summary_reference_adapter(self):
+        from test_vipe_benchmark_s1_recovery import S1RecoveryTests
         with tempfile.TemporaryDirectory() as temp:
-            local=Path(temp); (local/'jobs'/'S1-calibration-recovery-001').mkdir(parents=True)
+            fixture=S1RecoveryTests();fixture.setUp();self.addCleanup(fixture.doCleanups)
+            _,request,binding=fixture.register();command=fixture.command(binding)
+            reservation=fixture.ledger.reserve('S1-calibration-recovery-001',command,binding)
+            self.assertEqual(fixture.ledger.events()[-1],reservation)
+            local=fixture.root;(local/'jobs'/'S1-calibration-recovery-001').mkdir(parents=True)
             with self.scenario('L24','artifact') as session:
                 session.await_ready()
-                operation=dict(operation='constant',args=dict(value=dict(local=str(local))))
+                session.events.append(dict(event='actual_summary_reserve',reservation=reservation,command=command))
+                operation=dict(operation='constant',args=dict(value=dict(local=str(local),reservation=reservation,command=command)))
                 result=self.work(session,operation=operation)
                 self.assertEqual(result['rejected'],['session','reservation','missing','tamper'])
                 self.assertEqual(result['counts'],dict(complete=510))
@@ -1442,7 +1458,7 @@ class HelperSessionTests(unittest.TestCase):
         from vipe_benchmark import supervisor as sup
         with self.scenario(label,ready_seconds=.15,setup_seconds=.3,total_seconds=.5) as session:
             life=sup.HelperLifecycle(retain=True);life.helpers=[session]
-            calls=[]
+            calls=[];reserve_entries=[]
             with tempfile.TemporaryDirectory() as temp:
                 class Disposable:
                     jobs={'S1-calibration-recovery-001':dict(resource='gpu')}
@@ -1451,6 +1467,7 @@ class HelperSessionTests(unittest.TestCase):
                     def reserve(inner):
                         self.assertTrue(session.accepted_initial)
                         self.assertIsNotNone(session.last_sample)
+                        reserve_entries.append(dict(boundary='actual_reserve_descriptor',observed=self.time.monotonic(),deadline=session.setup_deadline))
                         if equality: session.decision_clock=lambda:session.setup_deadline
                         else:
                             self.time.sleep(max(0.,session.setup_deadline-self.time.monotonic()+.005))
@@ -1461,6 +1478,8 @@ class HelperSessionTests(unittest.TestCase):
                 returned=self.time.monotonic()
                 session.events.append(dict(event='rejected_admission',decision=session.decision_clock(),deadline=session.setup_deadline,returned=returned,calls=list(calls)))
                 self.assertEqual(calls,[])
+                self.assertEqual(len(reserve_entries),1)
+                session.events.append(dict(event='admission_predecessor',entries=reserve_entries))
                 self.assertLessEqual(returned,session.cleanup_deadline+.1)
                 self.assertTrue(session.closed)
 
@@ -1616,7 +1635,7 @@ class HelperSessionTests(unittest.TestCase):
         with self.scenario('L35') as session, tempfile.TemporaryDirectory() as temp:
             session.await_ready()
             marker=Path(temp)/'ready';release=Path(temp)/'release'
-            code=("import sys,time\nfrom pathlib import Path\nfrom test_vipe_benchmark_s1_helper_fixtures import fixture_process_launch,retire_fixture_processes\n"
+            code=("import sys,time\nfrom pathlib import Path\n"+f"sys.path.insert(0,{str(Path(__file__).resolve().parent)!r})\n"+"from test_vipe_benchmark_s1_helper_fixtures import fixture_process_launch,retire_fixture_processes\n"
                 "p=None\ntry:\n p=fixture_process_launch('existing detached descendant',[sys.executable,'-B','-c','import time; time.sleep(10)'])\n"
                 f" Path({str(marker)!r}).write_text(str(p.pid))\n end=time.monotonic()+1\n while not Path({str(release)!r}).exists() and time.monotonic()<end:time.sleep(.001)\n"
                 "except BaseException as primary:\n if p is not None:retire_fixture_processes([p],primary)\n raise\n")
@@ -1644,7 +1663,7 @@ class HelperSessionTests(unittest.TestCase):
             acquired.extend(dict(r) for r in owner.records.values() if r.get('pid'))
             raise RuntimeError('ambiguous native creation after start')
         started=self.time.monotonic();action_end=started+2;safety_end=started+3
-        session=Session.__new__(Session)
+        session=Session.__new__(Session);returned=started;production=None;cleaned=False;secondary=[]
         try:
             with patch.object(_thread,'start_joinable_thread',side_effect=ambiguous):
                 with self.assertRaisesRegex(RuntimeError,'ambiguous native creation'):
@@ -1659,16 +1678,41 @@ class HelperSessionTests(unittest.TestCase):
             self.assertIn(session.owner,OWNERS)
             production=dict(deadline=session.cleanup_deadline,returned=returned,state=session.state,ownership=session.ownership(),primary=session.primary,actually_acquired=acquired)
         finally:
-            session.handle=handles[0];session.owner.handle=handles[0]
-            cleaned=session.close(safety_end)
+            pending=sys.exception()
+            if production is None:
+                returned=self.time.monotonic()
+                production=dict(deadline=getattr(session,'cleanup_deadline',None),returned=returned,state=getattr(session,'state','not_started'),
+                    primary=getattr(session,'primary',None),actually_acquired=list(acquired),
+                    interrupted_by=None if pending is None else dict(error_class=type(pending).__name__,message=str(pending)))
+            def final_step(name,operation):
+                try:return operation()
+                except BaseException as error:
+                    secondary.append(dict(operation=name,error_class=type(error).__name__,message=str(error)))
+                    if pending is not None:pending.add_note('L36 secondary: '+repr(secondary[-1]))
+                    return None
+            def retire():
+                nonlocal cleaned
+                if handles:
+                    session.handle=handles[0]
+                    if session.owner is not None:session.owner.handle=handles[0]
+                cleaned=session.close(safety_end)
+            final_step('retire_acquired',retire)
             ended=self.time.monotonic()
             import json
+            owner=getattr(session,'owner',None)
             record=dict(scenario='L36',constructor_entry=started,action_cutoff=action_end,safety_cutoff=safety_end,
                 production=production,cleanup_confirmed=cleaned,execution_seconds=returned-started,cleanup_seconds=ended-returned,end=ended,
-                ownership=session.ownership(),records=session.owner.records,events=list(session.events),ticks=list(session.ticks),errors=list(session.owner.errors))
-            with (Path(os.environ['S1_VALIDATION_RUN_DIRECTORY'])/'scenario-L36.json').open('x') as stream:json.dump(record,stream,indent=2)
-            self.assertTrue(cleaned);self.assertLessEqual(ended-started,3);self.assertLessEqual(ended-returned,1)
-            self.assertNotIn(session.owner,OWNERS)
+                ownership=final_step('ownership',session.ownership),records={} if owner is None else owner.records,
+                events=list(session.events),ticks=list(session.ticks),errors=[] if owner is None else list(owner.errors),secondary=secondary)
+            def persist():
+                with (Path(os.environ['S1_VALIDATION_RUN_DIRECTORY'])/'scenario-L36.json').open('x') as stream:json.dump(record,stream,indent=2)
+            def original_checks():
+                self.assertTrue(cleaned);self.assertLessEqual(ended-started,3);self.assertLessEqual(ended-returned,1)
+                self.assertNotIn(session.owner,OWNERS)
+            final_step('original_cleanup_assertions',original_checks)
+            final_step('actual_outcome_write',persist)
+            final_step('actual_outcome_presence',lambda:self.assertTrue((Path(os.environ['S1_VALIDATION_RUN_DIRECTORY'])/'scenario-L36.json').is_file()))
+            if pending is None and secondary:raise AssertionError('L36 secondary failures: '+repr(secondary))
 
     def progress_scenario(self,label,mode,*,supervised=True):
         import json,shutil
@@ -1685,7 +1729,7 @@ class HelperSessionTests(unittest.TestCase):
             life=sup.HelperLifecycle(retain=True);life.helpers=[session]
             session.resume();self.assertLessEqual(self.record_census(session)[0],8)
             pair={k:p.process_binding(v) for k,v in session.owner.records.items()}
-            outcome={};caught=None;observed=[];consumer=None;primary_observations=[];late_parent_entries=[];cutoff_observations=[]
+            outcome={};caught=None;observed=[];consumer=None;reservation=None;primary_observations=[];late_parent_entries=[];cutoff_observations=[]
             if label=='P06':
                 install=session.install_progress
                 def install_held(*args,**kwargs):
@@ -1886,9 +1930,11 @@ class HelperSessionTests(unittest.TestCase):
                     publication=outcome.get('terminal_publication_status'),primary=dict(error_class=type(caught).__name__,message=str(caught),kind=getattr(caught,'kind',None),stop_required=getattr(caught,'stop_required',None)),primary_observations=primary_observations,finish=outcome,protocol_trace=p.trace_snapshot(),fixture_scope='two-row final-sample loss, not full acceptance' if label=='P04' else label,durable_copies=copied,original_pair=pair,original_clock=observed[0] if observed else reservation,
                     child_boundaries=child_boundaries,late_parent_entries=late_parent_entries,cutoff_observations=cutoff_observations,production_return=self.time.monotonic(),owner_block_entered=getattr(session.owner,'progress_block_entered',None)))
             finally:
-                pending=sys.exception();frozen=None;cleanup_errors=[]
+                pending=sys.exception();frozen=None;cleanup_errors=[];safety_steps=[]
                 def safety_step(name,function):
-                    try:return function()
+                    observation=dict(operation=name,entered=self.time.monotonic(),action_cutoff=session.fixture_action_end,safety_cutoff=session.fixture_safety_end,completed=False);safety_steps.append(observation)
+                    try:
+                        value=function();observation['completed']=True;return value
                     except BaseException as secondary:
                         item=dict(operation=name,error_class=type(secondary).__name__,message=str(secondary))
                         cleanup_errors.append(item)
@@ -1896,6 +1942,7 @@ class HelperSessionTests(unittest.TestCase):
                         if caught is not None:
                             caught.progress_safety_secondary=list(cleanup_errors)
                         return None
+                    finally:observation['returned']=self.time.monotonic()
                 def cutoff():
                     session.events.append(dict(event='plan047_production_cutoff',observed=self.time.monotonic(),reference=life.progress.reference(),ownership=life.ownership(),safety_cutoff=session.fixture_safety_end))
                 frozen=safety_step('frozen_snapshot',lambda:life.progress.snapshot)
@@ -1910,6 +1957,15 @@ class HelperSessionTests(unittest.TestCase):
                 def retired_record():
                     session.events.append(dict(event='plan047_safety_retirement',observed=self.time.monotonic(),ownership=life.ownership(),secondary=list(cleanup_errors)))
                 safety_step('retirement_record',retired_record)
+                def final_outcome():
+                    session.events.append(dict(event='progress_final_outcome',label=label,
+                        primary=None if caught is None else dict(error_class=type(caught).__name__,message=str(caught),kind=getattr(caught,'kind',None),
+                            primary_failure=getattr(caught,'primary_failure',None),secondary_failures=getattr(caught,'secondary_failures',None)),
+                        assertion_or_setup_failure=None if pending is None else dict(error_class=type(pending).__name__,message=str(pending)),
+                        finish=dict(outcome),reference=life.progress.reference(),retained_snapshot_present=frozen is not None,pointer_unchanged=life.progress.snapshot is frozen,primary_observations=list(primary_observations),
+                        cleanup_secondary=list(cleanup_errors),safety_steps=list(safety_steps),ownership=life.ownership(),observed=self.time.monotonic(),
+                        causal_status='recorded actual outcome; no inferred EPERM cause',original_clock=observed[0] if observed else reservation))
+                safety_step('final_outcome_record',final_outcome)
                 if pending is None and cleanup_errors:raise AssertionError('progress safety failures: '+repr(cleanup_errors))
             self.assertLessEqual(self.time.monotonic(),session.fixture_safety_end)
 
@@ -2009,8 +2065,20 @@ class HelperSessionTests(unittest.TestCase):
                 with self.subTest(**case):
                     kind=case['kind']
                     if kind=='deadline':
-                        result=e.reconcile_rows(output,fixture['request'],deadline=0)
-                        self.assertFalse(result['scan_complete']);self.assertEqual(result['counts']['produced_lower_bound'],0)
+                        # D49-2: exact expired public entry, not a returned scan.
+                        from contextlib import ExitStack
+                        suffix=[];spies=[]
+                        def forbidden(name,*args,**kwargs):
+                            suffix.append(name)
+                            raise AssertionError('expired reconciliation entered forbidden suffix: '+name)
+                        with ExitStack() as stack:
+                            for module,name in ((e,'_reconcile_rows'),(e,'input_loader'),(p,'candidate_inventory'),(e,'produced_row'),(e,'qualify_row')):
+                                spy=stack.enter_context(patch.object(module,name,side_effect=lambda *args,_name=name,**kwargs:forbidden(_name,*args,**kwargs)))
+                                spies.append((name,spy))
+                            with self.assertRaisesRegex(TimeoutError,'^progress original work deadline$'):
+                                e.reconcile_rows(output,fixture['request'],deadline=0)
+                            for name,spy in spies:self.assertEqual(spy.call_count,0,name)
+                            self.assertEqual(suffix,[])
                     elif kind=='symlink':
                         link=output/'alias-produced-row.json';link.symlink_to(output/'one-produced-row.json')
                         try:
@@ -2328,8 +2396,22 @@ class HelperSessionTests(unittest.TestCase):
                 checkpoint=p.read_record(pub.previous);head=p.read_record(state.cache.reference()['provenance']['worker']['accepted_head'],p.SMALL_BYTES)
                 notice=dict(schema='s1-progress-notice/v1',context=state.reference,producer='worker',binding=pub.binding,request_id=1,sequence=pub.sequence,current=pub.previous,previous=checkpoint['previous'],head=state.cache.reference()['provenance']['worker']['accepted_head'],completed=checkpoint['verified_at'])
                 ack=dict(schema='s1-progress-ack/v1',context=state.reference['sha256'],producer='worker',sequence=pub.sequence,current=pub.previous)
-                with patch.object(state.consumer,'read',side_effect=OSError('stop after credentialed intended successor')):
+                def transient_successor(rec,limit=p.CHECKPOINT_BYTES):
+                    intended=state.cache.reference()['provenance']['worker']['intended_successor']
+                    self.assertEqual(rec,state.reference)
+                    self.assertGreater(intended['sequence'],checkpoint['sequence'])
+                    evidence.append(dict(control='credentialed_transient_successor',record=rec,intended=intended,context=state.reference,observed=self.time.monotonic()))
+                    raise TimeoutError('stop after credentialed intended successor')
+                with patch.object(state.consumer,'read',side_effect=transient_successor):
                     with self.assertRaises(OSError):pub.publish()
+                self.assertTrue(state.consumer.cache.reference()['provenance']['worker']['intended_successor'])
+                with plan047_state(fixture,Path(temp)/'ordinary-oserror') as untrusted:
+                    untrusted.publisher.failure(ValueError('independent integrity control'),'schema')
+                    with patch.object(untrusted.consumer,'read',side_effect=OSError('ordinary integrity failure')):
+                        with self.assertRaises(OSError):untrusted.publisher.publish()
+                    self.assertTrue(untrusted.cache.integrity)
+                    with self.assertRaisesRegex(ValueError,'progress recovery unverified'):p.recover(untrusted.cache.reference())
+                    evidence.append(dict(control='ordinary_oserror_remains_integrity',integrity=untrusted.cache.integrity,reference=untrusted.cache.reference()))
                 reference=state.cache.reference()
                 trusted=p.recover(reference)
                 summary=dict(runtime={'final':{'status':'unverified','value':None}},first_result={'status':'unverified','value':None},verification_errors=[])
@@ -2767,6 +2849,8 @@ class HelperSessionTests(unittest.TestCase):
                             result='kernel anchor rejected paired caller substitution'
                             # Preserve the generic control above, then isolate the
                             # named pinned authority predicate at its actual entry.
+                            with patch.dict(os.environ,{'S1_OWNED_ROOT_NOTE':str(original_path),'S1_OWNED_ROOT_SHA256':hashlib.sha256(original_path.read_bytes()).hexdigest()}):
+                                self.assertEqual(h.owned_workload(original_path)['root'],original['ownership_root'])
                             reached=[];saved_anchor=copy.deepcopy(h.INVOCATION.anchor)
                             target_note=copy.deepcopy(note);target_raw=json.dumps(target_note).encode()
                             actual_read=Path.read_bytes;actual_stat=Path.stat
@@ -2784,6 +2868,50 @@ class HelperSessionTests(unittest.TestCase):
                                 'paired_env_runner_root':'capture root binding','capture_omitted':'capture root binding',
                                 'paired_env_foreign_output':'output/command binding'}[kind]
                             kernel_case=kind in ('stdin_inode_replaced','capture_argv_swapped','driver_log_inode_swapped')
+                            from vipe_benchmark import s1_validation_contract as contract
+                            projected={};actual_text=Path.read_text;actual_record=contract.file_record
+                            def projected_record(path):
+                                key=str(path)
+                                if key not in projected:return actual_record(path)
+                                data=projected[key];return dict(path=key,bytes=len(data),sha256=hashlib.sha256(data).hexdigest())
+                            def store_projection(path,value):
+                                projected[str(path)]=json.dumps(value).encode();return projected_record(path)
+                            # Rebuild every affected graph edge at its original
+                            # canonical logical path. No runtime authority file
+                            # is overwritten by these read-only fixture seams.
+                            if not kernel_case:
+                                admitted=json.loads(actual_read(Path(original['admission']['path'])))
+                                command_binding=admitted['bindings']
+                                request_path=command_binding['identity_request']['path']
+                                request_doc=json.loads(actual_read(Path(request_path)))
+                                for field in ('ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths'):
+                                    request_doc[field]=copy.deepcopy(target_note[field])
+                                    command_binding[field]=copy.deepcopy(target_note[field])
+                                request_ref=store_projection(request_path,request_doc)
+                                proof_path=command_binding['session_proof']['path']
+                                proof_doc=json.loads(actual_read(Path(proof_path)))
+                                old_line=proof_doc['readiness_line'];old_output='';event_docs=[]
+                                for event_ref in proof_doc['tool_events']:
+                                    document=json.loads(actual_read(Path(event_ref['path'])));event_docs.append(document);old_output+=document['result']['output']
+                                proof_doc['identity_request']=request_ref
+                                proof_doc['readiness_line']=json.dumps(dict(awaiting_main_admission=proof_doc['admission_path'],identity_request=request_ref))
+                                proof_doc['readiness_line_sha256']=hashlib.sha256(proof_doc['readiness_line'].encode()).hexdigest()
+                                delimiter='\r\n' if old_output.endswith('\r\n') else '\n'
+                                new_output=proof_doc['readiness_line']+delimiter;cursor=0;event_refs=[]
+                                for ordinal,(event_ref,document) in enumerate(zip(proof_doc['tool_events'],event_docs)):
+                                    count=len(document['result']['output'])
+                                    text=new_output[cursor:] if ordinal==proof_doc['readiness_event'] else new_output[cursor:cursor+count] if ordinal<proof_doc['readiness_event'] else ''
+                                    cursor+=len(text);document['result']['output']=text;document['output_sha256']=hashlib.sha256(text.encode()).hexdigest()
+                                    event_refs.append(store_projection(event_ref['path'],document))
+                                proof_doc['tool_events']=event_refs;proof_ref=store_projection(proof_path,proof_doc)
+                                command_binding['identity_request']=request_ref;command_binding['session_proof']=proof_ref
+                                admission_ref=store_projection(original['admission']['path'],admitted)
+                                target_note['admission']=admission_ref
+                                target_note['bindings']=[projected_record(row['path']) if row['path'] in projected else row for row in target_note['bindings']]
+                                store_projection(original_path,target_note);target_raw=projected[str(original_path)]
+                            def text_target(path,*args,**kwargs):
+                                if str(path) in projected:return projected[str(path)].decode(kwargs.get('encoding') or 'utf-8')
+                                return actual_text(path,*args,**kwargs)
                             if not kernel_case:
                                 h.INVOCATION.anchor=dict(saved_anchor,raw=target_raw)
                                 start_doc['note']=dict(path=str(original_path),bytes=len(target_raw),sha256=hashlib.sha256(target_raw).hexdigest())
@@ -2791,6 +2919,7 @@ class HelperSessionTests(unittest.TestCase):
                                 if kind=='capture_argv_swapped' and path==command_path:
                                     reached.append('live_capture_cmdline');return b'\0'.join(v.encode() for v in original['command']+['foreign'])+b'\0'
                                 if not kernel_case and path==original_path:reached.append('pinned_note_bytes');return target_raw
+                                if str(path) in projected:return projected[str(path)]
                                 if not kernel_case and path==start_path:return json.dumps(start_doc).encode()
                                 return actual_read(path)
                             def stat_target(path,*args,**kwargs):
@@ -2799,7 +2928,7 @@ class HelperSessionTests(unittest.TestCase):
                                     reached.append('named_descriptor_inode');fields=list(value);fields[1]+=1;return os.stat_result(fields)
                                 return value
                             try:
-                                with patch.dict(os.environ,{'S1_OWNED_ROOT_NOTE':str(original_path),'S1_OWNED_ROOT_SHA256':hashlib.sha256(original_path.read_bytes() if kernel_case else target_raw).hexdigest(),'S1_VALIDATION_RUN_DIRECTORY':original['run_directory']}),patch.object(Path,'read_bytes',read_target),patch.object(Path,'stat',stat_target):
+                                with patch.dict(os.environ,{'S1_OWNED_ROOT_NOTE':str(original_path),'S1_OWNED_ROOT_SHA256':hashlib.sha256(original_path.read_bytes() if kernel_case else target_raw).hexdigest(),'S1_VALIDATION_RUN_DIRECTORY':original['run_directory']}),patch.object(Path,'read_bytes',read_target),patch.object(Path,'read_text',text_target),patch.object(Path,'stat',stat_target),patch.object(contract,'file_record',side_effect=projected_record):
                                     with self.assertRaisesRegex(ValueError,expected_error):h.owned_workload(original_path)
                                 self.assertTrue(reached,kind)
                             finally:h.INVOCATION.anchor=saved_anchor
@@ -3215,6 +3344,7 @@ class HelperSessionTests(unittest.TestCase):
                         from test_vipe_benchmark_s1_helper_fixtures import backend_retirement_transition_controls,publication_equality_controls
                         seen.append(dict(stage='correction006_retirement_and_exact_C',retirement=backend_retirement_transition_controls(self,state.root),publication=publication_equality_controls(self,fixture,state.root)))
                     if name in publication:
+                        if name in ('notice_send','owner_retention','ack_send','ack_receipt'):now[0]=deadline-.25
                         target=publication[name]
                         current_stage=[''];injected=[False]
                         def advance(label):
@@ -3258,6 +3388,9 @@ class HelperSessionTests(unittest.TestCase):
                         encode=p.encode
                         def encoded(value,*args,**kwargs):
                             raw=encode(value,*args,**kwargs)
+                            if isinstance(value,dict) and value.get('schema')=='s1-progress-notice/v1':
+                                seen.append(dict(stage='actual_notice_freshness',completed=value['completed'],publication_clock=now[0],boundary=deadline+offset,fresh_until=min(deadline,value['completed']+.5)))
+                                if name in ('notice_send','owner_retention','ack_send','ack_receipt') and not expected_late:self.assertLess(deadline+offset,min(deadline,value['completed']+.5))
                             if isinstance(value,dict) and ((name=='notice_send' and value.get('schema')=='s1-progress-notice/v1') or (name=='owner_retention' and value.get('schema')=='s1-progress-ack/v1')):advance(value['schema']+'/encode')
                             return raw
                         retain=state.cache.retain
@@ -3319,6 +3452,18 @@ class HelperSessionTests(unittest.TestCase):
                         elif name=='qualified_guard':action=lambda:e.qualify_row(state.row,fixture['request'],first=True,deadline=deadline)
                         elif name=='runtime_guard':action=lambda:e.qualify_runtime(fixture['observed_runtime'],fixture['request'],deadline=deadline)
                         elif name in ('first_guard','reuse_after_read'):
+                            from test_vipe_benchmark_s1_helper_fixtures import fixture_interpreter_adapter
+                            adapter=stack.enter_context(fixture_interpreter_adapter(fixture,seen,deadline=deadline))
+                            self.assertEqual(adapter(fixture['request']['runtime']['python']),fixture['interpreter_adapter']['record'])
+                            alias=state.root/'untrusted-interpreter-alias';alias.symlink_to(fixture['interpreter_adapter']['target'])
+                            try:
+                                with self.assertRaises(OSError):adapter(alias)
+                            finally:alias.unlink()
+                            original_target=fixture['interpreter_adapter']['target']
+                            with patch.dict(fixture['interpreter_adapter'],target=str(state.root/'substituted-target')):
+                                with self.assertRaisesRegex(ValueError,'fixture original interpreter target changed'):
+                                    with fixture_interpreter_adapter(fixture,seen,deadline=deadline) as altered:altered(fixture['request']['runtime']['python'])
+                            self.assertEqual(fixture['interpreter_adapter']['target'],original_target)
                             checks=e.qualify_row(state.row,fixture['request'],first=True);kwargs=dict(clock=state.clock,rows=[state.row],runtime=fixture['observed_runtime'],checks=checks,raw=[state.row['diagnostics']])
                             first=e.first_record(fixture['request'],state.root,'passed',**kwargs);value=read_json(first['path'])
                             action=(lambda:e.verify_first(value,fixture['request'],clock=state.clock,deadline=deadline)) if name=='first_guard' else (lambda:e.first_record(fixture['request'],state.root,'passed',**kwargs))
@@ -3327,7 +3472,16 @@ class HelperSessionTests(unittest.TestCase):
                             deadline=full.clock.work_deadline
                             if name=='accept_after_read':action=lambda:recovery.accept_result(full.fixture.root,full.fixture.config,full.request,full.result,full.output,reservation=full.reservation)
                             else:
+                                # Explicit real prerequisite; this callback cannot inherit
+                                # a failed accept callback as an implicit baseline.
+                                if not (full.output/'acceptance.json').exists():
+                                    recovery.accept_result(full.fixture.root,full.fixture.config,full.request,full.result,full.output,reservation=full.reservation)
+                                e.validate_result(full.result,full.request,full.fixture.config,clock=full.clock,deadline=deadline)
                                 acceptance=file_record(full.output/'acceptance.json')
+                                accepted=p.read_record(acceptance,32*1024*1024)
+                                self.assertEqual(accepted['result'],file_record(full.output/'result.json'))
+                                self.assertEqual(accepted['count'],510)
+                                seen.append(dict(stage='real_acceptance_prerequisite',acceptance=acceptance,result=accepted['result'],fresh_validation=True,observed=now[0]))
                                 action=lambda:recovery.prepare_terminal_evidence(full.fixture.root,full.reservation,dict(error=None,result=file_record(full.output/'result.json'),acceptance=acceptance),deadline,config=full.fixture.config)
                         elif name=='next_input':
                             import builtins
@@ -3348,6 +3502,7 @@ class HelperSessionTests(unittest.TestCase):
                                     second_entries.append(now[0]);self.assertLess(now[0],deadline)
                                     event=dict(operation='load_rgb(frame62)',entered=now[0],completed=False);witness.target.append(event)
                                     value=actual_load(loader,identity);event.update(exited=now[0],completed=True)
+                                    load_context[0]='second_input_validation'
                                     return value
                                 return actual_load(loader,identity)
                             def predicted(*args,**kwargs):
@@ -3366,18 +3521,30 @@ class HelperSessionTests(unittest.TestCase):
                                 advance('segment_frame50_print_return_before_frame62')
                                 return value
                             inline_reference,inline_cache=stack.enter_context(inline_progress(segment_fixture.root,segment_clock,segment_request,segment_fixture.config))
-                            actual_array=e.load_array;actual_publish=p.publish_segment_row
+                            actual_array=e.load_array;actual_publish=p.publish_segment_row;load_context=['native_work'];load_calls=[]
+                            actual_preserve=e.preserve_failure;intended_valid=e.input_loader(segment_request).row(Identity('calibration',0,62))['valid']
                             def valid_array(*args,**kwargs):
-                                if injected[0]:
-                                    witness.successor.append(dict(operation='frame62_valid_array',entered=now[0]))
-                                    self.assertLess(now[0],deadline)
-                                    raise RuntimeError('plan049 actual frame62 deliberate stop')
-                                return actual_array(*args,**kwargs)
+                                event=dict(context=load_context[0],record=copy.deepcopy(args[0]),entered=now[0],completed=False);load_calls.append(event)
+                                try:
+                                    if injected[0] and load_context[0]=='second_input_validation':
+                                        self.assertEqual(args[0],intended_valid)
+                                        witness.successor.append(dict(operation='frame62_valid_array',entered=now[0],record=copy.deepcopy(args[0]),context=load_context[0]))
+                                        self.assertLess(now[0],deadline)
+                                        raise RuntimeError('plan049 actual frame62 deliberate stop')
+                                    value=actual_array(*args,**kwargs);event['completed']=True;return value
+                                except BaseException as error:event.update(error_class=type(error).__name__,message=str(error));raise
+                                finally:event['exited']=now[0]
+                            def preserving(request,output,identity,error,*args,**kwargs):
+                                previous=load_context[0];load_context[0]='failure_preservation'
+                                seen.append(dict(stage='actual_failure_preservation',identity=identity.record(),failure_stage=kwargs.get('stage'),error_class=type(error).__name__,entered=now[0]))
+                                try:return actual_preserve(request,output,identity,error,*args,**kwargs)
+                                finally:load_context[0]=previous
+
                             def raw_row(row,*args,**kwargs):
                                 if row['identity']['frame']==62:
                                     witness.successor.append(dict(operation='frame62_raw',entered=now[0]));raise AssertionError('frame62 raw successor')
                                 return actual_publish(row,*args,**kwargs)
-                            stack.enter_context(patch.object(e,'load_array',valid_array));stack.enter_context(patch.object(p,'publish_segment_row',raw_row))
+                            stack.enter_context(patch.object(e,'load_array',valid_array));stack.enter_context(patch.object(e,'preserve_failure',preserving));stack.enter_context(patch.object(p,'publish_segment_row',raw_row))
                             stack.enter_context(patch.dict(sys.modules,{'torch':SimpleNamespace(cuda=SimpleNamespace(synchronize=lambda:None,max_memory_allocated=lambda:0,max_memory_reserved=lambda:0))}))
                             stack.enter_context(patch.object(stages,'_model_runtime',return_value=copy.deepcopy(segment_fixture.observed)))
                             stack.enter_context(patch('vipe_benchmark.backends.build_backend',return_value=SimpleNamespace(segment=predicted)))
@@ -3391,6 +3558,8 @@ class HelperSessionTests(unittest.TestCase):
                                     if str(error)!='plan049 actual frame62 deliberate stop':raise
                                     self.assertEqual(second_entries,[deadline+offset])
                                 finally:
+                                    seen.append(dict(stage='complete_load_call_ledger',calls=load_calls))
+                                    self.control_record('plan049-next-input-load-'+case['when'],dict(calls=load_calls,second_entries=second_entries,native_entries=native_entries,work_deadline=deadline))
                                     self.assertEqual(len(native_entries),1)
                                     self.assertEqual(len(second_entries),0 if expected_late else 1)
                                     seen.append(dict(stage='actual_segment_frame62',target_entries=second_entries,native_entries=native_entries,forbidden_successor='frame62 valid/native/raw'))
@@ -3507,6 +3676,8 @@ class HelperSessionTests(unittest.TestCase):
                     class ObservedStream:
                         def __init__(inner,stream,closefd):inner.stream=stream;inner.closefd=closefd;inner.descriptor=stream.fileno()
                         def __getattr__(inner,attribute):return getattr(inner.stream,attribute)
+                        def __iter__(inner):return inner
+                        def __next__(inner):return next(inner.stream)
                         def write(inner,data):
                             offset=inner.stream.tell();value=inner.stream.write(data)
                             if observing[0]:write_observations.append(dict(path=fd_paths.get(inner.descriptor),offset=offset,bytes=value,content_hex=bytes(data[:value]).hex(),observed=now[0]))
@@ -3974,6 +4145,28 @@ class HelperSessionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'sequence exhausted'):current.submit('work',self.operation,self.time.monotonic()+.1)
         current.census_sequence=UINT64_MAX
         with self.assertRaisesRegex(ValueError,'generation exhausted'):current.request_census({'id':1},'pre')
+        # Exercise the actual acquisition/readiness prefix with pure existing
+        # lifecycle seams; submit rejection stays in the real Session method.
+        import ast,inspect,textwrap
+        from unittest.mock import Mock
+        from vipe_benchmark import supervisor as sup
+        monitored=ast.parse(textwrap.dedent(inspect.getsource(sup.monitored_call))).body[0]
+        prefix=next(node for node in monitored.body if isinstance(node,ast.Try)).body[:4]
+        readiness=[]
+        for ready in ({},{'work':{}},{'sample':{}},{'work':{},'sample':{}}):
+            events=[]
+            selected=types.SimpleNamespace(ready=ready,resume=Mock(side_effect=lambda:events.append('resume')),await_ready=Mock(side_effect=lambda:events.append('await_ready')),set_worker=Mock(side_effect=lambda worker:events.append('set_worker')))
+            life=types.SimpleNamespace(acquire=Mock(return_value=selected))
+            exec(compile(ast.Module(body=prefix,type_ignores=[]),'<actual-monitored-readiness>','exec'),dict(lifecycle=life,worker=None))
+            self.assertEqual(selected.await_ready.call_count,0 if ready.keys()=={'work','sample'} else 1)
+            self.assertEqual(events,(['resume'] if ready else [])+([] if ready.keys()=={'work','sample'} else ['await_ready'])+['set_worker'])
+            readiness.append(dict(ready=list(ready),events=events))
+        current.sequences['work']=0;current.requests['work']=None
+        for fault in ('poisoned','cancelled','deadline'):
+            current.poisoned=fault=='poisoned';current.owner.cancelled=fault=='cancelled'
+            with self.assertRaisesRegex(TimeoutError if fault=='deadline' else ValueError,'S1 work dispatch deadline' if fault=='deadline' else 'helper session unavailable'):
+                current.submit('work',self.operation,self.time.monotonic() if fault=='deadline' else self.time.monotonic()+.1)
+        self.control_record('plan049-ready-reuse',readiness)
         self.control_record('trace-controls',dict(rings=records,primary_retained=primary,request_retained=retained,role_order=order))
 
     def test_control_primitive_and_frame_mutations(self):

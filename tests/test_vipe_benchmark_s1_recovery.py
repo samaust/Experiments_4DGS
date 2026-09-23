@@ -804,10 +804,16 @@ class ReceiptContractTests(unittest.TestCase):
                         return dict(base,threads=tasks,threads_before=copy.deepcopy(tasks),threads_after=copy.deepcopy(tasks),process_before=dict(base),process_after=dict(base))
                     identity_fields=dict(ownership_root=process_identity(122,1,20),preexisting_ancestors=[process_identity(1,0,1)],
                         ancestry_terminal=dict(pid=1,ppid=0),retained_wrappers=[],output_paths=c.launch_output_paths(str(graph.root),'aggregate',1000))
+                    # Each ancestor task list is valid independently; all authority
+                    # documents retain these exact differing observational lists.
+                    ancestor_fixture=identity_fields['preexisting_ancestors'][0]
+                    ancestor_fixture['threads_before'].append(dict(ancestor_fixture['threads'][0],tid=2,start_ticks=2))
+                    ancestor_fixture['threads_after'][0]['start_ticks']+=1
                     identity_path=graph.root/'synthetic-prospective-identity.json'
                     identity_path.write_text(json.dumps(dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**identity_fields)))
                     identity_request=file_record(identity_path)
-                    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md')]
+                    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md','plan049-correction-015.md')]
+                    ancestor_authorization=file_record(run/'authorization-049-ancestor-process-001.md')
                     settings={key:'1' for key in (*c.THREADS,'OPENCV_FOR_THREADS_NUM','VIPE_CPU_VALIDATION')};settings['PYTHONPATH']=str(ROOT/'scripts')
                     # Synthetic file-routing seam: fixed logical R paths backed by
                     # this disposable fixture only. No Main evidence is published.
@@ -836,7 +842,7 @@ class ReceiptContractTests(unittest.TestCase):
                     readiness=json.dumps(dict(awaiting_main_admission=logical_admission,identity_request=identity_request))
                     session_events=[];event_paths=[]
                     for ordinal,role in enumerate(('start','pre_admission','at_admission')):
-                        args=dict(cmd=shlex.join(['exec',str(ROOT/c.ARGV[0]),'-B',driver['path'],'aggregate','1000','synthetic contract fixture; no execution performed']),shell='/bin/bash',login=False,workdir=str(ROOT),tty=True,sandbox_permissions='use_default',yield_time_ms=1000,max_output_tokens=10000) if ordinal==0 else dict(session_id=12345,chars='',yield_time_ms=1000)
+                        args=dict(cmd=shlex.join(['exec',str(ROOT/c.ARGV[0]),'-B',driver['path'],'aggregate','1000','synthetic contract fixture; no execution performed']),shell='/bin/bash',login=False,workdir=str(ROOT),tty=True,sandbox_permissions='require_escalated',yield_time_ms=1000,max_output_tokens=10000,justification='Run the reviewed Plan049 CPU-only aggregate after the exact AF_UNIX datagram socket retry succeeded.',prefix_rule=['exec',str(ROOT/c.ARGV[0]),'-B',driver['path']]) if ordinal==0 else dict(session_id=12345,chars='',yield_time_ms=1000)
                         output=readiness+'\n' if ordinal==0 else ''
                         session_events.append(dict(schema='plan049-session-tool-event/v1',kind='aggregate',index=1000,ordinal=ordinal,role=role,tool='exec_command' if ordinal==0 else 'write_stdin',arguments=args,
                             result=dict(session_id=12345,output=output,wall_time_seconds=1.),started=dict(utc=f'2026-01-01T00:00:0{ordinal*2}+00:00',monotonic=ordinal*2),returned=dict(utc=f'2026-01-01T00:00:0{ordinal*2+1}+00:00',monotonic=ordinal*2+1),output_sha256=hashlib.sha256(output.encode()).hexdigest()))
@@ -844,13 +850,13 @@ class ReceiptContractTests(unittest.TestCase):
                         physical.write_text(json.dumps(session_events[-1]))
                     session_authorization=file_record(run/'authorization-049-session-proof-001.md')
                     proof=dict(schema='plan049-session-proof/v1',proof_mode='session-bound/v1',kind='aggregate',index=1000,session_id=12345,driver=driver,identity_request=identity_request,admission_path=logical_admission,
-                        tool_events=[routed_record(logical) for logical,physical in event_paths],readiness_event=0,readiness_line=readiness,readiness_line_sha256=hashlib.sha256(readiness.encode()).hexdigest(),user_authorization=session_authorization,correction=addenda[-1],cross_namespace_kernel_verified=False)
+                        tool_events=[routed_record(logical) for logical,physical in event_paths],readiness_event=0,readiness_line=readiness,readiness_line_sha256=hashlib.sha256(readiness.encode()).hexdigest(),user_authorization=session_authorization,correction=addenda[7],cross_namespace_kernel_verified=False)
                     proof_path.write_text(json.dumps(proof));proof_reference=routed_record(logical_proof)
                     admission=dict(approved=True,cleanup_resolved=True,execution_mode='no-timeout',timeout_seconds=None,
                         kind='aggregate',index=1000,reason='synthetic contract fixture; no execution performed',counts_before={'diagnostic':0,'aggregate':999},
                         sources=outer['sources_before'],source_paths=[r['path'] for r in outer['sources_before']],
                         resource_capacity=dict(B=1,H=0,charge=2,artifact_bytes=0),
-                        bindings=dict(session_proof=proof_reference,plan=plan,dispatch=dispatch_record,status=status,authorization=authorization,driver=driver,
+                        bindings=dict(session_proof=proof_reference,plan=plan,dispatch=dispatch_record,status=status,authorization=authorization,ancestor_authorization=ancestor_authorization,driver=driver,
                             command=command,environment=settings,run_directory=str(graph.root),stdin=dict(bytes=len(c.STDIN.encode()),sha256=hashlib.sha256(c.STDIN.encode()).hexdigest()),identity_request=identity_request,addenda=addenda,**identity_fields))
                     admission_path=graph.root/'synthetic-no-timeout-admission.json';admission_path.write_text(json.dumps(admission))
                     logical_files[logical_admission]=admission_path
@@ -858,7 +864,7 @@ class ReceiptContractTests(unittest.TestCase):
                     note=dict(schema='plan049-prospective-launch/v1',execution_mode='no-timeout',timeout_seconds=None,
                         provenance='synthetic contract fixture; no execution performed',run_directory=str(graph.root),kind='aggregate',
                         attempt_index=1000,reason=admission['reason'],counts_before=admission['counts_before'],
-                        driver=driver,admission=admitted,bindings=[plan,dispatch_record,status,authorization,admitted,identity_request,proof_reference,session_authorization]+addenda,sources=outer['sources_before'],
+                        driver=driver,admission=admitted,bindings=[plan,dispatch_record,status,authorization,ancestor_authorization,admitted,identity_request,proof_reference,session_authorization]+addenda,sources=outer['sources_before'],
                         cpu_bound='B+max(1,H)≤8',command=command,environment=settings,cwd=str(ROOT),unset_environment=['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],stdin_identity=dict(bytes=len(c.STDIN.encode()),sha256=hashlib.sha256(c.STDIN.encode()).hexdigest(),content=c.STDIN),**identity_fields)
                     note_path=graph.root/'synthetic-no-timeout-note.json';note_path.write_text(json.dumps(note))
                     outer.update(schema='s1-cpu-execution/v2',execution_mode='no-timeout',timeout_seconds=None,
@@ -943,7 +949,7 @@ class ReceiptContractTests(unittest.TestCase):
                     self.assertEqual(c.session_proof(proof_reference,'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])['proof_mode'],'session-bound/v1')
                     # Canonical start acceptance is established above. Preserve
                     # raw command bytes: shell structure is not argv equivalence.
-                    for fault in ('newline','chain','prefix','command','cwd','tty','permission','yield','yield_bool','shell','shell_options','login','login_int','missing_shell','extra_option','output_bool','output_zero'):
+                    for fault in ('newline','chain','prefix','command','cwd','tty','permission','yield','yield_bool','shell','shell_options','login','login_int','missing_shell','extra_option','output_bool','output_zero','permission_omitted','permission_alternate','justification_omitted','justification_changed','prefix_omitted','prefix_changed','prefix_tuple','prefix_element'):
                         changed_events=copy.deepcopy(session_events);args=changed_events[0]['arguments']
                         if fault=='newline':args['cmd']=args['cmd'].replace('exec ','exec\n',1)
                         elif fault=='chain':args['cmd']+='; true'
@@ -951,7 +957,7 @@ class ReceiptContractTests(unittest.TestCase):
                         elif fault=='command':args['cmd']=args['cmd'].replace(' -B ',' -I ',1)
                         elif fault=='cwd':args['workdir']=str(graph.root)
                         elif fault=='tty':args['tty']=False
-                        elif fault=='permission':args['sandbox_permissions']='require_escalated'
+                        elif fault=='permission':args['sandbox_permissions']='use_default'
                         elif fault=='yield':args['yield_time_ms']=1001
                         elif fault=='yield_bool':args['yield_time_ms']=True
                         elif fault=='shell':args['shell']='/bin/sh'
@@ -961,8 +967,16 @@ class ReceiptContractTests(unittest.TestCase):
                         elif fault=='missing_shell':args.pop('shell')
                         elif fault=='extra_option':args['environment']={}
                         elif fault=='output_bool':args['max_output_tokens']=True
-                        else:args['max_output_tokens']=0
-                        expected_error='exact sole driver exec command' if fault in ('newline','chain','prefix','command') else 'exact start argument fields' if fault in ('missing_shell','extra_option') else 'exact positive start output budget' if fault in ('output_bool','output_zero') else 'exact start argument: '+{'cwd':'workdir','tty':'tty','permission':'sandbox_permissions','yield':'yield_time_ms','yield_bool':'yield_time_ms','shell':'shell','shell_options':'shell','login':'login','login_int':'login'}[fault]
+                        elif fault=='output_zero':args['max_output_tokens']=0
+                        elif fault=='permission_omitted':args.pop('sandbox_permissions')
+                        elif fault=='permission_alternate':args['sandbox_permissions']='other'
+                        elif fault=='justification_omitted':args.pop('justification')
+                        elif fault=='justification_changed':args['justification']+=' altered'
+                        elif fault=='prefix_omitted':args.pop('prefix_rule')
+                        elif fault=='prefix_changed':args['prefix_rule']=['python']
+                        elif fault=='prefix_tuple':args['prefix_rule']='exec'
+                        else:args['prefix_rule'][0]=False
+                        expected_error='exact sole driver exec command' if fault in ('newline','chain','prefix','command') else 'exact start argument fields' if fault in ('missing_shell','extra_option','permission_omitted','justification_omitted','prefix_omitted') else 'exact positive start output budget' if fault in ('output_bool','output_zero') else 'exact start argument: '+{'cwd':'workdir','tty':'tty','permission':'sandbox_permissions','yield':'yield_time_ms','yield_bool':'yield_time_ms','shell':'shell','shell_options':'shell','login':'login','login_int':'login','permission_alternate':'sandbox_permissions','justification_changed':'justification','prefix_changed':'prefix_rule','prefix_tuple':'prefix_rule','prefix_element':'prefix_rule'}[fault]
                         changed_proof=copy.deepcopy(proof);refs=[]
                         for event,(logical,physical) in zip(changed_events,event_paths):physical.write_text(json.dumps(event));refs.append(routed_record(logical))
                         changed_proof['tool_events']=refs;proof_path.write_text(json.dumps(changed_proof))
@@ -999,22 +1013,107 @@ class ReceiptContractTests(unittest.TestCase):
                     exec(compile(ast.Module(body=[handoff],type_ignores=[]),'<driver-handoff>','exec'),dict(sys=types.SimpleNamespace(stdin=io.StringIO('ADMIT\n'))))
                     local_node=next(n for n in main_node.body if isinstance(n,ast.FunctionDef) and n.name=='local_identity')
                     final_nodes=main_node.body[-2:]
-                    for fault in ('stable','root','thread','ancestor','unstable'):
+                    for fault in ('stable','root','thread','ancestor','unstable','ancestor_task_add','ancestor_task_remove','ancestor_task_start','failed_sample'):
                         observed={122:copy.deepcopy(root_identity),1:copy.deepcopy(identity_fields['preexisting_ancestors'][0])};calls=[];executed=[]
                         if fault=='root':observed[122]['start_ticks']+=1
                         elif fault=='thread':observed[122]['threads'].append(dict(observed[122]['threads'][0],tid=123))
                         elif fault=='ancestor':observed[1]['start_ticks']+=1
-                        def local_process(pid):
+                        def local_process(pid, *, ancestor_root=None):
                             calls.append(pid);value=copy.deepcopy(observed[pid])
+                            if fault=='failed_sample' and ancestor_root is not None:raise OSError('synthetic failed ancestor sample')
+                            if pid==1 and fault.startswith('ancestor_task_'):
+                                for key in ('threads','threads_before','threads_after'):
+                                    if fault=='ancestor_task_add':
+                                        value[key].append(dict(value[key][0],tid=100+len(calls),start_ticks=3))
+                                    elif fault=='ancestor_task_remove':value[key]=value[key][:1]
+                                    else:value[key][0]['start_ticks']+=len(calls)
                             if fault=='unstable' and len(calls)>2:value['start_ticks']+=1
                             return value
-                        scope=dict(process=local_process,os=types.SimpleNamespace(getpid=lambda:122,execve=lambda *args:executed.append(args)),root=root_identity,ancestors=identity_fields['preexisting_ancestors'],command=command,env=settings)
+                        scope=dict(process=local_process,identity_projection=c.identity_projection,os=types.SimpleNamespace(getpid=lambda:122,execve=lambda *args:executed.append(args)),root=root_identity,ancestors=identity_fields['preexisting_ancestors'],command=command,env=settings)
                         exec(compile(ast.Module(body=[local_node],type_ignores=[]),'<driver-local-identity>','exec'),scope)
-                        if fault=='stable':
+                        if fault=='stable' or fault.startswith('ancestor_task_'):
                             exec(compile(ast.Module(body=final_nodes,type_ignores=[]),'<driver-exec>','exec'),scope);self.assertEqual(len(executed),1)
+                        elif fault=='failed_sample':
+                            with self.assertRaisesRegex(OSError,'synthetic failed ancestor sample'):exec(compile(ast.Module(body=final_nodes,type_ignores=[]),'<driver-exec>','exec'),scope)
+                            self.assertEqual(executed,[])
                         else:
                             with self.assertRaises(ValueError):exec(compile(ast.Module(body=final_nodes,type_ignores=[]),'<driver-exec>','exec'),scope)
                             self.assertEqual(executed,[])
+                    # Pure role/chain projections: no new callback, process or thread.
+                    ancestor_base=copy.deepcopy(identity_fields['preexisting_ancestors'][0])
+                    expected_projection=c.identity_projection(root_identity,[ancestor_base])
+                    for key in ('threads','threads_before','threads_after'):
+                        for mutation in ('add','remove','start'):
+                            changed=copy.deepcopy(ancestor_base)
+                            if mutation=='add':changed[key].append(dict(changed[key][0],tid=9,start_ticks=3))
+                            elif mutation=='remove':
+                                changed[key].append(dict(changed[key][0],tid=9,start_ticks=3))
+                                changed[key]=changed[key][:1]
+                            else:changed[key][0]['start_ticks']+=1
+                            self.assertEqual(c.identity_projection(root_identity,[changed]),expected_projection)
+                            # Owned/child/wrapper/detached records use the same strict default.
+                            with self.assertRaisesRegex(ValueError,'stable thread identities around enumeration'):c.identity_record(changed)
+                            changed_root=copy.deepcopy(root_identity)
+                            if mutation=='add':changed_root[key].append(dict(changed_root[key][0],tid=123,start_ticks=21))
+                            elif mutation=='remove':changed_root[key]=[]
+                            else:changed_root[key][0]['start_ticks']+=1
+                            with self.assertRaises(ValueError):c.identity_projection(changed_root,[ancestor_base])
+                    for location in ('base','process_before','process_after'):
+                        for field in ('boot_id','pid','ppid','pgid','start_ticks'):
+                            changed=copy.deepcopy(ancestor_base);selected=changed if location=='base' else changed[location]
+                            selected[field]='00000000-0000-0000-0000-000000000001' if field=='boot_id' else selected[field]+1
+                            if field=='boot_id' and selected[field]==ancestor_base[field]:selected[field]='00000000-0000-0000-0000-000000000002'
+                            with self.assertRaisesRegex(ValueError,'stable process identity required'):c.identity_projection(root_identity,[changed])
+                    for key in ('threads','threads_before','threads_after'):
+                        for fault in ('bool','float','missing','extra','binding','empty','unsorted','duplicate','leader'):
+                            changed=copy.deepcopy(ancestor_base)
+                            if fault=='bool':changed[key][0]['tid']=True
+                            elif fault=='float':changed[key][0]['start_ticks']=float(changed[key][0]['start_ticks'])
+                            elif fault=='missing':changed[key][0].pop('tid')
+                            elif fault=='extra':changed[key][0]['extra']=0
+                            elif fault=='binding':changed[key][0]['process_start_ticks']+=1
+                            elif fault=='empty':changed[key]=[]
+                            elif fault=='unsorted':changed[key]=[dict(changed[key][0],tid=9),changed[key][0]]
+                            elif fault=='duplicate':changed[key].append(copy.deepcopy(changed[key][0]))
+                            else:changed[key]=[dict(changed[key][0],tid=9)]
+                            with self.assertRaises(ValueError):c.identity_projection(root_identity,[changed])
+                    # A two-hop chain distinguishes reorder/removal/substitution.
+                    chain=[process_identity(1,2,1),process_identity(2,0,1)]
+                    self.assertEqual(len(c.identity_projection(root_identity,chain)['preexisting_ancestors']),2)
+                    for fault in ('add','remove','reorder','cycle','terminal','root_role','pid_start','reparent','boot'):
+                        changed=copy.deepcopy(chain)
+                        if fault=='add':changed.append(process_identity(3,0,1))
+                        elif fault=='remove':changed.pop()
+                        elif fault=='reorder':changed.reverse()
+                        elif fault=='cycle':changed[1]=process_identity(2,1,1)
+                        elif fault=='terminal':changed[1]=process_identity(2,3,1)
+                        elif fault=='root_role':changed=[copy.deepcopy(root_identity)]
+                        elif fault=='pid_start':changed[0]=process_identity(3,2,2)
+                        elif fault=='reparent':changed[0]=process_identity(1,3,1)
+                        else:
+                            changed[0]['boot_id']='00000000-0000-0000-0000-000000000001'
+                            if changed[0]['boot_id']==root_identity['boot_id']:changed[0]['boot_id']='00000000-0000-0000-0000-000000000002'
+                            for key in ('process_before','process_after'):changed[0][key]['boot_id']=changed[0]['boot_id']
+                            for key in ('threads','threads_before','threads_after'):
+                                for task in changed[0][key]:task['boot_id']=changed[0]['boot_id']
+                        with self.assertRaises(ValueError):c.identity_projection(root_identity,changed)
+                    # Every live boundary rejects coherent process mutations and
+                    # accepts only valid ancestor list changes against original authority.
+                    live_checks=[n for n in ast.walk(main_node) if isinstance(n,ast.If) and isinstance(n.test,ast.Compare) and 'local_identity(' in ast.unparse(n.test)]
+                    self.assertEqual(len(live_checks),3)
+                    for check in live_checks:
+                        for field in ('pgid','start_ticks'):
+                            observed={122:copy.deepcopy(root_identity),1:copy.deepcopy(ancestor_base)};calls=[];executed=[];fault='stable'
+                            changed=observed[1];changed[field]+=1
+                            for key in ('process_before','process_after'):changed[key][field]=changed[field]
+                            if field=='start_ticks':
+                                for key in ('threads','threads_before','threads_after'):
+                                    for task in changed[key]:task['process_start_ticks']=changed[field];task['start_ticks']=max(task['start_ticks'],changed[field])
+                            scope=dict(process=local_process,identity_projection=c.identity_projection,os=types.SimpleNamespace(getpid=lambda:122),root=root_identity,ancestors=identity_fields['preexisting_ancestors'])
+                            exec(compile(ast.Module(body=[local_node],type_ignores=[]),'<driver-local-identity>','exec'),scope)
+                            with self.assertRaises(ValueError):exec(compile(ast.Module(body=[check],type_ignores=[]),'<driver-live-boundary>','exec'),scope)
+                            observed[1]=copy.deepcopy(ancestor_base);fault='ancestor_task_add';calls=[]
+                            exec(compile(ast.Module(body=[check],type_ignores=[]),'<driver-live-boundary>','exec'),scope)
                     # Failed/ambiguous Main sends cannot establish successful
                     # handoff: only actual ADMIT consumption reaches exec. The
                     # original tool send/terminal evidence remains Main's duty.
@@ -1071,7 +1170,7 @@ class ReceiptContractTests(unittest.TestCase):
                         with self.assertRaises(ValueError):c.validate_execution(candidate,valid['receipt'],graph.inner)
                     # Exact nested types must reject Python-equal bool/int
                     # substitutions after every enclosing document is rehashed.
-                    identity_faults=('process_ppid_bool','process_extra','process_missing','threads_before_bool','threads_after_missing','thread_extra','thread_identity_substitution','terminal_ppid_bool')
+                    identity_faults=('process_ppid_bool','process_extra','process_missing','threads_before_bool','threads_after_missing','thread_extra','thread_identity_substitution','terminal_ppid_bool','ancestor_tasks_tampered')
                     for location in ('note','main_binding','identity_request'):
                         for fault in identity_faults:
                             # Same routed graph must pass before this one-field fault.
@@ -1086,7 +1185,8 @@ class ReceiptContractTests(unittest.TestCase):
                             elif fault=='threads_before_bool':ancestor['threads_before'][0]['pid']=True
                             elif fault=='threads_after_missing':ancestor['threads_after'][0].pop('tid')
                             elif fault=='thread_extra':ancestor['threads_before'][0]['extra']=0
-                            elif fault=='thread_identity_substitution':ancestor['threads_after'][0]['start_ticks']=2
+                            elif fault=='thread_identity_substitution':selected['ownership_root']['threads_after'][0]['start_ticks']+=1
+                            elif fault=='ancestor_tasks_tampered':ancestor['threads_after'][0]['start_ticks']+=1
                             else:selected['ancestry_terminal']['ppid']=False
                             identity_path.write_text(json.dumps(request_doc));request_ref=routed_record(logical_identity)
                             changed_proof=copy.deepcopy(proof);changed_events=copy.deepcopy(session_events)
@@ -1107,7 +1207,8 @@ class ReceiptContractTests(unittest.TestCase):
                             note_path.write_text(json.dumps(changed_note))
                             expected_error={'process_ppid_bool':'parent identity required','process_extra':'exact nested process fields','process_missing':'exact nested process fields',
                                 'threads_before_bool':'exact positive thread identity: pid','threads_after_missing':'exact thread identity fields','thread_extra':'exact thread identity fields',
-                                'thread_identity_substitution':'stable thread identities around enumeration','terminal_ppid_bool':'typed ancestry terminal'}[fault]
+                                'thread_identity_substitution':'stable thread identities around enumeration','terminal_ppid_bool':'typed ancestry terminal',
+                                'ancestor_tasks_tampered':'exact pre-admission identity request' if location=='identity_request' else 'Main prebound identity: preexisting_ancestors'}[fault]
                             with self.assertRaises(ValueError) as rejected:c.no_timeout_launch(file_record(note_path),str(graph.root))
                             self.assertEqual(str(rejected.exception),expected_error)
                             identity_path.write_text(json.dumps(dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**identity_fields)))

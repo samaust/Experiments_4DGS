@@ -171,7 +171,8 @@ def monitored_call(function, deadline, sampler, config, peak, *, worker=None,
         # Idle time between supervised phases is not an active monitor tick.
         if session.ready:
             session.resume()
-        session.await_ready()
+        if session.ready.keys() != {'work','sample'}:
+            session.await_ready()
         session.set_worker(worker)
         if phase == 'initial_sample':
             deadline = min(deadline, session.setup_deadline)
@@ -325,7 +326,7 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
                 if time.monotonic() >= run_deadline:
                     raise TimeoutError('S1 prelaunch deadline exhausted')
                 lifecycle.helpers[0].install_progress(progress_context,run_deadline)
-                if time.monotonic()>=run_deadline:raise TimeoutError('S1 original work deadline after progress installation')
+                if time.monotonic()>=run_deadline:raise TimeoutError('S1 original work deadline immediately before worker launch (after progress installation)')
                 env['VIPE_S1_PROGRESS_CONTEXT'] = json.dumps(progress_context,allow_nan=False)
             if is_s1 and os.environ.get('S1_OWNED_ROOT_NOTE'):
                 from .s1_helper_session import predispatch_owned

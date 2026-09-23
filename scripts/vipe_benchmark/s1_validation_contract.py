@@ -334,7 +334,7 @@ def validate_wrapper(value, amendment, configuration):
 
 
 
-def identity_record(value):
+def _identity_record(value, *, ancestor=False):
     require(type(value) is dict,'complete process identity required')
     base=('boot_id','pid','ppid','pgid','start_ticks')
     require(set(value)==set(base)|{'threads','threads_before','threads_after','process_before','process_after'},'exact process identity fields')
@@ -357,8 +357,27 @@ def identity_record(value):
             require(task['start_ticks']>=value['start_ticks'],'thread birth identity')
             tids.append(task['tid'])
         require(tids==sorted(set(tids)) and value['pid'] in tids,'unique sorted complete task census')
-    require(value['threads']==value['threads_before']==value['threads_after'],'stable thread identities around enumeration')
+    if not ancestor:require(value['threads']==value['threads_before']==value['threads_after'],'stable thread identities around enumeration')
     return value
+
+
+def identity_record(value):
+    # Every root/owned creation, census and retirement caller stays strict.
+    return _identity_record(value)
+
+
+def identity_projection(root, ancestors):
+    """Trusted chain role: project only actual non-root preexisting ancestors."""
+    identity_record(root)
+    require(type(ancestors) is list and ancestors,'terminated ancestry required')
+    cursor=root['ppid'];seen={root['pid']};projected=[]
+    for row in ancestors:
+        _identity_record(row,ancestor=True)
+        require(row['pid']==cursor and cursor not in seen and row['boot_id']==root['boot_id'] and row['start_ticks']<=root['start_ticks'],'ancestry identity/age/reuse')
+        seen.add(cursor);cursor=row['ppid']
+        projected.append({key:value for key,value in row.items() if key not in ('threads','threads_before','threads_after')})
+    require(cursor==0,'ancestry termination')
+    return dict(ownership_root=root,preexisting_ancestors=projected)
 
 
 def launch_output_paths(directory,kind,index):
@@ -443,7 +462,7 @@ def session_proof(reference,kind,index,driver,identity_request,admission_path,re
     require(type(ancestors) is list and ancestors,'session full ancestry')
     cursor=root['ppid'];seen={root['pid']}
     for row in ancestors:
-        identity_record(row)
+        _identity_record(row,ancestor=True)
         require(row['pid']==cursor and cursor not in seen and row['boot_id']==root['boot_id'] and row['start_ticks']<=root['start_ticks'],'session ancestry chain')
         seen.add(cursor);cursor=row['ppid']
     terminal=request['ancestry_terminal']
@@ -492,10 +511,12 @@ def session_proof(reference,kind,index,driver,identity_request,admission_path,re
             # Token equivalence cannot prove shell structure (exec followed by
             # a newline is two commands). Bind exact quoting and shell options.
             fixed_start=dict(shell='/bin/bash',login=False,workdir=str(ROOT),tty=True,
-                             sandbox_permissions='use_default',yield_time_ms=1000)
-            require(set(args)==set(fixed_start)|{'cmd','max_output_tokens'},'exact start argument fields')
+                             sandbox_permissions='require_escalated',yield_time_ms=1000,
+                             justification='Run the reviewed Plan049 CPU-only '+kind+' after the exact AF_UNIX datagram socket retry succeeded.')
+            require(set(args)==set(fixed_start)|{'cmd','max_output_tokens','prefix_rule'},'exact start argument fields')
             for key,expected_value in fixed_start.items():
                 require(type(args[key]) is type(expected_value) and args[key]==expected_value,'exact start argument: '+key)
+            require(type(args['prefix_rule']) is list and all(type(value) is str for value in args['prefix_rule']) and args['prefix_rule']==['exec',str(ROOT/ARGV[0]),'-B',driver['path']],'exact start argument: prefix_rule')
             require(type(args['max_output_tokens']) is int and args['max_output_tokens']>0,'exact positive start output budget')
         else:
             require(event['tool']=='write_stdin' and type(args.get('session_id')) is int and args['session_id']==handle and args.get('chars')=='' and type(args.get('chars')) is str,'same-session empty live poll')
@@ -550,13 +571,13 @@ def no_timeout_launch(reference,directory,*,diagnostic=False):
     require(command_bindings.get('environment')==note.get('environment')==settings,'exact admission/launch environment')
     require(note.get('cwd')==str(ROOT) and note.get('unset_environment')==['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],'exact launch cwd/unset environment')
     require(note.get('stdin_identity')==dict(bytes=len(STDIN.encode()),sha256=hashlib.sha256(STDIN.encode()).hexdigest(),content=STDIN),'exact launch stdin identity')
-    require(set(command_bindings)=={'plan','dispatch','status','authorization','driver','command','environment','stdin','run_directory','identity_request','addenda','session_proof','ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths'},'exact admission binding fields')
+    require(set(command_bindings)=={'plan','dispatch','status','authorization','ancestor_authorization','driver','command','environment','stdin','run_directory','identity_request','addenda','session_proof','ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths'},'exact admission binding fields')
     def typed_binding(value):
         require(type(value) is dict,'identity binding dictionary')
         identity_record(value.get('ownership_root'))
         ancestors=value.get('preexisting_ancestors')
         require(type(ancestors) is list and ancestors,'typed ancestry list')
-        for row in ancestors:identity_record(row)
+        identity_projection(value['ownership_root'],ancestors)
         terminal=value.get('ancestry_terminal')
         require(type(terminal) is dict and set(terminal)=={'pid','ppid'} and type(terminal['pid']) is int and terminal['pid']>0 and type(terminal['ppid']) is int and terminal['ppid']==0,'typed ancestry terminal')
         require(type(value.get('retained_wrappers')) is list and value['retained_wrappers']==[],'typed retained wrapper list')
@@ -566,7 +587,7 @@ def no_timeout_launch(reference,directory,*,diagnostic=False):
     ancestors=note.get('preexisting_ancestors');require(type(ancestors) is list and ancestors,'terminated ancestry required')
     cursor=root['ppid'];seen={root['pid']}
     for row in ancestors:
-        identity_record(row)
+        _identity_record(row,ancestor=True)
         require(row['pid']==cursor and cursor not in seen and row['boot_id']==root['boot_id'] and row['start_ticks']<=root['start_ticks'],'ancestry identity/age/reuse')
         seen.add(cursor);cursor=row['ppid']
     require(cursor==0 and note.get('ancestry_terminal')==dict(pid=ancestors[-1]['pid'],ppid=0),'ancestry termination')
@@ -580,8 +601,11 @@ def no_timeout_launch(reference,directory,*,diagnostic=False):
     request=session_json(identity_request['path'])
     typed_binding(request)
     require(request==dict(schema='plan049-prospective-identity/v1',kind=note['kind'],index=note['attempt_index'],driver=driver,**{key:note[key] for key in ('ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths')}),'exact pre-admission identity request')
-    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md')]
+    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md','plan049-correction-015.md')]
     require(command_bindings.get('addenda')==addenda and all(row in bindings for row in addenda),'current correction authority')
+    ancestor_authorization=file_record(run/'authorization-049-ancestor-process-001.md')
+    require(ancestor_authorization['sha256']=='734fc8fc67f2cc7f60ead6eba279b797abff47bbf32602cf5106e07ef540605d','fixed ancestor authorization bytes')
+    require(command_bindings.get('ancestor_authorization')==ancestor_authorization and ancestor_authorization in bindings,'ancestor authorization binding')
     proof_record=strict_record(command_bindings.get('session_proof'))
     proof=session_proof(proof_record,note['kind'],note['attempt_index'],driver,identity_request,admission_record['path'],admission['reason'])
     require(proof_record in bindings and proof['user_authorization'] in bindings,'note session proof/authorization binding')
