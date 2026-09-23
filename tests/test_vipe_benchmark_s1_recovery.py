@@ -60,7 +60,8 @@ def synthetic_inputs(root, put, config):
     valid = np.ones((540,960), bool)
     np.save(root/'valid.npy',valid)
     cv2.imwrite(str(root/'rgb.png'),np.zeros((540,960,3),np.uint8))
-    rows=[dict(identity=i.record(),rgb=file_record(root/'rgb.png'),valid=file_record(root/'valid.npy'),
+    rgb_record,valid_record=file_record(root/'rgb.png'),file_record(root/'valid.npy')
+    rows=[dict(identity=i.record(),rgb=dict(rgb_record),valid=dict(valid_record),
         K=np.eye(3).tolist(),grid='distorted-opencv-integer') for i in dict.fromkeys(output_identities(config,'calibration')+annotation_identities(config))]
     return put('inputs.json', dict(rgb=rows))
 
@@ -428,11 +429,11 @@ class S1RecoveryTests(unittest.TestCase):
             session=kwargs['lifecycle'].helpers[0]; active[:]=[session]
             snapshot(kwargs['phase'],session)
             if kwargs['phase']=='worker_sample':
-                from vipe_benchmark.s1_helper_session import census
-                rows=census(); owned={os.getpid(),session.worker_pid,*session.owner.members}; parent=os.getppid()
-                while parent in rows: owned.add(parent); parent=rows[parent]['ppid']
-                counts={pid:len(list(Path('/proc',str(pid),'task').iterdir())) for pid in owned}
-                trace[-1]['process_threads']=counts; trace[-1]['total_workers']=sum(counts.values())
+                from vipe_benchmark.s1_helper_session import owned_workload
+                observed=owned_workload(os.environ['S1_OWNED_ROOT_NOTE'],extra=(session.worker_pid,))
+                counts=dict(observed['process_threads'],conservative_orchestration_slot=observed['reserve'])
+                trace[-1]['process_threads']=observed['process_threads'];trace[-1]['owned_workload']=observed
+                trace[-1]['total_workers']=sum(counts.values())
                 self.assertLessEqual(sum(counts.values()),8)
             return result
         def guard(session):
@@ -565,6 +566,8 @@ class FailureEvidenceTests(unittest.TestCase):
                 cuda=SimpleNamespace(synchronize=lambda:None,max_memory_allocated=lambda:0,max_memory_reserved=lambda:0)
                 from contextlib import ExitStack
                 with ExitStack() as stack:
+                    from test_vipe_benchmark_s1_helper_fixtures import inline_progress
+                    stack.enter_context(inline_progress(fixture.root,clock,request,fixture.config))
                     stack.enter_context(patch.dict(sys.modules,{'torch':SimpleNamespace(cuda=cuda)}))
                     stack.enter_context(patch('vipe_benchmark.stages._model_runtime',return_value={}))
                     stack.enter_context(patch('vipe_benchmark.stages.output_identities',return_value=identities))
@@ -786,6 +789,348 @@ class ReceiptContractTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, case['error']): graph.contract.validate_inner(inner)
                 graph.publish()
                 with self.assertRaisesRegex(ValueError, case['error']): graph.validate()
+                if label=='cap':
+                    # Fully bound synthetic graph, not a claim that a child ran.
+                    # Its elapsed duration exceeds the old cap without a sleep.
+                    import datetime,hashlib,json
+                    graph=self.fixture();c=graph.contract;outer=graph.outer
+                    run=ROOT/'docs/resolve-blocker/plan031-progress-20260922'
+                    dispatch_record=file_record(run/'implementation-dispatch-049.json');dispatch=read_json(dispatch_record['path'])
+                    plan=file_record(ROOT/'plans/plan_049.md');status=dispatch['implementation_status_snapshot'];authorization=dispatch['authorization_note'];driver=file_record(run/'launch-049-exec.py')
+                    command=[str(ROOT/c.ARGV[0]),'-B','-m','vipe_benchmark.s1_validation_capture',str(graph.root),'--no-timeout']
+                    def process_identity(pid,ppid,start):
+                        base=dict(boot_id=outer['boot_id'],pid=pid,ppid=ppid,pgid=pid,start_ticks=start)
+                        tasks=[dict(boot_id=base['boot_id'],pid=pid,process_start_ticks=start,tid=pid,start_ticks=start)]
+                        return dict(base,threads=tasks,threads_before=copy.deepcopy(tasks),threads_after=copy.deepcopy(tasks),process_before=dict(base),process_after=dict(base))
+                    identity_fields=dict(ownership_root=process_identity(122,1,20),preexisting_ancestors=[process_identity(1,0,1)],
+                        ancestry_terminal=dict(pid=1,ppid=0),retained_wrappers=[],output_paths=c.launch_output_paths(str(graph.root),'aggregate',1000))
+                    identity_path=graph.root/'synthetic-prospective-identity.json'
+                    identity_path.write_text(json.dumps(dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**identity_fields)))
+                    identity_request=file_record(identity_path)
+                    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md')]
+                    settings={key:'1' for key in (*c.THREADS,'OPENCV_FOR_THREADS_NUM','VIPE_CPU_VALIDATION')};settings['PYTHONPATH']=str(ROOT/'scripts')
+                    # Synthetic file-routing seam: fixed logical R paths backed by
+                    # this disposable fixture only. No Main evidence is published.
+                    from contextlib import ExitStack
+                    import shlex
+                    session_stack=ExitStack();self.addCleanup(session_stack.close)
+                    logical_files={}
+                    original_record=c.file_record;original_strict=c.strict_record;original_json=c.session_json
+                    def routed_record(path):
+                        text=str(path);row=original_record(logical_files.get(text,path))
+                        if text in logical_files:row['path']=text
+                        return row
+                    def routed_strict(row):
+                        if type(row) is dict and row.get('path') in logical_files:
+                            translated=dict(row,path=str(logical_files[row['path']]))
+                            original_strict(translated)
+                            return row
+                        return original_strict(row)
+                    def routed_json(path):return original_json(logical_files.get(str(path),path))
+                    for name,implementation in [('file_record',routed_record),('strict_record',routed_strict),('session_json',routed_json)]:
+                        session_stack.enter_context(patch.object(c,name,side_effect=implementation))
+                    logical_identity=str(run/'launch-identity-049-aggregate-1000.json');logical_files[logical_identity]=identity_path
+                    identity_request=routed_record(logical_identity)
+                    logical_admission=str(run/'launch-admission-049-aggregate-1000.json')
+                    proof_path=graph.root/'synthetic-session-proof.json';logical_proof=str(run/'main-session-proof-049-aggregate-1000.json');logical_files[logical_proof]=proof_path
+                    readiness=json.dumps(dict(awaiting_main_admission=logical_admission,identity_request=identity_request))
+                    session_events=[];event_paths=[]
+                    for ordinal,role in enumerate(('start','pre_admission','at_admission')):
+                        args=dict(cmd=shlex.join(['exec',str(ROOT/c.ARGV[0]),'-B',driver['path'],'aggregate','1000','synthetic contract fixture; no execution performed']),shell='/bin/bash',login=False,workdir=str(ROOT),tty=True,sandbox_permissions='use_default',yield_time_ms=1000,max_output_tokens=10000) if ordinal==0 else dict(session_id=12345,chars='',yield_time_ms=1000)
+                        output=readiness+'\n' if ordinal==0 else ''
+                        session_events.append(dict(schema='plan049-session-tool-event/v1',kind='aggregate',index=1000,ordinal=ordinal,role=role,tool='exec_command' if ordinal==0 else 'write_stdin',arguments=args,
+                            result=dict(session_id=12345,output=output,wall_time_seconds=1.),started=dict(utc=f'2026-01-01T00:00:0{ordinal*2}+00:00',monotonic=ordinal*2),returned=dict(utc=f'2026-01-01T00:00:0{ordinal*2+1}+00:00',monotonic=ordinal*2+1),output_sha256=hashlib.sha256(output.encode()).hexdigest()))
+                        logical=str(run/f'main-session-049-aggregate-1000-event-{ordinal:03}.json');physical=graph.root/f'synthetic-session-event-{ordinal}.json';logical_files[logical]=physical;event_paths.append((logical,physical))
+                        physical.write_text(json.dumps(session_events[-1]))
+                    session_authorization=file_record(run/'authorization-049-session-proof-001.md')
+                    proof=dict(schema='plan049-session-proof/v1',proof_mode='session-bound/v1',kind='aggregate',index=1000,session_id=12345,driver=driver,identity_request=identity_request,admission_path=logical_admission,
+                        tool_events=[routed_record(logical) for logical,physical in event_paths],readiness_event=0,readiness_line=readiness,readiness_line_sha256=hashlib.sha256(readiness.encode()).hexdigest(),user_authorization=session_authorization,correction=addenda[-1],cross_namespace_kernel_verified=False)
+                    proof_path.write_text(json.dumps(proof));proof_reference=routed_record(logical_proof)
+                    admission=dict(approved=True,cleanup_resolved=True,execution_mode='no-timeout',timeout_seconds=None,
+                        kind='aggregate',index=1000,reason='synthetic contract fixture; no execution performed',counts_before={'diagnostic':0,'aggregate':999},
+                        sources=outer['sources_before'],source_paths=[r['path'] for r in outer['sources_before']],
+                        resource_capacity=dict(B=1,H=0,charge=2,artifact_bytes=0),
+                        bindings=dict(session_proof=proof_reference,plan=plan,dispatch=dispatch_record,status=status,authorization=authorization,driver=driver,
+                            command=command,environment=settings,run_directory=str(graph.root),stdin=dict(bytes=len(c.STDIN.encode()),sha256=hashlib.sha256(c.STDIN.encode()).hexdigest()),identity_request=identity_request,addenda=addenda,**identity_fields))
+                    admission_path=graph.root/'synthetic-no-timeout-admission.json';admission_path.write_text(json.dumps(admission))
+                    logical_files[logical_admission]=admission_path
+                    admitted=routed_record(logical_admission)
+                    note=dict(schema='plan049-prospective-launch/v1',execution_mode='no-timeout',timeout_seconds=None,
+                        provenance='synthetic contract fixture; no execution performed',run_directory=str(graph.root),kind='aggregate',
+                        attempt_index=1000,reason=admission['reason'],counts_before=admission['counts_before'],
+                        driver=driver,admission=admitted,bindings=[plan,dispatch_record,status,authorization,admitted,identity_request,proof_reference,session_authorization]+addenda,sources=outer['sources_before'],
+                        cpu_bound='B+max(1,H)≤8',command=command,environment=settings,cwd=str(ROOT),unset_environment=['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],stdin_identity=dict(bytes=len(c.STDIN.encode()),sha256=hashlib.sha256(c.STDIN.encode()).hexdigest(),content=c.STDIN),**identity_fields)
+                    note_path=graph.root/'synthetic-no-timeout-note.json';note_path.write_text(json.dumps(note))
+                    outer.update(schema='s1-cpu-execution/v2',execution_mode='no-timeout',timeout_seconds=None,
+                        launch_note=file_record(note_path),wait=dict(method='Popen.wait',timeout_seconds=None,pid=outer['child_pid'],returncode=0,completed=True))
+                    root_identity=identity_fields['ownership_root'];child_identity=process_identity(outer['child_pid'],122,21)
+                    def census(records):return dict(root_pid=122,processes=records,B=len(records),H=0,charge=len(records)+1,complete=True)
+                    outer['creation']=dict(before=census([root_identity]),after=census([root_identity,child_identity]),retired=census([root_identity]),child=child_identity,
+                        retirement=dict(identity=child_identity,method='matching Popen.wait',returncode=0,completed=True,absent_after=True),authority=admitted,cpu_bound='B+max(1,H)≤8')
+                    outer['end']['monotonic']=401.;outer['end']['utc']=(datetime.datetime(2026,1,1,tzinfo=datetime.timezone.utc)+datetime.timedelta(seconds=401)).isoformat();outer['elapsed_seconds']=401.
+                    graph.publish();self.assertEqual(graph.validate()['provenance'],graph.provenance)
+                    valid=copy.deepcopy(outer)
+                    # Every mutation is rehashed through proof/admission/note.
+                    # These are synthetic schema controls, never tool attestations.
+                    for fault in ('missing_proof','handle_false','handle_float','handle_string','start_handle','poll_argument','poll_return','terminal_poll','missing_handle','omit_poll','reorder_poll','duplicate_poll','readiness_altered','readiness_truncated','readiness_conflict','request_hash','request_path','request_kind','request_index','request_driver','stale_proof','stale_authorization','wrong_mode','kernel_claim','proof_extra','proof_missing','event_extra','event_missing','ordinal_bool','index_float','stamp_bool','stamp_nonfinite','stamp_reverse','readiness_event_bool','duplicate_json','root_float','ancestor_bool','thread_float','root_substitution','ancestor_substitution','thread_substitution','source_stale'):
+                        changed_proof=copy.deepcopy(proof);changed_events=copy.deepcopy(session_events);changed_admission=copy.deepcopy(admission);changed_note=copy.deepcopy(note)
+                        request_doc=dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**copy.deepcopy(identity_fields))
+                        if fault=='handle_false':changed_proof['session_id']=False
+                        elif fault=='handle_float':changed_proof['session_id']=12345.
+                        elif fault=='handle_string':changed_proof['session_id']='12345'
+                        elif fault=='start_handle':changed_events[0]['result']['session_id']=12346
+                        elif fault=='poll_argument':changed_events[1]['arguments']['session_id']=12346
+                        elif fault=='poll_return':changed_events[2]['result']['session_id']=12346
+                        elif fault=='terminal_poll':changed_events[2]['result']['exit_code']=0
+                        elif fault=='missing_handle':changed_events[2]['result'].pop('session_id')
+                        elif fault=='omit_poll':changed_events.pop()
+                        elif fault=='reorder_poll':changed_events[1],changed_events[2]=changed_events[2],changed_events[1]
+                        elif fault=='duplicate_poll':changed_events[2]=copy.deepcopy(changed_events[1])
+                        elif fault=='readiness_altered':changed_events[0]['result']['output']=readiness.replace('1000','1001')+'\n'
+                        elif fault=='readiness_truncated':changed_events[0]['result']['output']=readiness[:-1]
+                        elif fault=='readiness_conflict':changed_events[0]['result']['output']+=readiness+'\n'
+                        elif fault=='request_hash':changed_proof['identity_request']['sha256']='0'*64
+                        elif fault=='request_path':changed_proof['identity_request']['path']=driver['path']
+                        elif fault=='request_kind':request_doc['kind']='diagnostic'
+                        elif fault=='request_index':request_doc['index']=1001
+                        elif fault=='request_driver':request_doc['driver']=plan
+                        elif fault=='stale_authorization':changed_proof['user_authorization']['sha256']='0'*64
+                        elif fault=='wrong_mode':changed_proof['proof_mode']='kernel-attested'
+                        elif fault=='kernel_claim':changed_proof['cross_namespace_kernel_verified']=True
+                        elif fault=='proof_extra':changed_proof['extra']=None
+                        elif fault=='proof_missing':changed_proof.pop('driver')
+                        elif fault=='event_extra':changed_events[1]['extra']=None
+                        elif fault=='event_missing':changed_events[1].pop('role')
+                        elif fault=='ordinal_bool':changed_events[0]['ordinal']=False
+                        elif fault=='index_float':changed_events[1]['index']=1000.
+                        elif fault=='stamp_bool':changed_events[0]['started']['monotonic']=False
+                        elif fault=='stamp_nonfinite':changed_events[0]['started']['monotonic']=float('inf')
+                        elif fault=='stamp_reverse':changed_events[1]['started']['monotonic']=0
+                        elif fault=='readiness_event_bool':changed_proof['readiness_event']=False
+                        elif fault=='root_float':request_doc['ownership_root']['pid']=122.
+                        elif fault=='ancestor_bool':request_doc['preexisting_ancestors'][0]['ppid']=False
+                        elif fault=='thread_float':request_doc['ownership_root']['threads'][0]['tid']=122.
+                        elif fault=='root_substitution':request_doc['ownership_root']=process_identity(123,1,20)
+                        elif fault=='ancestor_substitution':request_doc['preexisting_ancestors'][0]=process_identity(2,0,1)
+                        elif fault=='thread_substitution':request_doc['ownership_root']['threads_after'][0]['start_ticks']+=1
+                        elif fault=='source_stale':changed_admission['sources'][0]['sha256']='0'*64
+                        identity_path.write_text(json.dumps(request_doc));request_ref=routed_record(logical_identity)
+                        if fault not in ('request_hash','request_path'):changed_proof['identity_request']=request_ref
+                        # Request mutations update readiness too, reaching nested validators.
+                        if fault.startswith('request_') and fault not in ('request_hash','request_path') or fault in ('root_float','ancestor_bool','thread_float','root_substitution','ancestor_substitution','thread_substitution'):
+                            changed_proof['readiness_line']=json.dumps(dict(awaiting_main_admission=logical_admission,identity_request=request_ref))
+                            changed_proof['readiness_line_sha256']=hashlib.sha256(changed_proof['readiness_line'].encode()).hexdigest()
+                            changed_events[0]['result']['output']=changed_proof['readiness_line']+'\n'
+                        refs=[]
+                        for ordinal,event in enumerate(changed_events):
+                            event['output_sha256']=hashlib.sha256(event['result']['output'].encode()).hexdigest()
+                            logical,physical=event_paths[ordinal];physical.write_text(json.dumps(event));refs.append(routed_record(logical))
+                        changed_proof['tool_events']=refs;proof_path.write_text(json.dumps(changed_proof))
+                        if fault=='duplicate_json':proof_path.write_text(proof_path.read_text().replace('"schema":','"schema":"duplicate", "schema":',1))
+                        changed_proof_ref=routed_record(logical_proof)
+                        if fault=='stale_proof':changed_proof_ref['sha256']='0'*64
+                        changed_admission['bindings']['session_proof']=changed_proof_ref
+                        changed_admission['bindings']['identity_request']=request_ref
+                        if fault=='missing_proof':changed_admission['bindings'].pop('session_proof')
+                        admission_path.write_text(json.dumps(changed_admission));admission_ref=routed_record(logical_admission)
+                        changed_note['admission']=admission_ref
+                        changed_note['bindings']=[admission_ref if row==admitted else request_ref if row==identity_request else changed_proof_ref if row==proof_reference else row for row in changed_note['bindings']]
+                        note_path.write_text(json.dumps(changed_note))
+                        with self.assertRaises(ValueError):c.no_timeout_launch(file_record(note_path),str(graph.root))
+                    identity_path.write_text(json.dumps(dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**identity_fields)))
+                    for event,(logical,physical) in zip(session_events,event_paths):physical.write_text(json.dumps(event))
+                    proof_path.write_text(json.dumps(proof));admission_path.write_text(json.dumps(admission));note_path.write_text(json.dumps(note))
+                    self.assertEqual(c.session_proof(proof_reference,'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])['proof_mode'],'session-bound/v1')
+                    # Canonical start acceptance is established above. Preserve
+                    # raw command bytes: shell structure is not argv equivalence.
+                    for fault in ('newline','chain','prefix','command','cwd','tty','permission','yield','yield_bool','shell','shell_options','login','login_int','missing_shell','extra_option','output_bool','output_zero'):
+                        changed_events=copy.deepcopy(session_events);args=changed_events[0]['arguments']
+                        if fault=='newline':args['cmd']=args['cmd'].replace('exec ','exec\n',1)
+                        elif fault=='chain':args['cmd']+='; true'
+                        elif fault=='prefix':args['cmd']=' '+args['cmd']
+                        elif fault=='command':args['cmd']=args['cmd'].replace(' -B ',' -I ',1)
+                        elif fault=='cwd':args['workdir']=str(graph.root)
+                        elif fault=='tty':args['tty']=False
+                        elif fault=='permission':args['sandbox_permissions']='require_escalated'
+                        elif fault=='yield':args['yield_time_ms']=1001
+                        elif fault=='yield_bool':args['yield_time_ms']=True
+                        elif fault=='shell':args['shell']='/bin/sh'
+                        elif fault=='shell_options':args['shell']='/bin/bash -c'
+                        elif fault=='login':args['login']=True
+                        elif fault=='login_int':args['login']=0
+                        elif fault=='missing_shell':args.pop('shell')
+                        elif fault=='extra_option':args['environment']={}
+                        elif fault=='output_bool':args['max_output_tokens']=True
+                        else:args['max_output_tokens']=0
+                        expected_error='exact sole driver exec command' if fault in ('newline','chain','prefix','command') else 'exact start argument fields' if fault in ('missing_shell','extra_option') else 'exact positive start output budget' if fault in ('output_bool','output_zero') else 'exact start argument: '+{'cwd':'workdir','tty':'tty','permission':'sandbox_permissions','yield':'yield_time_ms','yield_bool':'yield_time_ms','shell':'shell','shell_options':'shell','login':'login','login_int':'login'}[fault]
+                        changed_proof=copy.deepcopy(proof);refs=[]
+                        for event,(logical,physical) in zip(changed_events,event_paths):physical.write_text(json.dumps(event));refs.append(routed_record(logical))
+                        changed_proof['tool_events']=refs;proof_path.write_text(json.dumps(changed_proof))
+                        with self.assertRaises(ValueError) as rejected:c.session_proof(routed_record(logical_proof),'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])
+                        self.assertEqual(str(rejected.exception),expected_error)
+                    # A readiness line may span tool results; only its complete
+                    # line event precedes both mandatory live polls.
+                    split_events=[copy.deepcopy(session_events[0]),copy.deepcopy(session_events[1]),copy.deepcopy(session_events[1]),copy.deepcopy(session_events[2])]
+                    split_paths=list(event_paths)+[(str(run/'main-session-049-aggregate-1000-event-003.json'),graph.root/'synthetic-session-event-3.json')]
+                    logical_files[split_paths[-1][0]]=split_paths[-1][1]
+                    for ordinal,event in enumerate(split_events):
+                        event['ordinal']=ordinal;event['role']=('start','readiness','pre_admission','at_admission')[ordinal]
+                        event['started']=dict(utc=f'2026-01-01T00:00:0{ordinal*2}+00:00',monotonic=ordinal*2)
+                        event['returned']=dict(utc=f'2026-01-01T00:00:0{ordinal*2+1}+00:00',monotonic=ordinal*2+1)
+                        event['result']['output']=readiness[:17] if ordinal==0 else readiness[17:]+'\n' if ordinal==1 else ''
+                        event['output_sha256']=hashlib.sha256(event['result']['output'].encode()).hexdigest()
+                        split_paths[ordinal][1].write_text(json.dumps(event))
+                    split_proof=copy.deepcopy(proof);split_proof['readiness_event']=1;split_proof['tool_events']=[routed_record(logical) for logical,physical in split_paths]
+                    proof_path.write_text(json.dumps(split_proof))
+                    self.assertEqual(c.session_proof(routed_record(logical_proof),'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])['readiness_event'],1)
+                    split_proof['readiness_event']=0;proof_path.write_text(json.dumps(split_proof))
+                    with self.assertRaisesRegex(ValueError,'readiness event correlation'):c.session_proof(routed_record(logical_proof),'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])
+                    for event,(logical,physical) in zip(session_events,event_paths):physical.write_text(json.dumps(event))
+                    proof_path.write_text(json.dumps(proof))
+                    # Compile the actual driver branches; all process/input/exec
+                    # seams are pure, with no subprocess or observer creation.
+                    import ast,io,types
+                    tree=ast.parse(Path(driver['path']).read_text());main_node=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='main')
+                    entry=next(n for n in main_node.body if isinstance(n,ast.If) and 'preexisting admission forbidden' in ast.unparse(n))
+                    with self.assertRaisesRegex(ValueError,'preexisting admission'):exec(compile(ast.Module(body=[entry],type_ignores=[]),'<driver-entry>','exec'),dict(admission_path=admission_path))
+                    handoff=next(n for n in main_node.body if isinstance(n,ast.If) and 'explicit Main admission handoff required' in ast.unparse(n))
+                    for incoming in ('','ABORT\n','ADMIT','ADMIT\r\n'):
+                        with self.assertRaisesRegex(ValueError,'explicit Main admission'):exec(compile(ast.Module(body=[handoff],type_ignores=[]),'<driver-handoff>','exec'),dict(sys=types.SimpleNamespace(stdin=io.StringIO(incoming))))
+                    exec(compile(ast.Module(body=[handoff],type_ignores=[]),'<driver-handoff>','exec'),dict(sys=types.SimpleNamespace(stdin=io.StringIO('ADMIT\n'))))
+                    local_node=next(n for n in main_node.body if isinstance(n,ast.FunctionDef) and n.name=='local_identity')
+                    final_nodes=main_node.body[-2:]
+                    for fault in ('stable','root','thread','ancestor','unstable'):
+                        observed={122:copy.deepcopy(root_identity),1:copy.deepcopy(identity_fields['preexisting_ancestors'][0])};calls=[];executed=[]
+                        if fault=='root':observed[122]['start_ticks']+=1
+                        elif fault=='thread':observed[122]['threads'].append(dict(observed[122]['threads'][0],tid=123))
+                        elif fault=='ancestor':observed[1]['start_ticks']+=1
+                        def local_process(pid):
+                            calls.append(pid);value=copy.deepcopy(observed[pid])
+                            if fault=='unstable' and len(calls)>2:value['start_ticks']+=1
+                            return value
+                        scope=dict(process=local_process,os=types.SimpleNamespace(getpid=lambda:122,execve=lambda *args:executed.append(args)),root=root_identity,ancestors=identity_fields['preexisting_ancestors'],command=command,env=settings)
+                        exec(compile(ast.Module(body=[local_node],type_ignores=[]),'<driver-local-identity>','exec'),scope)
+                        if fault=='stable':
+                            exec(compile(ast.Module(body=final_nodes,type_ignores=[]),'<driver-exec>','exec'),scope);self.assertEqual(len(executed),1)
+                        else:
+                            with self.assertRaises(ValueError):exec(compile(ast.Module(body=final_nodes,type_ignores=[]),'<driver-exec>','exec'),scope)
+                            self.assertEqual(executed,[])
+                    # Failed/ambiguous Main sends cannot establish successful
+                    # handoff: only actual ADMIT consumption reaches exec. The
+                    # original tool send/terminal evidence remains Main's duty.
+                    for mutation in ('legacy_over_300','null_without_mode','mode_with_timeout','missing_wait','early_completion','missing_receipt','wait_timeout','wait_pid','unapproved'):
+                        graph.outer=copy.deepcopy(valid);candidate=graph.outer
+                        if mutation=='legacy_over_300':
+                            candidate.update(schema='s1-cpu-execution/v1',timeout_seconds=300)
+                            for field in ('execution_mode','launch_note','wait'):candidate.pop(field)
+                        elif mutation=='null_without_mode':candidate.pop('execution_mode')
+                        elif mutation=='mode_with_timeout':candidate['timeout_seconds']=300
+                        elif mutation=='missing_wait':candidate.pop('wait')
+                        elif mutation=='early_completion':candidate['wait_completed']=False
+                        elif mutation=='missing_receipt':candidate['receipt']=None
+                        elif mutation=='wait_timeout':candidate['wait']['timeout_seconds']=300
+                        elif mutation=='wait_pid':candidate['wait']['pid']+=1
+                        else:
+                            changed=copy.deepcopy(admission);changed['approved']=False;admission_path.write_text(json.dumps(changed))
+                        # validate_execution directly preserves a deliberately
+                        # absent receipt; graph.publish would reconstruct it.
+                        with self.assertRaises(ValueError):c.validate_execution(candidate,valid['receipt'],graph.inner)
+                        admission_path.write_text(json.dumps(admission))
+                    # Mutations are rehashed through every enclosing edge so
+                    # each rejection proves semantic identity binding, not a stale hash.
+                    for field in ('ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths'):
+                        for fault in ('missing','malformed','changed'):
+                            changed_note=copy.deepcopy(note);changed_admission=copy.deepcopy(admission)
+                            if fault=='missing':changed_note.pop(field)
+                            elif fault=='malformed':changed_note[field]=False
+                            elif field=='ownership_root':changed_note[field]['start_ticks']+=1
+                            elif field=='preexisting_ancestors':changed_note[field][0]['pid']=122
+                            elif field=='ancestry_terminal':changed_note[field]['ppid']=1
+                            elif field=='retained_wrappers':changed_note[field]=[root_identity]
+                            else:changed_note[field][0]+='.reused'
+                            note_path.write_text(json.dumps(changed_note));candidate=copy.deepcopy(valid);candidate['launch_note']=file_record(note_path)
+                            with self.assertRaises(ValueError):c.validate_execution(candidate,valid['receipt'],graph.inner)
+                    for field in ('environment','cwd','unset_environment','stdin_identity'):
+                        changed_note=copy.deepcopy(note);changed_note[field]=None
+                        note_path.write_text(json.dumps(changed_note));candidate=copy.deepcopy(valid);candidate['launch_note']=file_record(note_path)
+                        with self.assertRaises(ValueError):c.validate_execution(candidate,valid['receipt'],graph.inner)
+                    note_path.write_text(json.dumps(note))
+                    for fault in ('missing_creation','missing_before','missing_after','missing_retirement','root_reuse','thread_reuse','missing_thread','duplicate_child','unretired','capacity','creation_authority'):
+                        candidate=copy.deepcopy(valid)
+                        if fault=='missing_creation':candidate.pop('creation')
+                        elif fault=='missing_before':candidate['creation'].pop('before')
+                        elif fault=='missing_after':candidate['creation'].pop('after')
+                        elif fault=='missing_retirement':candidate['creation'].pop('retirement')
+                        elif fault=='root_reuse':candidate['creation']['after']['processes'][0]['start_ticks']+=1
+                        elif fault=='thread_reuse':candidate['creation']['child']['threads'][0]['start_ticks']+=1
+                        elif fault=='missing_thread':candidate['creation']['child']['threads']=[]
+                        elif fault=='duplicate_child':candidate['creation']['after']['processes'].append(copy.deepcopy(child_identity))
+                        elif fault=='unretired':candidate['creation']['retired']=copy.deepcopy(candidate['creation']['after'])
+                        elif fault=='capacity':candidate['creation']['before']['B']=False
+                        else:candidate['creation']['authority']=identity_request
+                        with self.assertRaises(ValueError):c.validate_execution(candidate,valid['receipt'],graph.inner)
+                    # Exact nested types must reject Python-equal bool/int
+                    # substitutions after every enclosing document is rehashed.
+                    identity_faults=('process_ppid_bool','process_extra','process_missing','threads_before_bool','threads_after_missing','thread_extra','thread_identity_substitution','terminal_ppid_bool')
+                    for location in ('note','main_binding','identity_request'):
+                        for fault in identity_faults:
+                            # Same routed graph must pass before this one-field fault.
+                            self.assertEqual(c.no_timeout_launch(file_record(note_path),str(graph.root)),note)
+                            changed_note=copy.deepcopy(note);changed_admission=copy.deepcopy(admission)
+                            request_doc=json.loads(identity_path.read_text())
+                            selected=changed_note if location=='note' else changed_admission['bindings'] if location=='main_binding' else request_doc
+                            ancestor=selected['preexisting_ancestors'][0]
+                            if fault=='process_ppid_bool':ancestor['process_before']['ppid']=False
+                            elif fault=='process_extra':ancestor['process_after']['extra']=0
+                            elif fault=='process_missing':ancestor['process_before'].pop('ppid')
+                            elif fault=='threads_before_bool':ancestor['threads_before'][0]['pid']=True
+                            elif fault=='threads_after_missing':ancestor['threads_after'][0].pop('tid')
+                            elif fault=='thread_extra':ancestor['threads_before'][0]['extra']=0
+                            elif fault=='thread_identity_substitution':ancestor['threads_after'][0]['start_ticks']=2
+                            else:selected['ancestry_terminal']['ppid']=False
+                            identity_path.write_text(json.dumps(request_doc));request_ref=routed_record(logical_identity)
+                            changed_proof=copy.deepcopy(proof);changed_events=copy.deepcopy(session_events)
+                            changed_proof['identity_request']=request_ref
+                            changed_proof['readiness_line']=json.dumps(dict(awaiting_main_admission=logical_admission,identity_request=request_ref))
+                            changed_proof['readiness_line_sha256']=hashlib.sha256(changed_proof['readiness_line'].encode()).hexdigest()
+                            changed_events[0]['result']['output']=changed_proof['readiness_line']+'\n'
+                            refs=[]
+                            for event,(logical,physical) in zip(changed_events,event_paths):
+                                event['output_sha256']=hashlib.sha256(event['result']['output'].encode()).hexdigest()
+                                physical.write_text(json.dumps(event));refs.append(routed_record(logical))
+                            changed_proof['tool_events']=refs;proof_path.write_text(json.dumps(changed_proof));changed_proof_ref=routed_record(logical_proof)
+                            changed_admission['bindings']['identity_request']=request_ref
+                            changed_admission['bindings']['session_proof']=changed_proof_ref
+                            admission_path.write_text(json.dumps(changed_admission));admission_ref=routed_record(logical_admission)
+                            changed_note['admission']=admission_ref
+                            changed_note['bindings']=[admission_ref if row==admitted else request_ref if row==identity_request else changed_proof_ref if row==proof_reference else row for row in changed_note['bindings']]
+                            note_path.write_text(json.dumps(changed_note))
+                            expected_error={'process_ppid_bool':'parent identity required','process_extra':'exact nested process fields','process_missing':'exact nested process fields',
+                                'threads_before_bool':'exact positive thread identity: pid','threads_after_missing':'exact thread identity fields','thread_extra':'exact thread identity fields',
+                                'thread_identity_substitution':'stable thread identities around enumeration','terminal_ppid_bool':'typed ancestry terminal'}[fault]
+                            with self.assertRaises(ValueError) as rejected:c.no_timeout_launch(file_record(note_path),str(graph.root))
+                            self.assertEqual(str(rejected.exception),expected_error)
+                            identity_path.write_text(json.dumps(dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**identity_fields)))
+                            for event,(logical,physical) in zip(session_events,event_paths):physical.write_text(json.dumps(event))
+                            proof_path.write_text(json.dumps(proof));admission_path.write_text(json.dumps(admission));note_path.write_text(json.dumps(note))
+                    admission_path.write_text(json.dumps(admission));note_path.write_text(json.dumps(note))
+                    for fault in ('returncode_bool','completed_int','absent_int','missing','extra','identity_nested_bool','before_process_bool','after_thread_bool','retired_snapshot_bool','retirement_process_float','retirement_thread_float'):
+                        candidate=copy.deepcopy(valid);retirement=candidate['creation']['retirement']
+                        if fault=='returncode_bool':retirement['returncode']=False
+                        elif fault=='completed_int':retirement['completed']=1
+                        elif fault=='absent_int':retirement['absent_after']=1
+                        elif fault=='missing':retirement.pop('completed')
+                        elif fault=='extra':retirement['extra']=None
+                        elif fault=='identity_nested_bool':retirement['identity']['process_before']['ppid']=True
+                        elif fault=='before_process_bool':candidate['creation']['before']['processes'][0]['process_after']['ppid']=True
+                        elif fault=='after_thread_bool':candidate['creation']['after']['processes'][0]['threads_before'][0]['pid']=True
+                        elif fault=='retired_snapshot_bool':candidate['creation']['retired']['complete']=1
+                        elif fault=='retirement_process_float':retirement['identity']['process_before']['ppid']=float(retirement['identity']['ppid'])
+                        else:retirement['identity']['threads_after'][0]['start_ticks']=float(retirement['identity']['threads_after'][0]['start_ticks'])
+                        with self.assertRaises(ValueError):c.validate_execution(candidate,valid['receipt'],graph.inner)
+                    from vipe_benchmark import s1_validation_capture as capture
+                    for arguments in ((None,False),(0,False),(float('inf'),False),(300,True)):
+                        with self.assertRaises(ValueError):capture.capture(graph.root/'never-created',arguments[0],no_timeout=arguments[1])
 
     def test_legacy_receipts_rejected(self):
         graph = self.fixture()
@@ -1076,15 +1421,28 @@ class ReservationClockTests(unittest.TestCase):
                 with patch.dict(os.environ,VIPE_RESERVATION_START='bogus'), patch.object(s1_clock.time,'monotonic',return_value=observation), patch.object(s1_clock,'boot_id',return_value=clock.boot_id):
                     if kind in ('unavailable','late','nan'):
                         primary=RuntimeError('original primary')
-                        record=s1_evidence.preserve_failure(request,output,None,primary,clock=supplied)
-                        self.assertEqual(read_json(record['path'])['error'],'original primary')
-                        value=read_json(output/'first-result-qualification.json')
-                        self.assertEqual(value['clock_status'],'unverified')
-                        with self.assertRaises((ValueError,TypeError)):
-                            s1_evidence.reconcile_first(request,output,clock=supplied,error='later error')
-                        if kind=='late': self.assertEqual(value['elapsed_seconds_from_reservation'],91)
-                        if kind=='unavailable': self.assertIsNone(value['elapsed_seconds_from_reservation'])
-                        if kind=='nan': self.assertEqual(value['clock_observation'],'nan')
+                        if kind=='late':
+                            from vipe_benchmark import s1_progress
+                            forbidden=[]
+                            def no_io(*args,**kwargs):
+                                forbidden.append(repr(args));raise AssertionError('filesystem operation after C')
+                            with patch.object(Path,'open',side_effect=no_io),patch.object(s1_progress,'read_bytes',side_effect=no_io),patch.object(s1_evidence,'file_record',side_effect=no_io),patch.object(s1_evidence,'write_json',side_effect=no_io):
+                                record=s1_evidence.preserve_failure(request,output,None,primary,clock=supplied)
+                                with self.assertRaises(TimeoutError):s1_evidence.reconcile_first(request,output,clock=supplied,error='later error')
+                            self.assertIsNone(record);self.assertEqual(forbidden,[])
+                            self.assertEqual(type(primary),RuntimeError);self.assertEqual(str(primary),'original primary')
+                            self.assertIn('total deadline',primary.s1_progress_unavailable)
+                            self.assertIsNone(primary.s1_failure_record);self.assertIsNone(primary.s1_first_result)
+                            self.assertEqual(sorted(p.name for p in output.iterdir()),['config.json'])
+                        else:
+                            record=s1_evidence.preserve_failure(request,output,None,primary,clock=supplied)
+                            self.assertEqual(read_json(record['path'])['error'],'original primary')
+                            value=read_json(output/'first-result-qualification.json')
+                            self.assertEqual(value['clock_status'],'unverified')
+                            with self.assertRaises((ValueError,TypeError)):
+                                s1_evidence.reconcile_first(request,output,clock=supplied,error='later error')
+                            if kind=='unavailable': self.assertIsNone(value['elapsed_seconds_from_reservation'])
+                            if kind=='nan': self.assertEqual(value['clock_observation'],'nan')
                     else:
                         if kind != 'missing':
                             raw=fixture.put(kind+'-raw.json',{'raw':'original'})
@@ -1161,25 +1519,31 @@ class ReservationClockTests(unittest.TestCase):
         fixture, request, reservation, clock = self.admitted(reduced=True)
         row, arrays = synthetic_row(fixture.root/'barrier-native',request)
         prediction=SegmentationResult(np.load(row['instances']['path']),row['semantics'],np.ones((540,960),bool),row['metadata'],diagnostics=arrays)
-        real_load=RGBLoader.load; real_qualify=s1_evidence.qualify_row
+        real_load=s1_evidence.load_rgb; real_qualify=s1_evidence.qualify_row
         real_write=s1_evidence.write_json; real_read=s1_evidence.read_json
         real_verify=s1_evidence.verify_first; real_first=s1_evidence.first_record; real_print=builtins.print
         real_runtime=s1_evidence.qualify_runtime; real_record=s1_evidence.file_record
         for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             with self.subTest(**case):
                 kind=case['kind']; output=fixture.root/('segment-'+kind)
-                now=[clock.monotonic_start+1]; loads=[]; calls=[]; verified=[]; published=[]
+                now=[clock.monotonic_start+1]; loads=[]; calls=[]; verified=[]; published=[];operations=[]
                 def load(loader, identity):
+                    operations.append(dict(operation='RGBLoader.load',phase='start',observed=now[0],frame=identity.frame))
+                    self.assertLess(now[0],clock.work_deadline)
                     loads.append(identity.frame)
                     if identity.frame==62:
                         record=file_record(output/'first-result-qualification.json')
                         value=read_json(record['path']); real_verify(value,request,clock=clock)
                         self.assertEqual(record,published[0]); self.assertLess(now[0],clock.work_deadline)
                         raise RuntimeError('deliberate second input stop')
-                    return real_load(loader,identity)
+                    value=real_load(loader,identity)
+                    operations.append(dict(operation='RGBLoader.load',phase='completed',observed=now[0],frame=identity.frame))
+                    return value
                 def predict(*args,**kwargs): calls.append(1); return [prediction]
                 def qualify(*args,**kwargs):
+                    operations.append(dict(operation='qualify_row',phase='start',observed=now[0]))
                     result=real_qualify(*args,**kwargs)
+                    operations.append(dict(operation='qualify_row',phase='completed',observed=now[0]))
                     if kind=='qualification': now[0]=clock.work_deadline
                     return result
                 def write(path,value):
@@ -1214,17 +1578,19 @@ class ReservationClockTests(unittest.TestCase):
                     return result
                 cuda=SimpleNamespace(synchronize=lambda:None,max_memory_allocated=lambda:0,max_memory_reserved=lambda:0)
                 with ExitStack() as stack:
+                    from test_vipe_benchmark_s1_helper_fixtures import inline_progress
+                    stack.enter_context(inline_progress(fixture.root,clock,request,fixture.config))
                     for target, replacement in [('vipe_benchmark.s1_clock.time.monotonic',lambda:now[0]),
                         ('vipe_benchmark.s1_clock.boot_id',lambda:clock.boot_id),
                         ('vipe_benchmark.stages._model_runtime',lambda req:copy.deepcopy(fixture.observed)),
                         ('vipe_benchmark.backends.build_backend',lambda *a,**k:SimpleNamespace(segment=predict)),
-                        ('vipe_benchmark.runtime_capture.loaded_runtime',lambda *a,**k:fixture.observed['loaded_files']),
+                        ('vipe_benchmark.s1_progress.loaded_runtime',lambda *a,**k:fixture.observed['loaded_files']),
                         ('vipe_benchmark.s1_evidence.qualify_row',qualify),('vipe_benchmark.s1_evidence.qualify_runtime',qualify_runtime),
                         ('vipe_benchmark.s1_evidence.file_record',record_file),('vipe_benchmark.s1_evidence.write_json',write),
                         ('vipe_benchmark.s1_evidence.read_json',read),('vipe_benchmark.s1_evidence.verify_first',verify),
                         ('vipe_benchmark.s1_evidence.first_record',first),('builtins.print',progress)]:
                         stack.enter_context(patch(target,side_effect=replacement))
-                    stack.enter_context(patch.object(RGBLoader,'load',load))
+                    stack.enter_context(patch.object(s1_evidence,'load_rgb',load))
                     stack.enter_context(patch.dict(sys.modules,{'torch':SimpleNamespace(cuda=cuda)}))
                     with self.assertRaisesRegex((TimeoutError,RuntimeError),'second input stop' if kind in ('positive','reuse_positive') else 'work deadline'):
                         stages.segment(request,output,fixture.config,clock=clock)
@@ -1235,7 +1601,9 @@ class ReservationClockTests(unittest.TestCase):
                 import json
                 real_print('S1_CLOCK_BARRIER '+json.dumps(dict(case=kind,loader_frames=loads,adapter_calls=len(calls),
                     qualification_observations=verified,completion_observation=now[0],work_deadline=clock.work_deadline,
-                    first_publication=published[0] if published else None),sort_keys=True))
+                    first_publication=published[0] if published else None,production_operations=operations,retrospective_inspection='subsequent byte/guard checks occur outside the production clock patch'),sort_keys=True))
+                self.assertLessEqual(len(operations),512)
+                self.assertTrue(all(o['observed']<clock.work_deadline for o in operations if o['phase']=='start'))
                 self.assertFalse((output/'result.json').exists())
                 produced=list(output.rglob('*-produced-row.json')); self.assertEqual(len(produced),1)
                 self.assertEqual(s1_evidence.produced_row(read_json(produced[0]),request).frame,50)
@@ -1258,7 +1626,8 @@ class ReservationClockTests(unittest.TestCase):
             with self.subTest(**case), patch.object(s1_clock.time,'monotonic',side_effect=lambda:now[0]), patch.object(s1_clock,'boot_id',return_value=clock.boot_id):
                 now[0]=clock.monotonic_start+1
                 kind=case['kind']; output=fixture.root/('reuse-'+kind); output.mkdir(); write_json(output/'config.json',request)
-                kwargs=dict(clock=clock,rows=[row],runtime=fixture.observed,checks=checks,raw=[row['diagnostics']])
+                handoff=s1_evidence.FirstResultHandoff()
+                kwargs=dict(clock=clock,rows=[row],runtime=fixture.observed,checks=checks,raw=[row['diagnostics']],first_result_handoff=handoff)
                 if kind in ('failed','not_reached'):
                     original=s1_evidence.first_record(request,output,kind,clock=clock,error='original',stage='adapter')
                 else:
@@ -1271,9 +1640,20 @@ class ReservationClockTests(unittest.TestCase):
                 elif kind=='later_failure':
                     now[0]=clock.total_deadline+2
                     primary=RuntimeError('later original error')
-                    raw=s1_evidence.preserve_failure(request,output,None,primary,clock=clock)
+                    from contextlib import ExitStack
+                    from vipe_benchmark import s1_progress as progress
+                    forbidden=[];original_primary=primary
+                    def prohibited(*args,**kwargs):
+                        forbidden.append((args,kwargs));raise AssertionError('post-C production I/O')
+                    with ExitStack() as no_io:
+                        for module,name in [(Path,'open'),(Path,'read_bytes'),(progress.os,'open'),(progress,'read_bytes'),(progress,'record'),(progress,'encode'),(s1_evidence,'file_record'),(s1_evidence,'write_json'),(s1_evidence,'qualify_row'),(s1_evidence,'verify_first'),(s1_evidence,'read_json'),(progress.json,'dumps'),(progress.hashlib,'sha256'),(progress.os,'stat')]:
+                            no_io.enter_context(patch.object(module,name,side_effect=prohibited))
+                        raw=s1_evidence.preserve_failure(request,output,None,primary,clock=clock,first_result_handoff=handoff)
                     self.assertEqual(primary.s1_first_result,original)
-                    self.assertEqual(read_json(raw['path'])['clock_status'],'unverified')
+                    self.assertIsNone(raw);self.assertIsNone(primary.s1_failure_record)
+                    self.assertIn('total deadline',primary.s1_progress_unavailable)
+                    self.assertIs(primary,original_primary);self.assertIs(type(primary),RuntimeError)
+                    self.assertEqual(str(primary),'later original error');self.assertEqual(forbidden,[])
                 elif kind=='conflict':
                     with self.assertRaisesRegex(ValueError,'conflicting'):
                         s1_evidence.first_record(request,output,'passed',**dict(kwargs,checks=[]))
@@ -1289,7 +1669,7 @@ class ReservationClockTests(unittest.TestCase):
                 else:
                     with self.assertRaisesRegex(ValueError,'passed S1 first-result'):
                         s1_evidence.first_record(request,output,'passed',**kwargs)
-                self.assertEqual(Path(original['path']).read_bytes(),before)
+            self.assertEqual(Path(original['path']).read_bytes(),before)
         with patch.dict(os.environ,VIPE_RESERVATION_START=str(clock.monotonic_start)), patch('vipe_benchmark.stages._model_runtime',side_effect=AssertionError('setup reached')):
             with self.assertRaisesRegex(ValueError,'trusted reservation clock required'):
                 stages.segment(request,fixture.root/'missing-context',fixture.config)
@@ -1493,21 +1873,27 @@ class NumericalEnvelopeTests(unittest.TestCase):
                     else: env[key] = value
                 env.pop('S1_VALIDATION_RUN_DIRECTORY', None)
                 start = time.monotonic(); timed_out = False; process = None
-                stdout = stderr = ''; returncode = None
+                stdout = stderr = ''; returncode = None; owned_observations=[]
                 try:
-                    process = subprocess.Popen(argv, cwd=ROOT, env=env, stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE, text=True, start_new_session=True)
-                    try: stdout, stderr = process.communicate(timeout=10)
-                    except subprocess.TimeoutExpired:
-                        timed_out = True; os.killpg(process.pid, signal.SIGKILL)
-                        stdout, stderr = process.communicate(timeout=2)
+                    from vipe_benchmark.s1_helper_session import owned_workload,register_owned,create_owned_process
+                    if os.environ.get('S1_OWNED_ROOT_NOTE'):
+                        self.assertLessEqual(owned_workload(os.environ['S1_OWNED_ROOT_NOTE'])['total_workers']+1,8)
+                    from test_vipe_benchmark_s1_helper_fixtures import direct_script_launch
+                    process = direct_script_launch(argv,cwd=ROOT,env=env)
+                    if os.environ.get('S1_OWNED_ROOT_NOTE'):
+                        from vipe_benchmark.s1_helper_session import owned_workload
+                        owned_observations.append(owned_workload(os.environ['S1_OWNED_ROOT_NOTE'],extra=(process.pid,)))
+                    stdout, stderr = process.communicate()
                     returncode = process.returncode
                 finally:
                     if process is not None and process.poll() is None:
-                        os.killpg(process.pid, signal.SIGKILL); process.wait(timeout=2)
+                        os.killpg(process.pid, signal.SIGKILL); process.wait()
+                    if process is not None and process.returncode is not None:
+                        from vipe_benchmark.s1_helper_session import retire_owned
+                        retire_owned(process.pid)
                     print('S1_SCRIPT_CHILD '+json.dumps(dict(argv=argv, cwd=str(ROOT),
                         start_monotonic=start, end_monotonic=time.monotonic(),
-                        returncode=returncode, timed_out=timed_out, stdout=stdout, stderr=stderr), sort_keys=True), flush=True)
+                        returncode=returncode, timed_out=timed_out, stdout=stdout, stderr=stderr,owned_observations=owned_observations), sort_keys=True), flush=True)
                 self.assertFalse(timed_out); self.assertEqual(returncode, 0, stdout+stderr)
                 self.assertIn('Ran 1 test', stderr); self.assertIn('\nOK\n', stderr)
                 class_name, method = case['selector'].split('.')
@@ -1520,7 +1906,7 @@ SUBTEST_CASES = {
 'test_vipe_benchmark_s1_recovery.ReservationClockTests.test_phase_boundaries': [{'kind': 'zero', 'work': True, 'valid': True}, {'kind': 'before_work', 'work': True, 'valid': True}, {'kind': 'at_work', 'work': True, 'valid': False}, {'kind': 'after_work', 'work': True, 'valid': False}, {'kind': 'at_total', 'work': False, 'valid': True}, {'kind': 'after_total', 'work': False, 'valid': False}, {'kind': 'negative', 'work': True, 'valid': False}, {'kind': 'nan', 'work': True, 'valid': False}, {'kind': 'infinity', 'work': True, 'valid': False}, {'kind': 'before_start', 'work': True, 'valid': False}, {'kind': 'wrong_boot', 'work': True, 'valid': False}],
 'test_vipe_benchmark_s1_recovery.ReservationClockTests.test_failure_reconciliation': [{'kind': 'missing'}, {'kind': 'failed'}, {'kind': 'not_reached'}, {'kind': 'unavailable'}, {'kind': 'late'}, {'kind': 'nan'}],
 'test_vipe_benchmark_s1_recovery.ReservationClockTests.test_worker_bootstrap': [{'kind': 'valid'}, {'kind': 'missing'}, {'kind': 'forged'}, {'kind': 'operation'}, {'kind': 'output'}, {'kind': 'request'}, {'kind': 'config'}, {'kind': 'script'}, {'kind': 'interpreter'}, {'kind': 'duplicate'}],
-'test_vipe_benchmark_s1_recovery.ReservationClockTests.test_real_segment_publication_barriers': [{'kind': 'positive', 'first_loads': 6}, {'kind': 'reuse_positive', 'first_loads': 8}, {'kind': 'qualification', 'first_loads': 2}, {'kind': 'runtime', 'first_loads': 2}, {'kind': 'envelope_qualification', 'first_loads': 3}, {'kind': 'hash', 'first_loads': 5}, {'kind': 'write', 'first_loads': 5}, {'kind': 'readback', 'first_loads': 5}, {'kind': 'reverify', 'first_loads': 5}, {'kind': 'reuse', 'first_loads': 7}, {'kind': 'pre_input', 'first_loads': 5}],
+'test_vipe_benchmark_s1_recovery.ReservationClockTests.test_real_segment_publication_barriers': [{'kind': 'positive', 'first_loads': 6}, {'kind': 'reuse_positive', 'first_loads': 8}, {'kind': 'qualification', 'first_loads': 2}, {'kind': 'runtime', 'first_loads': 2}, {'kind': 'envelope_qualification', 'first_loads': 3}, {'kind': 'hash', 'first_loads': 3}, {'kind': 'write', 'first_loads': 3}, {'kind': 'readback', 'first_loads': 3}, {'kind': 'reverify', 'first_loads': 4}, {'kind': 'reuse', 'first_loads': 5}, {'kind': 'pre_input', 'first_loads': 4}],
 'test_vipe_benchmark_s1_recovery.ReservationClockTests.test_acceptance_and_historical_authority': [{'kind': 'start'}, {'kind': 'boot'}, {'kind': 'effective'}, {'kind': 'sequence'}, {'kind': 'hash'}],
 
 'test_vipe_benchmark_s1_recovery.NumericalEnvelopeTests.test_typed_numerical_fields': [{'field': 'native_group_wall_seconds',

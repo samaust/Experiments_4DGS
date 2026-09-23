@@ -1,3 +1,4 @@
+from .s1_progress import checked_clock_reservation
 """Serial process-group supervisor with deadlines that include cleanup."""
 import os
 from pathlib import Path
@@ -9,10 +10,11 @@ from .files import file_record, read_json, safe_path
 
 
 class SupervisionFailure(RuntimeError):
-    def __init__(self, message, *, kind, stop_required):
+    def __init__(self, message, *, kind, stop_required, verified_progress_reference=None):
         super().__init__(message)
         self.kind = kind
         self.stop_required = stop_required
+        self.verified_progress_reference = verified_progress_reference
 
 
 def group_processes(pgid, *, include_zombies=False):
@@ -47,6 +49,8 @@ def stop_group(process, deadline):
     while group_processes(pgid) and time.monotonic() < deadline:
         time.sleep(.01)
     process.wait(timeout=max(.01, deadline - time.monotonic()))
+    from .s1_helper_session import retire_owned
+    retire_owned(process.pid)
     return group_processes(pgid)
 
 
@@ -98,6 +102,8 @@ class HelperLifecycle:
         self.retain = retain
         self.session_factory = session_factory
         self.poisoned = False
+        from .s1_progress import RetainedProgress
+        self.progress = RetainedProgress()
 
     def acquire(self):
         if self.poisoned:
@@ -111,12 +117,15 @@ class HelperLifecycle:
             except BaseException as exc:
                 self.poisoned = True
                 raise HelperFailure(dict(error_class=type(exc).__name__, message=str(exc)[:1024], phase='startup', cause=None if exc.__cause__ is None else dict(error_class=type(exc.__cause__).__name__,message=str(exc.__cause__)[:1024]))) from exc
-        return self.helpers[0]
+        helper=self.helpers[0]
+        if hasattr(helper, 'progress_cache'): self.progress=helper.progress_cache
+        return helper
 
     def ownership(self):
         return [record for helper in self.helpers for record in helper.ownership()]
 
     def reap(self, deadline):
+        self.progress.freeze('helper retirement')
         while self.helpers:
             for helper in list(self.helpers):
                 try:
@@ -173,6 +182,8 @@ def monitored_call(function, deadline, sampler, config, peak, *, worker=None,
         result = None
         while True:
             responses = session.tick(deadline)
+            if lifecycle.progress.integrity:
+                raise ValueError('progress integrity failure: '+lifecycle.progress.integrity)
             for role, value, received, dispatch in responses:
                 if role == 'work':
                     completed, result = received, value
@@ -196,15 +207,17 @@ def monitored_call(function, deadline, sampler, config, peak, *, worker=None,
                 session.submit('sample', sampler, deadline)
             time.sleep(min(.005, max(0., deadline-time.monotonic())))
     except BaseException as exc:
-        lifecycle.poisoned = True
+        record_progress_failure(lifecycle,exc,phase)
         primary = exc
         if isinstance(exc, GPUOwnershipError):
             primary = HelperFailure(dict(error_class='GPUOwnershipError', message=str(exc), phase=phase))
+            primary.verified_progress_reference = lifecycle.progress.reference()
             raise primary from exc
         if (isinstance(exc, (EOFError, OSError)) and not isinstance(exc, TimeoutError)) or (session is not None and not session.ready and not isinstance(exc, TimeoutError)):
             primary = HelperFailure(dict(error_class=type(exc).__name__, message=str(exc),
                 phase='startup' if session is None or len(session.ready) != 2 else 'transport',
                 ownership=dict(pid=getattr(exc, 'helper_pid', None))))
+            primary.verified_progress_reference = lifecycle.progress.reference()
             raise primary from exc
         raise
     finally:
@@ -260,17 +273,23 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
             lifecycle.helpers[0].admission_guard()
         reservation = reserve(job_id, command, evidence, seconds_limit=seconds_limit)
     except BaseException as exc:
-        if is_s1 and lifecycle.helpers:
-            cleanup_end = getattr(lifecycle.helpers[0], 'cleanup_deadline', time.monotonic())
-            if not lifecycle.reap(cleanup_end):
-                exc.cleanup_uncertain = True
-                exc.add_note('pre-reservation helper cleanup not confirmed')
+        try:
+            if is_s1 and lifecycle.helpers:
+                cleanup_end = getattr(lifecycle.helpers[0], 'cleanup_deadline', time.monotonic())
+                if not lifecycle.reap(cleanup_end):
+                    exc.cleanup_uncertain = True
+                    exc.add_note('pre-reservation helper cleanup not confirmed')
+        except BaseException as cleanup:
+            exc.cleanup_uncertain=True
+            exc.add_note('pre-reservation helper cleanup: '+repr(cleanup))
+            exc.pre_reservation_cleanup_error=cleanup
         raise
     start = reservation['monotonic_start']
     deadline = start + reservation['seconds']
     cleanup_reserve = min(30., reservation['seconds'] / 4)
     run_deadline = deadline - cleanup_reserve
     process, stopped, error = None, [], None
+    primary_failure=None;primary_exception=None;secondary_failures=[]
     failure_kind, stop_required = 'supervisor', True
     result_record = None
     acceptance = None
@@ -286,7 +305,7 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
             env.update(MKL_NUM_THREADS='1', NUMEXPR_NUM_THREADS='1', OPENCV_FOR_THREADS_NUM='1')
             import json
             from .s1_clock import ReservationClock
-            env['VIPE_S1_RESERVATION_CLOCK'] = json.dumps(ReservationClock.from_reservation(reservation).mapping(), allow_nan=False)
+            env['VIPE_S1_RESERVATION_CLOCK'] = json.dumps(checked_clock_reservation(reservation).mapping(), allow_nan=False)
         temporary = output.with_name(output.name + '-temporary')
         temporary.mkdir(exist_ok=False)
         env['TMPDIR'] = str(temporary)
@@ -300,13 +319,25 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
         ledger.note('temporary_directory', job_id=job_id, path=str(temporary), native_caches=caches)
         with output.with_suffix('.log').open('x') as log:
             if is_s1:
-                monitored_call(dict(operation='prelaunch', args=dict(local=str(ledger.path.parent),
+                progress_context = monitored_call(dict(operation='prelaunch', args=dict(local=str(ledger.path.parent),
                     config=ledger.config, reservation=reservation, command=command)),
                     run_deadline, sampler, ledger.config, peak, phase='prelaunch', lifecycle=lifecycle)
                 if time.monotonic() >= run_deadline:
                     raise TimeoutError('S1 prelaunch deadline exhausted')
-            process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
+                lifecycle.helpers[0].install_progress(progress_context,run_deadline)
+                if time.monotonic()>=run_deadline:raise TimeoutError('S1 original work deadline after progress installation')
+                env['VIPE_S1_PROGRESS_CONTEXT'] = json.dumps(progress_context,allow_nan=False)
+            if is_s1 and os.environ.get('S1_OWNED_ROOT_NOTE'):
+                from .s1_helper_session import predispatch_owned
+                if time.monotonic()>=run_deadline:raise TimeoutError('S1 original work deadline before ownership admission')
+                owned=predispatch_owned('supervisor worker')
+            if is_s1 and time.monotonic() >= run_deadline:
+                raise TimeoutError('S1 original work deadline immediately before worker launch')
+            from .s1_helper_session import create_owned_process
+            process = create_owned_process('supervisor worker',subprocess.Popen,command, deadline=run_deadline if is_s1 else None, stdout=log, stderr=subprocess.STDOUT,
                                        start_new_session=True, env=env)
+            from .s1_helper_session import register_owned
+            register_owned(process.pid,'supervisor worker')
             ledger.note('started', job_id=job_id, pid=process.pid, pgid=process.pid)
             while True:
                 reading = (monitored_call(sampler, min(run_deadline, time.monotonic()+1.), sampler,
@@ -373,79 +404,108 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
         elif isinstance(exc, HelperFailure):
             failure_kind, stop_required = exc.kind, True
         error = f'{type(exc).__name__}: {exc}'
+        primary_exception=exc
+        primary_failure=dict(error_class=type(exc).__name__,message=str(exc),kind=failure_kind,
+            phase=getattr(exc,'failure',{}).get('phase',getattr(exc,'s1_phase','supervisor')),
+            observed=getattr(exc,'s1_first_observed',time.monotonic()),stop_required=stop_required)
     finally:
-        evidence_summary = None
-        if is_s1 and time.monotonic() < run_deadline:
-            from .s1_recovery import prepare_terminal_evidence
-            try:
-                evidence_summary = monitored_call(dict(operation='reconcile', args=dict(
-                    local=str(ledger.path.parent), config=ledger.config, reservation=reservation,
-                    outcome=dict(error=error, result=result_record, acceptance=acceptance), deadline=run_deadline)),
-                    run_deadline, sampler, ledger.config, peak, worker=process, phase='reconciliation', lifecycle=lifecycle)
-            except Exception as exc:
-                error = (error or '') + f'; reconciliation failed: {type(exc).__name__}: {exc}'
-                failure_kind, stop_required = 'evidence_reconciliation', True
-        # A second Ctrl-C must not interrupt process cleanup.
-        for sig in old_handlers:
-            signal.signal(sig, signal.SIG_IGN)
-        cleanup_uncertain = False if is_s1 else not lifecycle.reap(deadline)
-        if cleanup_uncertain:
-            failure_kind, stop_required = 'cleanup', True
-            error = (error or '') + '; helper cleanup not confirmed'
-        try:
-            if is_s1 and lifecycle.helpers: lifecycle.helpers[0].retire_worker()
-            stopped = stop_group(process, deadline)
-        except BaseException as exc:
-            failure_kind, stop_required = 'cleanup', True
-            cleanup_uncertain = True
-            try:
-                stopped = group_processes(process.pid) if process else []
-            except Exception:
-                stopped = []
-            error = (error or '') + f'; cleanup failed: {type(exc).__name__}: {exc}'
-        for sig, handler in old_handlers.items():
-            signal.signal(sig, handler)
-        if stopped:
-            failure_kind, stop_required = 'cleanup', True
-            error = (error or '') + f'; processes not confirmed stopped: {stopped}'
-        elapsed = time.monotonic() - start
-        if elapsed > reservation['seconds']:
-            failure_kind, stop_required = 'cleanup_deadline', True
-            error = (error or '') + '; total deadline exceeded'
-        evidence = dict(error=error, result=result_record, peak=peak, surviving_pids=stopped,
-                        cleanup_confirmed=not stopped and not cleanup_uncertain, cleanup_uncertain=cleanup_uncertain, failure_kind=failure_kind if error else None,
-                        stop_required=stop_required if error else False)
-        if is_s1:
-            evidence.update(reservation={k:reservation[k] for k in ('sequence','event_sha256')},
-                            acceptance=acceptance, evidence_summary_record=evidence_summary)
-            try:
-                if terminal_publisher is None:
-                    raise ValueError('S1 charged terminal publisher required')
-                evidence['terminal_receipt'] = monitored_call(
-                    dict(operation='publish', args=dict(local=str(ledger.path.parent), docs=str(terminal_docs),
-                        config=ledger.config, reservation=reservation, outcome=evidence)),
-                    deadline - min(.1, cleanup_reserve / 10), sampler, ledger.config, peak,
-                    worker=None, phase='publication', lifecycle=lifecycle)
+        evidence_summary=None;cleanup_uncertain=False;helper_errors=[]
+        def final_step(phase,operation,default=None):
+            # Every fallible finalization edge uses the same primary-preserving
+            # closure. A first cleanup error is itself a failure, never success.
+            nonlocal primary_exception,primary_failure,error,failure_kind,stop_required,cleanup_uncertain
+            try:return operation()
             except BaseException as exc:
-                error = (error or '') + f'; evidence publication failed: {exc}'
-                failure_kind, stop_required = 'evidence_publication', True
-                evidence.update(error=error, stop_required=True, failure_kind=failure_kind)
-            elapsed = time.monotonic() - start
-            if elapsed >= reservation['seconds']:
-                error = (error or '') + '; total deadline exceeded'
-                failure_kind, stop_required = 'cleanup_deadline', True
-                evidence.update(error=error, stop_required=True, failure_kind=failure_kind)
-        # Publication can introduce new unsettled helpers after worker cleanup.
-        if not lifecycle.reap(deadline):
-            error = (error or '') + '; helper cleanup not confirmed after publication'
-            failure_kind, stop_required = 'cleanup', True
-            evidence.update(error=error, failure_kind=failure_kind, stop_required=True,
-                            cleanup_confirmed=False, cleanup_uncertain=True)
-        evidence.update(helper_ownership=lifecycle.ownership(), helper_cleanup_errors=list(lifecycle.errors))
-        if checkpoint and not error:
-            ledger.checkpoint(job_id, elapsed, **evidence)
-        else:
-            ledger.finish(job_id, 'failed' if error else 'complete', elapsed, **evidence)
+                observed=time.monotonic()
+                item=dict(error_class=type(exc).__name__,message=str(exc),phase=phase,observed=observed)
+                secondary_failures.append(item)
+                if primary_exception is None:
+                    primary_exception=exc
+                    primary_failure=dict(item,kind=phase,stop_required=True)
+                else:primary_exception.add_note(phase+': '+type(exc).__name__+': '+str(exc))
+                error=(error or '')+'; '+phase.replace('_',' ')+' failed: '+type(exc).__name__+': '+str(exc)
+                failure_kind=phase;stop_required=True
+                if phase in ('cleanup','final_cleanup','ownership','signal_restore'):cleanup_uncertain=True
+                return default
+        def reconcile():
+            if is_s1 and not lifecycle.poisoned and time.monotonic()<run_deadline:
+                return monitored_call(dict(operation='reconcile',args=dict(local=str(ledger.path.parent),
+                    config=ledger.config,reservation=reservation,outcome=dict(error=error,result=result_record,acceptance=acceptance),deadline=run_deadline)),
+                    run_deadline,sampler,ledger.config,peak,worker=process,phase='reconciliation',lifecycle=lifecycle)
+        evidence_summary=final_step('evidence_reconciliation',reconcile)
+        for sig in old_handlers:final_step('signal_ignore',lambda sig=sig:signal.signal(sig,signal.SIG_IGN))
+        def reap_helpers():
+            if not lifecycle.reap(deadline):raise RuntimeError('helper cleanup not confirmed')
+        if not is_s1:final_step('cleanup',reap_helpers)
+        def retire_worker():
+            if is_s1 and lifecycle.helpers:lifecycle.helpers[0].retire_worker()
+        final_step('cleanup',retire_worker)
+        stopped=final_step('cleanup',lambda:stop_group(process,deadline),[])
+        for sig,handler in old_handlers.items():final_step('signal_restore',lambda sig=sig,handler=handler:signal.signal(sig,handler))
+        def check_stopped():
+            if stopped:raise RuntimeError('processes not confirmed stopped: '+str(stopped))
+        final_step('cleanup',check_stopped)
+        elapsed=time.monotonic()-start
+        def check_total():
+            if time.monotonic()-start>=reservation['seconds']:raise TimeoutError('total deadline exceeded')
+        final_step('cleanup_deadline',check_total)
+        evidence=dict(error=error,result=result_record,peak=peak,surviving_pids=stopped,
+            cleanup_confirmed=not stopped and not cleanup_uncertain,cleanup_uncertain=cleanup_uncertain,
+            failure_kind=failure_kind if error else None,stop_required=stop_required if error else False,
+            primary_failure=primary_failure,secondary_failures=secondary_failures,secondary_outcome_kind=None)
+        if is_s1:
+            def progress_fields():
+                evidence.update(reservation={k:reservation[k] for k in ('sequence','event_sha256')},acceptance=acceptance,
+                    evidence_summary_record=evidence_summary,verified_progress_reference=lifecycle.progress.reference(),
+                    terminal_receipt=None,terminal_publication_status='unavailable')
+            final_step('progress_reference',progress_fields)
+            def publish():
+                if lifecycle.poisoned or lifecycle.progress.integrity or time.monotonic()>=deadline-min(.1,cleanup_reserve/10):
+                    raise RuntimeError('retained helper unavailable for terminal publication')
+                if terminal_publisher is None:raise ValueError('S1 charged terminal publisher required')
+                evidence['terminal_receipt']=monitored_call(dict(operation='publish',args=dict(local=str(ledger.path.parent),
+                    docs=str(terminal_docs),config=ledger.config,reservation=reservation,outcome=evidence)),
+                    deadline-min(.1,cleanup_reserve/10),sampler,ledger.config,peak,worker=None,phase='publication',lifecycle=lifecycle)
+                evidence['terminal_publication_status']='published'
+            final_step('evidence_publication',publish)
+            final_step('publication_deadline',check_total)
+        final_step('final_cleanup',reap_helpers)
+        if is_s1:
+            reference=final_step('progress_reference',lambda:lifecycle.progress.reference())
+            if reference is not None:evidence['verified_progress_reference']=reference
+        evidence['helper_ownership']=final_step('ownership',lifecycle.ownership,[])
+        helper_errors=final_step('ownership',lambda:list(lifecycle.errors),[])
+        evidence['helper_cleanup_errors']=helper_errors
+        def refresh_evidence():
+            evidence.update(error=error,primary_failure=primary_failure,secondary_failures=secondary_failures,
+                failure_kind=primary_failure['kind'] if primary_failure else (failure_kind if error else None),
+                secondary_outcome_kind=failure_kind if primary_failure and failure_kind!=primary_failure['kind'] else None,
+                stop_required=stop_required if error else False,cleanup_uncertain=cleanup_uncertain,
+                cleanup_confirmed=not stopped and not cleanup_uncertain)
+        refresh_evidence()
+        elapsed=time.monotonic()-start
+        def finalize_ledger():
+            if checkpoint and not error:ledger.checkpoint(job_id,elapsed,**evidence)
+            else:ledger.finish(job_id,'failed' if error else 'complete',elapsed,**evidence)
+        final_step('ledger_finalization',finalize_ledger)
+        refresh_evidence()
+        if primary_failure is not None:failure_kind=primary_failure['kind']
     if error:
-        raise SupervisionFailure(error, kind=failure_kind, stop_required=stop_required)
+        failure=SupervisionFailure(error,kind=failure_kind,stop_required=stop_required,verified_progress_reference=evidence.get('verified_progress_reference'))
+        failure.primary_failure=primary_failure;failure.primary_exception=primary_exception
+        failure.secondary_failures=list(secondary_failures);failure.helper_cleanup_errors=helper_errors
+        failure.final_evidence=evidence
+        raise failure from primary_exception
     return read_json(result_record['path'])
+
+
+
+def record_progress_failure(lifecycle,error,phase):
+    """The same owner transition handles local and transported integrity failure."""
+    from .s1_progress import ProgressIntegrityError
+    lifecycle.progress.freeze(error,integrity=isinstance(error,ProgressIntegrityError) or getattr(error,'failure',{}).get('error_class')=='ProgressIntegrityError')
+    error.verified_progress_reference=lifecycle.progress.reference()
+    lifecycle.poisoned=True
+    error.s1_phase=phase
+    if not hasattr(error,'s1_first_observed'):error.s1_first_observed=time.monotonic()
+    return error.verified_progress_reference

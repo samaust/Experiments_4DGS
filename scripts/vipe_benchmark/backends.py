@@ -76,8 +76,17 @@ class BackendError(RuntimeError):
     """A component is unusable; no sample may be marked complete."""
 
 
+def _s1_call(gate, function, *args, **kwargs):
+    """Optional S1-only operation seam; no environment-selected behavior."""
+    return function(*args, **kwargs) if gate is None else gate(function, *args, **kwargs)
+
+
 class AssetBundle:
-    def __init__(self, component, records):
+    def __init__(self, component, records, *, s1_gate=None):
+        if s1_gate is not None and component != 'S1':
+            raise ValueError('deadline hook is restricted to S1')
+        self.s1_gate=s1_gate
+        run=lambda function,*args,**kwargs: _s1_call(s1_gate,function,*args,**kwargs)
         if component not in REQUIRED_ASSETS:
             raise ValueError(f'unknown native component: {component}')
         missing = set(REQUIRED_ASSETS[component]) - set(records)
@@ -86,9 +95,9 @@ class AssetBundle:
         self.records, self.paths = {}, {}
         for name in REQUIRED_ASSETS[component]:
             record = records[name]
-            path = safe_path(record['path']).resolve()
+            path = run(run(safe_path,record['path']).resolve)
             if name.endswith(('_source', '_snapshot')):
-                if not path.is_dir() or not record.get('files'):
+                if not run(path.is_dir) or not record.get('files'):
                     raise BackendError(f'{component}: {name} needs a local directory and file hashes')
                 revision = record.get('revision', '')
                 expected = SOURCE_PINS.get(name, SNAPSHOT_PINS.get(name))
@@ -96,24 +105,24 @@ class AssetBundle:
                     raise BackendError(f'{component}: wrong or missing revision for {name}')
                 listed = set()
                 for item in record['files']:
-                    item_path = safe_path(item['path']).absolute()
+                    item_path = run(run(safe_path,item['path']).absolute)
                     # HF snapshots commonly contain symlinks to adjacent blobs;
                     # lexical membership plus verified target bytes allows those.
                     if not item_path.is_relative_to(path):
                         raise BackendError(f'{name}: listed file is outside its declared directory')
-                    verify_record(item)
+                    run(verify_record,item)
                     listed.add(str(item_path.relative_to(path)))
                 if name in SNAPSHOT_PINS and not {'config.json', 'model.safetensors'} <= listed:
                     raise BackendError(f'{name}: pinned config.json and model.safetensors required')
             else:
-                verify_record(record)
+                run(verify_record,record)
                 expected_name = CHECKPOINT_NAMES.get(name)
-                if expected_name and safe_path(record['path']).name != expected_name:
+                if expected_name and run(safe_path,record['path']).name != expected_name:
                     raise BackendError(f'{component}: {name} must select {expected_name}')
             self.records[name] = record
             self.paths[name] = path
         self.provenance = dict(component=component, assets=self.records,
-                               assets_sha256=object_hash(self.records))
+                               assets_sha256=run(object_hash,self.records))
 
     def __getitem__(self, name):
         return str(self.paths[name])
@@ -121,14 +130,14 @@ class AssetBundle:
     def source(self, name):
         root = self.paths[name]
         for location in (root / 'src', root):
-            if location.is_dir() and str(location) not in sys.path:
+            if _s1_call(self.s1_gate,location.is_dir) and str(location) not in sys.path:
                 sys.path.insert(0, str(location))
         return root
 
     def module(self, module_name, source_name):
         root = self.source(source_name)
-        module = importlib.import_module(module_name)
-        if not getattr(module, '__file__', None) or not safe_path(module.__file__).resolve().is_relative_to(root):
+        module = _s1_call(self.s1_gate,importlib.import_module,module_name)
+        if not getattr(module, '__file__', None) or not _s1_call(self.s1_gate,_s1_call(self.s1_gate,safe_path,module.__file__).resolve).is_relative_to(root):
             raise BackendError(f'{module_name}: imported module does not belong to pinned {source_name}')
         return module
 
@@ -632,7 +641,8 @@ def _s1_aot_module(bundle):
         np.random.set_state(state)
 
 
-def _s1_tracker(aot_module, runtime, arguments):
+def _s1_tracker(aot_module, runtime, arguments, *, s1_gate=None):
+    run=lambda function,*args,**kwargs: _s1_call(s1_gate,function,*args,**kwargs)
     prescribed = dict(phase='PRE_YTB_DAV', model='r50_deaotl', long_term_mem_gap=9999,
                       max_len_long_term=9999, gpu_id=0)
     if (set(arguments) != set(prescribed) | {'model_path'} or
@@ -641,7 +651,7 @@ def _s1_tracker(aot_module, runtime, arguments):
             not Path(arguments['model_path']).is_absolute()):
         raise BackendError('S1 AOT engine bridge requires the exact frozen tracker settings')
     temporary_root = os.environ.get('TMPDIR')
-    if not temporary_root or not safe_path(temporary_root).is_dir():
+    if not temporary_root or not run(run(safe_path,temporary_root).is_dir):
         raise BackendError('S1 AOT construction requires the supervised job TMPDIR')
     original_builder = aot_module.build_engine
     builder_calls = 0
@@ -654,21 +664,29 @@ def _s1_tracker(aot_module, runtime, arguments):
             raise BackendError('S1 AOT wrapper changed its frozen engine constructor contract')
         builder_calls += 1
         del kwargs['max_len_long_term']
-        return original_builder(name, phase=phase, **kwargs)
-    directory = tempfile.TemporaryDirectory(prefix='s1-aot-config-', dir=Path(temporary_root).resolve())
-    previous = Path.cwd()
+        return run(original_builder,name, phase=phase, **kwargs)
+    directory=None;cwd=None
+    if s1_gate is None:
+        directory=tempfile.TemporaryDirectory(prefix='s1-aot-config-',dir=Path(temporary_root).resolve())
+        previous=Path.cwd()
+    else:
+        from .s1_progress import OwnedWorkingDirectory
+        cwd=OwnedWorkingDirectory()
     try:
-        os.chdir(directory.name)
+        if s1_gate is not None:directory=run(tempfile.TemporaryDirectory,prefix='s1-aot-config-',dir=run(Path(temporary_root).resolve))
+        run(os.chdir,directory.name)
         with patch.object(aot_module, 'build_engine', build_engine):
-            native = aot_module.get_aot(dict(arguments))
+            native = run(aot_module.get_aot,dict(arguments))
         if builder_calls != 1:
             raise BackendError('S1 AOT wrapper did not construct exactly one native engine')
-        return S1TrackerBridge(native, runtime, directory)
+        return run(S1TrackerBridge,native, runtime, directory)
     except BaseException:
-        directory.cleanup()
+        if directory is not None:directory.cleanup()
         raise
     finally:
-        os.chdir(previous)
+        if s1_gate is None:os.chdir(previous)
+        else:cwd.restore(getattr(s1_gate,'cleanup_deadline',None))
+
 
 
 class LegacyStandaloneBackend:
@@ -1126,23 +1144,24 @@ class DepthProBackend:
 
 
 def _grounding(bundle, runtime, text_threshold, *, s1_assignment=False):
+    run=lambda function,*args,**kwargs: _s1_call(getattr(bundle,'s1_gate',None),function,*args,**kwargs)
     source = 'grounding_source'
     models = bundle.module('groundingdino.models', source)
-    config = bundle.module('groundingdino.util.slconfig', source).SLConfig.fromfile(bundle['grounding_config'])
+    config = run(bundle.module('groundingdino.util.slconfig', source).SLConfig.fromfile,bundle['grounding_config'])
     config.device = runtime.device
     config.text_encoder_type = bundle['bert_snapshot']
-    model = models.build_model(config)
+    model = run(models.build_model,config)
     utils = bundle.module('groundingdino.util.utils', source)
-    checkpoint = runtime.torch.load(bundle['grounding_checkpoint'], map_location='cpu', weights_only=True)
-    incompatible = model.load_state_dict(utils.clean_state_dict(checkpoint['model']), strict=False)
+    checkpoint = run(runtime.torch.load,bundle['grounding_checkpoint'], map_location='cpu', weights_only=True)
+    incompatible = run(model.load_state_dict,run(utils.clean_state_dict,checkpoint['model']), strict=False)
     # The official loader uses strict=False. Keep the exact policy and disclose
     # every mismatch, instead of hiding it or selecting alternate weights.
-    model = model.to(device=runtime.device, dtype=runtime.torch.float32).eval()
+    model = run(run(model.to,device=runtime.device, dtype=runtime.torch.float32).eval)
     transforms = bundle.module('groundingdino.datasets.transforms', source)
-    transform = transforms.Compose([transforms.RandomResize([800], max_size=1333), transforms.ToTensor(),
-        transforms.Normalize([.485, .456, .406], [.229, .224, .225])])
+    transform = run(transforms.Compose,[run(transforms.RandomResize,[800], max_size=1333), run(transforms.ToTensor),
+        run(transforms.Normalize,[.485, .456, .406], [.229, .224, .225])])
     predict = bundle.module('groundingdino.util.inference', source).predict
-    detector = GroundingDetector(model, transform, predict, runtime, text_threshold,
+    detector = run(GroundingDetector,model, transform, predict, runtime, text_threshold,
                                  s1_assignment=s1_assignment)
     detector.metadata['state_dict_missing_keys'] = list(incompatible.missing_keys)
     detector.metadata['state_dict_unexpected_keys'] = list(incompatible.unexpected_keys)
@@ -1242,27 +1261,31 @@ def _build_native(component, bundle, runtime):
     if component == 'S0':
         return _legacy_vipe_segmentation(bundle, runtime)
     if component == 'S1':
+        gate=getattr(bundle,'s1_gate',None)
+        run=lambda function,*args,**kwargs: _s1_call(gate,function,*args,**kwargs)
         detector = _grounding(bundle, runtime, .5, s1_assignment=True)
         sam = bundle.module('segment_anything', 'sam_source')
-        predictor = sam.SamPredictor(sam.sam_model_registry['vit_b'](
-            checkpoint=bundle['sam_checkpoint']).to(device=runtime.device, dtype=torch.float32).eval())
+        model=run(sam.sam_model_registry['vit_b'],checkpoint=bundle['sam_checkpoint'])
+        model=run(run(model.to,device=runtime.device,dtype=torch.float32).eval)
+        predictor=run(sam.SamPredictor,model)
         # Setup preserves SAM-Track's vendored tree and exposes the separate
         # prescribed AOT revision through its package namespace.
         bundle.source('aot_source')
         bundle.source('samtrack_source')
         aot_module = _s1_aot_module(bundle)
-        aot_package = importlib.import_module('aot')
-        locations = [safe_path(p).resolve() for p in getattr(aot_package, '__path__', [])]
+        aot_package = run(importlib.import_module,'aot')
+        locations = [run(run(safe_path,p).resolve) for p in getattr(aot_package, '__path__', [])]
         if bundle.paths['aot_source'] not in locations:
             raise BackendError('SAM-Track aot import is not the declared pinned AOT source')
         gpu_id = 0 if runtime.device == 'cuda' else int(runtime.device.split(':')[1])
-        tracker = _s1_tracker(aot_module, runtime, dict(phase='PRE_YTB_DAV', model='r50_deaotl',
-            model_path=bundle['aot_checkpoint'], long_term_mem_gap=9999, max_len_long_term=9999,
-            gpu_id=gpu_id))
+        arguments=dict(phase='PRE_YTB_DAV',model='r50_deaotl',model_path=bundle['aot_checkpoint'],
+            long_term_mem_gap=9999,max_len_long_term=9999,gpu_id=gpu_id)
+        tracker=(_s1_tracker(aot_module,runtime,arguments) if gate is None else
+            _s1_tracker(aot_module,runtime,arguments,s1_gate=gate))
         attention = bundle.module('networks.layers.attention', 'aot_source')
         if not attention.enable_corr:
             raise BackendError('AOT native correlation extension is unavailable; implicit fallback is prohibited')
-        return LegacyStandaloneBackend(detector, predictor, tracker, runtime, bundle.provenance)
+        return run(LegacyStandaloneBackend,detector, predictor, tracker, runtime, bundle.provenance)
     if component in ('S2', 'S4'):
         if component == 'S2':
             detector = _grounding(bundle, runtime, .25)
@@ -1343,24 +1366,26 @@ def _build_native(component, bundle, runtime):
     raise BackendError(f'unimplemented native component: {component}')
 
 
-def build_backend(component, assets, *, device='cuda'):
+def build_backend(component, assets, *, device='cuda', s1_gate=None):
     """Build one pinned backend from verified local files in an admitted worker.
 
     This constructs models and allocates their requested GPU resources; it must
     be called inside the component job's budget, never by setup/import probes.
     ``REQUIRED_ASSETS`` describes the public asset-name contract.
     """
-    bundle = AssetBundle(component, assets)
+    if s1_gate is not None and component != 'S1':raise ValueError('deadline hook is restricted to S1')
+    run=lambda function,*args,**kwargs: _s1_call(s1_gate,function,*args,**kwargs)
+    bundle = AssetBundle(component, assets) if s1_gate is None else AssetBundle(component,assets,s1_gate=s1_gate)
     if not re.fullmatch(r'cuda(?::0)?', str(device)):
         raise BackendError('Plan 031 permits one CUDA device; CPU fallback is prohibited')
     if any(os.environ.get(name) != '1' for name in ('HF_HUB_OFFLINE', 'TRANSFORMERS_OFFLINE')):
         raise BackendError('native worker must set HF_HUB_OFFLINE=1 and TRANSFORMERS_OFFLINE=1 before imports')
-    torch = importlib.import_module('torch')
-    if not torch.cuda.is_available():
+    torch = run(importlib.import_module,'torch')
+    if not run(torch.cuda.is_available):
         raise BackendError('CUDA unavailable; no CPU fallback')
     if component in ('S2', 'S3', 'S4', 'D2') and not torch.cuda.is_bf16_supported():
         raise BackendError('native bfloat16 inference is required; precision fallback is prohibited')
-    runtime = TorchRuntime(torch, str(device))
+    runtime = run(TorchRuntime,torch, str(device))
     def no_download(*args, **kwargs):
         raise BackendError('native backend attempted an unadmitted download; supply the exact local asset')
     # The caller's network guard must remain installed throughout the worker.
@@ -1371,9 +1396,9 @@ def build_backend(component, assets, *, device='cuda'):
         stack.enter_context(patch.object(torch.hub, 'load_state_dict_from_url', no_download))
         backend = _build_native(component, bundle, runtime)
     import random
-    random.seed(0); np.random.seed(0); torch.manual_seed(0); torch.cuda.manual_seed_all(0)
-    settings_path = Path(__file__).resolve().parents[2] / 'configs/vipe-alternatives/components-v1.json'
-    settings = read_json(settings_path)['settings'][component]
-    backend.provenance.update(settings=settings, settings_sha256=object_hash(settings),
+    run(random.seed,0); run(np.random.seed,0); run(torch.manual_seed,0); run(torch.cuda.manual_seed_all,0)
+    settings_path = run(Path(__file__).resolve).parents[2] / 'configs/vipe-alternatives/components-v1.json'
+    settings = run(read_json,settings_path)['settings'][component]
+    backend.provenance.update(settings=settings, settings_sha256=run(object_hash,settings),
                               seed=0, batch_size=1, device=str(device))
     return backend

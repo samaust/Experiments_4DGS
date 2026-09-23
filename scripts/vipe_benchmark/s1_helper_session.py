@@ -369,6 +369,260 @@ def census():
     return rows
 
 
+class InvocationRegistry:
+    """One runner-owned identity registry; caller dictionaries cannot reset it."""
+    def __init__(self):
+        self.records={};self.anchor=None;self.lock=_thread.RLock()
+    def register(self,pid,event='spawn'):
+        with self.lock:
+            # The returned PID is charged before the first fallible identity read.
+            value=dict(boot_id=None,pid=pid,creation_parent=os.getpid(),creation_event=event,
+                state='unresolved',threads=[pid])
+            self.records[(None,pid,None)]=value
+            boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+            observed=identity(pid)
+            value.update(observed,boot_id=boot,state='live')
+            del self.records[(None,pid,None)]
+            self.records[(boot,pid,observed['start_ticks'])]=value
+            return value
+
+
+INVOCATION = InvocationRegistry()
+
+
+def owned_charge(B,H):
+    if type(B) is not int or type(H) is not int or min(B,H)<0 or B+max(1,H)>8:
+        raise ValueError('owned CPU thread ceiling')
+    return B+max(1,H)
+
+
+def predispatch_owned(event):
+    observed=owned_workload(os.environ['S1_OWNED_ROOT_NOTE'])
+    if observed['total_workers']+1>8:raise ValueError('owned '+event+' dispatch CPU capacity')
+    return observed
+
+
+def create_owned_process(event,create,*args,deadline=None,**kwargs):
+    """Common real creation gate; callers retain the returned handle immediately."""
+    if os.environ.get('S1_OWNED_ROOT_NOTE'):predispatch_owned(event)
+    from .s1_progress import before
+    before(deadline)
+    return create(*args,**kwargs)
+
+
+def register_owned(pid,event='spawn'):
+    if os.environ.get('S1_OWNED_ROOT_NOTE'):
+        return INVOCATION.register(pid,event)
+
+
+def retire_owned(pid):
+    """Called only after a matching child wait, including registration failure."""
+    with INVOCATION.lock:
+        for key,record in list(INVOCATION.records.items()):
+            if record['pid']==pid:
+                record.update(state='retired',retirement='matching child wait')
+                if key[2] is None:del INVOCATION.records[key]
+
+
+def validation_sources(repository):
+    """Read the unchanged contract expression, including both current globs."""
+    import ast
+    tree=ast.parse((repository/'scripts/vipe_benchmark/s1_validation_contract.py').read_text())
+    function=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='source_paths')
+    expression=function.body[0].value
+    if not isinstance(expression,ast.Call) or not isinstance(expression.func,ast.Name) or expression.func.id!='sorted':
+        raise ValueError('owned source contract shape')
+    items=expression.args[0].elts;paths=[]
+    for item in items:
+        if isinstance(item,ast.BinOp) and isinstance(item.left,ast.Name) and item.left.id=='ROOT':
+            paths.append(repository/ast.literal_eval(item.right))
+        elif isinstance(item,ast.Starred) and isinstance(item.value,ast.Call):
+            call=item.value
+            if not isinstance(call.func,ast.Attribute) or call.func.attr!='glob':raise ValueError('owned source glob')
+            root=call.func.value
+            if not isinstance(root,ast.BinOp) or not isinstance(root.left,ast.Name) or root.left.id!='ROOT':raise ValueError('owned source root')
+            paths.extend((repository/ast.literal_eval(root.right)).glob(ast.literal_eval(call.args[0])))
+        else:raise ValueError('owned source contract item')
+    return sorted(paths)
+
+
+def source_membership(records,repository):
+    expected=[str(path) for path in validation_sources(repository)]
+    if [record['path'] for record in records]!=expected:raise ValueError('owned source membership')
+    return expected
+
+
+def _launch_anchor(rows,boot,repository):
+    import ast,hashlib,re
+    run=repository/'docs/resolve-blocker/plan031-progress-20260922'
+    def cmd(pid):return Path('/proc',str(pid),'cmdline').read_bytes().rstrip(b'\0').split(b'\0')
+    cursor=os.getpid();seen=set()
+    while cursor in rows and cursor not in seen:
+        seen.add(cursor)
+        argv=cmd(cursor)
+        if len(argv)==3 and argv[1:]==[b'-B',b'-']:break
+        cursor=rows[cursor]['ppid']
+    else:raise ValueError('owned actual stdin runner unavailable')
+    runner=cursor;capture=rows[runner]['ppid']
+    if capture not in rows:raise ValueError('owned capture unavailable')
+    interpreter=repository/'.local/envs/stg-colmap/bin/python'
+    if Path(os.fsdecode(cmd(runner)[0])).resolve()!=interpreter.resolve() or Path('/proc',str(runner),'exe').resolve()!=interpreter.resolve():raise ValueError('owned runner interpreter')
+    if Path('/proc',str(runner),'cwd').resolve()!=repository:raise ValueError('owned runner cwd')
+    descriptor=Path('/proc',str(runner),'fd/0');stdin=Path(os.readlink(descriptor))
+    directory=stdin.parent
+    matched=re.fullmatch(r'(diagnostic|aggregate)-049-(\d{3,})',directory.name)
+    if stdin.name!='stdin.py' or directory.parent!=run or not matched:raise ValueError('owned stdin location')
+    kind,index=matched.groups()
+    if int(index)<1:raise ValueError('owned positive attempt index')
+    command=[str(interpreter),'-B','-m','vipe_benchmark.s1_validation_capture',str(directory),'--no-timeout']
+    if kind=='diagnostic':command.append('--diagnostic')
+    if cmd(capture)!=[v.encode() for v in command]:raise ValueError('owned capture argv')
+    if Path('/proc',str(capture),'cwd').resolve()!=repository or Path('/proc',str(capture),'exe').resolve()!=interpreter.resolve():raise ValueError('owned capture identity')
+    contract=ast.parse((repository/'scripts/vipe_benchmark/s1_validation_contract.py').read_text())
+    expected=ast.literal_eval(next(n.value for n in contract.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='STDIN' for t in n.targets))).encode()
+    named=stdin.stat();opened=descriptor.stat()
+    if (named.st_dev,named.st_ino,named.st_size)!=(opened.st_dev,opened.st_ino,opened.st_size) or stdin.read_bytes()!=expected:raise ValueError('owned stdin descriptor identity')
+    prefix=run/('driver-049-'+kind+'-'+index)
+    start=json.loads(Path(str(prefix)+'-exec-start.json').read_bytes())
+    for number,suffix in [(1,'-stdout.log'),(2,'-stderr.log')]:
+        live=Path('/proc',str(capture),'fd',str(number)).stat();named=Path(str(prefix)+suffix).stat()
+        if (live.st_dev,live.st_ino)!=(named.st_dev,named.st_ino) or start['logs'][str(number)]!={'device':live.st_dev,'inode':live.st_ino}:raise ValueError('owned driver log descriptor identity')
+    note_path=run/('launch-note-049-'+kind+'-'+index+'.json')
+    raw=note_path.read_bytes()
+    if start['note']!={'path':str(note_path),'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}:raise ValueError('owned exec-start note correlation')
+    return dict(runner=runner,capture=capture,note_path=str(note_path),raw=raw,directory=str(directory),command=command,stdin=(opened.st_dev,opened.st_ino,opened.st_size))
+
+
+def thread_identity(pid,tid):
+    fields=Path('/proc',str(pid),'task',str(tid),'stat').read_text().rsplit(')',1)[1].split()
+    return dict(tid=tid,start_ticks=int(fields[19]))
+
+
+def stable_process_identity(pid):
+    """Complete live identity, rechecked around task enumeration."""
+    boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+    def process():
+        fields=Path('/proc',str(pid),'stat').read_text().rsplit(')',1)[1].split()
+        return dict(boot_id=boot,pid=pid,ppid=int(fields[1]),pgid=int(fields[2]),start_ticks=int(fields[19]))
+    first=process()
+    tids=sorted(int(path.name) for path in Path('/proc',str(pid),'task').iterdir())
+    tasks=[dict(boot_id=boot,pid=pid,process_start_ticks=first['start_ticks'],**thread_identity(pid,tid)) for tid in tids]
+    again=sorted(int(path.name) for path in Path('/proc',str(pid),'task').iterdir())
+    repeated=[dict(boot_id=boot,pid=pid,process_start_ticks=first['start_ticks'],**thread_identity(pid,tid)) for tid in again]
+    last=process()
+    if first!=last or tasks!=repeated or not tasks or boot!=Path('/proc/sys/kernel/random/boot_id').read_text().strip():raise ValueError('unstable process/thread identity')
+    return dict(first,threads=tasks,threads_before=[dict(task) for task in tasks],threads_after=repeated,process_before=first,process_after=last)
+
+
+def creation_identity_snapshot(root_pid):
+    """Fresh complete subtree census, with stable identity around enumeration."""
+    rows=census();owned={root_pid}
+    if root_pid not in rows:raise ValueError('creation root missing')
+    for _ in range(len(rows)):
+        additions={pid for pid,row in rows.items() if row['ppid'] in owned}-owned
+        if not additions:break
+        owned.update(additions)
+    records=[stable_process_identity(pid) for pid in sorted(owned)]
+    after=census();again={root_pid}
+    for _ in range(len(after)):
+        additions={pid for pid,row in after.items() if row['ppid'] in again}-again
+        if not additions:break
+        again.update(additions)
+    if again!=owned:raise ValueError('creation subtree changed during enumeration')
+    for record in records:
+        pid=record['pid']
+        if pid not in after or any(rows[pid][key]!=after[pid][key] or after[pid][key]!=record[key] for key in ('pid','ppid','pgid','start_ticks')):raise ValueError('creation PID identity changed')
+    B=sum(len(record['threads']) for record in records)
+    return dict(root_pid=root_pid,processes=records,B=B,H=0,charge=owned_charge(B,0),complete=True)
+
+
+def owned_workload(note_path, *, extra=(), retained=None):
+    """Kernel/dispatch anchor and persistent full-identity ownership at every call."""
+    import hashlib
+    with INVOCATION.lock:
+        rows=census()  # Enumeration failure cannot be hidden by any caller note.
+        boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+        repository=Path(__file__).resolve().parents[2]
+        if INVOCATION.anchor is None:
+            INVOCATION.anchor=_launch_anchor(rows,boot,repository)
+        anchor=INVOCATION.anchor
+        fresh_anchor=_launch_anchor(rows,boot,repository)
+        if fresh_anchor!=anchor:raise ValueError('owned live launch anchor changed')
+        root_pid=anchor['capture']
+        owned={root_pid}
+        unresolved=[]
+        for key,rec in INVOCATION.records.items():
+            pid=rec['pid']
+            if pid in rows:
+                if key[2] is None or rows[pid]['start_ticks']!=key[2] or rows[pid]['pgid']!=rec['pgid']:
+                    rec['state']='unresolved';unresolved.append(rec);continue
+                owned.add(pid)
+            elif key[2] is not None:
+                # A complete matching identity previously seen, now absent from
+                # a successful whole census, is retired without forgetting it.
+                rec['state']='retired'
+            else:unresolved.append(rec)
+        for _ in range(len(rows)):
+            added={pid for pid,row in rows.items() if row['ppid'] in owned}-owned
+            if not added:break
+            owned.update(added)
+        for pid in extra:
+            if type(pid) is not int or pid not in owned:raise ValueError('unproven detached ownership')
+        records=[];threads={}
+        for pid in sorted(owned):
+            if pid not in rows:raise ValueError('owned process missing')
+            row=rows[pid];process_before=identity(pid)
+            tids=sorted(int(t.name) for t in Path('/proc',str(pid),'task').iterdir())
+            if not tids or len(tids)!=len(set(tids)):raise ValueError('owned CPU thread ceiling enumeration ambiguity')
+            task_identities=[dict(boot_id=boot,pid=pid,process_start_ticks=process_before['start_ticks'],**thread_identity(pid,tid)) for tid in tids]
+            process_after=identity(pid)
+            if process_before!=process_after or process_after!={k:row[k] for k in ('pid','pgid','start_ticks')}:raise ValueError('owned task identity changed')
+            key=(boot,pid,row['start_ticks']);rec=INVOCATION.records.get(key,{})
+            rec.update(boot_id=boot,**{k:row[k] for k in ('pid','ppid','pgid','start_ticks')},threads=tids,thread_identities=task_identities,process_before=process_before,process_after=process_after,state='live')
+            rec.setdefault('creation_parent',row['ppid']);rec.setdefault('creation_event','owned descendant census')
+            INVOCATION.records[key]=rec;records.append(dict(rec));threads[pid]=len(tids)
+        B=sum(threads.values())+sum(max(1,len(r['threads'])) for r in unresolved);H=0
+        owned_charge(B,H)
+        if unresolved:raise ValueError('owned unresolved process identity blocks dispatch')
+        raw=Path(note_path).read_bytes()
+        if hashlib.sha256(raw).hexdigest()!=os.environ.get('S1_OWNED_ROOT_SHA256'):raise ValueError('owned root note digest')
+        note=json.loads(raw)
+        if str(note_path)!=anchor['note_path'] or raw!=anchor['raw']:raise ValueError('owned note differs from kernel anchor')
+        if note.get('schema')!='plan049-prospective-launch/v1':raise ValueError('owned root schema')
+        if note.get('execution_mode')!='no-timeout' or 'timeout_seconds' not in note or note['timeout_seconds'] is not None:raise ValueError('owned no-timeout mode')
+        root=note['ownership_root']
+        expected=dict(boot_id=boot,**{k:rows[root_pid][k] for k in ('pid','ppid','pgid','start_ticks')})
+        if any(root.get(k)!=v for k,v in expected.items()) or any(type(root[k]) is not int for k in ('pid','ppid','pgid','start_ticks')):raise ValueError('owned capture root binding')
+        from .s1_validation_contract import identity_record,no_timeout_launch
+        identity_record(root)
+        no_timeout_launch(dict(path=str(note_path),bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest()),anchor['directory'],diagnostic=note['kind']=='diagnostic')
+        if note['run_directory']!=anchor['directory'] or note['command']!=anchor['command']:raise ValueError('owned output/command binding')
+        if os.environ.get('S1_OWNED_ROOT_NOTE')!=anchor['note_path'] or os.environ.get('S1_VALIDATION_RUN_DIRECTORY',anchor['directory'])!=anchor['directory']:raise ValueError('owned environment locator')
+        run=repository/'docs/resolve-blocker/plan031-progress-20260922'
+        dispatch_path=run/'implementation-dispatch-049.json';dispatch_raw=dispatch_path.read_bytes();dispatch=json.loads(dispatch_raw)
+        dispatch_record=dict(path=str(dispatch_path),bytes=len(dispatch_raw),sha256=hashlib.sha256(dispatch_raw).hexdigest())
+        status=dispatch['implementation_status_snapshot'];plan=dispatch['plan']
+        if dispatch.get('schema')!='plan049-implementation-dispatch/v1' or plan['path']!=str(repository/'plans/plan_049.md') or status['path']!=str(run/'implementation-status-049.md'):raise ValueError('owned fixed Plan049 authority')
+        if dispatch_record not in note['bindings'] or not any(rec['path']==plan['path'] and rec['sha256']==plan['sha256'] for rec in note['bindings']) or note['status']!={k:status[k] for k in ('bytes','sha256')}:raise ValueError('owned dispatch/plan/status binding')
+        if note['cwd']!=str(repository) or str(run/'launch-049-exec.py')!=note['driver']['path']:raise ValueError('owned launch authority')
+        source_membership(note['sources'],repository)
+        for rec in note['bindings']+note['sources']+[note['driver'],status]:
+            current=Path(rec['path']).read_bytes()
+            if len(current)!=rec['bytes'] or hashlib.sha256(current).hexdigest()!=rec['sha256']:raise ValueError('owned source/dispatch bytes changed')
+        ancestors=[];cursor=root['ppid'];seen=set()
+        for recorded in note['preexisting_ancestors']:
+            if cursor in seen or cursor!=recorded['pid'] or cursor not in rows:raise ValueError('owned truncated/cyclic ancestry')
+            seen.add(cursor)
+            expected=dict(boot_id=boot,**{k:rows[cursor][k] for k in ('pid','ppid','pgid','start_ticks')})
+            if any(recorded[k]!=v for k,v in expected.items()) or recorded['start_ticks']>root['start_ticks']:raise ValueError('owned ancestry changed')
+            ancestors.append(dict(recorded,exclusion_reason='pre-existing kernel ancestry'));cursor=rows[cursor]['ppid']
+        if cursor!=0 or not ancestors or note['ancestry_terminal']!={'pid':ancestors[-1]['pid'],'ppid':0}:raise ValueError('owned incomplete ancestry termination')
+        if note['retained_wrappers']:raise ValueError('unvalidated retained wrapper ownership')
+        if retained is not None:
+            retained.update({rec['pid']:dict(rec) for rec in records})
+        return dict(processes=records,process_threads=threads,ancestors=ancestors,B=B,H=H,measured_total=B+H,reserve=max(0,1-H),total_workers=B+max(1,H),root=root,registry_identity=id(INVOCATION),unresolved=[])
+
+
 class Owner:
     """Only this retained thread creates/reaps children and scans ownership."""
     def __init__(self, session):
@@ -390,11 +644,16 @@ class Owner:
         self.boot_id = None
         self.handle = None
         self.cancel_time = None
+        self.progress_install = None
+        self.progress_consumer = None
+        self.progress_ready = False
+        self.progress_error = None
+        self.progress_request_id = None
 
     def spawn(self, role, actions, env):
-        return os.posix_spawn(sys.executable,
+        return create_owned_process('Owner.run '+role,os.posix_spawn,sys.executable,
             [sys.executable, '-B', '-m', 'vipe_benchmark.s1_cpu_helper', role, self.session.token, '100'],
-            env, file_actions=actions, setsid=True)
+            env,deadline=self.session.ready_deadline,file_actions=actions,setsid=True)
 
     def observe_identity(self, pid):
         return identity(pid)
@@ -406,7 +665,9 @@ class Owner:
         os.killpg(pid, sig)
 
     def reap_child(self, pid):
-        return os.waitpid(pid, os.WNOHANG)
+        result=os.waitpid(pid, os.WNOHANG)
+        if result[0]==pid:retire_owned(pid)
+        return result
 
     def run(self):
         try:
@@ -425,12 +686,18 @@ class Owner:
                 env.update({key: '1' for key in THREADS})
                 env['OPENCV_FOR_THREADS_NUM'] = '1'
                 try:
+                    if os.environ.get('S1_OWNED_ROOT_NOTE'):
+                        observed=predispatch_owned('Owner.run '+role)
+                        self.session.events.append(dict(event='owned_dispatch',role=role,**observed))
+                    from .s1_progress import before
+                    before(self.session.ready_deadline)
                     pid = self.spawn(role, actions, env)
                 except OSError:
                     self.records[role] = dict(role=role, state='pending', pid=None, failed=True)
                     raise
                 # Publish returned PID before *any* fallible operation or seam.
                 self.records[role] = dict(role=role, state='pid_owned', pid=pid)
+                register_owned(pid,'Owner.run '+role)
                 child.close()
                 observed = self.observe_identity(pid)
                 if observed['pgid'] != pid:
@@ -440,6 +707,7 @@ class Owner:
                     break
             while True:
                 self.maintain()
+                self.maintain_progress()
                 if self.cancelled and all(r['state'] in ('pending', 'reaped') for r in self.records.values()):
                     break
                 time.sleep(.005)
@@ -452,12 +720,42 @@ class Owner:
                 self.maintain()
                 time.sleep(.005)
         finally:
+            if self.progress_consumer is not None:
+                self.progress_consumer.close()
             for pair in self.session.channels.values():
                 try:
                     pair[1].close()
                 except OSError:
                     pass
             self.done = True
+
+    def maintain_progress(self):
+        if self.cancelled or self.session.progress_cache.frozen: return
+        if not self.session.progress_io_turn.acquire(False):return
+        try:self._maintain_progress()
+        finally:self.session.progress_io_turn.release()
+
+    def _maintain_progress(self):
+        if self.cancelled or self.session.progress_cache.frozen:return
+        from .s1_progress import Consumer, process_binding
+        def bindings(producer):
+            if producer == 'worker':
+                root=self.worker_root
+                if root is None or self.worker_generation != 1: return None
+                return (dict(pid=root.pid,start_ticks=root.start_ticks,pgid=root.pgid),1)
+            if self.progress_request_id is None: return None
+            return (process_binding(self.records['work']),self.progress_request_id)
+        try:
+            if self.progress_install is not None and self.progress_consumer is None:
+                self.progress_consumer=Consumer(self.progress_install,self.session.progress_cache,
+                    lambda:self.cancelled,bindings)
+                if self.progress_consumer.context['session'] != self.session.token or self.progress_consumer.context['work'] != process_binding(self.records['work']):
+                    raise ValueError('progress installed context differs from retained owner')
+                self.progress_ready=True
+            if self.progress_consumer is not None: self.progress_consumer.tick()
+        except BaseException as exc:
+            self.progress_error=dict(error_class=type(exc).__name__,message=str(exc)[:1024])
+            self.session.progress_cache.freeze(exc,integrity=not isinstance(exc,(TimeoutError,BlockingIOError)))
 
     def lineage(self, rows, roots, previous):
         children = {}
@@ -572,6 +870,10 @@ class Session:
         self.last_sample = None; self.accepted_initial = False
         self.decision_clock = time.monotonic
         self.fixture_action_end = self.fixture_safety_end = None
+        from .s1_progress import RetainedProgress
+        self.progress_cache = RetainedProgress()
+        self.progress_io_turn = _thread.allocate_lock()
+        self.progress_context = None
         try:
             if not (0 < ready_seconds <= 1 and ready_seconds < setup_seconds <= 2 and setup_seconds < total_seconds <= 3):
                 raise ValueError('invalid session setup cutoffs')
@@ -596,6 +898,16 @@ class Session:
             else:
                 self.state='not_started'; self.close(self.cleanup_deadline)
             raise
+
+    def install_progress(self, reference, deadline):
+        if self.progress_context is not None: raise ValueError('progress context already installed')
+        self.progress_context=reference
+        self.owner.progress_install=reference
+        while not self.owner.progress_ready:
+            if self.owner.progress_error: raise ValueError(str(self.owner.progress_error))
+            self.tick(deadline)
+            time.sleep(min(.005,max(0.,deadline-time.monotonic())))
+        return reference
 
     def resume(self):
         now=time.monotonic(); self.last_tick=now; self.ticks.append(now)
@@ -761,7 +1073,12 @@ class Session:
                 message=self.pending_ready.pop(role,None)
                 if message is None:
                     context=request if request and request.get('stage','wire')=='wire' else None
-                    message=self.wires[role].tick(context)
+                    # Never wait for owner I/O: keep cancellation/deadline ticks
+                    # active, but do not overlap a final send/peek turn with a
+                    # large metadata validation that can release/reacquire GIL.
+                    if not self.progress_io_turn.acquire(False):continue
+                    try:message=self.wires[role].tick(context)
+                    finally:self.progress_io_turn.release()
                 real_received=time.monotonic(); self.max_turn=max(self.max_turn,real_received-now)
                 if self.max_turn>.1: raise TimeoutError('S1 control tick overrun')
                 received=self.decision_clock() if message is not None else real_received
@@ -784,7 +1101,11 @@ class Session:
                     payload=self.correlate(role,message,'response',request['id'])
                     if type(payload) is not dict or set(payload)!={'operation','ok','value','acquisition_start','acquisition_end'} or payload['operation']!=request['operation'] or type(payload['ok']) is not bool:
                         raise ValueError('invalid helper response payload')
-                    if not payload['ok']: raise RuntimeError('helper operation failed: '+str(payload['value']))
+                    if not payload['ok']:
+                        if type(payload['value']) is dict and payload['value'].get('error_class')=='ProgressIntegrityError':
+                            from .s1_progress import ProgressIntegrityError
+                            raise ProgressIntegrityError(payload['value'].get('message','progress integrity failure'))
+                        raise RuntimeError('helper operation failed: '+str(payload['value']))
                     if role=='sample':
                         validate_acquisition(payload,request['dispatch'],received,request['deadline'])
                         request.update(candidate=payload,response_observed=received)
@@ -821,11 +1142,17 @@ class Session:
                      state='queued',operation_payload=operation)
         self.requests[role]=request
         if role=='sample': self.request_census(request,'pre')
-        else: self.wires[role].queue(self.envelope(role,sequence,'request',operation))
+        else:
+            if self.progress_context is not None and name in ('reconcile','accept'):
+                self.owner.progress_request_id=sequence
+                operation=dict(operation,args=dict(operation.get('args',{}),progress_context=self.progress_context,trusted_progress=self.progress_cache.reference()))
+                request['operation_payload']=operation
+            self.wires[role].queue(self.envelope(role,sequence,'request',operation))
         self.events.append(dict(event='dispatch',role=role,request_id=sequence,dispatch=now))
 
     def close(self, deadline):
         if self.fixture_safety_end is not None: deadline=min(deadline,self.fixture_safety_end)
+        self.progress_cache.freeze('session close')
         self.poisoned=True
         if self.owner is not None: self.owner.cancelled=True
         if self.state in ('not_started','retired'):

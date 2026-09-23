@@ -1,8 +1,17 @@
+from .s1_progress import checked_clock_reservation
 """Serializable CPU operations for the S1 monitor; never construct a model."""
 import os
 
 
 def run(operation):
+    from .s1_progress import operation as guarded,reservation_deadline
+    name=operation['operation'];args=operation.get('args',{})
+    if name in ('prelaunch','accept','reconcile'):
+        return guarded(_run,operation,deadline=reservation_deadline(args['reservation']))
+    return _run(operation)
+
+
+def _run(operation):
     from pathlib import Path
     name = operation['operation']
     args = operation.get('args', {})
@@ -19,7 +28,7 @@ def run(operation):
         return None
     if name == 'accept':
         from .s1_recovery import active_binding, accept_result
-        from .files import read_json, file_record
+        from .s1_progress import checked_read_json as read_json,checked_file_record as file_record
         local, output = Path(args['local']), Path(args['output'])
         active_binding(local, args['config'], args['reservation'], args['command'])
         request = read_json(args['reservation']['evidence']['request']['path'])
@@ -42,19 +51,57 @@ def summary_binding(session, request_id, reservation):
 
 
 def session_operation(operation, session, request_id):
+    from .s1_progress import operation as guarded,reservation_deadline
+    name=operation['operation'];args=operation.get('args',{})
+    if name in ('prelaunch','accept','reconcile'):
+        return guarded(_session_operation,operation,session,request_id,deadline=reservation_deadline(args['reservation']))
+    return _session_operation(operation,session,request_id)
+
+
+def _session_operation(operation, session, request_id):
     """Bulk evidence stays in owned immutable files, verified by the work role."""
     from pathlib import Path
-    from .files import write_json, file_record, read_json
+    from .s1_progress import checked_write_json as write_json, checked_file_record as file_record, checked_read_json as read_json
+    from .s1_progress import checked_read_json as read_json,checked_file_record as file_record
     from .s1_recovery import strict_record
     name, args = operation['operation'], operation.get('args', {})
+    if name == 'prelaunch':
+        from .s1_recovery import captured_clock
+        from .s1_progress import prepare_context
+        from .s1_helper_session import identity
+        clock=captured_clock(Path(args['local']),args['config'],args['reservation'],args['command'])
+        request=read_json(args['reservation']['evidence']['request']['path'])
+        return prepare_context(Path(args['local']),clock,request,args['reservation']['evidence']['authorization'],session,identity(os.getpid()),args['config'])
+    if name == 'accept' and args.get('progress_context') is not None:
+        value=run(operation)
+        from .s1_progress import Publisher,accepted_progress
+        from .s1_clock import ReservationClock
+        publisher=Publisher(args['progress_context'],'reconcile',request_id,clock=checked_clock_reservation(args['reservation']),trusted=args.get('trusted_progress'))
+        try:accepted_progress(publisher,read_json(Path(args['output'])/'result.json'),value[0],value[1])
+        finally:publisher.close()
+        return list(value)
     if name == 'reconcile':
-        summary = run(operation)
+        publisher=None
+        try:
+            if args.get('progress_context') is not None:
+                from .s1_progress import Publisher
+                from .s1_clock import ReservationClock
+                publisher=Publisher(args['progress_context'],'reconcile',request_id,clock=checked_clock_reservation(args['reservation']),trusted=args.get('trusted_progress'))
+                from .s1_recovery import prepare_terminal_evidence
+                summary=prepare_terminal_evidence(Path(args['local']),args['reservation'],args['outcome'],args['deadline'],config=args['config'],publisher=publisher)
+            else: summary = run(operation)
+        finally:
+            if publisher is not None:publisher.close()
         binding = summary_binding(session, request_id, args['reservation'])
         path = Path(args['local'])/'jobs'/'S1-calibration-recovery-001'/('helper-summary-'+session+'-'+str(request_id)+'.json')
         write_json(path, dict(binding, summary=summary))
         return dict(binding, record=file_record(path))
     if name == 'publish':
         outcome = dict(args['outcome'])
+        progress=outcome.get('verified_progress_reference')
+        if progress is not None:
+            from .s1_progress import recover
+            outcome['evidence_summary']=recover(progress)
         reference = outcome.get('evidence_summary_record')
         if reference is not None:
             expected = summary_binding(session, reference['request_id'], args['reservation'])
@@ -63,10 +110,17 @@ def session_operation(operation, session, request_id):
             path = Path(args['local'])/'jobs'/'S1-calibration-recovery-001'/('helper-summary-'+session+'-'+str(reference['request_id'])+'.json')
             if Path(reference['record']['path']) != path:
                 raise ValueError('helper summary reference path')
-            document = read_json(strict_record(reference['record'])['path'])
+            from .s1_progress import read_record
+            document = read_record(strict_record(reference['record']))
             if set(document) != set(expected) | {'summary'} or any(document[k] != v for k,v in expected.items()):
                 raise ValueError('helper summary artifact correlation')
-            outcome['evidence_summary'] = document['summary']
+            if progress is not None:
+                from .s1_progress import summary_adapter
+                outcome['evidence_summary']=summary_adapter(outcome['evidence_summary'],document['summary'])
+            else:outcome['evidence_summary'] = document['summary']
+        elif progress is not None:
+            from .s1_progress import summary_adapter
+            outcome['evidence_summary']=summary_adapter(outcome['evidence_summary'])
         return run(dict(operation=name, args=dict(args, outcome=outcome)))
     value = run(operation)
     return list(value) if isinstance(value, tuple) else value

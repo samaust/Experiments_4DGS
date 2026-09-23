@@ -1,3 +1,5 @@
+from .s1_progress import clock_match
+from .s1_progress import checked_clock_reservation
 """Fail-closed binding for the one amendment-bound S1 calibration allocation.
 
 Validation accepts a locked event snapshot so registration/reservation never
@@ -7,6 +9,8 @@ from pathlib import Path
 
 from .config import ROOT
 from .files import file_record, object_hash, read_json, safe_path, verify_record
+from .s1_progress import (checked_file_record as file_record,
+    checked_verify_record as verify_record,checked_read_json as read_json)
 
 SCHEMA = 'vipe-benchmark-s1-amendment-calibration-recovery/v1'
 JOB = 'S1-calibration-recovery-001'
@@ -24,6 +28,11 @@ BINDINGS = ('semantic_amendment', 'repair_validation', 'configuration',
 # Compatibility exports keep admission and execution on one static contract.
 from .s1_validation_contract import (SUITES, source_paths, strict_record,
     required_cases, receipt_totals, validate_wrapper)
+
+
+def strict_record(record):
+    from .s1_progress import checked_strict_record
+    return checked_strict_record(record)
 
 
 def validation_record(record, amendment, configuration):
@@ -357,11 +366,16 @@ def active_binding(local, config, captured, command, *, with_reservation=False):
 
 
 def captured_clock(local, config, reservation, command):
+    from .s1_progress import operation,reservation_deadline
+    return operation(_captured_clock,local,config,reservation,command,deadline=reservation_deadline(reservation))
+
+
+def _captured_clock(local, config, reservation, command):
     from .s1_clock import ReservationClock
     if type(reservation) is not dict:
         raise ValueError('captured reservation required for helper clock')
     _, active = active_binding(local, config, reservation, command, with_reservation=True)
-    return ReservationClock.from_reservation(active)
+    return checked_clock_reservation(active)
 
 
 def worker_clock(args, request, config):
@@ -382,14 +396,14 @@ def worker_clock(args, request, config):
     if sys.argv[1:] != command[2:]:
         raise ValueError('canonical worker arguments changed')
     _, reservation = active_binding(local, config, None, command, with_reservation=True)
-    clock = ReservationClock.from_reservation(reservation)
+    clock = checked_clock_reservation(reservation)
     if read_json(strict_record(clock.mapping()['request'])['path']) != request:
         raise ValueError('canonical worker request changed')
     try:
         transported = json.loads(os.environ['VIPE_S1_RESERVATION_CLOCK'])
     except (KeyError, ValueError) as exc:
         raise ValueError('missing/invalid transported reservation clock') from exc
-    clock.match(transported)
+    clock_match(clock,transported)
     clock.observe()
     return clock
 
@@ -444,9 +458,9 @@ def resolved_result(local, config, events, finish):
     validate_result_numerics(result, config)
     first = read_json(strict_record(result['first_result'])['path'])
     from .s1_clock import ReservationClock
-    clock = ReservationClock.from_reservation(reserves[0])
+    clock = checked_clock_reservation(reserves[0])
     for value in (first, result, acceptance):
-        clock.match(value.get('reservation_clock'))
+        clock_match(clock,value.get('reservation_clock'))
     clock.recorded(first.get('elapsed_seconds_from_reservation'), 'passed')
     if not 0 <= first['elapsed_seconds_from_reservation'] <= finish['elapsed_seconds'] <= reserves[0]['seconds']:
         raise ValueError('S1 reservation-relative timing inconsistent')
@@ -475,26 +489,41 @@ def referenced_records(value):
 
 
 def accept_result(local, config, request, result, output, *, reservation):
+    from .s1_progress import operation,reservation_deadline
+    return operation(_accept_result,local,config,request,result,output,reservation=reservation,
+        deadline=reservation_deadline(reservation))
+
+
+def _accept_result(local, config, request, result, output, *, reservation):
     from .s1_evidence import validate_result
     from .files import write_json
+    from .s1_progress import checked_read_json as read_json,checked_file_record as file_record,write_exclusive,encode
     document = active_binding(local, config, reservation, reservation['command'])
     clock = captured_clock(local, config, reservation, reservation['command'])
     if read_json(strict_record(clock.mapping()['request'])['path']) != request:
         raise ValueError('accepted request differs from reservation')
-    validate_result(result, request, config, clock=clock)
+    clock.observe()
+    validate_result(result, request, config, clock=clock,deadline=clock.work_deadline)
+    clock.observe()
     result_record = file_record(output / 'result.json')
     value = dict(schema='plan035-s1-acceptance/v1', status='passed', job_id=JOB,
         authorization=request['recovery_authorization'], baseline_correction=document['baseline_correction'],
         result=result_record, first_result=result['first_result'], reservation_clock=clock.mapping(),
         records=referenced_records([result, request]), count=510)
     path = output / 'acceptance.json'
-    write_json(path, value)
-    return file_record(path)
+    return write_exclusive(path,encode(value,32*1024*1024))
 
 
-def prepare_terminal_evidence(local, reservation, outcome, deadline, *, config):
+def prepare_terminal_evidence(local, reservation, outcome, deadline, *, config, publisher=None):
+    from .s1_progress import operation
+    return operation(_prepare_terminal_evidence,local,reservation,outcome,deadline,config=config,
+        publisher=publisher,deadline=deadline)
+
+
+def _prepare_terminal_evidence(local, reservation, outcome, deadline, *, config, publisher=None):
     """All expensive optional evidence inspection belongs inside work time."""
     from .s1_evidence import reconcile_rows, evidence_counts, qualify_runtime, reconcile_first
+    from .s1_progress import checked_read_json as read_json,checked_file_record as file_record
     import time
     output = Path(local) / 'jobs' / JOB
     errors = []
@@ -502,7 +531,9 @@ def prepare_terminal_evidence(local, reservation, outcome, deadline, *, config):
         try:
             if time.monotonic() >= deadline:
                 raise TimeoutError('evidence reconciliation work deadline')
-            return dict(status='verified', value=function())
+            value=function()
+            if time.monotonic() >= deadline:raise TimeoutError('evidence operation completed at work deadline')
+            return dict(status='verified', value=value)
         except Exception as exc:
             errors.append(dict(evidence=label, error=f'{type(exc).__name__}: {exc}'))
             return dict(status='unverified', value=None)
@@ -512,15 +543,20 @@ def prepare_terminal_evidence(local, reservation, outcome, deadline, *, config):
     result = optional('result', lambda: read_json(output / 'result.json'))['value']
     complete = not outcome.get('error') and bool(outcome.get('acceptance'))
     if complete:
+        if time.monotonic() >= deadline:raise TimeoutError('complete evidence work deadline')
         accepted = read_json(strict_record(outcome['acceptance'])['path'])
+        if time.monotonic() >= deadline:raise TimeoutError('complete evidence read reached work deadline')
         if accepted['result'] != outcome['result']:
             raise ValueError('terminal acceptance/result conflict')
+        if publisher is not None:
+            from .s1_progress import accepted_progress
+            accepted_progress(publisher,result,outcome['result'],outcome['acceptance'])
         identities = [r['identity'] for r in result['rows']]
         summary = dict(counts=evidence_counts(identities, identities, complete=True),
             produced_identities=identities, qualified_identities=identities,
             verification_errors=[], scan_complete=True)
     elif isinstance(request, dict):
-        state = optional('rows', lambda: reconcile_rows(output, request, result=result, deadline=deadline))
+        state = optional('rows', lambda: reconcile_rows(output, request, result=result, deadline=deadline, publisher=publisher))
         summary = state['value']
     else:
         summary = None
@@ -530,13 +566,26 @@ def prepare_terminal_evidence(local, reservation, outcome, deadline, *, config):
         for name in ('initial-runtime.json', 'partial-runtime.json'):
             def inspect(name=name):
                 record = file_record(output / name)
-                qualify_runtime(read_json(record['path']), request)
+                qualify_runtime(read_json(record['path']), request,deadline=deadline)
+                if time.monotonic() >= deadline:raise TimeoutError('runtime verification completed late')
+                if publisher is not None:
+                    publisher.runtime[name]=record
+                    publisher.publish()
                 return record
             runtime[name] = optional(name, inspect)
         if isinstance(result, dict):
-            runtime['final'] = optional('final_runtime', lambda: qualify_runtime(result['runtime'], request))
+            def final_runtime():
+                qualify_runtime(result['runtime'],request,deadline=deadline)
+                if time.monotonic() >= deadline:raise TimeoutError('final runtime verification completed late')
+                record=file_record(output/'result.json')
+                if publisher is not None:publisher.runtime['final']=record;publisher.publish()
+                return record
+            runtime['final'] = optional('final_runtime', final_runtime)
         summary['first_result'] = optional('first_result', lambda: reconcile_first(request, output,
             clock=clock, error=outcome.get('error') or 'worker did not publish first-result evidence'))
+    if publisher is not None and summary.get('first_result',{}).get('status')=='verified':
+        if time.monotonic() >= deadline:raise TimeoutError('first verification completed late')
+        publisher.first_result=summary['first_result']['value'];publisher.publish()
     summary['runtime'] = runtime
     summary['verification_errors'].extend(errors)
     return summary
