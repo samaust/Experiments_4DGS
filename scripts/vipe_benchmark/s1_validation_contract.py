@@ -8,6 +8,7 @@ import hashlib
 import math
 from pathlib import Path
 import re
+import sys
 
 from .config import ROOT
 from .files import file_record, read_json
@@ -429,7 +430,12 @@ def session_json(path):
             result[key]=value
         return result
     def invalid(value):raise ValueError('nonfinite session evidence: '+value)
-    value=json.loads(Path(path).read_text(),object_pairs_hook=pairs,parse_constant=invalid)
+    raw=Path(path).read_text();digit_limit=sys.get_int_max_str_digits()
+    try:
+        if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(20000)
+        value=json.loads(raw,object_pairs_hook=pairs,parse_constant=invalid)
+    finally:
+        if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(digit_limit)
     def finite(item):
         if type(item) is float:require(math.isfinite(item),'finite session JSON number')
         elif type(item) is dict:
@@ -467,7 +473,12 @@ def validate_job_ledger(note,proof,*,terminal=False):
     main_rows=[row for row in rows if row['event']=='main-handle']
     require(len(main_rows)==1,'one Main handle binding')
     start=session_json(proof['tool_events'][0]['path'])
-    start_hash=hashlib.sha256(json.dumps(start,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
+    digit_limit=sys.get_int_max_str_digits()
+    try:
+        if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(20000)
+        start_hash=hashlib.sha256(json.dumps(start,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
+    finally:
+        if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(digit_limit)
     require(main_rows[0]['data']==dict(session_id=proof['session_id'],start_event_sha256=start_hash),'same returned start event binding')
     runners=[row for row in state['roots'].values() if row.get('label')=='capture runner']
     require(len(runners)<=1,'unique capture runner root')
@@ -515,11 +526,17 @@ def session_proof(reference,kind,index,driver,identity_request,admission_path,re
     proof_record=strict_record(reference)
     require(proof_record['path']==str(run/('main-session-proof-049-'+suffix+'.json')),'fixed session proof path')
     proof=session_json(proof_record['path'])
-    fields={'schema','proof_mode','kind','index','session_id','driver','identity_request','admission_path','tool_events','readiness_event','readiness_line','readiness_line_sha256','admission_handoff','user_authorization','correction','cross_namespace_kernel_verified'}
+    fields={'schema','proof_mode','kind','index','session_id','driver','identity_request','admission_path','tool_events','readiness_event','readiness_line','readiness_line_sha256','admission_handoff','user_authorization','correction','plan054','evidence_amendment','cross_namespace_kernel_verified'}
     require(type(proof) is dict and set(proof)==fields,'exact session proof fields')
-    require(proof['schema']=='plan049-session-proof/v1' and proof['proof_mode']=='session-bound/v1' and proof['cross_namespace_kernel_verified'] is False,'explicit session trust model')
+    require(proof['schema']=='plan049-session-proof/v2' and proof['proof_mode']=='session-bound/v2' and proof['cross_namespace_kernel_verified'] is False,'explicit session trust model')
     require(proof['kind']==kind and type(proof['index']) is int and proof['index']==index,'proof kind/index correlation')
-    handle=proof['session_id'];require(type(handle) is int and handle>0 and len(str(handle))<=16384,'opaque exact session handle')
+    handle=proof['session_id'];digit_limit=sys.get_int_max_str_digits()
+    try:
+        if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(20000)
+        valid_handle=type(handle) is int and handle>0 and len(str(handle))<=16384
+    finally:
+        if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(digit_limit)
+    require(valid_handle,'opaque exact session handle')
     require(proof['admission_handoff']==dict(session_id=handle,chars='ADMIT\n'),'exact same-handle admission intent')
     require(strict_record(proof['driver'])==driver and strict_record(proof['identity_request'])==identity_request,'session driver/request binding')
     require(identity_request['path']==str(run/('launch-identity-049-'+suffix+'.json')),'fixed session identity path')
@@ -527,6 +544,10 @@ def session_proof(reference,kind,index,driver,identity_request,admission_path,re
     authorization=strict_record(proof['user_authorization']);correction=strict_record(proof['correction'])
     require(authorization['path']==str(run/'authorization-049-session-proof-001.md') and correction['path']==str(run/'plan049-correction-008.md'),'fixed session authorization/correction')
     require(authorization['sha256']=='6ee2d0f899c6ee20de96415079d9aa07900b51f2321ef37d20af5e7e171bd755' and correction['sha256']=='e68129133349fbbecc25e725025c0cda833c7ab149aaacad0ff05ead4737cf91','authorized session trust amendment bytes')
+    plan054=strict_record(proof['plan054']);amendment=strict_record(proof['evidence_amendment'])
+    require(plan054['path']==str(ROOT/'plans/plan_054.md') and plan054['sha256']=='91d0ac7191d944b8cf2175b74c74aff3d70d4dba4a530431f223cb8aab2df62d'
+            and amendment['path']==str(ROOT/'docs/resolve-blocker/plan031-session-proof-wrapper-20260923/correction-008-trust-amendment-001-proposal.md')
+            and amendment['sha256']=='9a27dbb60afcf358409364987e0b74d219431e4b5a83652ac9c607f658426d84','adopted exact v2 trust authority')
     request=session_json(identity_request['path'])
     request_fields={'schema','kind','index','driver','ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths'}
     require(type(request) is dict and set(request)==request_fields,'exact session identity request fields')
@@ -556,27 +577,30 @@ def session_proof(reference,kind,index,driver,identity_request,admission_path,re
     require(type(announcement) is dict and set(announcement)=={'awaiting_main_admission','identity_request'} and announcement['awaiting_main_admission']==admission_path and strict_record(announcement['identity_request'])==identity_request,'readiness identity correlation')
     previous=None;output='';ends=[]
     def stamp(value):
-        require(type(value) is dict and set(value)=={'utc','monotonic'},'exact event stamp')
+        require(type(value) is dict and set(value)=={'utc'},'exact event stamp')
         require(type(value['utc']) is str,'event UTC text')
         try:utc=datetime.datetime.fromisoformat(value['utc'])
         except ValueError:raise ValueError('event UTC') from None
         require(utc.tzinfo is not None and utc.utcoffset()==datetime.timedelta(0),'event UTC timezone')
-        mono=value['monotonic'];require(type(mono) in (int,float) and math.isfinite(mono) and mono>=0,'event finite monotonic')
-        return utc,mono
+        return utc
     for ordinal,event_record in enumerate(events):
         strict_record(event_record)
         require(event_record['path']==str(run/('main-session-049-'+suffix+'-event-'+str(ordinal).zfill(3)+'.json')),'fixed contiguous event path')
         event=session_json(event_record['path'])
         require(type(event) is dict and set(event)=={'schema','kind','index','ordinal','role','tool','arguments','result','started','returned','output_sha256'},'exact tool event fields')
         role='start' if ordinal==0 else 'pre_admission' if ordinal==len(events)-2 else 'at_admission' if ordinal==len(events)-1 else 'readiness'
-        require(event['schema']=='plan049-session-tool-event/v1' and event['kind']==kind and type(event['index']) is int and event['index']==index and type(event['ordinal']) is int and event['ordinal']==ordinal and event['role']==role,'ordered event correlation')
+        require(event['schema']=='plan049-session-tool-event/v2' and event['kind']==kind and type(event['index']) is int and event['index']==index and type(event['ordinal']) is int and event['ordinal']==ordinal and event['role']==role,'ordered event correlation')
         start=stamp(event['started']);end=stamp(event['returned'])
-        require(all(a<=b for a,b in zip(start,end)) and (previous is None or all(a<=b for a,b in zip(previous,start))),'ordered tool stamps');previous=end
+        require(start<=end and (previous is None or previous<=start),'ordered tool stamps');previous=end
         args=event['arguments'];result=event['result']
         require(type(args) is dict and type(result) is dict,'verbatim tool objects')
-        require(type(result.get('session_id')) is int and result['session_id']==handle and result.get('exit_code') is None and not result.get('isError') and not result.get('error'),'affirmative live tool session')
+        require(type(result.get('session_id')) is int and result['session_id']==handle and result.get('exit_code') is None
+                and ('isError' not in result or result['isError'] is False)
+                and ('error' not in result or result['error'] is None),'affirmative live tool session')
         require(type(result.get('output')) is str and type(event['output_sha256']) is str and hashlib.sha256(result['output'].encode()).hexdigest()==event['output_sha256'],'exact tool output hash')
-        require(not result.get('truncated') and not result.get('output_truncated') and 'truncated' not in result['output'].lower(),'untruncated tool output')
+        require(('truncated' not in result or result['truncated'] is False)
+                and ('output_truncated' not in result or result['output_truncated'] is False)
+                and 'truncated' not in result['output'].lower(),'untruncated tool output')
         if ordinal==0:
             require(event['tool']=='exec_command' and type(args.get('cmd')) is str,'session start command')
             expected_command=shlex.join(['exec',str(ROOT/ARGV[0]),'-B',driver['path'],kind,str(index),reason])
@@ -594,8 +618,13 @@ def session_proof(reference,kind,index,driver,identity_request,admission_path,re
         else:
             require(event['tool']=='write_stdin' and type(args.get('session_id')) is int and args['session_id']==handle and type(args.get('chars')) is str,'same-session live poll')
             if ordinal==1:
-                try:frame=json.loads(args['chars'],object_pairs_hook=unique)
-                except (TypeError,ValueError):raise ValueError('structured Main start frame') from None
+                digit_limit=sys.get_int_max_str_digits()
+                try:
+                    if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(20000)
+                    try:frame=json.loads(args['chars'],object_pairs_hook=unique)
+                    except (TypeError,ValueError):raise ValueError('structured Main start frame') from None
+                finally:
+                    if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(digit_limit)
                 require(args['chars'].endswith('\n') and frame==dict(schema='plan049-main-start-frame/v1',session_id=handle,event=session_json(events[0]['path'])),'same-session structured start proof handoff')
             else:require(args['chars']=='','same-session empty live poll')
         require(type(args.get('yield_time_ms')) is int and 0<args['yield_time_ms']<=60000,'responsive poll yield')
@@ -669,7 +698,7 @@ def no_timeout_launch(reference,directory,*,diagnostic=False):
     require(command_bindings.get('environment')==note.get('environment')==settings,'exact admission/launch environment')
     require(note.get('cwd')==str(ROOT) and note.get('unset_environment')==['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],'exact launch cwd/unset environment')
     require(note.get('stdin_identity')==dict(bytes=len(STDIN.encode()),sha256=hashlib.sha256(STDIN.encode()).hexdigest(),content=STDIN),'exact launch stdin identity')
-    require(set(command_bindings)=={'plan','dispatch','status','authorization','ancestor_authorization','driver','command','environment','stdin','run_directory','identity_request','addenda','session_proof','ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths','job_ledger'},'exact admission binding fields')
+    require(set(command_bindings)=={'plan','dispatch','status','authorization','ancestor_authorization','driver','command','environment','stdin','run_directory','identity_request','addenda','session_proof','plan054','evidence_amendment','ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths','job_ledger'},'exact admission binding fields')
     def typed_binding(value):
         require(type(value) is dict,'identity binding dictionary')
         identity_record(value.get('ownership_root'))
@@ -708,10 +737,12 @@ def no_timeout_launch(reference,directory,*,diagnostic=False):
     require(command_bindings.get('ancestor_authorization')==ancestor_authorization and ancestor_authorization in bindings,'ancestor authorization binding')
     proof_record=strict_record(command_bindings.get('session_proof'))
     proof=session_proof(proof_record,note['kind'],note['attempt_index'],driver,identity_request,admission_record['path'],admission['reason'])
+    require(command_bindings['plan054']==proof['plan054'] and command_bindings['evidence_amendment']==proof['evidence_amendment'],'admission v2 authority binding')
     bootstrap=session_json(proof['tool_events'][0]['path'])['result']['output'].strip()
     require(note.get('job_ledger')==command_bindings.get('job_ledger')==json.loads(bootstrap)['awaiting_main_start_proof'],'current sidecar admission binding')
     validate_job_ledger(note,proof)
-    require(proof_record in bindings and proof['user_authorization'] in bindings,'note session proof/authorization binding')
+    require(proof_record in bindings and proof['user_authorization'] in bindings
+            and proof['plan054'] in bindings and proof['evidence_amendment'] in bindings,'note session proof/authorization binding')
     capacity=admission.get('resource_capacity',{});B=capacity.get('B');H=capacity.get('H')
     require(type(B) is int and type(H) is int and min(B,H)>=0 and B+max(1,H)<=8 and type(capacity.get('charge')) is int and capacity['charge']==B+max(1,H),'admission exact CPU capacity')
     require(B==0 and H==1,'Main live outer H admission correlation')

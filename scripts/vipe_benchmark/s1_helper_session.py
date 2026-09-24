@@ -368,7 +368,12 @@ def _candidate_receipt(candidate):
 
 
 def _job_bytes(value):
-    return (json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False)+'\n').encode()
+    digit_limit=sys.get_int_max_str_digits()
+    try:
+        if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(20000)
+        return (json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False)+'\n').encode()
+    finally:
+        if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(digit_limit)
 
 
 def _job_line(sequence,previous,event,data):
@@ -397,7 +402,12 @@ def _job_read(raw):
                 if key in value:raise ValueError('duplicate job ledger key')
                 value[key]=item
             return value
-        row=json.loads(line,object_pairs_hook=pairs,parse_constant=lambda value:(_ for _ in ()).throw(ValueError('nonfinite job ledger number')))
+        digit_limit=sys.get_int_max_str_digits()
+        try:
+            if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(20000)
+            row=json.loads(line,object_pairs_hook=pairs,parse_constant=lambda value:(_ for _ in ()).throw(ValueError('nonfinite job ledger number')))
+        finally:
+            if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(digit_limit)
         def finite(value):
             if type(value) is float and not math.isfinite(value):raise ValueError('nonfinite job ledger number')
             if type(value) is dict:
@@ -711,7 +721,13 @@ def append_job_event(event,data,path=None,*,guard=None):
             if replacement is not None:event,data=replacement
         _job_event_data(event,data)
         line=_job_line(len(rows),rows[-1]['sha256'],event,data)
-        _job_state(rows+[json.loads(line)])
+        digit_limit=sys.get_int_max_str_digits()
+        try:
+            if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(20000)
+            proposed=json.loads(line)
+        finally:
+            if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(digit_limit)
+        _job_state(rows+[proposed])
         if len(raw)+len(line)>JOB_LEDGER_LIMIT:
             marker_error=poison('cap')
             if marker_error is not None:raise marker_error

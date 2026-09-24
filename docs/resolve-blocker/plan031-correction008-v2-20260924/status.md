@@ -1,0 +1,36 @@
+# Plan031 / Correction008 v2 resolution status
+
+Calling task: complete Plan031 under [Plan049](../../plans/plan_049.md), including the user's adopted practical measured-size change in [Plan053](../../plans/plan_053.md). This bounded run implements and validates the reviewed [Plan054](../../plans/plan_054.md) and [Correction008 trust amendment 001](../plan031-session-proof-wrapper-20260923/correction-008-trust-amendment-001-proposal.md).
+
+## Scope and authority
+
+- Plan054 SHA-256 `91d0ac7191d944b8cf2175b74c74aff3d70d4dba4a530431f223cb8aab2df62d`; trust amendment proposal SHA-256 `9a27dbb60afcf358409364987e0b74d219431e4b5a83652ac9c607f658426d84`; independent plan review PASS SHA-256 `ba80adcab217be4070a2ce6e5fb47ab99c30403565c7cf8d0edabae909665730`.
+- Main adopted these exact bytes on 2026-09-24 relying on the user's prior trust choices and standing autonomous-choice instruction; adoption is recorded in the Plan031 and session-wrapper status files.
+- Editable paths only: `docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py`; `scripts/vipe_benchmark/s1_validation_capture.py`, `s1_validation_contract.py`, `s1_helper_session.py`, `supervisor.py`; `tests/test_vipe_benchmark_s1_helper_fixtures.py`, `test_vipe_benchmark_supervisor.py`, `test_vipe_benchmark_s1_recovery.py`, `test_vipe_benchmark_budgets.py`. No new test methods, callbacks, creators, paths, helper processes/threads, selectors, or source closure changes.
+- Preserve Plan049/Correction015 and Plan053: CPU-only, serial, `B+max(1,H)≤8` logical-job accounting, all original assertions/deadlines/order/error precedence/selectors/source counts, 150 GiB artifact cap, one 64 MiB memo cap, 8,388,608-byte ledger cap and actual per-create limits. No operational time cap. Never read `prompts`.
+- No diagnostic, admission, aggregate, launch, or runtime proof is cleared by plan adoption or source work. Fresh exact source/authority/hash and resource/output/high-water preflight and separately reviewed live-capture clearance remain required.
+
+## Criteria
+
+| ID | Acceptance criterion | State |
+| --- | --- | --- |
+| C1 | Implement strict v2 ordered-UTC event/proof contract; no monotonic/physical-time inference; preserve exact original nested tool result and handle correlation; checked file copies remain secondary evidence. | static source PASS; live transcript evidence unverified |
+| C2 | Bind identical exact session handle through start, polls, one `ADMIT\n`, terminal and retirement; strictly reject malformed, changed, stale, ambiguous or mixed-version proof evidence. | static source/synthetic PASS; live send/terminal evidence unverified |
+| C3 | Preserve logical `B+max(1,H)≤8` accounting at every transition, including concurrent target/readback outer sessions; group descendants under their launched process root and keep ambiguous jobs charged. | source/synthetic transitions PASS; actual Main outer-session evidence unverified |
+| C4 | Add or adapt existing-method synthetic controls for valid/invalid v2 cases and ownership transitions without changing test/method/callback counts or original assertions/deadlines. | PASS, review002 |
+| C5 | Focused CPU-only checks pass; a distinct independent exact-source review verifies all nine final paths, strict schemas, ownership mapping, frozen behavior and fresh hash manifest. | PASS, review002 |
+| C6 | After C5 only, Main's fresh preflight and separate live proof capture may proceed; independent runtime evidence review must pass before diagnostics. | unverified |
+| C7 | Run the required serial CPU-only diagnostics and final aggregate; inspect actual ledger bytes/content and recommend whether further compaction is justified by measured use. | unverified |
+
+## Allocation and stage
+
+- Plan review: completed by distinct `gpt-6-sol` agent, high reasoning; plan wording only. CPU/model-token consumption was not measured. Evidence is the exact review linked above.
+- Plan adoption: completed by Main from existing user authority; no new authorization inferred beyond the scoped trust changes.
+- Implementation allocation: one distinct `gpt-6-sol` agent at high reasoning, no nested delegation. Source edits and focused synthetic CPU tests only in the nine listed paths. It must not launch Plan049 diagnostics/aggregate, perform admission, inspect/signal processes or stage/commit. No operational duration or token ceiling is imposed; unmeasured use remains unknown. Main retains all runtime, resource accounting, integration and commit ownership.
+- Independent validation allocation: one separate `gpt-6-sol` validator at high reasoning after implementation; no nested delegation and no implementation edits. Focused tests and synthetic fixtures only. No diagnostic/runtime authorization.
+- Implementation report: [implementation.md](implementation.md), SHA-256 `088294fb7ef9e8a0eba93e9cef556446344622b5a6fddb6bb6080830a6c66a00`. The candidate changed three authorized paths; independent Main hash check matched all nine. The focused mutation test, diff check, AST parsing and unchanged collection counts passed. No launch or ledger-size measurement occurred.
+- Plan-adoption checkpoint commit: `a620f25 Adopt reviewed Plan054 session-proof amendment`; only the two status files recording exact reviewed adoption were staged and committed. No source was staged in that commit.
+- Review001: [independent-source-review-001.md](independent-source-review-001.md), SHA-256 `b59d051820ee162744283a1bce5d32f90f86e0990746f429db98550ba3afce93`, NEEDS_CORRECTION for P4/C4/C5. It finds missing original-result/copy mismatch controls, failed/ambiguous/duplicate ADMIT and outer-terminal controls, target/readback H-overlap controls, and uncontained import-time integer-limit mutation. P2/P3 static implementation checks pass; all live C1–C3 and B1–B4 remain unverified. [Correction001](correction-001.md) records exact scope and acceptance.
+- Correction001 implementation report: [correction-001-implementation.md](correction-001-implementation.md), SHA-256 `4d75ec1693bcb034eb4d0fe5218a3e06ffd3ebe2e39ffeed8c02fb2434b59d72`. Four existing paths changed; final nine-path hashes match Main's independent hashing. The focused mutation test, AST parse, diff check and unchanged collection counts pass. Synthetic controls are explicitly not live Main/tool attestations.
+- Independent re-review002: [independent-source-review-002.md](independent-source-review-002.md), SHA-256 `f53ee08acba575517217de051c040d3f040436111c0f89cc0b727e6d5d0d2ff8`, PASS for P2–P4/C4–C5 static source/synthetic gate on all exact nine hashes. It confirms the review001 findings were closed; live Main/tool transcript evidence, fresh preflight, C1–C3 runtime acceptance and all B1–B4 outcomes remain separate gates. It notes the digit guard temporarily changes process state within `try/finally`; concurrent external callers during that bounded conversion were not measured and must not be inferred from synthetic controls.
+- Current stage: static source milestone validated; Main prepares a fresh, read-only Plan049 preflight. No admission, diagnostic or aggregate has launched. The measured Plan053 ledger cap remains enforced; actual size/content measurement awaits the separately cleared diagnostic.

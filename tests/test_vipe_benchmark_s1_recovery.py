@@ -1114,7 +1114,7 @@ class ReceiptContractTests(unittest.TestCase):
                     identity_request=routed_record(logical_identity)
                     logical_admission=str(run/'launch-admission-049-aggregate-1000.json')
                     proof_path=graph.root/'synthetic-session-proof.json';logical_proof=str(run/'main-session-proof-049-aggregate-1000.json');logical_files[logical_proof]=proof_path
-                    from vipe_benchmark.s1_helper_session import _job_line,_job_operation_key,_candidate_receipt,_prepare_owned_candidate
+                    from vipe_benchmark.s1_helper_session import _job_line,_job_read,_job_operation_key,_candidate_receipt,_prepare_owned_candidate
                     logical_ledger=str(run/'.job-ledger-aggregate-049-1000.jsonl');physical_ledger=graph.root/'synthetic-job-ledger.jsonl';logical_files[logical_ledger]=physical_ledger
                     initial=_job_line(0,'0'*64,'attempt-open',dict(kind='aggregate',index=1000,h=1,driver_pid=122))
                     job_ledger=dict(path=logical_ledger,lock=str(run/'.job-ledger-aggregate-049-1000.lock'),initial_sha256=hashlib.sha256(initial).hexdigest(),schema='registered-process-tree-job/v1')
@@ -1125,19 +1125,20 @@ class ReceiptContractTests(unittest.TestCase):
                     for ordinal,role in enumerate(('start','readiness','pre_admission','at_admission')):
                         args=dict(cmd=shlex.join(['exec',str(ROOT/c.ARGV[0]),'-B',driver['path'],'aggregate','1000','synthetic contract fixture; no execution performed']),shell='/bin/bash',login=False,workdir=str(ROOT),tty=True,sandbox_permissions='require_escalated',yield_time_ms=1000,max_output_tokens=10000,justification='Run the reviewed Plan049 CPU-only aggregate after the exact AF_UNIX datagram socket retry succeeded.',prefix_rule=['exec',str(ROOT/c.ARGV[0]),'-B',driver['path']]) if ordinal==0 else dict(session_id=12345,chars=(json.dumps(dict(schema='plan049-main-start-frame/v1',session_id=12345,event=session_events[0]))+'\n' if ordinal==1 else ''),yield_time_ms=1000)
                         output=boot_line+'\n' if ordinal==0 else readiness+'\n' if ordinal==1 else ''
-                        session_events.append(dict(schema='plan049-session-tool-event/v1',kind='aggregate',index=1000,ordinal=ordinal,role=role,tool='exec_command' if ordinal==0 else 'write_stdin',arguments=args,
-                            result=dict(session_id=12345,output=output,wall_time_seconds=1.),started=dict(utc=f'2026-01-01T00:00:0{ordinal*2}+00:00',monotonic=ordinal*2),returned=dict(utc=f'2026-01-01T00:00:0{ordinal*2+1}+00:00',monotonic=ordinal*2+1),output_sha256=hashlib.sha256(output.encode()).hexdigest()))
+                        session_events.append(dict(schema='plan049-session-tool-event/v2',kind='aggregate',index=1000,ordinal=ordinal,role=role,tool='exec_command' if ordinal==0 else 'write_stdin',arguments=args,
+                            result=dict(session_id=12345,output=output,wall_time_seconds=1.),started=dict(utc=f'2026-01-01T00:00:0{ordinal*2}+00:00'),returned=dict(utc=f'2026-01-01T00:00:0{ordinal*2+1}+00:00'),output_sha256=hashlib.sha256(output.encode()).hexdigest()))
                         logical=str(run/f'main-session-049-aggregate-1000-event-{ordinal:03}.json');physical=graph.root/f'synthetic-session-event-{ordinal}.json';logical_files[logical]=physical;event_paths.append((logical,physical))
                         physical.write_text(json.dumps(session_events[-1]))
                     session_authorization=file_record(run/'authorization-049-session-proof-001.md')
-                    proof=dict(schema='plan049-session-proof/v1',proof_mode='session-bound/v1',kind='aggregate',index=1000,session_id=12345,driver=driver,identity_request=identity_request,admission_path=logical_admission,
-                        tool_events=[routed_record(logical) for logical,physical in event_paths],readiness_event=1,readiness_line=readiness,readiness_line_sha256=hashlib.sha256(readiness.encode()).hexdigest(),admission_handoff=dict(session_id=12345,chars='ADMIT\n'),user_authorization=session_authorization,correction=addenda[7],cross_namespace_kernel_verified=False)
+                    plan054=file_record(ROOT/'plans/plan_054.md');evidence_amendment=file_record(ROOT/'docs/resolve-blocker/plan031-session-proof-wrapper-20260923/correction-008-trust-amendment-001-proposal.md')
+                    proof=dict(schema='plan049-session-proof/v2',proof_mode='session-bound/v2',kind='aggregate',index=1000,session_id=12345,driver=driver,identity_request=identity_request,admission_path=logical_admission,
+                        tool_events=[routed_record(logical) for logical,physical in event_paths],readiness_event=1,readiness_line=readiness,readiness_line_sha256=hashlib.sha256(readiness.encode()).hexdigest(),admission_handoff=dict(session_id=12345,chars='ADMIT\n'),user_authorization=session_authorization,correction=addenda[7],plan054=plan054,evidence_amendment=evidence_amendment,cross_namespace_kernel_verified=False)
                     proof_path.write_text(json.dumps(proof));proof_reference=routed_record(logical_proof)
                     admission=dict(approved=True,cleanup_resolved=True,execution_mode='no-timeout',timeout_seconds=None,
                         kind='aggregate',index=1000,reason='synthetic contract fixture; no execution performed',counts_before={'diagnostic':0,'aggregate':999},
                         sources=outer['sources_before'],source_paths=[r['path'] for r in outer['sources_before']],
                         resource_capacity=dict(B=0,H=1,charge=1,artifact_bytes=0),
-                        bindings=dict(session_proof=proof_reference,plan=plan,dispatch=dispatch_record,status=status,authorization=authorization,ancestor_authorization=ancestor_authorization,driver=driver,
+                        bindings=dict(session_proof=proof_reference,plan054=plan054,evidence_amendment=evidence_amendment,plan=plan,dispatch=dispatch_record,status=status,authorization=authorization,ancestor_authorization=ancestor_authorization,driver=driver,
                             command=command,environment=settings,run_directory=str(graph.root),stdin=dict(bytes=len(c.STDIN.encode()),sha256=hashlib.sha256(c.STDIN.encode()).hexdigest()),identity_request=identity_request,addenda=addenda,job_ledger=job_ledger,**identity_fields))
                     admission_path=graph.root/'synthetic-no-timeout-admission.json';admission_path.write_text(json.dumps(admission))
                     logical_files[logical_admission]=admission_path
@@ -1145,7 +1146,7 @@ class ReceiptContractTests(unittest.TestCase):
                     note=dict(schema='plan049-prospective-launch/v1',execution_mode='no-timeout',timeout_seconds=None,
                         provenance='synthetic contract fixture; no execution performed',run_directory=str(graph.root),kind='aggregate',
                         attempt_index=1000,reason=admission['reason'],counts_before=admission['counts_before'],
-                        driver=driver,admission=admitted,bindings=[plan,dispatch_record,status,authorization,ancestor_authorization,admitted,identity_request,proof_reference,session_authorization]+addenda,sources=outer['sources_before'],
+                        driver=driver,admission=admitted,bindings=[plan,dispatch_record,status,authorization,ancestor_authorization,admitted,identity_request,proof_reference,session_authorization,plan054,evidence_amendment]+addenda,sources=outer['sources_before'],
                         cpu_bound='B+max(1,H)≤8',command=command,environment=settings,cwd=str(ROOT),unset_environment=['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],stdin_identity=dict(bytes=len(c.STDIN.encode()),sha256=hashlib.sha256(c.STDIN.encode()).hexdigest(),content=c.STDIN),job_ledger=job_ledger,**identity_fields)
                     note_path=graph.root/'synthetic-no-timeout-note.json';note_path.write_text(json.dumps(note))
                     outer.update(schema='s1-cpu-execution/v2',execution_mode='no-timeout',timeout_seconds=None,
@@ -1177,17 +1178,21 @@ class ReceiptContractTests(unittest.TestCase):
                     valid=copy.deepcopy(outer)
                     # Every mutation is rehashed through proof/admission/note.
                     # These are synthetic schema controls, never tool attestations.
-                    for fault in ('missing_proof','handle_false','handle_float','handle_string','start_handle','poll_argument','poll_return','terminal_poll','missing_handle','omit_poll','reorder_poll','duplicate_poll','readiness_altered','readiness_truncated','readiness_conflict','request_hash','request_path','request_kind','request_index','request_driver','stale_proof','stale_authorization','wrong_mode','kernel_claim','proof_extra','proof_missing','event_extra','event_missing','ordinal_bool','index_float','stamp_bool','stamp_nonfinite','stamp_reverse','readiness_event_bool','duplicate_json','root_float','ancestor_bool','thread_float','root_substitution','ancestor_substitution','thread_substitution','source_stale'):
+                    for fault in ('missing_proof','handle_false','handle_float','handle_string','handle_overwidth','start_handle','poll_argument','poll_return','terminal_poll','missing_handle','error_flag','tool_error','truncation_flag','output_hash','omit_poll','reorder_poll','duplicate_poll','readiness_altered','readiness_truncated','readiness_conflict','request_hash','request_path','request_kind','request_index','request_driver','stale_proof','stale_authorization','stale_plan054','stale_amendment','missing_plan054_binding','wrong_mode','v1_proof','mixed_event','kernel_claim','proof_extra','proof_missing','event_extra','event_missing','ordinal_bool','index_float','stamp_bool','stamp_nonfinite','stamp_reverse','stamp_rollback','stamp_timezone','stamp_extra','readiness_event_bool','duplicate_json','root_float','ancestor_bool','thread_float','root_substitution','ancestor_substitution','thread_substitution','source_stale'):
                         changed_proof=copy.deepcopy(proof);changed_events=copy.deepcopy(session_events);changed_admission=copy.deepcopy(admission);changed_note=copy.deepcopy(note)
                         request_doc=dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**copy.deepcopy(identity_fields))
                         if fault=='handle_false':changed_proof['session_id']=False
                         elif fault=='handle_float':changed_proof['session_id']=12345.
                         elif fault=='handle_string':changed_proof['session_id']='12345'
+                        elif fault=='handle_overwidth':changed_proof['session_id']=0
                         elif fault=='start_handle':changed_events[0]['result']['session_id']=12346
                         elif fault=='poll_argument':changed_events[1]['arguments']['session_id']=12346
                         elif fault=='poll_return':changed_events[2]['result']['session_id']=12346
                         elif fault=='terminal_poll':changed_events[2]['result']['exit_code']=0
                         elif fault=='missing_handle':changed_events[2]['result'].pop('session_id')
+                        elif fault=='error_flag':changed_events[2]['result']['isError']=[]
+                        elif fault=='tool_error':changed_events[2]['result']['error']=''
+                        elif fault=='truncation_flag':changed_events[2]['result']['truncated']=[]
                         elif fault=='omit_poll':changed_events.pop()
                         elif fault=='reorder_poll':changed_events[1],changed_events[2]=changed_events[2],changed_events[1]
                         elif fault=='duplicate_poll':changed_events[2]=copy.deepcopy(changed_events[1])
@@ -1200,7 +1205,12 @@ class ReceiptContractTests(unittest.TestCase):
                         elif fault=='request_index':request_doc['index']=1001
                         elif fault=='request_driver':request_doc['driver']=plan
                         elif fault=='stale_authorization':changed_proof['user_authorization']['sha256']='0'*64
+                        elif fault=='stale_plan054':changed_proof['plan054']['sha256']='0'*64
+                        elif fault=='stale_amendment':changed_proof['evidence_amendment']['sha256']='0'*64
+                        elif fault=='missing_plan054_binding':changed_admission['bindings'].pop('plan054')
                         elif fault=='wrong_mode':changed_proof['proof_mode']='kernel-attested'
+                        elif fault=='v1_proof':changed_proof['schema']='plan049-session-proof/v1'
+                        elif fault=='mixed_event':changed_events[1]['schema']='plan049-session-tool-event/v1'
                         elif fault=='kernel_claim':changed_proof['cross_namespace_kernel_verified']=True
                         elif fault=='proof_extra':changed_proof['extra']=None
                         elif fault=='proof_missing':changed_proof.pop('driver')
@@ -1208,9 +1218,12 @@ class ReceiptContractTests(unittest.TestCase):
                         elif fault=='event_missing':changed_events[1].pop('role')
                         elif fault=='ordinal_bool':changed_events[0]['ordinal']=False
                         elif fault=='index_float':changed_events[1]['index']=1000.
-                        elif fault=='stamp_bool':changed_events[0]['started']['monotonic']=False
-                        elif fault=='stamp_nonfinite':changed_events[0]['started']['monotonic']=float('inf')
-                        elif fault=='stamp_reverse':changed_events[1]['started']['monotonic']=0
+                        elif fault=='stamp_bool':changed_events[0]['started']['utc']=False
+                        elif fault=='stamp_nonfinite':changed_events[0]['started']['utc']=float('inf')
+                        elif fault=='stamp_reverse':changed_events[1]['started']['utc']='2025-12-31T23:59:59+00:00'
+                        elif fault=='stamp_rollback':changed_events[1]['returned']['utc']='2025-12-31T23:59:59+00:00'
+                        elif fault=='stamp_timezone':changed_events[0]['started']['utc']='2026-01-01T00:00:00+01:00'
+                        elif fault=='stamp_extra':changed_events[0]['started']['monotonic']=0
                         elif fault=='readiness_event_bool':changed_proof['readiness_event']=False
                         elif fault=='root_float':request_doc['ownership_root']['pid']=122.
                         elif fault=='ancestor_bool':request_doc['preexisting_ancestors'][0]['ppid']=False
@@ -1229,8 +1242,10 @@ class ReceiptContractTests(unittest.TestCase):
                         refs=[]
                         for ordinal,event in enumerate(changed_events):
                             event['output_sha256']=hashlib.sha256(event['result']['output'].encode()).hexdigest()
+                            if fault=='output_hash' and ordinal==1:event['output_sha256']='0'*64
                             logical,physical=event_paths[ordinal];physical.write_text(json.dumps(event));refs.append(routed_record(logical))
                         changed_proof['tool_events']=refs;proof_path.write_text(json.dumps(changed_proof))
+                        if fault=='handle_overwidth':proof_path.write_text(proof_path.read_text().replace('"session_id": 0','"session_id": '+'1'*16385,1))
                         if fault=='duplicate_json':proof_path.write_text(proof_path.read_text().replace('"schema":','"schema":"duplicate", "schema":',1))
                         changed_proof_ref=routed_record(logical_proof)
                         if fault=='stale_proof':changed_proof_ref['sha256']='0'*64
@@ -1245,7 +1260,96 @@ class ReceiptContractTests(unittest.TestCase):
                     identity_path.write_text(json.dumps(dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**identity_fields)))
                     for event,(logical,physical) in zip(session_events,event_paths):physical.write_text(json.dumps(event))
                     proof_path.write_text(json.dumps(proof));admission_path.write_text(json.dumps(admission));note_path.write_text(json.dumps(note))
-                    self.assertEqual(c.session_proof(proof_reference,'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])['proof_mode'],'session-bound/v1')
+                    self.assertEqual(c.session_proof(proof_reference,'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])['proof_mode'],'session-bound/v2')
+                    # The opaque bound is inclusive even above Python's default
+                    # 4,300-digit integer conversion limit.
+                    prior_digit_limit=sys.get_int_max_str_digits()
+                    wide_handle=10**16384-1
+                    wide_events=copy.deepcopy(session_events);wide_proof=copy.deepcopy(proof)
+                    wide_proof['session_id']=wide_handle;wide_proof['admission_handoff']['session_id']=wide_handle
+                    wide_refs=[]
+                    try:
+                        if prior_digit_limit and prior_digit_limit<20000:sys.set_int_max_str_digits(20000)
+                        for event,(logical,physical) in zip(wide_events,event_paths):
+                            event['result']['session_id']=wide_handle
+                            if event['ordinal']>0:event['arguments']['session_id']=wide_handle
+                            if event['ordinal']==1:event['arguments']['chars']=json.dumps(dict(schema='plan049-main-start-frame/v1',session_id=wide_handle,event=wide_events[0]))+'\n'
+                            physical.write_text(json.dumps(event));wide_refs.append(routed_record(logical))
+                        wide_proof['tool_events']=wide_refs;proof_path.write_text(json.dumps(wide_proof))
+                    finally:
+                        if prior_digit_limit and prior_digit_limit<20000:sys.set_int_max_str_digits(prior_digit_limit)
+                    self.assertEqual(c.session_proof(routed_record(logical_proof),'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])['session_id'],wide_handle)
+                    self.assertEqual(sys.get_int_max_str_digits(),prior_digit_limit)
+                    if prior_digit_limit:
+                        with self.assertRaises(ValueError):json.dumps(10**prior_digit_limit)
+                    wide_line=_job_line(1,json.loads(initial)['sha256'],'main-handle',dict(session_id=wide_handle,start_event_sha256='a'*64))
+                    self.assertEqual(_job_read(initial+wide_line)[1]['data']['session_id'],wide_handle)
+                    self.assertEqual(sys.get_int_max_str_digits(),prior_digit_limit)
+                    with self.assertRaises(TypeError):helper._job_bytes(dict(unsupported=object()))
+                    with self.assertRaises(ValueError):_job_read(initial+b'{"broken":\n')
+                    self.assertEqual(sys.get_int_max_str_digits(),prior_digit_limit)
+                    proof_path.write_text('{"session_id":')
+                    with self.assertRaises(ValueError):c.session_json(logical_proof)
+                    self.assertEqual(sys.get_int_max_str_digits(),prior_digit_limit)
+                    for event,(logical,physical) in zip(session_events,event_paths):physical.write_text(json.dumps(event))
+                    proof_path.write_text(json.dumps(proof))
+                    # Synthetic Main boundary: a checked, rehashed file copy can
+                    # satisfy the file schema while differing from the original
+                    # visible nested tool result. This is not live attestation.
+                    original_result=copy.deepcopy(session_events[2]['result'])
+                    changed_events=copy.deepcopy(session_events);changed_events[2]['result']['wall_time_seconds']=2.
+                    changed_events[2]['output_sha256']=hashlib.sha256(changed_events[2]['result']['output'].encode()).hexdigest()
+                    event_paths[2][1].write_text(json.dumps(changed_events[2]))
+                    checked_ref=routed_record(event_paths[2][0]);checked_copy=c.session_json(checked_ref['path'])
+                    checked_proof=copy.deepcopy(proof);checked_proof['tool_events'][2]=checked_ref
+                    proof_path.write_text(json.dumps(checked_proof))
+                    self.assertEqual(c.session_proof(routed_record(logical_proof),'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])['proof_mode'],'session-bound/v2')
+                    self.assertEqual(c.strict_record(checked_ref),checked_ref)
+                    with self.assertRaisesRegex(ValueError,'original result differs from checked copy'):
+                        c.require(original_result==checked_copy['result'],'original result differs from checked copy')
+                    event_paths[2][1].write_text(json.dumps(session_events[2]));proof_path.write_text(json.dumps(proof))
+                    # Synthetic Main transcript controls. The actual ADMIT send
+                    # and outer return still require visible Main/tool evidence.
+                    send=dict(arguments=dict(session_id=12345,chars='ADMIT\n'),result=dict(session_id=12345,output='',exit_code=None))
+                    terminal_return=dict(arguments=dict(session_id=12345,chars=''),result=dict(output='',exit_code=0))
+                    for fault in ('valid','missing_send','lost_send','send_error','wrong_send_handle','duplicate_send','missing_terminal','lost_terminal','live_terminal','wrong_terminal_handle','wrong_return_handle','terminal_error'):
+                        sends=[copy.deepcopy(send)];outer_return=copy.deepcopy(terminal_return)
+                        if fault=='missing_send':sends=[]
+                        elif fault=='lost_send':sends[0]['result']=None
+                        elif fault=='send_error':sends[0]['result']['isError']=True
+                        elif fault=='wrong_send_handle':sends[0]['arguments']['session_id']=12346
+                        elif fault=='duplicate_send':sends.append(copy.deepcopy(send))
+                        elif fault=='missing_terminal':outer_return=None
+                        elif fault=='lost_terminal':outer_return['result']=None
+                        elif fault=='live_terminal':outer_return['result']['exit_code']=None
+                        elif fault=='wrong_terminal_handle':outer_return['arguments']['session_id']=12346
+                        elif fault=='wrong_return_handle':outer_return['result']['session_id']=12346
+                        elif fault=='terminal_error':outer_return['result']['isError']=True
+                        try:
+                            c.require(len(sends)==1 and sends[0]['arguments']==dict(session_id=12345,chars='ADMIT\n')
+                                and type(sends[0]['result']) is dict and sends[0]['result'].get('session_id')==12345
+                                and sends[0]['result'].get('exit_code') is None and sends[0]['result'].get('isError') is not True,
+                                'ambiguous Main ADMIT send')
+                            c.require(type(outer_return) is dict and outer_return['arguments']==dict(session_id=12345,chars='')
+                                and type(outer_return['result']) is dict and type(outer_return['result'].get('exit_code')) is int
+                                and outer_return['result'].get('session_id',12345)==12345 and outer_return['result'].get('isError') is not True,
+                                'ambiguous outer terminal')
+                            accepted=True
+                        except ValueError:accepted=False
+                        self.assertEqual(accepted,fault=='valid',fault)
+                    # Each outer readback session is an H while the target H is
+                    # live; an ambiguous return remains charged until retired.
+                    outer_jobs={'target':'live'}
+                    self.assertEqual(helper.owned_charge(6,sum(state!='retired' for state in outer_jobs.values())),7)
+                    outer_jobs['readback']='live'
+                    self.assertEqual(helper.owned_charge(6,sum(state!='retired' for state in outer_jobs.values())),8)
+                    with self.assertRaises(ValueError):helper.owned_charge(7,sum(state!='retired' for state in outer_jobs.values()))
+                    outer_jobs['readback']='ambiguous'
+                    self.assertEqual(helper.owned_charge(6,sum(state!='retired' for state in outer_jobs.values())),8)
+                    outer_jobs['readback']='retired'
+                    self.assertEqual(helper.owned_charge(6,sum(state!='retired' for state in outer_jobs.values())),7)
+                    outer_jobs['target']='retired'
+                    self.assertEqual(helper.owned_charge(6,sum(state!='retired' for state in outer_jobs.values())),7)
                     # Canonical start acceptance is established above. Preserve
                     # raw command bytes: shell structure is not argv equivalence.
                     for fault in ('newline','chain','prefix','command','cwd','tty','permission','yield','yield_bool','shell','shell_options','login','login_int','missing_shell','extra_option','output_bool','output_zero','permission_omitted','permission_alternate','justification_omitted','justification_changed','prefix_omitted','prefix_changed','prefix_tuple','prefix_element'):
@@ -1292,8 +1396,8 @@ class ReceiptContractTests(unittest.TestCase):
                     for ordinal,event in enumerate(split_events):
                         event['ordinal']=ordinal;event['role']=('start','readiness','readiness','pre_admission','at_admission')[ordinal]
                         if ordinal==2:event['arguments']['chars']=''
-                        event['started']=dict(utc=f'2026-01-01T00:00:0{ordinal*2}+00:00',monotonic=ordinal*2)
-                        event['returned']=dict(utc=f'2026-01-01T00:00:0{ordinal*2+1}+00:00',monotonic=ordinal*2+1)
+                        event['started']=dict(utc=f'2026-01-01T00:00:0{ordinal*2}+00:00')
+                        event['returned']=dict(utc=f'2026-01-01T00:00:0{ordinal*2+1}+00:00')
                         event['result']['output']=boot_line+'\n' if ordinal==0 else readiness[:17] if ordinal==1 else readiness[17:]+'\n' if ordinal==2 else ''
                         event['output_sha256']=hashlib.sha256(event['result']['output'].encode()).hexdigest()
                         split_paths[ordinal][1].write_text(json.dumps(event))

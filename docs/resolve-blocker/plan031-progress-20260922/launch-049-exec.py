@@ -125,18 +125,25 @@ def main():
     boot_line=json.dumps(dict(awaiting_main_start_proof=job_ledger,kind=kind,index=index),sort_keys=True,separators=(',',':'))
     print(boot_line,flush=True)
     frame=session_json_line=sys.stdin.readline()
-    try:start_frame=json.loads(session_json_line)
-    except (TypeError,ValueError):raise ValueError('Main start proof JSON frame') from None
-    if type(start_frame) is not dict or set(start_frame)!={'schema','session_id','event'} or start_frame['schema']!='plan049-main-start-frame/v1' or type(start_frame['session_id']) is not int or start_frame['session_id']<=0 or len(str(start_frame['session_id']))>16384:
+    digit_limit=sys.get_int_max_str_digits()
+    try:
+        if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(20000)
+        try:start_frame=json.loads(session_json_line)
+        except (TypeError,ValueError):raise ValueError('Main start proof JSON frame') from None
+        valid_frame=type(start_frame) is dict and set(start_frame)=={'schema','session_id','event'} and start_frame['schema']=='plan049-main-start-frame/v1' and type(start_frame['session_id']) is int and start_frame['session_id']>0 and len(str(start_frame['session_id']))<=16384
+    finally:
+        if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(digit_limit)
+    if not valid_frame:
         raise ValueError('Main start proof frame')
     start_event=start_frame['event']
-    if type(start_event) is not dict or start_event.get('tool')!='exec_command' or start_event.get('result',{}).get('session_id')!=start_frame['session_id']:
+    if type(start_event) is not dict or set(start_event)!={'schema','kind','index','ordinal','role','tool','arguments','result','started','returned','output_sha256'} or start_event['schema']!='plan049-session-tool-event/v2' or start_event['kind']!=kind or type(start_event['index']) is not int or start_event['index']!=index or type(start_event['ordinal']) is not int or start_event['ordinal']!=0 or start_event['role']!='start' or start_event['tool']!='exec_command' or type(start_event['result']) is not dict or type(start_event['result'].get('session_id')) is not int or start_event['result']['session_id']!=start_frame['session_id']:
         raise ValueError('exact returned Main session handle')
     if type(start_event.get('result',{}).get('output')) is not str or start_event['result']['output'] not in (boot_line+'\n',boot_line+'\r\n') or start_event['result'].get('exit_code') is not None or start_event['result'].get('error') or start_event['result'].get('isError'):
         raise ValueError('Main live bootstrap output')
     if start_event.get('output_sha256')!=hashlib.sha256(start_event['result']['output'].encode()).hexdigest() or start_event.get('arguments',{}).get('cmd')!=__import__('shlex').join(['exec',str(ROOT/'.local/envs/stg-colmap/bin/python'),'-B',str(Path(__file__).resolve()),kind,str(index),reason]):
         raise ValueError('Main bootstrap command/output binding')
     for key in ('started','returned'):
+        if type(start_event.get(key)) is not dict or set(start_event[key])!={'utc'}:raise ValueError('Main bootstrap UTC stamp')
         try:observed=datetime.datetime.fromisoformat(start_event[key]['utc'])
         except (KeyError,TypeError,ValueError):raise ValueError('Main bootstrap UTC') from None
         if observed.tzinfo is None or observed.utcoffset()!=datetime.timedelta(0):raise ValueError('Main bootstrap UTC timezone')
@@ -262,7 +269,13 @@ def main():
     # All source/authority/output/high-water and live process identity reads
     # above are complete. Create the exclusive ledger as the first mutation.
     job_ledger=initialize_job_ledger(kind,index,prepared_ledger)
-    append_job_event('main-handle',dict(session_id=start_frame['session_id'],start_event_sha256=hashlib.sha256(json.dumps(start_event,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()),job_ledger['path'])
+    digit_limit=sys.get_int_max_str_digits()
+    try:
+        if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(20000)
+        start_hash=hashlib.sha256(json.dumps(start_event,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
+    finally:
+        if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(digit_limit)
+    append_job_event('main-handle',dict(session_id=start_frame['session_id'],start_event_sha256=start_hash),job_ledger['path'])
     prefix=RUN/('driver-049-'+suffix)
     outputs=[str(directory/name) for name in ('receipt.json','execution.json','process-stdout.log','process-stderr.log','stdout.log','stderr.log','stdin.py','runner.py','capture.py')]+[str(prefix)+ending for ending in ('-exec-start.json','-stdout.log','-stderr.log')]
     identity_request_path=RUN/('launch-identity-049-'+suffix+'.json')
@@ -283,10 +296,13 @@ def main():
     addenda=[record(RUN/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md','plan049-correction-015.md','plan049-correction-015-source-scope-addendum-001.md','plan049-correction-015-source-scope-addendum-002.md','plan049-correction-015-source-scope-addendum-003.md','plan049-correction-015-source-scope-addendum-006.md')]
     ancestor_authorization=record(RUN/'authorization-049-ancestor-process-001.md')
     if ancestor_authorization['sha256']!='734fc8fc67f2cc7f60ead6eba279b797abff47bbf32602cf5106e07ef540605d':raise ValueError('fixed ancestor authorization bytes')
+    plan054=record(ROOT/'plans/plan_054.md')
+    evidence_amendment=record(ROOT/'docs/resolve-blocker/plan031-session-proof-wrapper-20260923/correction-008-trust-amendment-001-proposal.md')
+    if plan054['sha256']!='91d0ac7191d944b8cf2175b74c74aff3d70d4dba4a530431f223cb8aab2df62d' or evidence_amendment['sha256']!='9a27dbb60afcf358409364987e0b74d219431e4b5a83652ac9c607f658426d84':raise ValueError('adopted exact v2 trust authority')
     proof_record=record(RUN/('main-session-proof-049-'+suffix+'.json'))
     proof=session_proof(proof_record,kind,index,record(Path(__file__)),identity_request,str(admission_path),reason)
     if proof['session_id']!=start_frame['session_id'] or session_json(proof['tool_events'][0]['path'])!=start_event:raise ValueError('Main start frame differs from durable same-handle proof')
-    expected=dict(session_proof=proof_record,plan=plan,dispatch=record(dispatch_path),status=status,authorization=authorization,ancestor_authorization=ancestor_authorization,driver=record(Path(__file__)),command=command,environment=settings,stdin=dict(bytes=len(stdin),sha256=hashlib.sha256(stdin).hexdigest()),run_directory=str(directory),identity_request=identity_request,addenda=addenda,job_ledger=job_ledger,**identity_binding)
+    expected=dict(session_proof=proof_record,plan054=plan054,evidence_amendment=evidence_amendment,plan=plan,dispatch=record(dispatch_path),status=status,authorization=authorization,ancestor_authorization=ancestor_authorization,driver=record(Path(__file__)),command=command,environment=settings,stdin=dict(bytes=len(stdin),sha256=hashlib.sha256(stdin).hexdigest()),run_directory=str(directory),identity_request=identity_request,addenda=addenda,job_ledger=job_ledger,**identity_binding)
     if json.dumps(admission.get('bindings'),sort_keys=True,allow_nan=False)!=json.dumps(expected,sort_keys=True,allow_nan=False):raise ValueError('main immutable typed command/authority/identity binding')
     if (observed_projection:=identity_projection(*local_identity('before_note')))!=(expected_projection:=identity_projection(root,ancestors)):
         error=ValueError('Main prospective identity changed')
@@ -296,7 +312,7 @@ def main():
             except BaseException:pass
         raise error
     if capacity['B']!=0 or capacity['H']!=1:raise ValueError('Main live outer session capacity mismatch')
-    bindings=[plan,record(dispatch_path),status,authorization,ancestor_authorization,record(admission_path),identity_request,proof_record,proof['user_authorization']]+proof['tool_events']+addenda
+    bindings=[plan,record(dispatch_path),status,authorization,ancestor_authorization,record(admission_path),identity_request,proof_record,proof['user_authorization'],plan054,evidence_amendment]+proof['tool_events']+addenda
     note=dict(schema='plan049-prospective-launch/v1',execution_mode='no-timeout',timeout_seconds=None,driver=record(Path(__file__)),admission=record(admission_path),bindings=bindings,sources=sources,status={k:status[k] for k in ('bytes','sha256')},kind=kind,attempt_index=index,counts_before=counts,counts_after=dict(counts,**{kind:counts[kind]+1}),reason=reason,command=command,cwd=str(ROOT),run_directory=str(directory),environment=settings,unset_environment=['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],stdin_identity=dict(bytes=len(stdin),sha256=hashlib.sha256(stdin).hexdigest(),content=stdin.decode()),ownership_root=root,preexisting_ancestors=ancestors,ancestry_terminal=dict(pid=ancestors[-1]['pid'],ppid=0),retained_wrappers=[],output_paths=outputs,job_ledger=job_ledger,observed=stamp(),cpu_bound='B+max(1,H)≤8',existing_scenarios=42,direct_scripts=6,scenario_execution_seconds=2,scenario_cleanup_seconds=1)
     note_record=publish(RUN/('launch-note-049-'+suffix+'.json'),note)
     no_timeout_launch(note_record,str(directory),diagnostic=kind=='diagnostic')
