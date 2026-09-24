@@ -305,6 +305,12 @@ def validate_execution(value, receipt_record, inner):
         require(value.get('wait')==dict(method='Popen.wait',timeout_seconds=None,pid=value['child_pid'],returncode=value['returncode'],completed=True),'actual unbounded wait evidence required')
         note=no_timeout_launch(value.get('launch_note'),directory)
         validate_creation(value.get('creation'),note,value['child_pid'],value['boot_id'])
+        require(value.get('job_ledger')==note['job_ledger'] and type(value.get('runner_job')) is str,'execution runner ledger binding')
+        proof=session_proof(strict_record(session_json(note['admission']['path'])['bindings']['session_proof']),note['kind'],note['attempt_index'],strict_record(note['driver']),
+            strict_record(session_json(note['admission']['path'])['bindings']['identity_request']),note['admission']['path'],note['reason'])
+        state=validate_job_ledger(note,proof,terminal=True)
+        require(state['roots'].get(value['runner_job'],{}).get('identity')==value['creation']['child']
+                and state['roots'][value['runner_job']]['state']=='retired','exact runner root terminal')
 
     return value
 
@@ -401,12 +407,12 @@ def validate_creation(value,note,child_pid,boot):
         owned={root['pid']}
         for _ in records:owned.update(row['pid'] for row in records if row['ppid'] in owned)
         require(owned==set(ids),'unbound creation descendant')
-        B=sum(len(row['threads']) for row in records)
-        require(type(item['B']) is int and item['B']==B and type(item['H']) is int and item['H']==0 and type(item['charge']) is int and item['charge']==B+1<=8,'creation exact capacity')
+        B=len(records)-1;H=1
+        require(type(item['B']) is int and item['B']==B and type(item['H']) is int and item['H']==H and type(item['charge']) is int and item['charge']==B+max(1,H)<=8,'creation exact capacity')
         return records
     before=snapshot(value['before']);after=snapshot(value['after']);retired=snapshot(value['retired'])
     require(before==[root] and after==sorted([root,child],key=lambda row:row['pid']) and retired==before,'exact before/after/retired creation identity set')
-    require(value['before']['B']+2<=8,'new child plus reserve before creation')
+    require(value['before']['B']+1+max(1,value['before']['H'])<=8,'new child plus reserve before creation')
     retirement=value['retirement']
     require(type(retirement) is dict and set(retirement)=={'identity','method','returncode','completed','absent_after'},'exact retirement fields')
     identity_record(retirement['identity'])
@@ -434,6 +440,72 @@ def session_json(path):
     return value
 
 
+def job_ledger_input(path):
+    path=Path(path);lock=path.with_suffix('.lock')
+    require(path.is_file() and not path.is_symlink() and lock.is_file() and not lock.is_symlink(),
+        'exclusive sidecar/lock files required')
+    require(lock.read_bytes()==b'','job ledger lock poison/uncertainty marker')
+    return path.read_bytes()
+
+
+def validate_job_ledger(note,proof,*,terminal=False):
+    """Fail closed on a missing or ambiguous current logical-job sidecar."""
+    from .s1_helper_session import _job_read,_job_state,JOB_LEDGER_LIMIT
+    run=ROOT/'docs/resolve-blocker/plan031-progress-20260922'
+    kind=note['kind'];index=note['attempt_index'];suffix=kind+'-049-'+str(index).zfill(3)
+    expected=run/('.job-ledger-'+suffix+'.jsonl')
+    reference=note.get('job_ledger')
+    require(type(reference) is dict and set(reference)=={'path','lock','initial_sha256','schema'}
+            and reference['path']==str(expected) and reference['lock']==str(expected.with_suffix('.lock'))
+            and reference['schema']=='registered-process-tree-job/v1','required fixed current job ledger')
+    raw=job_ledger_input(expected);require(0<len(raw)<=JOB_LEDGER_LIMIT,'job ledger size cap')
+    rows=_job_read(raw);state=_job_state(rows)
+    initial=raw.splitlines(keepends=True)[0]
+    require(hashlib.sha256(initial).hexdigest()==reference['initial_sha256'],'exclusive bootstrap bytes/hash')
+    require(rows[0]['event']=='attempt-open' and rows[0]['data']==dict(kind=kind,index=index,h=1,driver_pid=note['ownership_root']['pid']),'initial live H reservation')
+    require(state['session_id']==proof['session_id'],'exact Main handle ledger binding')
+    main_rows=[row for row in rows if row['event']=='main-handle']
+    require(len(main_rows)==1,'one Main handle binding')
+    start=session_json(proof['tool_events'][0]['path'])
+    start_hash=hashlib.sha256(json.dumps(start,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
+    require(main_rows[0]['data']==dict(session_id=proof['session_id'],start_event_sha256=start_hash),'same returned start event binding')
+    runners=[row for row in state['roots'].values() if row.get('label')=='capture runner']
+    require(len(runners)<=1,'unique capture runner root')
+    runner_pid=runners[0].get('identity',{}).get('pid') if runners else None
+    for token,root in state['roots'].items():
+        require(type(token) is str and re.fullmatch('[0-9a-f]{32}',token) and root.get('role') in ('B','H'),'typed logical root')
+        creator=root.get('creator');require(type(creator) is dict and set(creator)=={'boot_id','pid','start_ticks','pgid','tid','thread_start_ticks'}
+            and all(type(creator[key]) is int and creator[key]>0 for key in ('pid','start_ticks','pgid','tid','thread_start_ticks'))
+            and creator['boot_id']==note['ownership_root']['boot_id'],'actual creator process/thread identity')
+        require(creator['pid'] in (note['ownership_root']['pid'],runner_pid),'root created by driver or runner')
+        if root['state']!='reserved':
+            handle=root.get('handle');identity_value=root.get('identity')
+            require(type(handle) is dict and set(handle)=={'kind','object_id'} and type(handle['object_id']) is int and handle['object_id']>0,'retained root handle')
+            if handle['kind']=='process':
+                identity_record(identity_value)
+                require(identity_value['ppid']==creator['pid'] and root['role']=='B','direct process creator ancestry')
+            else:
+                require(handle['kind']=='Thread' and type(identity_value) is dict
+                    and all(type(identity_value.get(key)) is int and identity_value[key]>0 for key in ('pid','tid','ident'))
+                    and type(identity_value.get('start_ticks',identity_value.get('thread_start_ticks'))) is int,
+                    'native thread root identity')
+                require(identity_value['pid']==creator['pid'] and root['role']=='H','direct helper thread creator ancestry')
+    for token,child in state['descendants'].items():
+        require(type(token) is str and child.get('root') in state['roots'],'descendant attached to launched root')
+        parent=state['roots'][child['root']]
+        require(parent['role']=='B' and type(child.get('creator')) is dict
+            and all(child['creator'].get(key)==parent.get('identity',{}).get(key) for key in ('boot_id','pid','start_ticks','pgid')),
+            'descendant creator bound to live B root identity at reservation')
+        if child['state']!='reserved':
+            identity_record(child.get('identity'))
+            require(child['identity']['ppid']==child['creator']['pid'],'descendant live parent chain')
+    if terminal:
+        require(all(row['state']=='retired' for row in state['roots'].values())
+                and all(row['state']=='retired' for row in state['descendants'].values())
+                and state['H']==1 and not state['terminal'],'payload trees retired while outer H is live')
+    return state
+
+
 def session_proof(reference,kind,index,driver,identity_request,admission_path,reason):
     """Trusted Main transcript correlation; never cross-namespace kernel attestation."""
     import shlex
@@ -443,11 +515,12 @@ def session_proof(reference,kind,index,driver,identity_request,admission_path,re
     proof_record=strict_record(reference)
     require(proof_record['path']==str(run/('main-session-proof-049-'+suffix+'.json')),'fixed session proof path')
     proof=session_json(proof_record['path'])
-    fields={'schema','proof_mode','kind','index','session_id','driver','identity_request','admission_path','tool_events','readiness_event','readiness_line','readiness_line_sha256','user_authorization','correction','cross_namespace_kernel_verified'}
+    fields={'schema','proof_mode','kind','index','session_id','driver','identity_request','admission_path','tool_events','readiness_event','readiness_line','readiness_line_sha256','admission_handoff','user_authorization','correction','cross_namespace_kernel_verified'}
     require(type(proof) is dict and set(proof)==fields,'exact session proof fields')
     require(proof['schema']=='plan049-session-proof/v1' and proof['proof_mode']=='session-bound/v1' and proof['cross_namespace_kernel_verified'] is False,'explicit session trust model')
     require(proof['kind']==kind and type(proof['index']) is int and proof['index']==index,'proof kind/index correlation')
-    handle=proof['session_id'];require(type(handle) is int and handle>0,'opaque exact session handle')
+    handle=proof['session_id'];require(type(handle) is int and handle>0 and len(str(handle))<=16384,'opaque exact session handle')
+    require(proof['admission_handoff']==dict(session_id=handle,chars='ADMIT\n'),'exact same-handle admission intent')
     require(strict_record(proof['driver'])==driver and strict_record(proof['identity_request'])==identity_request,'session driver/request binding')
     require(identity_request['path']==str(run/('launch-identity-049-'+suffix+'.json')),'fixed session identity path')
     require(proof['admission_path']==admission_path==str(run/('launch-admission-049-'+suffix+'.json')),'fixed session admission path')
@@ -469,8 +542,8 @@ def session_proof(reference,kind,index,driver,identity_request,admission_path,re
     require(type(terminal) is dict and set(terminal)=={'pid','ppid'} and type(terminal['pid']) is int and type(terminal['ppid']) is int and terminal==dict(pid=ancestors[-1]['pid'],ppid=0) and cursor==0,'session ancestry terminal')
     require(type(request['retained_wrappers']) is list and request['retained_wrappers']==[],'session wrappers')
     require(type(request['output_paths']) is list and all(type(p) is str for p in request['output_paths']),'session output paths')
-    events=proof['tool_events'];require(type(events) is list and len(events)>=3,'two mandatory live polls')
-    require(type(proof['readiness_event']) is int and 0<=proof['readiness_event']<len(events)-2,'readiness precedes mandatory live polls')
+    events=proof['tool_events'];require(type(events) is list and len(events)>=4,'bootstrap, readiness and two mandatory live polls')
+    require(type(proof['readiness_event']) is int and 0<proof['readiness_event']<len(events)-2,'readiness precedes mandatory live polls')
     line=proof['readiness_line'];require(type(line) is str and '\n' not in line and '\r' not in line,'complete readiness line')
     require(type(proof['readiness_line_sha256']) is str and hashlib.sha256(line.encode()).hexdigest()==proof['readiness_line_sha256'],'readiness line hash')
     # Parse through the same duplicate-key rejecting parser without normalizing output.
@@ -519,10 +592,28 @@ def session_proof(reference,kind,index,driver,identity_request,admission_path,re
             require(type(args['prefix_rule']) is list and all(type(value) is str for value in args['prefix_rule']) and args['prefix_rule']==['exec',str(ROOT/ARGV[0]),'-B',driver['path']],'exact start argument: prefix_rule')
             require(type(args['max_output_tokens']) is int and args['max_output_tokens']>0,'exact positive start output budget')
         else:
-            require(event['tool']=='write_stdin' and type(args.get('session_id')) is int and args['session_id']==handle and args.get('chars')=='' and type(args.get('chars')) is str,'same-session empty live poll')
+            require(event['tool']=='write_stdin' and type(args.get('session_id')) is int and args['session_id']==handle and type(args.get('chars')) is str,'same-session live poll')
+            if ordinal==1:
+                try:frame=json.loads(args['chars'],object_pairs_hook=unique)
+                except (TypeError,ValueError):raise ValueError('structured Main start frame') from None
+                require(args['chars'].endswith('\n') and frame==dict(schema='plan049-main-start-frame/v1',session_id=handle,event=session_json(events[0]['path'])),'same-session structured start proof handoff')
+            else:require(args['chars']=='','same-session empty live poll')
         require(type(args.get('yield_time_ms')) is int and 0<args['yield_time_ms']<=60000,'responsive poll yield')
         output+=result['output'];ends.append(len(output))
-    require(output==line+'\n' or output==line+'\r\n','sole complete readiness announcement; unexplained output rejected')
+    bootstrap_event=session_json(events[0]['path'])
+    bootstrap=bootstrap_event['result']['output']
+    require(bootstrap.endswith('\n') and bootstrap.count('\n')==1,'sole complete bootstrap announcement')
+    bootstrap_data=json.loads(bootstrap.strip(),object_pairs_hook=unique)
+    ledger_path=run/('.job-ledger-'+kind+'-049-'+str(index).zfill(3)+'.jsonl')
+    require(type(bootstrap_data) is dict and set(bootstrap_data)=={'awaiting_main_start_proof','kind','index'}
+            and bootstrap_data['kind']==kind and type(bootstrap_data['index']) is int and bootstrap_data['index']==index,
+            'bootstrap kind/index')
+    ledger=bootstrap_data['awaiting_main_start_proof']
+    require(type(ledger) is dict and set(ledger)=={'path','lock','initial_sha256','schema'}
+            and ledger['path']==str(ledger_path) and ledger['lock']==str(ledger_path.with_suffix('.lock'))
+            and ledger['schema']=='registered-process-tree-job/v1' and type(ledger['initial_sha256']) is str
+            and re.fullmatch('[0-9a-f]{64}',ledger['initial_sha256']),'bootstrap sidecar binding')
+    require(output==bootstrap+line+'\n' or output==bootstrap+line+'\r\n','complete bootstrap/readiness announcements; unexplained output rejected')
     complete=next((ordinal for ordinal,end in enumerate(ends) if end>=len(output)),None)
     require(complete==proof['readiness_event'],'readiness event correlation')
     return proof
@@ -538,7 +629,14 @@ def no_timeout_launch(reference,directory,*,diagnostic=False):
     dispatch_record=file_record(run/'implementation-dispatch-049.json');dispatch=read_json(dispatch_record['path'])
     require(dispatch.get('schema')=='plan049-implementation-dispatch/v1','fixed Plan049 dispatch schema')
     require(dispatch['authorization']['invocation_timeout'] is None and dispatch['authorization']['operational_duration_ceiling_seconds'] is None,'no-timeout authorization required')
-    require(dispatch['plan']['path']==str(ROOT/'plans/plan_049.md') and file_record(ROOT/'plans/plan_049.md')['sha256']==dispatch['plan']['sha256'],'fixed Plan049 authority')
+    # Preserve the immutable dispatch's original Plan049 digest while also
+    # binding the independently reviewed, adopted six-lane/current revision.
+    require(dispatch['plan']==dict(path=str(ROOT/'plans/plan_049.md'),
+            sha256='a27329ee5c9d9439515093e6797ad72f61bd6faf1e43c5f45f2b2cf4c013cc1f'),
+            'fixed original Plan049 dispatch authority')
+    require(file_record(ROOT/'plans/plan_049.md')['sha256']=='89d1f634ad2407b02558ff9c030d4a4f12f8f4ab010c93e2cf532876564afe7e'
+            and file_record(ROOT/'plans/plan_049.md') in note.get('bindings',[]),
+            'fixed adopted Plan049 revision')
     status=strict_record(dispatch['implementation_status_snapshot']);authorization=strict_record(dispatch['authorization_note'])
     require(status['path']==str(run/'implementation-status-049.md') and authorization['path']==str(run/'authorization-049.md'),'fixed Plan049 status/authorization')
     driver=strict_record(note.get('driver'));require(driver['path']==str(run/'launch-049-exec.py'),'fixed Plan049 driver')
@@ -571,7 +669,7 @@ def no_timeout_launch(reference,directory,*,diagnostic=False):
     require(command_bindings.get('environment')==note.get('environment')==settings,'exact admission/launch environment')
     require(note.get('cwd')==str(ROOT) and note.get('unset_environment')==['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],'exact launch cwd/unset environment')
     require(note.get('stdin_identity')==dict(bytes=len(STDIN.encode()),sha256=hashlib.sha256(STDIN.encode()).hexdigest(),content=STDIN),'exact launch stdin identity')
-    require(set(command_bindings)=={'plan','dispatch','status','authorization','ancestor_authorization','driver','command','environment','stdin','run_directory','identity_request','addenda','session_proof','ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths'},'exact admission binding fields')
+    require(set(command_bindings)=={'plan','dispatch','status','authorization','ancestor_authorization','driver','command','environment','stdin','run_directory','identity_request','addenda','session_proof','ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths','job_ledger'},'exact admission binding fields')
     def typed_binding(value):
         require(type(value) is dict,'identity binding dictionary')
         identity_record(value.get('ownership_root'))
@@ -601,16 +699,21 @@ def no_timeout_launch(reference,directory,*,diagnostic=False):
     request=session_json(identity_request['path'])
     typed_binding(request)
     require(request==dict(schema='plan049-prospective-identity/v1',kind=note['kind'],index=note['attempt_index'],driver=driver,**{key:note[key] for key in ('ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths')}),'exact pre-admission identity request')
-    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md','plan049-correction-015.md')]
-    require(command_bindings.get('addenda')==addenda and all(row in bindings for row in addenda),'current correction authority')
+    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md','plan049-correction-015.md','plan049-correction-015-source-scope-addendum-001.md','plan049-correction-015-source-scope-addendum-002.md','plan049-correction-015-source-scope-addendum-003.md','plan049-correction-015-source-scope-addendum-006.md')]
+    require(command_bindings.get('addenda')==addenda and bindings[-len(addenda):]==addenda
+            and len({row['path'] for row in addenda})==len(addenda)
+            and all(bindings.count(row)==1 for row in addenda),'current ordered correction authority')
     ancestor_authorization=file_record(run/'authorization-049-ancestor-process-001.md')
     require(ancestor_authorization['sha256']=='734fc8fc67f2cc7f60ead6eba279b797abff47bbf32602cf5106e07ef540605d','fixed ancestor authorization bytes')
     require(command_bindings.get('ancestor_authorization')==ancestor_authorization and ancestor_authorization in bindings,'ancestor authorization binding')
     proof_record=strict_record(command_bindings.get('session_proof'))
     proof=session_proof(proof_record,note['kind'],note['attempt_index'],driver,identity_request,admission_record['path'],admission['reason'])
+    bootstrap=session_json(proof['tool_events'][0]['path'])['result']['output'].strip()
+    require(note.get('job_ledger')==command_bindings.get('job_ledger')==json.loads(bootstrap)['awaiting_main_start_proof'],'current sidecar admission binding')
+    validate_job_ledger(note,proof)
     require(proof_record in bindings and proof['user_authorization'] in bindings,'note session proof/authorization binding')
     capacity=admission.get('resource_capacity',{});B=capacity.get('B');H=capacity.get('H')
     require(type(B) is int and type(H) is int and min(B,H)>=0 and B+max(1,H)<=8 and type(capacity.get('charge')) is int and capacity['charge']==B+max(1,H),'admission exact CPU capacity')
-    require(B==len(root['threads']) and H==0,'Main root thread capacity correlation')
+    require(B==0 and H==1,'Main live outer H admission correlation')
     require(type(capacity.get('artifact_bytes')) is int and 0<=capacity['artifact_bytes']<=150*1024**3,'admission artifact capacity')
     return note

@@ -101,12 +101,12 @@ def main(role, token, fd, mode):
             if mode in ('stalled_reader','wrong_role'):
                 raw=json.dumps(message).encode(); channel.send(struct.pack('!I',len(raw))+raw); time.sleep(10)
             if mode == 'descendant':
-                from vipe_benchmark.s1_helper_session import create_owned_process,register_owned,retire_owned
+                from vipe_benchmark.s1_helper_session import create_owned_process,register_owned,retire_owned,wait_owned_pid
                 child=create_owned_process('helper fixture descendant',os.posix_spawn,sys.executable,
                     [sys.executable,'-B','-c','import time; time.sleep(10)'],os.environ,file_actions=[(os.POSIX_SPAWN_CLOSE,int(fd))])
                 try:register_owned(child,'helper fixture descendant')
                 except BaseException as primary:
-                    try:os.kill(child,signal.SIGKILL);os.waitpid(child,0);retire_owned(child)
+                    try:os.kill(child,signal.SIGKILL);wait_owned_pid(child,0);retire_owned(child)
                     except BaseException as cleanup:
                         primary.s1_owned_pid=child;primary.add_note('descendant retirement: '+repr(cleanup))
                     raise
@@ -588,13 +588,13 @@ def invalidated_fallback(test,fixture,root,kind):
 def direct_script_launch(command, *, cwd, env):
     """Actual six-script creation/registration entry; caller owns normal wait."""
     import subprocess
-    from vipe_benchmark.s1_helper_session import create_owned_process,register_owned,retire_owned
+    from vipe_benchmark.s1_helper_session import create_owned_process,register_owned,retire_owned,signal_owned_pid
     process=create_owned_process('direct script',subprocess.Popen,command,cwd=cwd,env=env,
         stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
     try:register_owned(process.pid,'direct script')
     except BaseException as primary:
         try:
-            if process.poll() is None:os.killpg(process.pid,signal.SIGKILL)
+            if process.poll() is None:signal_owned_pid(process.pid,signal.SIGKILL,None)
             process.wait();retire_owned(process.pid)
         except BaseException as cleanup:
             primary.s1_owned_process=process
@@ -605,12 +605,14 @@ def direct_script_launch(command, *, cwd, env):
 
 def l18_sentinel_launch():
     """Actual L18 foreign sentinel entry with registration-failure ownership."""
-    from vipe_benchmark.s1_helper_session import create_owned_process,register_owned,retire_owned
+    from vipe_benchmark.s1_helper_session import create_owned_process,register_owned,retire_owned,signal_owned_pid
     pid=create_owned_process('L18 sentinel',os.posix_spawn,sys.executable,
         [sys.executable,'-B','-c','import time; time.sleep(10)'],os.environ,setsid=True)
     try:register_owned(pid,'L18 sentinel')
     except BaseException as primary:
-        try:os.killpg(pid,signal.SIGKILL);os.waitpid(pid,0);retire_owned(pid)
+        try:
+            from vipe_benchmark.s1_helper_session import wait_owned_pid
+            signal_owned_pid(pid,signal.SIGKILL,None);wait_owned_pid(pid,0);retire_owned(pid)
         except BaseException as cleanup:
             primary.s1_owned_pid=pid
             primary.add_note('sentinel registration cleanup: '+repr(cleanup))
@@ -699,11 +701,11 @@ def named_creation_controls(test,kind,root):
                     finally:
                         if process is not None:
                             try:
-                                if type(process) is int:os.killpg(process,signal_module.SIGKILL);os.waitpid(process,0);h.retire_owned(process)
-                                else:process.kill();process.wait();h.retire_owned(process.pid)
+                                if type(process) is int:h.signal_owned_pid(process,signal_module.SIGKILL,None);h.wait_owned_pid(process,0);h.retire_owned(process)
+                                else:h.signal_owned_pid(process.pid,signal_module.SIGKILL,None);process.wait();h.retire_owned(process.pid)
                             except OSError as error:
                                 events.append(dict(operation='cleanup_error',same_primary=error is primary,unresolved=copy.deepcopy(list(h.INVOCATION.records.values()))))
-                                if type(process) is int:os.waitpid(process,0);h.retire_owned(process)
+                                if type(process) is int:h.wait_owned_pid(process,0);h.retire_owned(process)
                                 else:process.wait();h.retire_owned(process.pid)
                 else:
                     # Actual supervisor reaches its real worker creation branch;
@@ -729,7 +731,7 @@ def named_creation_controls(test,kind,root):
                         raise RuntimeError('plan049 pure worker monitor stop')
                     def stop(process,deadline):
                         if process is None:return []
-                        try:process.kill();process.wait();h.retire_owned(process.pid)
+                        try:h.signal_owned_pid(process.pid,signal_module.SIGKILL,None);process.wait();h.retire_owned(process.pid)
                         except OSError as error:
                             events.append(dict(operation='cleanup_error',same_primary=error is primary))
                             if fault=='registration_cleanup':raise
@@ -850,15 +852,21 @@ def backend_gate_controls(test,fixture,root):
 
 def retire_fixture_processes(processes,primary=None,*,stop=None):
     """Retire every returned handle, retaining uncertainty on the first error."""
-    from vipe_benchmark.s1_helper_session import retire_owned
+    from vipe_benchmark.s1_helper_session import retire_owned,signal_owned_pid
     errors=[];unresolved=[]
     for process in processes:
         try:
             if stop is None:
-                if process.poll() is None:process.kill()
+                if process.poll() is None:signal_owned_pid(process.pid,signal.SIGKILL,None)
                 process.wait()
             elif stop(process):raise RuntimeError('fixture process cleanup unconfirmed')
-            retire_owned(process.pid)
+            retire_owned(process.pid,handle=process)
+            if os.environ.get('S1_JOB_LEDGER'):
+                from vipe_benchmark.s1_helper_session import _job_state,job_ledger_events
+                ledger=_job_state(job_ledger_events())
+                matches=[row for row in (*ledger['roots'].values(),*ledger['descendants'].values()) if row.get('identity',{}).get('pid')==process.pid]
+                if len(matches)!=1 or matches[0]['state'] not in ('waited','retired'):
+                    raise ValueError('fixture matching handle retirement not durable')
         except BaseException as error:
             errors.append(error);unresolved.append(process)
     if errors:
@@ -875,7 +883,14 @@ def fixture_process_launch(event,command,**kwargs):
     import subprocess
     from vipe_benchmark.s1_helper_session import create_owned_process,register_owned
     process=create_owned_process(event,subprocess.Popen,command,**kwargs)
-    try:register_owned(process.pid,event)
+    try:
+        register_owned(process.pid,event)
+        if os.environ.get('S1_JOB_LEDGER'):
+            from vipe_benchmark.s1_helper_session import _job_state,job_ledger_events
+            ledger=_job_state(job_ledger_events())
+            matches=[row for row in (*ledger['roots'].values(),*ledger['descendants'].values()) if row.get('identity',{}).get('pid')==process.pid]
+            if len(matches)!=1 or matches[0]['state']!='live':
+                raise ValueError('fixture returned process handle not durably registered')
     except BaseException as primary:
         primary.s1_owned_process=process
         retire_fixture_processes([process],primary)
@@ -937,7 +952,7 @@ def enclosing_creation_controls(test,root):
                     stack.enter_context(patch.object(h,'identity',side_effect=identify))
                     stack.enter_context(patch.object(subprocess,'Popen',side_effect=create))
                     def stop(process,deadline):
-                        process.kill();process.wait();return []
+                        h.signal_owned_pid(process.pid,signal_module.SIGKILL,None);process.wait();return []
                     stack.enter_context(patch.object(sup,'stop_group',side_effect=stop))
                     try:
                         if entry=='helper_worker':

@@ -44,25 +44,33 @@ def capture(directory, timeout_seconds=300, diagnostic=False, *, no_timeout=Fals
     start = stamp()
     timed_out = False
     with (directory/'stdin.py').open('rb') as stdin, (directory/'process-stdout.log').open('wb') as stdout, (directory/'process-stderr.log').open('wb') as stderr:
-        creation=None
+        creation=None;runner_job=None
         if no_timeout:
             # The stdin runner does not exist yet, so its later ancestry anchor
             # cannot audit its own creation. Bind this first edge to the freshly
             # verified driver note and the complete current capture subtree.
             note=no_timeout_launch(launch,str(directory),diagnostic=diagnostic)
-            from .s1_helper_session import creation_identity_snapshot,owned_charge,register_owned,retire_owned
+            from .s1_helper_session import creation_identity_snapshot,owned_charge,register_owned,retire_owned,reserve_job_root,bind_job_root,wait_job_root,_prepare_owned_candidate
             before_creation=creation_identity_snapshot(os.getpid())
             if before_creation['processes']!=[note['ownership_root']]:raise ValueError('capture differs from Main admitted root')
-            owned_charge(before_creation['B']+1,0)
-            creation=dict(before=before_creation,authority=note['admission'],cpu_bound='B+max(1,H)≤8')
-        process = subprocess.Popen(ARGV, cwd=ROOT, env=env, stdin=stdin, stdout=stdout, stderr=stderr, start_new_session=True)
+            owned_charge(before_creation['B']+1,before_creation['H'])
+            candidate=_prepare_owned_candidate(subprocess.Popen,(ARGV,),dict(cwd=ROOT,env=env,stdin=stdin,stdout=stdout,stderr=stderr,start_new_session=True))
+            creation=dict(before=before_creation,authority=note['admission'],cpu_bound='B+max(1,H)≤8',candidate_sha256=__import__('hashlib').sha256(candidate[0]).hexdigest())
+            runner_job=reserve_job_root('B','capture runner',allow_descendant=False,candidate=candidate)
+            checked=_prepare_owned_candidate(subprocess.Popen,candidate[2],candidate[3])
+            if checked[0]!=candidate[0] or checked[1]!=candidate[1]:raise ValueError('capture process candidate changed after durable reservation')
+            process=subprocess.Popen(*checked[2],**checked[3])
+        else:
+            process = subprocess.Popen(ARGV, cwd=ROOT, env=env, stdin=stdin, stdout=stdout, stderr=stderr, start_new_session=True)
         try:
             if no_timeout:
                 register_owned(process.pid,'capture stdin runner')
                 creation['after']=creation_identity_snapshot(os.getpid())
                 creation['child']=next(row for row in creation['after']['processes'] if row['pid']==process.pid)
+                bind_job_root(runner_job,creation['child'],process)
                 if creation['after']['processes']!=sorted([note['ownership_root'],creation['child']],key=lambda row:row['pid']):raise ValueError('unexpected process at capture creation')
             returncode = process.wait() if no_timeout else process.wait(timeout=timeout_seconds)
+            if no_timeout:wait_job_root(runner_job,process,terminal=dict(method='matching Popen.wait',pid=process.pid,returncode=returncode))
         except subprocess.TimeoutExpired:
             timed_out = True
             os.killpg(process.pid, signal.SIGKILL)
@@ -70,8 +78,11 @@ def capture(directory, timeout_seconds=300, diagnostic=False, *, no_timeout=Fals
         except BaseException as primary:
             if no_timeout:
                 try:
-                    if process.poll() is None:os.killpg(process.pid,signal.SIGKILL)
+                    if process.poll() is None:
+                        from .s1_helper_session import signal_owned_pid
+                        signal_owned_pid(process.pid,signal.SIGKILL,None)
                     process.wait();retire_owned(process.pid)
+                    if runner_job is not None:wait_job_root(runner_job,process,terminal=dict(method='cleanup Popen.wait',pid=process.pid,returncode=process.returncode))
                 except BaseException as cleanup:
                     primary.s1_owned_process=process
                     primary.add_note('capture owned retirement: '+repr(cleanup))
@@ -93,7 +104,7 @@ def capture(directory, timeout_seconds=300, diagnostic=False, *, no_timeout=Fals
         interpreter=file_record(ROOT/ARGV[0]), stdout=file_record(directory/'process-stdout.log'), stderr=file_record(directory/'process-stderr.log'))
     if no_timeout:
         value.update(schema='s1-cpu-execution/v2',execution_mode='no-timeout',launch_note=launch,creation=creation,
-            wait=dict(method='Popen.wait',timeout_seconds=None,pid=process.pid,returncode=returncode,completed=True))
+            wait=dict(method='Popen.wait',timeout_seconds=None,pid=process.pid,returncode=returncode,completed=True),job_ledger=note['job_ledger'],runner_job=runner_job)
     (directory/'execution.json').write_text(json.dumps(value, indent=2, allow_nan=False)+'\n')
     print(json.dumps(dict(directory=str(directory), child_pid=process.pid, returncode=returncode, timed_out=timed_out)))
     return returncode if returncode >= 0 else 128-returncode

@@ -35,23 +35,131 @@ def stop_group(process, deadline):
     if process is None:
         return []
     pgid = process.pid
-    try:
-        os.killpg(pgid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    grace = min(time.monotonic() + 2., deadline - .1)
-    while group_processes(pgid) and time.monotonic() < grace:
-        time.sleep(.02)
-    try:
-        os.killpg(pgid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
+    job_token=None;pin_state=None;waited_root=False
+    if os.environ.get('S1_JOB_LEDGER'):
+        from .s1_helper_session import JOB_HANDLES,JOB_OWNERS,_job_state,job_ledger_events,stable_process_identity,retire_job_descendant_pidfd,register_job_pidfd_pin,signal_job_pidfd,close_job_pidfd
+        state=_job_state(job_ledger_events())
+        matches=[(token,row) for token,row in state['roots'].items()
+            if row.get('role')=='B' and row.get('identity',{}).get('pid')==process.pid
+            and row.get('handle',{}).get('object_id')==id(process) and JOB_HANDLES.get(token) is process]
+        if len(matches)!=1:raise ValueError('stop_group exact retained B handle/root')
+        job_token,root=matches[0]
+        bound=root['identity']
+        if root['state']=='retired':
+            if any(child['root']==job_token and child['state']!='retired' for child in state['descendants'].values()):
+                raise ValueError('repeat stop_group tree unresolved')
+            if any(value['kind']=='pin' and value['owner'].get('root_token')==job_token and value['state']!='closed' for value in state['operations'].values()):
+                raise ValueError('repeat stop_group pin close receipt unresolved')
+            if Path('/proc',str(process.pid)).exists():
+                observed=stable_process_identity(process.pid)
+                if any(observed[key]!=bound[key] for key in ('boot_id','pid','start_ticks','pgid')):
+                    raise ValueError('repeat stop_group PID/group reuse')
+            if group_processes(pgid):raise ValueError('repeat stop_group foreign group')
+            process.wait(timeout=max(.01, deadline - time.monotonic()))
+            pins=getattr(stop_group,'_pinned',{}).get(job_token)
+            if pins is not None:del stop_group._pinned[job_token]
+            from .s1_helper_session import JOB_PROCESSES
+            if JOB_PROCESSES.get(process.pid)==(job_token,process):del JOB_PROCESSES[process.pid]
+            return group_processes(pgid)
+        if root['state'] not in ('live','waited'):raise ValueError('stop_group unresolved root state')
+        waited_root=root['state']=='waited'
+        if waited_root:
+            if process.returncode is None or root.get('terminal')!=dict(method='matching child wait',pid=process.pid,returncode=process.returncode):
+                raise ValueError('waited stop_group matching Popen wait')
+            if any(child['root']==job_token and child['state'] not in ('retired','waited') for child in state['descendants'].values()):
+                raise ValueError('waited stop_group descendants unresolved')
+            remaining=group_processes(pgid)
+            if remaining:return remaining
+        if Path('/proc',str(process.pid)).exists():
+            observed=stable_process_identity(process.pid)
+            if any(observed[key]!=bound[key] for key in ('boot_id','pid','ppid','pgid','start_ticks')):
+                raise ValueError('stop_group root identity changed')
+        elif not waited_root:
+            prior=getattr(stop_group,'_pinned',{}).get(job_token)
+            if prior is None or prior['signals']!='complete' or process.returncode is None:
+                raise ValueError('stop_group unobserved root exit before safe signal phase')
+        if not hasattr(stop_group,'_pinned'):stop_group._pinned={}
+        pin_state=stop_group._pinned.get(job_token)
+        expected={token:child for token,child in state['descendants'].items() if child['root']==job_token}
+        if pin_state is None:
+            pin_state=dict(pins={},root_pin=None,signals='complete' if waited_root else 'unstarted')
+            stop_group._pinned[job_token]=pin_state
+        for (target_token,descriptor),pin in JOB_OWNERS[job_token].get('pidfds',{}).items():
+            selected=dict(token=target_token,root=job_token,identity=pin['identity'])
+            pin_state['pins'].setdefault((target_token,descriptor),(selected,descriptor))
+        for (target_token,descriptor),(selected,_) in pin_state['pins'].items():
+            child=expected.get(target_token)
+            if target_token==job_token:
+                if selected['identity']!=bound:raise ValueError('repeat stop_group root pidfd identity changed')
+                pin_state['root_pin']=(selected,descriptor)
+            elif child is None or selected['root']!=job_token or selected['identity']!=child.get('identity'):
+                raise ValueError('repeat stop_group descendant pidfd identity changed')
+            os.fstat(descriptor)
+        if not waited_root and pin_state['root_pin'] is None:
+            before=stable_process_identity(process.pid)
+            if any(before[key]!=bound[key] for key in ('boot_id','pid','ppid','pgid','start_ticks')):raise ValueError('stop_group root pin census changed')
+            descriptor=os.pidfd_open(process.pid,0);pin_state['root_pin']=(dict(token=job_token,root=job_token,identity=bound),descriptor)
+            after=stable_process_identity(process.pid)
+            if any(after[key]!=bound[key] for key in ('boot_id','pid','start_ticks','pgid')):raise ValueError('stop_group root pidfd identity changed')
+            register_job_pidfd_pin(job_token,job_token,bound,descriptor)
+        for token,child in expected.items():
+            if any(key[0]==token for key in pin_state['pins']) or child['state']=='retired':continue
+            if child['state']!='live' or not child.get('creator_acknowledged'):
+                raise ValueError('stop_group descendant creation not acknowledged')
+            identity_value=child['identity'];pid=identity_value['pid'];before=stable_process_identity(pid)
+            if any(before[key]!=identity_value[key] for key in ('boot_id','pid','start_ticks','pgid')):raise ValueError('stop_group descendant census changed')
+            descriptor=os.pidfd_open(pid,0);selected=dict(token=token,root=job_token,identity=identity_value)
+            pin_state['pins'][(token,descriptor)]=(selected,descriptor)
+            after=stable_process_identity(pid)
+            if any(after[key]!=identity_value[key] for key in ('boot_id','pid','start_ticks','pgid')):raise ValueError('stop_group pidfd identity changed')
+            register_job_pidfd_pin(job_token,token,identity_value,descriptor)
+    if waited_root:
+        pass  # A recorded matching wait forbids any further group signal.
+    elif job_token is not None and pin_state is not None and pin_state['signals']=='unstarted':
+        targets=[]
+        if pin_state['root_pin'] is not None:targets.append(pin_state['root_pin'])
+        targets.extend(value for value in pin_state['pins'].values() if value[0]['token'] in expected and expected[value[0]['token']]['state']=='live')
+        for selected,descriptor in targets:signal_job_pidfd(job_token,selected['token'],selected['identity'],descriptor,signal.SIGTERM,deadline)
+        grace = min(time.monotonic() + 2., deadline - .1)
+        while group_processes(pgid) and time.monotonic() < grace:
+            time.sleep(.02)
+        for selected,descriptor in targets:signal_job_pidfd(job_token,selected['token'],selected['identity'],descriptor,signal.SIGKILL,deadline)
+        pin_state['signals']='complete'
+    elif job_token is None and (pin_state is None or pin_state['signals']=='unstarted'):
+        try:os.killpg(pgid, signal.SIGTERM)
+        except ProcessLookupError:pass
+        grace=min(time.monotonic()+2.,deadline-.1)
+        while group_processes(pgid) and time.monotonic()<grace:time.sleep(.02)
+        try:os.killpg(pgid,signal.SIGKILL)
+        except ProcessLookupError:pass
+    elif pin_state['signals']!='complete':
+        raise ValueError('stop_group uncertain partial signal phase')
     while group_processes(pgid) and time.monotonic() < deadline:
         time.sleep(.01)
     process.wait(timeout=max(.01, deadline - time.monotonic()))
+    remaining=group_processes(pgid) if job_token is not None else None
+    if job_token is not None and remaining:
+        # Unknown or surviving group members keep this tree and its pidfds charged.
+        return remaining
     from .s1_helper_session import retire_owned
-    retire_owned(process.pid)
-    return group_processes(pgid)
+    if job_token is not None:
+        from .s1_helper_session import retire_job_descendant_pidfd
+        for (token,descriptor),(selected,_) in list(pin_state['pins'].items()):
+            retire_job_descendant_pidfd(selected,descriptor,deadline)
+        remaining=group_processes(pgid)
+        if remaining:return remaining
+        if pin_state['root_pin'] is not None:
+            selected,descriptor=pin_state['root_pin']
+            close_job_pidfd(job_token,job_token,selected['identity'],descriptor)
+        if waited_root:
+            from .s1_helper_session import finalize_waited_job_root
+            finalize_waited_job_root(job_token,process,process.pid)
+        else:retire_owned(process.pid,handle=process)
+        if _job_state(job_ledger_events())['roots'][job_token]['state']!='retired':
+            raise ValueError('stop_group root tree retirement not durable')
+        del stop_group._pinned[job_token]
+    else:retire_owned(process.pid)
+    return remaining if job_token is not None else group_processes(pgid)
 
 
 def gpu_reading():

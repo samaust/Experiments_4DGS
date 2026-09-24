@@ -90,6 +90,17 @@ class SupervisorTests(unittest.TestCase):
         state = self.ledger.states()['prepare']
         self.assertTrue(state['cleanup_confirmed'])
         self.assertEqual(state['surviving_pids'], [])
+        import os
+        if os.environ.get('S1_JOB_LEDGER'):
+            from vipe_benchmark.s1_helper_session import _job_state,job_ledger_events
+            jobs=_job_state(job_ledger_events())
+            started=next(row for row in self.ledger.events() if row['event']=='started')
+            matches=[(token,row) for token,row in jobs['roots'].items()
+                if row.get('identity',{}).get('pid')==started['pid']]
+            self.assertEqual(len(matches),1)
+            self.assertEqual(matches[0][1]['state'],'retired')
+            self.assertTrue(all(child['state']=='retired' for child in jobs['descendants'].values()
+                if child['root']==matches[0][0]))
 
     def test_missing_result_and_nonzero_exit_consume_attempts(self):
         with self.assertRaisesRegex(RuntimeError, 'FileNotFoundError'):
@@ -1035,6 +1046,16 @@ class HelperIntegrationTests(unittest.TestCase):
             self.time.sleep(.005)
         self.assertGreaterEqual(len(self.sup.group_processes(process.pid)),2)
         self.assertEqual(self.sup.stop_group(process,limit),[])
+        import os
+        if os.environ.get('S1_JOB_LEDGER'):
+            from vipe_benchmark.s1_helper_session import _job_state,job_ledger_events
+            jobs=_job_state(job_ledger_events())
+            matches=[(token,row) for token,row in jobs['roots'].items()
+                if row.get('identity',{}).get('pid')==process.pid]
+            self.assertEqual(len(matches),1)
+            self.assertEqual(matches[0][1]['state'],'retired')
+            self.assertTrue(all(child['state']=='retired' for child in jobs['descendants'].values()
+                if child['root']==matches[0][0]))
         helper = self.life.acquire()
         helper.await_ready()
         self.assertTrue(self.life.reap(self.time.monotonic()+2))
@@ -1377,7 +1398,7 @@ class HelperSessionTests(unittest.TestCase):
 
     def test_l18_descendant_and_foreign_sentinel(self):
         import signal
-        from vipe_benchmark.s1_helper_session import census,predispatch_owned,register_owned,retire_owned,create_owned_process
+        from vipe_benchmark.s1_helper_session import census,predispatch_owned,register_owned,retire_owned,create_owned_process,wait_owned_pid,signal_owned_pid
         with self.scenario('L18','descendant') as session:
             session.await_ready()
             if os.environ.get('S1_OWNED_ROOT_NOTE'):predispatch_owned('L18 sentinel')
@@ -1394,10 +1415,10 @@ class HelperSessionTests(unittest.TestCase):
                 os.kill(sentinel,0)
                 session.events.append(dict(event='foreign_sentinel_survived',pid=sentinel))
             finally:
-                os.killpg(sentinel,signal.SIGKILL)
+                signal_owned_pid(sentinel,signal.SIGKILL,None)
                 limit=self.time.monotonic()+.3
                 while self.time.monotonic()<limit:
-                    if os.waitpid(sentinel,os.WNOHANG)[0]:retire_owned(sentinel);break
+                    if wait_owned_pid(sentinel,os.WNOHANG)[0]:retire_owned(sentinel);break
                     self.time.sleep(.005)
                 else: self.fail('sentinel reap deadline')
 
@@ -1632,6 +1653,7 @@ class HelperSessionTests(unittest.TestCase):
             session.owner.released=True
 
     def test_l35_exited_leader_live_descendant(self):
+        from vipe_benchmark.s1_helper_session import acknowledge_job_descendant,register_job_pidfd_pin,retire_job_descendant_pidfd,stable_process_identity
         with self.scenario('L35') as session, tempfile.TemporaryDirectory() as temp:
             session.await_ready()
             marker=Path(temp)/'ready';release=Path(temp)/'release'
@@ -1639,9 +1661,24 @@ class HelperSessionTests(unittest.TestCase):
                 "p=None\ntry:\n p=fixture_process_launch('existing detached descendant',[sys.executable,'-B','-c','import time; time.sleep(10)'])\n"
                 f" Path({str(marker)!r}).write_text(str(p.pid))\n end=time.monotonic()+1\n while not Path({str(release)!r}).exists() and time.monotonic()<end:time.sleep(.001)\n"
                 "except BaseException as primary:\n if p is not None:retire_fixture_processes([p],primary)\n raise\n")
+            pinned=None;selected=None
             with self.scenario_worker(session,code) as worker:
                 while not marker.exists() and self.time.monotonic()<session.fixture_action_end:self.time.sleep(.001)
-                self.record_census(session,extra=(worker.pid,int(marker.read_text())))
+                child_pid=int(marker.read_text())
+                self.record_census(session,extra=(worker.pid,child_pid))
+                observed=session.events[-1]
+                worker_row=next(row for row in observed['processes'] if row['pid']==worker.pid)
+                child_row=next(row for row in observed['processes'] if row['pid']==child_pid)
+                if child_row['ppid']!=worker_row['pid'] or child_row['boot_id']!=worker_row['boot_id']:
+                    raise ValueError('L35 live worker/child census ancestry')
+                selected=acknowledge_job_descendant(worker.pid,child_pid,child_row)
+                if selected is not None:
+                    pinned=os.pidfd_open(child_pid,0)
+                    identity_after=stable_process_identity(child_pid)
+                    if any(identity_after[key]!=child_row[key] for key in ('boot_id','pid','ppid','pgid','start_ticks')):
+                        raise ValueError('L35 pidfd identity changed before release')
+                    register_job_pidfd_pin(selected['root'],selected['token'],selected['identity'],pinned)
+                    session.l35_pidfd=pinned
                 release.write_text('creation ancestry retained')
                 end=min(session.fixture_action_end,self.time.monotonic()+.3)
                 while os.waitid(os.P_PID,worker.pid,os.WEXITED|os.WNOHANG|os.WNOWAIT) is None and self.time.monotonic()<end:self.time.sleep(.001)
@@ -1651,6 +1688,9 @@ class HelperSessionTests(unittest.TestCase):
                 count,_=self.record_census(session,extra=tuple(r.pid for r in rows));self.assertLessEqual(count,8)
                 with self.assertRaisesRegex(RuntimeError,'live child'):session.worker_exit()
                 self.assertIsNone(worker.returncode)
+            if selected is not None:
+                retire_job_descendant_pidfd(selected,pinned,session.fixture_safety_end)
+                session.l35_pidfd=None
 
     def test_l36_ambiguous_native_start_retained(self):
         import _thread
@@ -2781,7 +2821,10 @@ class HelperSessionTests(unittest.TestCase):
                             def reached(event):
                                 value=gate(event);creation.append(dict(event=event,registry=value['registry_identity'],charge=value['total_workers']));return value
                             def syscall(*args,**kwargs):creation.append(dict(syscall='pure creation seam'));return 2147482999
-                            with patch.object(h,'predispatch_owned',side_effect=reached):
+                            # This exact synthetic syscall only observes the
+                            # Python-side dispatch seam; it is not an OS create
+                            # and therefore has no process-ledger reservation.
+                            with patch.dict(os.environ,{'S1_JOB_LEDGER':''}),patch.object(h,'predispatch_owned',side_effect=reached):
                                 self.assertEqual(h.create_owned_process(entry,syscall),2147482999)
                             self.assertEqual(creation[0]['event'],entry);self.assertEqual(creation[0]['registry'],id(h.INVOCATION))
                             self.assertEqual(creation[-1],{'syscall':'pure creation seam'})

@@ -340,10 +340,15 @@ class BudgetTests(unittest.TestCase):
             except BaseException as exc:
                 errors.append(exc)
         threads = [threading.Thread(target=transfer, args=(i,)) for i in range(2)]
+        from vipe_benchmark.s1_helper_session import reserve_job_root,bind_job_root,wait_job_root,thread_job_identity
+        job_tokens={}
         for thread in threads:
+            job_tokens[thread]=reserve_job_root('H','budget transfer race thread',allow_descendant=False)
             thread.start()
+            if job_tokens[thread] is not None:bind_job_root(job_tokens[thread],thread_job_identity(thread),thread,thread=True)
         for thread in threads:
-            thread.join(3)
+            if job_tokens[thread] is None:thread.join(3)
+            else:wait_job_root(job_tokens[thread],thread,terminal=dict(method='same Thread.join(3)',stopped=True),perform_wait=True,wait_args=(3,))
         self.assertFalse(any(t.is_alive() for t in threads))
         self.assertEqual(errors, [])
         self.assertEqual(sorted(received), [3, 7])
@@ -362,10 +367,14 @@ class BudgetTests(unittest.TestCase):
                 errors.append('cancelled')
         with budgets.download_lock(self.root):
             thread = threading.Thread(target=wait_for_lock)
+            from vipe_benchmark.s1_helper_session import reserve_job_root,bind_job_root,wait_job_root,thread_job_identity
+            job_token=reserve_job_root('H','budget cancelled lock helper',allow_descendant=False)
             thread.start()
+            if job_token is not None:bind_job_root(job_token,thread_job_identity(thread),thread,thread=True)
             self.assertTrue(started.wait(1))
             cancelled.set()
-            thread.join(2)
+            if job_token is None:thread.join(2)
+            else:wait_job_root(job_token,thread,terminal=dict(method='same Thread.join(2)',stopped=True),perform_wait=True,wait_args=(2,))
         self.assertFalse(thread.is_alive())
         self.assertEqual(errors, ['cancelled'])
 

@@ -742,6 +742,280 @@ class ReceiptContractTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, case['error']): graph.validate()
 
     def test_execution_mutations(self):
+        # Focused, no-child checks for the implementation-first sizing gate.
+        # These exercise actual materialized bytes and temporary ledgers only.
+        import hashlib,json,os,subprocess,threading
+        from vipe_benchmark import s1_helper_session as helper
+        self.assertEqual(helper.JOB_LEDGER_LIMIT,8*1024*1024)
+        page=64
+        with patch.object(helper.os,'sysconf',side_effect=lambda key:page if key=='SC_PAGE_SIZE' else 1_000_000):
+            at_string_limit=helper._prepare_owned_candidate(subprocess.Popen,(['/bin/true','x'*(page*32-1)],),{'env':{'A':'B'}})
+            self.assertLessEqual(len(at_string_limit[0]),16384)
+            with self.assertRaisesRegex(ValueError,'host per-string'):
+                helper._prepare_owned_candidate(subprocess.Popen,(['/bin/true','x'*(page*32)],),{'env':{'A':'B'}})
+        exact_env={f'K{number:02}':'v'*65531 for number in range(16)}
+        candidate=helper._prepare_owned_candidate(subprocess.Popen,(['/bin/true'],),{'env':exact_env})
+        descriptor=json.loads(candidate[0]);self.assertEqual(descriptor['environment']['bytes'],1024*1024)
+        over_env=dict(exact_env);over_env['K00']+='v'
+        with self.assertRaisesRegex(ValueError,'process environment cap'):
+            helper._prepare_owned_candidate(subprocess.Popen,(['/bin/true'],),{'env':over_env})
+        with self.assertRaisesRegex(ValueError,'process environment cap'):
+            helper._prepare_owned_candidate(subprocess.Popen,(['/bin/true'],),{'env':{f'K{n}':'v' for n in range(4097)}})
+        with self.assertRaisesRegex(ValueError,'descriptor cap'):
+            helper._prepare_owned_candidate(subprocess.Popen,(['/bin/true','x'*9000],),{'env':{'A':'B'}})
+        small=helper._prepare_owned_candidate(subprocess.Popen,(['/bin/true'],),{'env':{'A':'B'}})
+        mutable_argv=['/bin/true','original'];mutable_env={'A':'B'}
+        frozen=helper._prepare_owned_candidate(subprocess.Popen,(mutable_argv,),{'env':mutable_env})
+        before=frozen[0];mutable_argv[1]='changed';mutable_env['A']='changed'
+        self.assertEqual(helper._candidate_bytes(subprocess.Popen,frozen[2],frozen[3])[0],before)
+        self.assertIs(type(frozen[2][0]),tuple)
+        self.assertEqual(frozen[3]['env'],{'A':'B'})
+        mutable_spawn_argv=['/bin/true','before']
+        mutable_actions=[[__import__('os').POSIX_SPAWN_CLOSE,9]]
+        spawn=helper._prepare_owned_candidate(__import__('os').posix_spawn,
+            ('/bin/true',mutable_spawn_argv,{'A':'B'}),{'file_actions':mutable_actions})
+        mutable_spawn_argv[1]='after';mutable_actions[0][1]=10
+        self.assertEqual(helper._candidate_bytes(__import__('os').posix_spawn,spawn[2],spawn[3])[0],spawn[0])
+        self.assertEqual(spawn[3]['file_actions'],((__import__('os').POSIX_SPAWN_CLOSE,9),))
+        small_descriptor=json.loads(small[0]);host=small_descriptor['host']
+        exact_arg_max=host['pointer_bytes']+host['platform_overhead']+host['vector_bytes']
+        actual_page=__import__('os').sysconf('SC_PAGE_SIZE')
+        with patch.object(helper.os,'sysconf',side_effect=lambda key:actual_page if key=='SC_PAGE_SIZE' else exact_arg_max):
+            self.assertEqual(json.loads(helper._prepare_owned_candidate(subprocess.Popen,(['/bin/true'],),{'env':{'A':'B'}})[0])['host']['arg_max'],exact_arg_max)
+        with patch.object(helper.os,'sysconf',side_effect=lambda key:actual_page if key=='SC_PAGE_SIZE' else exact_arg_max-1):
+            with self.assertRaisesRegex(ValueError,'host full process-vector'):
+                helper._prepare_owned_candidate(subprocess.Popen,(['/bin/true'],),{'env':{'A':'B'}})
+
+        def ledger_prefix(folder):
+            path=Path(folder)/'sizing.jsonl';lock=Path(folder)/'sizing.lock'
+            first=helper._job_line(0,'0'*64,'attempt-open',dict(kind='aggregate',index=1,h=1,driver_pid=1))
+            previous=json.loads(first)['sha256']
+            main=helper._job_line(1,previous,'main-handle',dict(session_id=7,start_event_sha256='a'*64))
+            path.write_bytes(first+main);lock.write_bytes(b'')
+            data=dict(session_id=7,terminal=dict(schema='plan049-main-session-terminal/v1',session_id=7,
+                returned_utc='2026-09-24T00:00:00+00:00',exit_code=0,output_sha256='c'*64))
+            rows=helper._job_read(first+main)
+            line=helper._job_line(2,rows[-1]['sha256'],'session-terminal',data)
+            return path,lock,first+main,data,line
+        def fresh_process_refuses(path,prefix,terminal,label):
+            # One retained child at a time; the parent waits its exact result.
+            script=('import hashlib,json,os,sys\n'
+                'from vipe_benchmark import s1_helper_session as helper\n'
+                'path=sys.argv[1];terminal=json.loads(sys.argv[2]);before=open(path,"rb").read()\n'
+                'result={"pid":os.getpid()}\n'
+                'try:helper.job_ledger_events(path)\n'
+                'except Exception as exc:result["read_error"]=[type(exc).__name__,str(exc)]\n'
+                'try:helper.append_job_event("session-terminal",terminal,path)\n'
+                'except Exception as exc:result["append_error"]=[type(exc).__name__,str(exc)]\n'
+                'after=open(path,"rb").read()\n'
+                'result.update(before_sha256=hashlib.sha256(before).hexdigest(),after_sha256=hashlib.sha256(after).hexdigest(),bytes=len(after))\n'
+                'print(json.dumps(result,sort_keys=True))\n')
+            command=(sys.executable,'-B','-c',script,str(path),json.dumps(terminal,sort_keys=True,separators=(',',':')))
+            env=dict(os.environ)
+            env['PYTHONPATH']=str(ROOT/'scripts')+os.pathsep+env.get('PYTHONPATH','')
+            stdout=path.with_name(label+'-stdout.log');stderr=path.with_name(label+'-stderr.log')
+            with stdout.open('xb') as out,stderr.open('xb') as err:
+                child=helper.create_owned_process('focused poison marker '+label,subprocess.Popen,list(command),
+                    stdout=out,stderr=err,env=env,cwd=str(ROOT))
+                child_pid=child.pid
+                result=child.wait()
+                helper.retire_owned(child_pid,child)
+                self.assertEqual(tuple(child.args),command)
+            self.assertEqual(result,0,stderr.read_text())
+            receipt=json.loads(stdout.read_text())
+            self.assertEqual(receipt['pid'],child_pid)
+            self.assertEqual(receipt['read_error'][0],'ValueError')
+            self.assertIn('poisoned',receipt['read_error'][1])
+            self.assertEqual(receipt['append_error'][0],'ValueError')
+            self.assertIn('poisoned',receipt['append_error'][1])
+            expected_hash=hashlib.sha256(prefix).hexdigest()
+            self.assertEqual(receipt['before_sha256'],expected_hash)
+            self.assertEqual(receipt['after_sha256'],expected_hash)
+            self.assertEqual(receipt['bytes'],len(prefix))
+            self.assertEqual(path.read_bytes(),prefix)
+            return dict(pid=child_pid,returncode=result,command=command,receipt=receipt)
+        with tempfile.TemporaryDirectory() as temporary:
+            path,lock,prefix,terminal,line=ledger_prefix(temporary)
+            with patch.object(helper,'JOB_LEDGER_LIMIT',len(prefix)+len(line)),patch.object(helper,'JOB_LEDGER_POISONED',False):
+                helper.append_job_event('session-terminal',terminal,path)
+                self.assertEqual(len(path.read_bytes()),len(prefix)+len(line))
+                self.assertEqual(lock.read_bytes(),b'')
+            path,lock,prefix,terminal,line=ledger_prefix(temporary)
+            with patch.object(helper,'JOB_LEDGER_LIMIT',len(prefix)+len(line)-1),patch.object(helper,'JOB_LEDGER_POISONED',False):
+                with self.assertRaisesRegex(ValueError,'size cap'):helper.append_job_event('session-terminal',terminal,path)
+                self.assertEqual(path.read_bytes(),prefix);self.assertTrue(lock.read_bytes())
+                with patch.object(helper,'JOB_LEDGER_POISONED',False),self.assertRaisesRegex(ValueError,'poisoned'):
+                    helper.append_job_event('session-terminal',terminal,path)
+                with patch.object(helper,'JOB_LEDGER_POISONED',False),self.assertRaisesRegex(ValueError,'poisoned'):
+                    helper.job_ledger_events(path)
+            cap_child=fresh_process_refuses(path,prefix,terminal,'cap')
+            self.assertEqual(cap_child['receipt']['pid'],cap_child['pid'])
+            path,lock,prefix,terminal,line=ledger_prefix(temporary)
+            original_write=helper.os.write
+            def short_write(fd,data):return original_write(fd,data[:3])
+            with patch.object(helper,'JOB_LEDGER_LIMIT',len(prefix)+len(line)),patch.object(helper,'JOB_LEDGER_POISONED',False),patch.object(helper.os,'write',side_effect=short_write):
+                with self.assertRaisesRegex(OSError,'short job ledger append'):helper.append_job_event('session-terminal',terminal,path)
+                self.assertEqual(path.read_bytes(),prefix);self.assertTrue(lock.read_bytes())
+            with patch.object(helper,'JOB_LEDGER_POISONED',False),self.assertRaisesRegex(ValueError,'poisoned'):
+                helper.append_job_event('session-terminal',terminal,path)
+            rollback_child=fresh_process_refuses(path,prefix,terminal,'rollback')
+            self.assertEqual(rollback_child['receipt']['pid'],rollback_child['pid'])
+            for marker_fault in ('write','fsync','readback'):
+                path,lock,prefix,terminal,line=ledger_prefix(temporary)
+                if marker_fault=='write':
+                    target='pwrite';fault=lambda *args:(_ for _ in ()).throw(OSError('marker write fault'))
+                elif marker_fault=='fsync':
+                    target='fsync';fault=lambda *args:(_ for _ in ()).throw(OSError('marker fsync fault'))
+                else:
+                    target='pread';reads=[0]
+                    def fault(*args):
+                        reads[0]+=1
+                        if reads[0]==1:return b''
+                        raise OSError('marker readback fault')
+                with patch.object(helper,'JOB_LEDGER_LIMIT',len(prefix)+len(line)-1),\
+                        patch.object(helper,'JOB_LEDGER_POISONED',False),patch.object(helper.os,target,side_effect=fault):
+                    with self.assertRaisesRegex(OSError,'poison marker persistence failed'):
+                        helper.append_job_event('session-terminal',terminal,path)
+                    self.assertTrue(helper.JOB_LEDGER_POISONED)
+                self.assertEqual(path.read_bytes(),prefix)
+            path,lock,prefix,terminal,line=ledger_prefix(temporary)
+            with patch.object(helper,'JOB_LEDGER_LIMIT',len(prefix)+len(line)),\
+                    patch.object(helper,'JOB_LEDGER_POISONED',False),\
+                    patch.object(helper.os,'write',side_effect=short_write),\
+                    patch.object(helper.os,'pwrite',side_effect=OSError('marker write fault')):
+                with self.assertRaisesRegex(OSError,'short job ledger append') as caught:
+                    helper.append_job_event('session-terminal',terminal,path)
+                self.assertIn('poison marker persistence failed',' '.join(caught.exception.__notes__))
+                self.assertEqual(path.read_bytes(),prefix)
+        def process_identity(pid,ppid,start):
+            core=dict(boot_id='synthetic-boot',pid=pid,ppid=ppid,pgid=ppid if ppid>100 else pid,start_ticks=start)
+            task=dict(boot_id=core['boot_id'],pid=pid,process_start_ticks=start,tid=pid,start_ticks=start)
+            return dict(core,threads=[task],threads_before=[task],threads_after=[task],
+                process_before=dict(core),process_after=dict(core))
+        def owner(token,pid,start,handle):
+            return dict(boot_id='synthetic-boot',owner_pid=pid,owner_start_ticks=start,
+                main_session_id=7,root_token=token,nonce='e'*32,handle_object_id=handle)
+        def ledger_bytes(steps):
+            raw=b'';previous='0'*64
+            for event,data in steps:
+                line=helper._job_line(len(raw.splitlines()),previous,event,data)
+                raw+=line;previous=json.loads(line)['sha256']
+            return raw
+        def replay(steps):return helper._job_state(helper._job_read(ledger_bytes(steps)))
+        root_token='1'*32;child_token='2'*32
+        root_identity=process_identity(202,101,20);child_identity=process_identity(303,202,30)
+        root_owner=owner(root_token,101,10,id(202));child_owner=owner(child_token,202,20,303)
+        root_creator=dict(boot_id='synthetic-boot',pid=101,start_ticks=10,pgid=101,tid=101,thread_start_ticks=10)
+        child_creator=dict(boot_id='synthetic-boot',pid=202,start_ticks=20,pgid=root_identity['pgid'],tid=202,thread_start_ticks=20)
+        candidate=helper._candidate_receipt(small)
+        root_steps=[('attempt-open',dict(kind='aggregate',index=1,h=1,driver_pid=101)),
+            ('main-handle',dict(session_id=7,start_event_sha256='a'*64)),
+            ('root-reserved',dict(token=root_token,role='B',label='focused root',creator=root_creator,candidate=candidate)),
+            ('root-bound',dict(token=root_token,identity=root_identity,handle=dict(kind='process',object_id=id(202)),owner=root_owner))]
+        root_key=helper._job_operation_key(root_owner,'wait',root_identity)
+        def poll(sequence,pid,status):
+            return [('wait-poll-intent',dict(token=root_token,owner=root_owner,operation_key=root_key,sequence=sequence)),
+                ('wait-poll-result',dict(token=root_token,owner=root_owner,operation_key=root_key,sequence=sequence,
+                    result=dict(pid=pid,wait_status=status,terminal=pid>0)))]
+        nonterminal=root_steps+poll(1,0,0)
+        self.assertEqual(replay(nonterminal)['operations'][root_key]['state'],'polling')
+        terminal_poll=nonterminal+poll(2,202,0)
+        self.assertEqual(replay(terminal_poll)['operations'][root_key]['terminal_poll']['sequence'],2)
+        with self.assertRaisesRegex(ValueError,'wait poll sequence/order'):replay(terminal_poll+poll(3,202,0))
+        with self.assertRaisesRegex(ValueError,'owned child'):replay(nonterminal+poll(2,999,0))
+        with self.assertRaisesRegex(ValueError,'wait poll result'):replay(root_steps+poll(1,0,1))
+        root_terminal=dict(method='matching child wait',pid=202,wait_status=0)
+        root_wait=('root-wait',dict(token=root_token,terminal=root_terminal,handle_object_id=id(202),
+            owner=root_owner,operation_key=root_key))
+        retired=replay(terminal_poll+[root_wait,('root-retired',dict(token=root_token,terminal=root_terminal))])
+        self.assertEqual(retired['roots'][root_token]['state'],'retired')
+        with tempfile.TemporaryDirectory() as temporary:
+            path=Path(temporary)/'poll.jsonl';path.write_bytes(ledger_bytes(root_steps))
+            Path(temporary,'poll.lock').write_bytes(b'')
+            with patch.dict(helper.os.environ,{'S1_JOB_LEDGER':str(path)}),patch.object(helper,'JOB_LEDGER_POISONED',False),\
+                    patch.object(helper,'_job_owner',return_value=root_owner),\
+                    patch.dict(helper.JOB_PROCESSES,{202:(root_token,202)}),\
+                    patch.dict(helper.JOB_OWNERS,{root_token:dict(owner=root_owner,wait_receipt=None)}),\
+                    patch.dict(helper.JOB_MUTEXES,{}),\
+                    patch.object(helper.os,'waitpid',side_effect=[(0,0),(202,0)]) as waitpid:
+                self.assertEqual(helper.wait_owned_pid(202,__import__('os').WNOHANG),(0,0))
+                self.assertEqual(helper._job_state(helper.job_ledger_events())['operations'][root_key]['state'],'polling')
+                self.assertEqual(helper.wait_owned_pid(202,__import__('os').WNOHANG),(202,0))
+                self.assertEqual(waitpid.call_count,2)
+                self.assertEqual(helper._job_state(helper.job_ledger_events())['roots'][root_token]['state'],'waited')
+                helper.append_job_event('root-retired',dict(token=root_token,terminal=root_terminal))
+                self.assertEqual(helper._job_state(helper.job_ledger_events())['roots'][root_token]['state'],'retired')
+        child_key=helper._job_operation_key(child_owner,'wait',child_identity)
+        child_steps=root_steps+[
+            ('descendant-reserved',dict(token=child_token,root=root_token,role='B',label='focused child',creator=child_creator,candidate=candidate)),
+            ('descendant-bound',dict(token=child_token,identity=child_identity,handle=dict(kind='process',object_id=303),owner=child_owner)),
+            ('root-wait-claim',dict(token=child_token,owner=child_owner,operation_key=child_key))]
+        child_terminal=dict(method='matching child wait',pid=303,wait_status=0)
+        child_retire=('descendant-retired',dict(token=child_token,method='matching child wait',terminal=child_terminal,
+            handle_object_id=303,owner=child_owner,operation_key=child_key))
+        self.assertEqual(replay(child_steps+[child_retire])['descendants'][child_token]['state'],'retired')
+        child_poll=[('wait-poll-intent',dict(token=child_token,owner=child_owner,operation_key=child_key,sequence=1)),
+            ('wait-poll-result',dict(token=child_token,owner=child_owner,operation_key=child_key,sequence=1,
+                result=dict(pid=303,wait_status=0,terminal=True)))]
+        self.assertEqual(replay(child_steps[:-1]+child_poll+[child_retire])['descendants'][child_token]['state'],'retired')
+        changed_terminal=dict(child_retire[1],terminal=dict(child_terminal,wait_status=1))
+        with self.assertRaisesRegex(ValueError,'differs from terminal poll'):
+            replay(child_steps[:-1]+child_poll+[('descendant-retired',changed_terminal)])
+        changed_poll=copy.deepcopy(child_poll);changed_poll[-1][1]['result']['pid']=999
+        with self.assertRaisesRegex(ValueError,'owned child'):replay(child_steps[:-1]+changed_poll)
+        with self.assertRaisesRegex(ValueError,'wait poll sequence/order'):
+            replay(child_steps[:-1]+child_poll+[('wait-poll-intent',dict(child_poll[0][1],sequence=2))])
+        pin_key=helper._job_operation_key(root_owner,'pin',dict(identity=child_identity,descriptor=17))
+        open_pin=('pidfd-pin',dict(token=child_token,owner=root_owner,operation_key=pin_key,target=child_identity,descriptor=17))
+        with self.assertRaisesRegex(ValueError,'unresolved operation'):replay(child_steps+[open_pin,child_retire])
+        signal_key=helper._job_operation_key(root_owner,'signal:9',root_identity)
+        valid_signal=dict(token=root_token,owner=root_owner,operation_key=signal_key,target=root_identity,signal=9)
+        helper._job_event_data('signal-intent',valid_signal)
+        with self.assertRaisesRegex(ValueError,'process identity schema'):
+            helper._job_event_data('signal-intent',dict(valid_signal,target=dict(root_identity,extra='unreviewed')))
+        for result in ({'sent':True,'error':None,'extra':1},{'sent':False,'error':None},{'sent':True,'error':'OSError'}):
+            with self.assertRaisesRegex(ValueError,'signal result'):
+                helper._job_event_data('signal-result',dict(token=root_token,owner=root_owner,operation_key=signal_key,result=result))
+        for result in ({'closed':True,'error':None,'extra':1},{'closed':False,'error':None},{'closed':True,'error':'OSError'}):
+            with self.assertRaisesRegex(ValueError,'pidfd close result'):
+                helper._job_event_data('pidfd-closed',dict(token=child_token,owner=root_owner,operation_key=pin_key,descriptor=17,result=result))
+        close_events=[]
+        close_state=dict(operations={pin_key:dict(kind='pin',token=child_token,owner=root_owner,
+            target=child_identity,descriptor=17,state='open')})
+        with patch.dict(helper.os.environ,{'S1_JOB_LEDGER':'synthetic-ledger'}),\
+                patch.dict(helper.JOB_HANDLES,{root_token:202}),\
+                patch.dict(helper.JOB_OWNERS,{root_token:dict(owner=root_owner)}),\
+                patch.dict(helper.JOB_MUTEXES,{}),\
+                patch.object(helper,'_job_owner',return_value=root_owner),\
+                patch.object(helper,'job_ledger_events',return_value=[]),\
+                patch.object(helper,'_job_state',return_value=close_state),\
+                patch.object(helper,'append_job_event',side_effect=lambda event,data:close_events.append(event)),\
+                patch.object(helper.os,'close',side_effect=OSError('uncertain close')):
+            with self.assertRaisesRegex(OSError,'uncertain close'):
+                helper.close_job_pidfd(root_token,child_token,child_identity,17)
+            self.assertEqual(close_events,['pidfd-close-claim','operation-uncertain'])
+            close_key=helper._job_operation_key(root_owner,'close',dict(token=child_token,target=child_identity,descriptor=17))
+            self.assertIsNone(helper.JOB_OWNERS[root_token]['close_receipts'][close_key]['closed'])
+        with tempfile.TemporaryDirectory() as temporary,patch.object(helper,'JOB_LEDGER_POISONED',False):
+            path=Path(temporary)/'thread-job.jsonl';lock=Path(temporary)/'thread-job.lock'
+            first=helper._job_line(0,'0'*64,'attempt-open',dict(kind='aggregate',index=1,h=1,driver_pid=__import__('os').getpid()))
+            main=helper._job_line(1,json.loads(first)['sha256'],'main-handle',dict(session_id=19,start_event_sha256='d'*64))
+            path.write_bytes(first+main);lock.write_bytes(b'')
+            released=threading.Event();started=threading.Event()
+            thread=threading.Thread(target=lambda:(started.set(),released.wait()))
+            thread.start()
+            try:
+                self.assertTrue(started.wait(1))
+                with patch.dict(helper.os.environ,{'S1_JOB_LEDGER':str(path)}):
+                    token=helper.reserve_job_root('H','measured-size focused thread',allow_descendant=False)
+                    helper.bind_job_root(token,helper.thread_job_identity(thread),thread,thread=True)
+                    released.set()
+                    helper.wait_job_root(token,thread,terminal=dict(method='same Thread.join(1)',stopped=True),perform_wait=True,wait_args=(1,))
+                    state=helper._job_state(helper.job_ledger_events(path))
+                    self.assertEqual(state['roots'][token]['state'],'retired')
+            finally:
+                released.set();thread.join(1)
+            self.assertFalse(thread.is_alive())
         for case in SUBTEST_CASES[f"{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}"]:
             with self.subTest(**case):
                 graph = self.fixture()
@@ -812,7 +1086,7 @@ class ReceiptContractTests(unittest.TestCase):
                     identity_path=graph.root/'synthetic-prospective-identity.json'
                     identity_path.write_text(json.dumps(dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**identity_fields)))
                     identity_request=file_record(identity_path)
-                    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md','plan049-correction-015.md')]
+                    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md','plan049-correction-015.md','plan049-correction-015-source-scope-addendum-001.md','plan049-correction-015-source-scope-addendum-002.md','plan049-correction-015-source-scope-addendum-003.md','plan049-correction-015-source-scope-addendum-006.md')]
                     ancestor_authorization=file_record(run/'authorization-049-ancestor-process-001.md')
                     settings={key:'1' for key in (*c.THREADS,'OPENCV_FOR_THREADS_NUM','VIPE_CPU_VALIDATION')};settings['PYTHONPATH']=str(ROOT/'scripts')
                     # Synthetic file-routing seam: fixed logical R paths backed by
@@ -821,7 +1095,7 @@ class ReceiptContractTests(unittest.TestCase):
                     import shlex
                     session_stack=ExitStack();self.addCleanup(session_stack.close)
                     logical_files={}
-                    original_record=c.file_record;original_strict=c.strict_record;original_json=c.session_json
+                    original_record=c.file_record;original_strict=c.strict_record;original_json=c.session_json;original_ledger=c.job_ledger_input
                     def routed_record(path):
                         text=str(path);row=original_record(logical_files.get(text,path))
                         if text in logical_files:row['path']=text
@@ -833,31 +1107,38 @@ class ReceiptContractTests(unittest.TestCase):
                             return row
                         return original_strict(row)
                     def routed_json(path):return original_json(logical_files.get(str(path),path))
-                    for name,implementation in [('file_record',routed_record),('strict_record',routed_strict),('session_json',routed_json)]:
+                    def routed_ledger(path):return original_ledger(logical_files.get(str(path),path))
+                    for name,implementation in [('file_record',routed_record),('strict_record',routed_strict),('session_json',routed_json),('job_ledger_input',routed_ledger)]:
                         session_stack.enter_context(patch.object(c,name,side_effect=implementation))
                     logical_identity=str(run/'launch-identity-049-aggregate-1000.json');logical_files[logical_identity]=identity_path
                     identity_request=routed_record(logical_identity)
                     logical_admission=str(run/'launch-admission-049-aggregate-1000.json')
                     proof_path=graph.root/'synthetic-session-proof.json';logical_proof=str(run/'main-session-proof-049-aggregate-1000.json');logical_files[logical_proof]=proof_path
+                    from vipe_benchmark.s1_helper_session import _job_line,_job_operation_key,_candidate_receipt,_prepare_owned_candidate
+                    logical_ledger=str(run/'.job-ledger-aggregate-049-1000.jsonl');physical_ledger=graph.root/'synthetic-job-ledger.jsonl';logical_files[logical_ledger]=physical_ledger
+                    initial=_job_line(0,'0'*64,'attempt-open',dict(kind='aggregate',index=1000,h=1,driver_pid=122))
+                    job_ledger=dict(path=logical_ledger,lock=str(run/'.job-ledger-aggregate-049-1000.lock'),initial_sha256=hashlib.sha256(initial).hexdigest(),schema='registered-process-tree-job/v1')
+                    physical_ledger.with_suffix('.lock').write_bytes(b'')
+                    boot_line=json.dumps(dict(awaiting_main_start_proof=job_ledger,kind='aggregate',index=1000),sort_keys=True,separators=(',',':'))
                     readiness=json.dumps(dict(awaiting_main_admission=logical_admission,identity_request=identity_request))
                     session_events=[];event_paths=[]
-                    for ordinal,role in enumerate(('start','pre_admission','at_admission')):
-                        args=dict(cmd=shlex.join(['exec',str(ROOT/c.ARGV[0]),'-B',driver['path'],'aggregate','1000','synthetic contract fixture; no execution performed']),shell='/bin/bash',login=False,workdir=str(ROOT),tty=True,sandbox_permissions='require_escalated',yield_time_ms=1000,max_output_tokens=10000,justification='Run the reviewed Plan049 CPU-only aggregate after the exact AF_UNIX datagram socket retry succeeded.',prefix_rule=['exec',str(ROOT/c.ARGV[0]),'-B',driver['path']]) if ordinal==0 else dict(session_id=12345,chars='',yield_time_ms=1000)
-                        output=readiness+'\n' if ordinal==0 else ''
+                    for ordinal,role in enumerate(('start','readiness','pre_admission','at_admission')):
+                        args=dict(cmd=shlex.join(['exec',str(ROOT/c.ARGV[0]),'-B',driver['path'],'aggregate','1000','synthetic contract fixture; no execution performed']),shell='/bin/bash',login=False,workdir=str(ROOT),tty=True,sandbox_permissions='require_escalated',yield_time_ms=1000,max_output_tokens=10000,justification='Run the reviewed Plan049 CPU-only aggregate after the exact AF_UNIX datagram socket retry succeeded.',prefix_rule=['exec',str(ROOT/c.ARGV[0]),'-B',driver['path']]) if ordinal==0 else dict(session_id=12345,chars=(json.dumps(dict(schema='plan049-main-start-frame/v1',session_id=12345,event=session_events[0]))+'\n' if ordinal==1 else ''),yield_time_ms=1000)
+                        output=boot_line+'\n' if ordinal==0 else readiness+'\n' if ordinal==1 else ''
                         session_events.append(dict(schema='plan049-session-tool-event/v1',kind='aggregate',index=1000,ordinal=ordinal,role=role,tool='exec_command' if ordinal==0 else 'write_stdin',arguments=args,
                             result=dict(session_id=12345,output=output,wall_time_seconds=1.),started=dict(utc=f'2026-01-01T00:00:0{ordinal*2}+00:00',monotonic=ordinal*2),returned=dict(utc=f'2026-01-01T00:00:0{ordinal*2+1}+00:00',monotonic=ordinal*2+1),output_sha256=hashlib.sha256(output.encode()).hexdigest()))
                         logical=str(run/f'main-session-049-aggregate-1000-event-{ordinal:03}.json');physical=graph.root/f'synthetic-session-event-{ordinal}.json';logical_files[logical]=physical;event_paths.append((logical,physical))
                         physical.write_text(json.dumps(session_events[-1]))
                     session_authorization=file_record(run/'authorization-049-session-proof-001.md')
                     proof=dict(schema='plan049-session-proof/v1',proof_mode='session-bound/v1',kind='aggregate',index=1000,session_id=12345,driver=driver,identity_request=identity_request,admission_path=logical_admission,
-                        tool_events=[routed_record(logical) for logical,physical in event_paths],readiness_event=0,readiness_line=readiness,readiness_line_sha256=hashlib.sha256(readiness.encode()).hexdigest(),user_authorization=session_authorization,correction=addenda[7],cross_namespace_kernel_verified=False)
+                        tool_events=[routed_record(logical) for logical,physical in event_paths],readiness_event=1,readiness_line=readiness,readiness_line_sha256=hashlib.sha256(readiness.encode()).hexdigest(),admission_handoff=dict(session_id=12345,chars='ADMIT\n'),user_authorization=session_authorization,correction=addenda[7],cross_namespace_kernel_verified=False)
                     proof_path.write_text(json.dumps(proof));proof_reference=routed_record(logical_proof)
                     admission=dict(approved=True,cleanup_resolved=True,execution_mode='no-timeout',timeout_seconds=None,
                         kind='aggregate',index=1000,reason='synthetic contract fixture; no execution performed',counts_before={'diagnostic':0,'aggregate':999},
                         sources=outer['sources_before'],source_paths=[r['path'] for r in outer['sources_before']],
-                        resource_capacity=dict(B=1,H=0,charge=2,artifact_bytes=0),
+                        resource_capacity=dict(B=0,H=1,charge=1,artifact_bytes=0),
                         bindings=dict(session_proof=proof_reference,plan=plan,dispatch=dispatch_record,status=status,authorization=authorization,ancestor_authorization=ancestor_authorization,driver=driver,
-                            command=command,environment=settings,run_directory=str(graph.root),stdin=dict(bytes=len(c.STDIN.encode()),sha256=hashlib.sha256(c.STDIN.encode()).hexdigest()),identity_request=identity_request,addenda=addenda,**identity_fields))
+                            command=command,environment=settings,run_directory=str(graph.root),stdin=dict(bytes=len(c.STDIN.encode()),sha256=hashlib.sha256(c.STDIN.encode()).hexdigest()),identity_request=identity_request,addenda=addenda,job_ledger=job_ledger,**identity_fields))
                     admission_path=graph.root/'synthetic-no-timeout-admission.json';admission_path.write_text(json.dumps(admission))
                     logical_files[logical_admission]=admission_path
                     admitted=routed_record(logical_admission)
@@ -865,14 +1146,32 @@ class ReceiptContractTests(unittest.TestCase):
                         provenance='synthetic contract fixture; no execution performed',run_directory=str(graph.root),kind='aggregate',
                         attempt_index=1000,reason=admission['reason'],counts_before=admission['counts_before'],
                         driver=driver,admission=admitted,bindings=[plan,dispatch_record,status,authorization,ancestor_authorization,admitted,identity_request,proof_reference,session_authorization]+addenda,sources=outer['sources_before'],
-                        cpu_bound='B+max(1,H)≤8',command=command,environment=settings,cwd=str(ROOT),unset_environment=['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],stdin_identity=dict(bytes=len(c.STDIN.encode()),sha256=hashlib.sha256(c.STDIN.encode()).hexdigest(),content=c.STDIN),**identity_fields)
+                        cpu_bound='B+max(1,H)≤8',command=command,environment=settings,cwd=str(ROOT),unset_environment=['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],stdin_identity=dict(bytes=len(c.STDIN.encode()),sha256=hashlib.sha256(c.STDIN.encode()).hexdigest(),content=c.STDIN),job_ledger=job_ledger,**identity_fields)
                     note_path=graph.root/'synthetic-no-timeout-note.json';note_path.write_text(json.dumps(note))
                     outer.update(schema='s1-cpu-execution/v2',execution_mode='no-timeout',timeout_seconds=None,
-                        launch_note=file_record(note_path),wait=dict(method='Popen.wait',timeout_seconds=None,pid=outer['child_pid'],returncode=0,completed=True))
+                        launch_note=file_record(note_path),wait=dict(method='Popen.wait',timeout_seconds=None,pid=outer['child_pid'],returncode=0,completed=True),job_ledger=job_ledger,runner_job='a'*32)
                     root_identity=identity_fields['ownership_root'];child_identity=process_identity(outer['child_pid'],122,21)
-                    def census(records):return dict(root_pid=122,processes=records,B=len(records),H=0,charge=len(records)+1,complete=True)
+                    def census(records):return dict(root_pid=122,processes=records,B=len(records)-1,H=1,charge=len(records),complete=True)
                     outer['creation']=dict(before=census([root_identity]),after=census([root_identity,child_identity]),retired=census([root_identity]),child=child_identity,
                         retirement=dict(identity=child_identity,method='matching Popen.wait',returncode=0,completed=True,absent_after=True),authority=admitted,cpu_bound='B+max(1,H)≤8')
+                    chain=initial;previous=json.loads(initial)['sha256']
+                    start_hash=hashlib.sha256(json.dumps(session_events[0],sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
+                    root_token='a'*32
+                    owner=dict(boot_id=outer['boot_id'],owner_pid=122,owner_start_ticks=20,main_session_id=12345,
+                        root_token=root_token,nonce='b'*32,handle_object_id=1)
+                    process_candidate=_prepare_owned_candidate(__import__('subprocess').Popen,([sys.executable,'-c','pass'],),{})
+                    candidate_receipt=_candidate_receipt(process_candidate)
+                    terminal=dict(method='matching child wait',pid=outer['child_pid'],returncode=0)
+                    wait_key=_job_operation_key(owner,'wait',child_identity)
+                    ledger_steps=[('main-handle',dict(session_id=12345,start_event_sha256=start_hash)),
+                        ('root-reserved',dict(token=root_token,role='B',label='capture runner',creator=dict(boot_id=outer['boot_id'],pid=122,start_ticks=20,pgid=122,tid=122,thread_start_ticks=20),candidate=candidate_receipt)),
+                        ('root-bound',dict(token=root_token,identity=child_identity,handle=dict(kind='process',object_id=1),owner=owner)),
+                        ('root-wait-claim',dict(token=root_token,owner=owner,operation_key=wait_key)),
+                        ('root-wait',dict(token=root_token,terminal=terminal,handle_object_id=1,owner=owner,operation_key=wait_key)),
+                        ('root-retired',dict(token=root_token,terminal=terminal))]
+                    for sequence,(event,data) in enumerate(ledger_steps,1):
+                        line=_job_line(sequence,previous,event,data);chain+=line;previous=json.loads(line)['sha256']
+                    physical_ledger.write_bytes(chain)
                     outer['end']['monotonic']=401.;outer['end']['utc']=(datetime.datetime(2026,1,1,tzinfo=datetime.timezone.utc)+datetime.timedelta(seconds=401)).isoformat();outer['elapsed_seconds']=401.
                     graph.publish();self.assertEqual(graph.validate()['provenance'],graph.provenance)
                     valid=copy.deepcopy(outer)
@@ -892,9 +1191,9 @@ class ReceiptContractTests(unittest.TestCase):
                         elif fault=='omit_poll':changed_events.pop()
                         elif fault=='reorder_poll':changed_events[1],changed_events[2]=changed_events[2],changed_events[1]
                         elif fault=='duplicate_poll':changed_events[2]=copy.deepcopy(changed_events[1])
-                        elif fault=='readiness_altered':changed_events[0]['result']['output']=readiness.replace('1000','1001')+'\n'
-                        elif fault=='readiness_truncated':changed_events[0]['result']['output']=readiness[:-1]
-                        elif fault=='readiness_conflict':changed_events[0]['result']['output']+=readiness+'\n'
+                        elif fault=='readiness_altered':changed_events[1]['result']['output']=readiness.replace('1000','1001')+'\n'
+                        elif fault=='readiness_truncated':changed_events[1]['result']['output']=readiness[:-1]
+                        elif fault=='readiness_conflict':changed_events[1]['result']['output']+=readiness+'\n'
                         elif fault=='request_hash':changed_proof['identity_request']['sha256']='0'*64
                         elif fault=='request_path':changed_proof['identity_request']['path']=driver['path']
                         elif fault=='request_kind':request_doc['kind']='diagnostic'
@@ -926,7 +1225,7 @@ class ReceiptContractTests(unittest.TestCase):
                         if fault.startswith('request_') and fault not in ('request_hash','request_path') or fault in ('root_float','ancestor_bool','thread_float','root_substitution','ancestor_substitution','thread_substitution'):
                             changed_proof['readiness_line']=json.dumps(dict(awaiting_main_admission=logical_admission,identity_request=request_ref))
                             changed_proof['readiness_line_sha256']=hashlib.sha256(changed_proof['readiness_line'].encode()).hexdigest()
-                            changed_events[0]['result']['output']=changed_proof['readiness_line']+'\n'
+                            changed_events[1]['result']['output']=changed_proof['readiness_line']+'\n'
                         refs=[]
                         for ordinal,event in enumerate(changed_events):
                             event['output_sha256']=hashlib.sha256(event['result']['output'].encode()).hexdigest()
@@ -984,20 +1283,24 @@ class ReceiptContractTests(unittest.TestCase):
                         self.assertEqual(str(rejected.exception),expected_error)
                     # A readiness line may span tool results; only its complete
                     # line event precedes both mandatory live polls.
-                    split_events=[copy.deepcopy(session_events[0]),copy.deepcopy(session_events[1]),copy.deepcopy(session_events[1]),copy.deepcopy(session_events[2])]
-                    split_paths=list(event_paths)+[(str(run/'main-session-049-aggregate-1000-event-003.json'),graph.root/'synthetic-session-event-3.json')]
+                    for event,(logical,physical) in zip(session_events,event_paths):physical.write_text(json.dumps(event))
+                    proof_path.write_text(json.dumps(proof))
+                    self.assertEqual(c.session_proof(routed_record(logical_proof),'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])['readiness_event'],1)
+                    split_events=[copy.deepcopy(session_events[0]),copy.deepcopy(session_events[1]),copy.deepcopy(session_events[1]),copy.deepcopy(session_events[2]),copy.deepcopy(session_events[3])]
+                    split_paths=list(event_paths)+[(str(run/'main-session-049-aggregate-1000-event-004.json'),graph.root/'synthetic-session-event-4.json')]
                     logical_files[split_paths[-1][0]]=split_paths[-1][1]
                     for ordinal,event in enumerate(split_events):
-                        event['ordinal']=ordinal;event['role']=('start','readiness','pre_admission','at_admission')[ordinal]
+                        event['ordinal']=ordinal;event['role']=('start','readiness','readiness','pre_admission','at_admission')[ordinal]
+                        if ordinal==2:event['arguments']['chars']=''
                         event['started']=dict(utc=f'2026-01-01T00:00:0{ordinal*2}+00:00',monotonic=ordinal*2)
                         event['returned']=dict(utc=f'2026-01-01T00:00:0{ordinal*2+1}+00:00',monotonic=ordinal*2+1)
-                        event['result']['output']=readiness[:17] if ordinal==0 else readiness[17:]+'\n' if ordinal==1 else ''
+                        event['result']['output']=boot_line+'\n' if ordinal==0 else readiness[:17] if ordinal==1 else readiness[17:]+'\n' if ordinal==2 else ''
                         event['output_sha256']=hashlib.sha256(event['result']['output'].encode()).hexdigest()
                         split_paths[ordinal][1].write_text(json.dumps(event))
-                    split_proof=copy.deepcopy(proof);split_proof['readiness_event']=1;split_proof['tool_events']=[routed_record(logical) for logical,physical in split_paths]
+                    split_proof=copy.deepcopy(proof);split_proof['readiness_event']=2;split_proof['tool_events']=[routed_record(logical) for logical,physical in split_paths]
                     proof_path.write_text(json.dumps(split_proof))
-                    self.assertEqual(c.session_proof(routed_record(logical_proof),'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])['readiness_event'],1)
-                    split_proof['readiness_event']=0;proof_path.write_text(json.dumps(split_proof))
+                    self.assertEqual(c.session_proof(routed_record(logical_proof),'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])['readiness_event'],2)
+                    split_proof['readiness_event']=1;proof_path.write_text(json.dumps(split_proof))
                     with self.assertRaisesRegex(ValueError,'readiness event correlation'):c.session_proof(routed_record(logical_proof),'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])
                     for event,(logical,physical) in zip(session_events,event_paths):physical.write_text(json.dumps(event))
                     proof_path.write_text(json.dumps(proof))
@@ -1012,7 +1315,7 @@ class ReceiptContractTests(unittest.TestCase):
                         with self.assertRaisesRegex(ValueError,'explicit Main admission'):exec(compile(ast.Module(body=[handoff],type_ignores=[]),'<driver-handoff>','exec'),dict(sys=types.SimpleNamespace(stdin=io.StringIO(incoming))))
                     exec(compile(ast.Module(body=[handoff],type_ignores=[]),'<driver-handoff>','exec'),dict(sys=types.SimpleNamespace(stdin=io.StringIO('ADMIT\n'))))
                     local_node=next(n for n in main_node.body if isinstance(n,ast.FunctionDef) and n.name=='local_identity')
-                    final_nodes=main_node.body[-2:]
+                    final_nodes=main_node.body[-4:]
                     for fault in ('stable','root','thread','ancestor','unstable','ancestor_task_add','ancestor_task_remove','ancestor_task_start','failed_sample'):
                         observed={122:copy.deepcopy(root_identity),1:copy.deepcopy(identity_fields['preexisting_ancestors'][0])};calls=[];executed=[]
                         if fault=='root':observed[122]['start_ticks']+=1
@@ -1029,7 +1332,11 @@ class ReceiptContractTests(unittest.TestCase):
                                     else:value[key][0]['start_ticks']+=len(calls)
                             if fault=='unstable' and len(calls)>2:value['start_ticks']+=1
                             return value
-                        scope=dict(process=local_process,identity_projection=c.identity_projection,os=types.SimpleNamespace(getpid=lambda:122,execve=lambda *args:executed.append(args)),root=root_identity,ancestors=identity_fields['preexisting_ancestors'],command=command,env=settings)
+                        exec_candidate=(b'synthetic immutable descriptor',dict(settings),(command[0],command,dict(settings)),{})
+                        scope=dict(process=local_process,identity_projection=c.identity_projection,
+                            _prepare_owned_candidate=lambda *args:exec_candidate,exec_candidate=exec_candidate,
+                            os=types.SimpleNamespace(getpid=lambda:122,execve=lambda *args:executed.append(args)),
+                            root=root_identity,ancestors=identity_fields['preexisting_ancestors'],command=command,env=settings)
                         exec(compile(ast.Module(body=[local_node],type_ignores=[]),'<driver-local-identity>','exec'),scope)
                         if fault=='stable' or fault.startswith('ancestor_task_'):
                             exec(compile(ast.Module(body=final_nodes,type_ignores=[]),'<driver-exec>','exec'),scope);self.assertEqual(len(executed),1)
@@ -1193,7 +1500,7 @@ class ReceiptContractTests(unittest.TestCase):
                             changed_proof['identity_request']=request_ref
                             changed_proof['readiness_line']=json.dumps(dict(awaiting_main_admission=logical_admission,identity_request=request_ref))
                             changed_proof['readiness_line_sha256']=hashlib.sha256(changed_proof['readiness_line'].encode()).hexdigest()
-                            changed_events[0]['result']['output']=changed_proof['readiness_line']+'\n'
+                            changed_events[1]['result']['output']=changed_proof['readiness_line']+'\n'
                             refs=[]
                             for event,(logical,physical) in zip(changed_events,event_paths):
                                 event['output_sha256']=hashlib.sha256(event['result']['output'].encode()).hexdigest()
@@ -1988,7 +2295,8 @@ class NumericalEnvelopeTests(unittest.TestCase):
                     returncode = process.returncode
                 finally:
                     if process is not None and process.poll() is None:
-                        os.killpg(process.pid, signal.SIGKILL); process.wait()
+                        from vipe_benchmark.s1_helper_session import signal_owned_pid
+                        signal_owned_pid(process.pid,signal.SIGKILL,None); process.wait()
                     if process is not None and process.returncode is not None:
                         from vipe_benchmark.s1_helper_session import retire_owned
                         retire_owned(process.pid)

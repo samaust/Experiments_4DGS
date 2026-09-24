@@ -1,0 +1,25 @@
+# Plan 053 — implement guarded Plan049 sizing, then measure
+
+Prepared 2026-09-24 as a **plan-only proposal** with [Addendum021](../docs/resolve-blocker/plan049-addendum015-resolution-20260924/addendum021-proposal.md). The user's full direction, recorded in the corrected [authorization note](../docs/resolve-blocker/plan049-addendum015-resolution-20260924/authorization-049-measured-ledger-001.md), is:
+
+> I propose a change in the specifications.
+>
+> Trying to exactly estimate the size is a waste of time because input data in unbounded.
+>
+> I propose a change in the specifications. Make a reasonable attempt at optimizing the implementation plan to minimize size while retaining enough valuable data, implement, use, inspect the size used, review if changes are recommended or not.
+>
+> This practical approach will take less time to plan and implement than a purely theoretical approach.
+
+This plan interprets that practical sequence to replace two prediction-only pre-edit proofs: the theoretical cumulative whole-attempt ledger byte sum and universal selected per-caller command/environment byte maxima for future values. It also moves completion of the exact event schema/emitter table to implementation and independent post-edit review. It does **not** relax any actual byte cap, source/path/creator closure, evidence requirement, assertion, deadline, selector, order, error precedence or ownership gate. [Plan049](plan_049.md), Correction015 and unchanged addenda continue to govern. Audit006 remains FAIL under the former C2/C3 gate; its C1 prospective finding is historical evidence, not source/runtime clearance.
+
+| Criterion | Reviewable result |
+| --- | --- |
+| G1 | Independent exact-byte review of Plan053/Addendum021 and Main adoption bind the user's instruction and explicit narrow supersessions. A fresh read-only exact-hash source/import/path/creator closure confirms all selected callers, nested descendants and six script selectors before nine-path edits. Unknown creator, path or source remains FAIL. |
+| G2 | The existing nine narrow paths implement a typed deterministic renderer and immutable full effective environment at every selected OS create. Validate each **actual materialized** descriptor `≤16,384`, environment `≤1,048,576` bytes/`≤4,096` entries and each string/full vector under fresh host limits **before reservation**; after durable reservation, verify the same bytes and fresh limits immediately before create. Driver candidate/high-water/authority/host/handle checks precede its first mutation. |
+| G3 | Strict, complete required ledger events and one-shot ownership receipts are implemented. Under exclusive lock, verify actual committed bytes, render whole event, reject `S+L>8,388,608` before append, fsync and read back accepted complete lines; partial/ambiguous writes stop with verified-prefix/unknown-tail semantics. No evidence truncation or over-cap committed row. |
+| G4 | Focused boundary/fault checks validate below/equal/over cap, no over-cap write, short-write recovery/uncertainty stop, event fields/replay, dynamic command/environment/per-string/full-vector rejection and unchanged ownership/error precedence. A distinct independent exact-source review checks all final nine-path bytes, strict schema/renderer/guards, field preservation and post-edit hash manifest **before any diagnostic**. |
+| G5 | Main performs fresh source/artifact/ownership/capacity/output/high-water/session preflight, then separately cleared serial CPU-only diagnostic and later aggregate. It audits observed ledger bytes, canonical content and required fields for each run or honestly marks unreadable facts unknown, and recommends whether further safe compaction is needed. Cap stop or uncertain tail fails acceptance and keeps unresolved ownership charged. |
+
+Sequence: independent plan review; Main records reviewed adoption under the user's standing autonomous-choice authorization; fresh C1 read-only exact-source closure; narrow nine-path implementation; focused tests; distinct exact-source/hash review; fresh preflight; separately cleared runtime; observed size/content review. A failed C1, post-edit review or preflight blocks dependent work. No implementation/test/runtime is authorized by this plan-only drafting stage.
+
+Retain 78 source members, 249 methods, 1,028 callbacks, nine suites and six exact direct-script selectors, original W/C/equality-is-late and protocol/scenario deadlines, assertions and error precedence, exact positive ≤16,384-digit Main handle and job tree, serial CPU-only `B+max(1,H)≤8`, 150 GiB artifacts, one ≤64 MiB memo, hard 8,388,608-byte ledger, 16,384-byte descriptor, complete 1,048,576-byte/4,096-entry environment and fresh host string/vector caps. No operational wall/CPU/stage/invocation, attempt, correction or token ceiling is added. A run reaching the ledger cap may stop incomplete; no promise of completion for unbounded work follows. A needed cap increase, changed deadline/assertion/order/selector/source path, or new process/thread requires separate explicit authorization and review. Never read `prompts`; unmeasured resource use is unknown.
