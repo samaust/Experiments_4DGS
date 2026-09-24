@@ -1,0 +1,9 @@
+# Initial blocker evidence
+
+- Diagnostic008 was started using `exec_command`; exact Main session handle `76028` was retained and immediately recorded before admission.
+- Main returned the structured start frame on that same handle. The exact `write_stdin` return at event ordinal 1 contains the echoed JSON frame followed by the driver's readiness line. Event000–003 copies were independently read back and matched their preserved original tool objects.
+- Main assembled the session-bound/v2 proof with exact Plan054 and amendment authorities, the original tool event returns, and the readiness line. A pre-admission call to the existing `session_proof` validator returned exit code 2 and `ValueError: complete bootstrap/readiness announcements; unexplained output rejected`.
+- No `ADMIT\n` was sent. Main interrupted the waiting driver through the retained tool session handle, not through a PID. The exact same-handle return shows `KeyboardInterrupt` at the driver's admission read and outer exit code 1. No diagnostic payload or tests ran under attempt008.
+- Attempt008 and its path are consumed. The identity request is historical, must not be reused, and no further signal/admission will target it. The final candidate for a future attempt starts above current high-water after fresh checks.
+- Source implementation remains at the independently reviewed Plan054/C006 baseline; no source was edited for this attempt. The hard requirement is to recognize only the exact PTY echo encoded in the already preserved event while retaining the original bytes and rejecting any other output.
+- Live process state is terminal for Main session 76028. Resource transition was `H=1` target plus serial Main readbacks up to `H=2`, with `B=0`; charge remained at most 2, within Plan049 `B+max(1,H)≤8`. No admitted workload, child, test, or payload tree was started.

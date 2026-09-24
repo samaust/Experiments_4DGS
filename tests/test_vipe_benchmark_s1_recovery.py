@@ -1408,6 +1408,93 @@ class ReceiptContractTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError,'readiness event correlation'):c.session_proof(routed_record(logical_proof),'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])
                     for event,(logical,physical) in zip(session_events,event_paths):physical.write_text(json.dumps(event))
                     proof_path.write_text(json.dumps(proof))
+                    # The PTY may echo the exact sent frame with its final LF
+                    # rendered as CRLF. Bind that echo to ordinal 1's whole
+                    # output, preserving both readiness terminator variants.
+                    sent=session_events[1]['arguments']['chars']
+                    echo=sent[:-1]+'\r\n'
+                    echo_original=echo+readiness+'\r\n'
+                    for fault in ('echo_lf','echo_crlf','reserialized_sent','partial_echo','changed_echo','duplicate_echo',
+                            'echo_lf_only','echo_cr_only','echo_double_cr','prefix','suffix','readiness_repeat',
+                            'later_output','json_spelling','json_spacing','json_order','echo_handle','embedded_lf',
+                            'embedded_cr','wrong_sent_frame','wrong_sent_handle','bad_hash','wrong_handle',
+                            'failed_result','terminal_result','truncated','readiness_event','missing_event',
+                            'duplicate_event','reordered_event'):
+                        changed_events=copy.deepcopy(session_events);changed_proof=copy.deepcopy(proof)
+                        sent_here=sent
+                        if fault=='reserialized_sent':
+                            sent_here=json.dumps(json.loads(sent),sort_keys=True,separators=(',',':'))+'\n'
+                        elif fault=='embedded_lf':sent_here=sent.replace(', "session_id"',',\n"session_id"',1)
+                        elif fault=='embedded_cr':sent_here=sent.replace(', "session_id"',',\r"session_id"',1)
+                        elif fault=='wrong_sent_frame':sent_here=sent.replace('plan049-main-start-frame/v1','wrong-start-frame',1)
+                        changed_events[1]['arguments']['chars']=sent_here
+                        echo_here=sent_here[:-1]+'\r\n'
+                        if fault=='partial_echo':echo_here=echo_here[1:]
+                        elif fault=='changed_echo':echo_here='X'+echo_here[1:]
+                        elif fault=='duplicate_echo':echo_here+=echo_here
+                        elif fault=='echo_lf_only':echo_here=echo_here[:-2]+'\n'
+                        elif fault=='echo_cr_only':echo_here=echo_here[:-2]+'\r'
+                        elif fault=='echo_double_cr':echo_here=echo_here[:-2]+'\r\r\n'
+                        elif fault=='json_spelling':echo_here=echo_here.replace('"schema"','"\\u0073chema"',1)
+                        elif fault=='json_spacing':echo_here=echo_here.replace(', "session_id"',',"session_id"',1)
+                        elif fault=='json_order':
+                            echo_here=json.dumps(dict(session_id=12345,schema='plan049-main-start-frame/v1',event=session_events[0]),separators=(',',':'))+'\r\n'
+                        elif fault=='echo_handle':echo_here=echo_here.replace('"session_id": 12345','"session_id": 12346',1)
+                        terminator='\r\n' if fault=='echo_crlf' else '\n'
+                        output_here=echo_here+readiness+terminator
+                        if fault=='prefix':output_here='prefix'+output_here
+                        elif fault=='suffix':output_here+='suffix'
+                        elif fault=='readiness_repeat':output_here+=readiness+'\n'
+                        changed_events[1]['result']['output']=output_here
+                        if fault=='later_output':changed_events[2]['result']['output']='later'
+                        elif fault=='wrong_sent_handle':changed_events[1]['arguments']['session_id']=12346
+                        elif fault=='wrong_handle':changed_events[1]['result']['session_id']=12346
+                        elif fault=='failed_result':changed_events[1]['result']['isError']=True
+                        elif fault=='terminal_result':changed_events[1]['result']['exit_code']=0
+                        elif fault=='truncated':changed_events[1]['result']['output_truncated']=True
+                        elif fault=='readiness_event':
+                            changed_proof['readiness_event']=2
+                            changed_events.insert(2,copy.deepcopy(changed_events[1]))
+                            changed_events[2]['arguments']['chars']=''
+                            changed_events[2]['result']['output']=''
+                            for ordinal,event in enumerate(changed_events):
+                                event['ordinal']=ordinal
+                                event['role']=('start','readiness','readiness','pre_admission','at_admission')[ordinal]
+                                event['started']=dict(utc=f'2026-01-01T00:00:0{ordinal*2}+00:00')
+                                event['returned']=dict(utc=f'2026-01-01T00:00:0{ordinal*2+1}+00:00')
+                        elif fault=='missing_event':changed_events.pop()
+                        elif fault=='duplicate_event':changed_events[2]=copy.deepcopy(changed_events[1])
+                        elif fault=='reordered_event':changed_events[1],changed_events[2]=changed_events[2],changed_events[1]
+                        refs=[];paths_here=split_paths if fault=='readiness_event' else event_paths
+                        for ordinal,event in enumerate(changed_events):
+                            event['output_sha256']=hashlib.sha256(event['result']['output'].encode()).hexdigest()
+                            if fault=='bad_hash' and ordinal==1:event['output_sha256']='0'*64
+                            logical,physical=paths_here[ordinal];physical.write_text(json.dumps(event));refs.append(routed_record(logical))
+                        changed_proof['tool_events']=refs;proof_path.write_text(json.dumps(changed_proof))
+                        current=routed_record(logical_proof)
+                        if fault in ('echo_lf','echo_crlf','reserialized_sent'):
+                            self.assertEqual(c.session_proof(current,'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])['readiness_event'],1)
+                        elif fault=='readiness_event':
+                            with self.assertRaisesRegex(ValueError,'readiness event correlation'):
+                                c.session_proof(current,'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])
+                        else:
+                            with self.assertRaises(ValueError,msg=fault):
+                                c.session_proof(current,'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])
+                    # A checked copy with a wholly omitted echo is a valid
+                    # no-echo transcript. The original-result boundary rejects
+                    # it when Main actually observed the echo-bearing return.
+                    for event,(logical,physical) in zip(session_events,event_paths):physical.write_text(json.dumps(event))
+                    omitted=copy.deepcopy(session_events[1]);omitted['result']['output']=readiness+'\r\n'
+                    omitted['output_sha256']=hashlib.sha256(omitted['result']['output'].encode()).hexdigest()
+                    event_paths[1][1].write_text(json.dumps(omitted))
+                    omitted_proof=copy.deepcopy(proof);omitted_proof['tool_events'][1]=routed_record(event_paths[1][0])
+                    proof_path.write_text(json.dumps(omitted_proof))
+                    self.assertEqual(c.session_proof(routed_record(logical_proof),'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])['readiness_event'],1)
+                    with self.assertRaisesRegex(ValueError,'original result differs from checked copy'):
+                        c.require(dict(session_events[1]['result'],output=echo_original)==omitted['result'],
+                                  'original result differs from checked copy')
+                    for event,(logical,physical) in zip(session_events,event_paths):physical.write_text(json.dumps(event))
+                    proof_path.write_text(json.dumps(proof))
                     # Compile the actual driver branches; all process/input/exec
                     # seams are pure, with no subprocess or observer creation.
                     import ast,io,types

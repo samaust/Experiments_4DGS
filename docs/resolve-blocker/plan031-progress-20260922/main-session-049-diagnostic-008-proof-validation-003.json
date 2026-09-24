@@ -1,0 +1,26 @@
+{
+  "schema": "plan049-main-pre_admission-proof-validation/v1",
+  "kind": "diagnostic",
+  "index": 8,
+  "arguments": {
+    "cmd": ".local/envs/stg-colmap/bin/python -B -c 'import hashlib,json,pathlib,sys; sys.path.insert(0,\"scripts\"); from vipe_benchmark.s1_validation_contract import session_proof; root=pathlib.Path(\"docs/resolve-blocker/plan031-progress-20260922\").resolve(); rec=lambda p: dict(path=str(p.resolve()),bytes=len(p.read_bytes()),sha256=hashlib.sha256(p.read_bytes()).hexdigest()); p=root/\"main-session-proof-049-diagnostic-008.json\"; ref=rec(p); driver=rec(root/\"launch-049-exec.py\"); identity=rec(root/\"launch-identity-049-diagnostic-008.json\");\ntry:\n session_proof(ref,\"diagnostic\",8,driver,identity,str(root/\"launch-admission-049-diagnostic-008.json\"),\"Plan049 Correction015 runtime diagnostics for F1 F7 F8 F10\")\n print(json.dumps({\"verdict\":\"PASS\"}))\nexcept Exception as e:\n print(json.dumps({\"verdict\":\"FAIL\",\"error_type\":type(e).__name__,\"error\":str(e)})); sys.exit(2)'",
+    "shell": "/bin/bash",
+    "login": false,
+    "workdir": "/home/auss/git_repos/samaust/Experiments_4DGS",
+    "yield_time_ms": 10000,
+    "max_output_tokens": 2000
+  },
+  "result": {
+    "chunk_id": "c5af1a",
+    "wall_time_seconds": 0.000011438,
+    "exit_code": 2,
+    "original_token_count": 33,
+    "output": "{\"verdict\": \"FAIL\", \"error_type\": \"ValueError\", \"error\": \"complete bootstrap/readiness announcements; unexplained output rejected\"}\n"
+  },
+  "started": {
+    "utc": "2026-09-24T23:15:03.233Z"
+  },
+  "returned": {
+    "utc": "2026-09-24T23:15:03.447Z"
+  }
+}

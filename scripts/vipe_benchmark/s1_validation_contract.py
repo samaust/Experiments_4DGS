@@ -626,6 +626,7 @@ def session_proof(reference,kind,index,driver,identity_request,admission_path,re
                 finally:
                     if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(digit_limit)
                 require(args['chars'].endswith('\n') and frame==dict(schema='plan049-main-start-frame/v1',session_id=handle,event=session_json(events[0]['path'])),'same-session structured start proof handoff')
+                sent=args['chars'];readiness_output=result['output']
             else:require(args['chars']=='','same-session empty live poll')
         require(type(args.get('yield_time_ms')) is int and 0<args['yield_time_ms']<=60000,'responsive poll yield')
         output+=result['output'];ends.append(len(output))
@@ -642,7 +643,13 @@ def session_proof(reference,kind,index,driver,identity_request,admission_path,re
             and ledger['path']==str(ledger_path) and ledger['lock']==str(ledger_path.with_suffix('.lock'))
             and ledger['schema']=='registered-process-tree-job/v1' and type(ledger['initial_sha256']) is str
             and re.fullmatch('[0-9a-f]{64}',ledger['initial_sha256']),'bootstrap sidecar binding')
-    require(output==bootstrap+line+'\n' or output==bootstrap+line+'\r\n','complete bootstrap/readiness announcements; unexplained output rejected')
+    no_echo=output in (bootstrap+line+'\n',bootstrap+line+'\r\n')
+    echo=sent[:-1]+'\r\n'
+    echoed=('\n' not in sent[:-1] and '\r' not in sent[:-1]
+            and any(readiness_output==echo+line+terminator
+                    and output==bootstrap+echo+line+terminator
+                    for terminator in ('\n','\r\n')))
+    require(no_echo or echoed,'complete bootstrap/readiness announcements; unexplained output rejected')
     complete=next((ordinal for ordinal,end in enumerate(ends) if end>=len(output)),None)
     require(complete==proof['readiness_event'],'readiness event correlation')
     return proof

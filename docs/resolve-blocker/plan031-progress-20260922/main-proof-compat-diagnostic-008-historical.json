@@ -1,0 +1,53 @@
+{
+  "schema": "plan049-historical-session-proof-compatibility/v1",
+  "kind": "diagnostic",
+  "index": 8,
+  "role": "historical-only",
+  "arguments": {
+    "cmd": ".local/envs/stg-colmap/bin/python -B -c 'import hashlib,json,pathlib,sys; sys.path.insert(0,\"scripts\"); from vipe_benchmark.s1_validation_contract import session_proof; root=pathlib.Path(\"docs/resolve-blocker/plan031-progress-20260922\").resolve(); rec=lambda p: dict(path=str(p.resolve()),bytes=len(p.read_bytes()),sha256=hashlib.sha256(p.read_bytes()).hexdigest()); p=root/\"main-session-proof-049-diagnostic-008.json\"; proof=session_proof(rec(p),\"diagnostic\",8,rec(root/\"launch-049-exec.py\"),rec(root/\"launch-identity-049-diagnostic-008.json\"),str(root/\"launch-admission-049-diagnostic-008.json\"),\"Plan049 Correction015 runtime diagnostics for F1 F7 F8 F10\"); print(json.dumps({\"verdict\":\"PASS historical compatibility only\",\"proof_mode\":proof[\"proof_mode\"],\"session_id\":proof[\"session_id\"],\"events\":len(proof[\"tool_events\"]),\"readiness_event\":proof[\"readiness_event\"],\"attempt_may_be_resumed\":False}))'",
+    "shell": "/bin/bash",
+    "login": false,
+    "workdir": "/home/auss/git_repos/samaust/Experiments_4DGS",
+    "yield_time_ms": 10000,
+    "max_output_tokens": 1500
+  },
+  "result": {
+    "chunk_id": "a4b496",
+    "wall_time_seconds": 0.000010961,
+    "exit_code": 0,
+    "original_token_count": 44,
+    "output": "{\"verdict\": \"PASS historical compatibility only\", \"proof_mode\": \"session-bound/v2\", \"session_id\": 76028, \"events\": 4, \"readiness_event\": 1, \"attempt_may_be_resumed\": false}\n"
+  },
+  "started": {
+    "utc": "2026-09-24T23:39:13.861Z"
+  },
+  "returned": {
+    "utc": "2026-09-24T23:39:14.075Z"
+  },
+  "original_event_readbacks": [
+    {
+      "path": "docs/resolve-blocker/plan031-progress-20260922/main-session-049-diagnostic-008-event-000.json",
+      "bytes": 1741,
+      "sha256": "7156b656c69195f23aca29873af66fb58d847b63a1be5a3c97499b312a614069",
+      "copy_matches_original": true
+    },
+    {
+      "path": "docs/resolve-blocker/plan031-progress-20260922/main-session-049-diagnostic-008-event-001.json",
+      "bytes": 4999,
+      "sha256": "ddb3ada83cd4c051fed520a39bce64d0a5ebb1889d8924cec7ce9f3650a9bf13",
+      "copy_matches_original": true
+    },
+    {
+      "path": "docs/resolve-blocker/plan031-progress-20260922/main-session-049-diagnostic-008-event-002.json",
+      "bytes": 635,
+      "sha256": "704f51e57a90c162fb3b045d100e3c863c4216cf255af444da7dd06812ed575d",
+      "copy_matches_original": true
+    },
+    {
+      "path": "docs/resolve-blocker/plan031-progress-20260922/main-session-049-diagnostic-008-event-003.json",
+      "bytes": 634,
+      "sha256": "34e0a65f7df98ff039dba0ebd40923706c724deb18fff284115d43c7827a2202",
+      "copy_matches_original": true
+    }
+  ]
+}
