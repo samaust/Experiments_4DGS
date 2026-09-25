@@ -1,0 +1,7 @@
+# Main adoption — Plan056 Correction002
+
+Main adopts [Correction002](correction-002-proposal.md), exact SHA-256 `c6559c57e0a88fda9b08ab8041aa1f55e873b083f85ecaa7cffa9c86c3f70af4`, solely for this candidate009 lost-handle incident, based on the user's explicit rerun authorization and direct administrator attestation that the computer was restarted and the process group retired.
+
+The exact proposal received independent **PASS** in [review001](correction-002-review-001.md), SHA-256 `ae0d3f47ec537b6989d46037d0890d2dc0c48fcf913db015757d6e2d9aa0883f`. This adoption marks the candidate009 local process group and descendants retired and releases only that local process-tree B charge. It does not recover or retire the unknown native tool-session object. Keep one conservative unresolved outer-session charge in H under Plan054 until terminal proof is available; include it in every capacity calculation. Candidate009's failed/unadmitted disposition, index 009, output paths, and identity request remain permanently consumed and untouched.
+
+No diagnostic, test, aggregate, start frame, `ADMIT`, or session contact is authorized by this adoption. Candidate010 may be considered only after a fresh complete preflight and a distinct independent readiness PASS, with the old H charge retained and all Plan049/054/055 limits, deadlines, scope, and serial execution intact. The reviewed raw-result-first capture correction remains prospective until a future actual full tool return is visibly and durably validated.

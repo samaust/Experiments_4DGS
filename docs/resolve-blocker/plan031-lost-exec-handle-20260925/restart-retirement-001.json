@@ -1,0 +1,30 @@
+{
+  "evidence_id": "diagnostic009-host-restart-retirement-001",
+  "scope": "candidate009 only; this does not validate or reuse its session handle, identity request, or output paths",
+  "user_report": "The user reported restarting the computer and being certain the process group had retired.",
+  "prior_observation": {
+    "source": "host-census-002.json",
+    "observed_utc": "2026-09-25T04:40:20.361190Z",
+    "matching_driver_pid": 378088,
+    "matching_driver_pgid": 378088,
+    "state": "S"
+  },
+  "current_observation": {
+    "observed_utc": "2026-09-25T05:10:21.679340Z",
+    "kernel_boot_id": "072f8a59-03c2-4df4-af1f-c44aa0407253",
+    "boot_time_utc": "2026-09-25T05:08:02Z",
+    "proc_entries_observed": 3,
+    "matching_launch_driver_processes": [],
+    "census_errors": [],
+    "tool_return": "restart-retirement-001-tool-return.json"
+  },
+  "interpretation": {
+    "result": "The active kernel boot began after the last census that observed candidate009's driver. A full kernel reboot retires all processes and process groups from the previous boot; therefore the observed candidate009 process group is retired.",
+    "limits": [
+      "The new PID namespace is small; absence in its process listing is corroborating evidence, not the retirement basis by itself.",
+      "No exact candidate009 session handle was recovered, polled, signaled, admitted, reused, or otherwise contacted.",
+      "Candidate009 remains consumed and failed/unadmitted as historically recorded; its index, output paths, and identity request are not reusable.",
+      "This retirement evidence clears only the previous process ownership charge after independent review. It does not clear candidate010 launch readiness or any source, artifact, output-path, authority, or capacity preflight."
+    ]
+  }
+}
