@@ -780,9 +780,20 @@ def qualify_runtime(runtime, request):
         raise ValueError('S1 loaded runtime manifest required')
     interpreter = manifest.get('interpreter', {})
     executable = interpreter.get('executable', {})
-    if (interpreter.get('invoked_executable') != request['runtime']['python']
-            or executable != operation(file_record,request['runtime']['python'])):
+    invoked=request['runtime']['python']
+    if interpreter.get('invoked_executable') != invoked:
         raise ValueError('S1 loaded interpreter differs from admission')
+    # The admitted spelling may itself be a venv symlink. Resolve that exact
+    # spelling under W, then keep the byte reader's O_NOFOLLOW guarantee by
+    # opening only the resulting canonical target.
+    requested_path=Path(invoked)
+    resolved=operation(Path.resolve,requested_path,strict=True)
+    if type(executable) is not dict or executable.get('path') != str(resolved):
+        raise ValueError('S1 loaded interpreter differs from admission')
+    if executable != operation(file_record,resolved):
+        raise ValueError('S1 loaded interpreter differs from admission')
+    if operation(Path.resolve,requested_path,strict=True) != resolved:
+        raise ValueError('S1 loaded interpreter target changed')
     operation(strict_record,executable)
     inventory = operation(read_json,operation(strict_record,request['runtime']['inventory'])['path'])
     if inventory.get('versions') != request['runtime']['versions'] or inventory.get('executable') != request['runtime']['python']:

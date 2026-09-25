@@ -16,6 +16,8 @@ class FaultOwner(Owner):
 
     def run(self):
         if self.mode == 'owner_block':
+            from vipe_benchmark.s1_helper_session import _job_creator, _thread
+            self.native_job_identity=dict(_job_creator(),ident=_thread.get_ident())
             time.sleep(.15)
         super().run()
 
@@ -1683,7 +1685,7 @@ def named_deadline_witness(test,name,state,stack,now,deadline,injected,stage,pha
     from types import SimpleNamespace
     from unittest.mock import patch
     from vipe_benchmark import s1_progress as p,s1_evidence as e,s1_recovery as recovery
-    witness=SimpleNamespace(target=[],successor=[],spec={},calls=[])
+    witness=SimpleNamespace(target=[],successor=[],unrelated=[],spec={},calls=[])
     def bind(module,attribute,role,predicate=lambda *args,**kwargs:True):
         original=getattr(module,attribute)
         @functools.wraps(original)
@@ -1753,7 +1755,22 @@ def named_deadline_witness(test,name,state,stack,now,deadline,injected,stage,pha
     elif name=='owner_retention':
         bind(state.cache,'acknowledge','target');bind(state.cache,'retain','successor',lambda *a,**k:True)
     elif name=='ack_receipt':
-        bind(p,'ack_correlation','target');bind(p,'encode','successor',lambda *a,**k:True)
+        bind(p,'ack_correlation','target',lambda *a,**k:stage()=='ack_receipt:after')
+        original_encode=p.encode
+        @functools.wraps(original_encode)
+        def observe_ack_encode(value,*args,**kwargs):
+            successor=bool(witness.target) and stage()=='ack_receipt:after' and value is state.publisher.diagnostics
+            record=dict(role='successor' if successor else 'unrelated',operation='encode',stage=stage(),
+                publisher_diagnostics=value is state.publisher.diagnostics,after_target=bool(witness.target),entered=now(),completed=False)
+            (witness.successor if successor else witness.unrelated).append(record);witness.calls.append(record)
+            if successor and now()>=deadline():raise AssertionError('named successor entered at deadline: '+name+'/encode')
+            try:result=original_encode(value,*args,**kwargs)
+            except BaseException as error:record.update(exited=now(),error_class=type(error).__name__,message=str(error));raise
+            record.update(exited=now(),completed=True);return result
+        stack.enter_context(patch.object(p,'encode',observe_ack_encode))
+        witness.spec=dict(target=dict(operation='ack_correlation',stage='ack_receipt:after'),
+            successor=dict(operation='Publisher._publish diagnostics encode',stage='ack_receipt:after',after_target=True))
+        witness.spec['unrelated']=dict(operation='encode',classification='separately_recorded_not_successor')
     elif name=='array_npy':
         bind(np,'save','target');bind(p.DeadlineSink,'write','successor',lambda *a,**k:True)
     elif name=='array_png':

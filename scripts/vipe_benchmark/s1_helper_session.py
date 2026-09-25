@@ -1843,7 +1843,11 @@ def owned_workload(note_path, *, extra=(), retained=None):
         dispatch_record=dict(path=str(dispatch_path),bytes=len(dispatch_raw),sha256=hashlib.sha256(dispatch_raw).hexdigest())
         status=dispatch['implementation_status_snapshot'];plan=dispatch['plan']
         if dispatch.get('schema')!='plan049-implementation-dispatch/v1' or plan['path']!=str(repository/'plans/plan_049.md') or status['path']!=str(run/'implementation-status-049.md'):raise ValueError('owned fixed Plan049 authority')
-        if dispatch_record not in note['bindings'] or not any(rec['path']==plan['path'] and rec['sha256']==plan['sha256'] for rec in note['bindings']) or note['status']!={k:status[k] for k in ('bytes','sha256')}:raise ValueError('owned dispatch/plan/status binding')
+        original_plan=dict(path=str(repository/'plans/plan_049.md'),sha256='a27329ee5c9d9439515093e6797ad72f61bd6faf1e43c5f45f2b2cf4c013cc1f')
+        if plan!=original_plan:raise ValueError('owned original Plan049 dispatch authority')
+        current_plan_raw=(repository/'plans/plan_049.md').read_bytes()
+        current_plan=dict(path=str(repository/'plans/plan_049.md'),bytes=len(current_plan_raw),sha256=hashlib.sha256(current_plan_raw).hexdigest())
+        if dispatch_record not in note['bindings'] or current_plan not in note['bindings'] or note['status']!={k:status[k] for k in ('bytes','sha256')}:raise ValueError('owned dispatch/plan/status binding')
         if note['cwd']!=str(repository) or str(run/'launch-049-exec.py')!=note['driver']['path']:raise ValueError('owned launch authority')
         ancestors=[];cursor=root['ppid'];seen=set()
         for recorded in note['preexisting_ancestors']:

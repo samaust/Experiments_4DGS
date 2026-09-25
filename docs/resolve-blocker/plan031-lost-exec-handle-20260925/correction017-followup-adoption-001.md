@@ -1,0 +1,5 @@
+# Main adoption — Correction017 follow-up plan 001
+
+Main adopts exact plan SHA-256 `cc5eb522733f126c719185e60dbe75e7318a66f6c624ca221bda9ca0d284d541`, independently reviewed PASS in `correction017-followup-plan-review-002.md` (SHA-256 `eed82bfeff3a92302a692fb300698dcf95e6afaf6970b1c5e9c7997cf9bf3f6b`).
+
+This adopts only the bounded follow-up correction: edit `scripts/vipe_benchmark/s1_progress.py` child cleanup so that a descriptor-close failure is suppressed only when that child traversal itself has an active exception; otherwise let it propagate into unresolved-owner accounting. Reuse `backend_retirement_transition_controls` unchanged. Preserve one-attempt semantics, uncertain descriptor ownership, original primary exception, all original work/cleanup deadline boundaries, and resource constraints. Independent exact-source review is required before the next focused test. No test or diagnostic launch, diagnostic admission, aggregate, process signal, or resource-limit change is authorized by this adoption.

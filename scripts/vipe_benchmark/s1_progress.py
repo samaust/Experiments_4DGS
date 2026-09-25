@@ -1570,13 +1570,17 @@ class OwnedTemporaryDirectory:
                     entry=gate.call('scandir_next',next,iterator['iterator'],sentinel)
                     if entry is sentinel:break
                     names.append(entry.name)
-            finally:
-                pending=sys.exception()
+            except BaseException as pending:
+                # Only a locally active traversal failure makes iterator
+                # close secondary. sys.exception() may expose an outer
+                # caller's primary, which must not mask this uncertainty.
                 try:close_iterator(iterator)
                 except BaseException as secondary:
-                    if pending is None:raise
                     event['secondary'].append(dict(operation='scandir_close',error_class=type(secondary).__name__,message=str(secondary)))
                     pending.add_note('temporary iterator close: '+repr(secondary))
+                raise
+            else:
+                close_iterator(iterator)
             for name in names:
                 if type(name) is not str or not name or name in ('.','..') or '/' in name:raise ValueError('temporary entry containment')
                 item=gate.call('statat_nofollow',os.stat,name,dir_fd=fd,follow_symlinks=False)
@@ -1585,13 +1589,20 @@ class OwnedTemporaryDirectory:
                     owned=dict(fd=None,device=item.st_dev,inode=item.st_ino,mount_id=self.mount_id,closed=False)
                     def retained_child(value):owned['fd']=value;self.children.append(owned)
                     gate.call('openat_directory_nofollow',self.open_directory,fd,name,self.mount_id,retain=retained_child)
+                    traversal_error=None
                     try:
                         clear(owned['fd'],owned)
                         current=gate.call('statat_nofollow',os.stat,name,dir_fd=fd,follow_symlinks=False)
                         if not same(current,owned):raise ValueError('temporary child name reused')
                         gate.call('rmdirat',os.rmdir,name,dir_fd=fd)
+                    except BaseException as error:
+                        traversal_error=error
+                        raise
                     finally:
-                        pending=sys.exception()
+                        # Ambient caller exceptions do not make a failed close
+                        # secondary to this child traversal. Only a failure
+                        # raised by this block may retain the child's primary.
+                        pending=traversal_error
                         try:self.close_fd(owned,'fd',gate,'close_child_descriptor')
                         except BaseException as secondary:
                             if pending is None:raise

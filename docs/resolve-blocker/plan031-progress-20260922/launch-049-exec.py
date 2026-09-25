@@ -294,6 +294,7 @@ def main():
     if type(capacity.get('artifact_bytes')) is not int or not 0<=capacity['artifact_bytes']<=150*1024**3:raise ValueError('artifact cap proof')
     if [r['path'] for r in sources]!=admission['source_paths'] or sources!=admission['sources']:raise ValueError('main source snapshot changed')
     addenda=[record(RUN/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md','plan049-correction-015.md','plan049-correction-015-source-scope-addendum-001.md','plan049-correction-015-source-scope-addendum-002.md','plan049-correction-015-source-scope-addendum-003.md','plan049-correction-015-source-scope-addendum-006.md')]
+    addenda.append(record(RUN.parent/'plan031-lost-exec-handle-20260925/candidate011-correction-adoption-001.md'))
     ancestor_authorization=record(RUN/'authorization-049-ancestor-process-001.md')
     if ancestor_authorization['sha256']!='734fc8fc67f2cc7f60ead6eba279b797abff47bbf32602cf5106e07ef540605d':raise ValueError('fixed ancestor authorization bytes')
     plan054=record(ROOT/'plans/plan_054.md')

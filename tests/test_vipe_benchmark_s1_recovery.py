@@ -1087,6 +1087,7 @@ class ReceiptContractTests(unittest.TestCase):
                     identity_path.write_text(json.dumps(dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**identity_fields)))
                     identity_request=file_record(identity_path)
                     addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md','plan049-correction-015.md','plan049-correction-015-source-scope-addendum-001.md','plan049-correction-015-source-scope-addendum-002.md','plan049-correction-015-source-scope-addendum-003.md','plan049-correction-015-source-scope-addendum-006.md')]
+                    addenda.append(file_record(run.parent/'plan031-lost-exec-handle-20260925/candidate011-correction-adoption-001.md'))
                     ancestor_authorization=file_record(run/'authorization-049-ancestor-process-001.md')
                     settings={key:'1' for key in (*c.THREADS,'OPENCV_FOR_THREADS_NUM','VIPE_CPU_VALIDATION')};settings['PYTHONPATH']=str(ROOT/'scripts')
                     # Synthetic file-routing seam: fixed logical R paths backed by
