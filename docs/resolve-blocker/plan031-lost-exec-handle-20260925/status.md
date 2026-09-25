@@ -4,16 +4,20 @@ Calling task: Plan031 under Plan049. Candidate009 preflight and its pre-admissio
 
 The blocker plan and preserved evidence were checkpointed in local commit `3de65da` (`Record Plan031 lost session handle blocker`).
 
+The user has explicitly authorized a rerun to regenerate missing data, conditioned on fixing the handle-loss bug first. [Correction001](correction-001.md), SHA-256 `a4b6c8ca291724ce79f4afedb0dbd4bbb0d6ce9e5664a1b7c5849a738615d447`, defines the operational fix: in the dedicated launch-return cell, immediately store the raw nested `exec_command` result and emit it; do not hash or format it first. [Independent correction review](correction-review-001.md), SHA-256 `a347d2701b7c5360cde0e46a9dab356b67d9ff39d3464d737a9861e24ae1612b`, passed for this prospective fix only. A synthetic nested-value check confirmed `store` then `text` works in the current helper, and the census call exercised the same ordering; neither returned or validated a live long-running session handle. This removes the known `crypto` failure path from the future capture procedure but is not a source-code change.
+
 | Criterion | State |
 | --- | --- |
 | C1 exact-handle recovery route | not met; independent review found no recovery/list/replay API among exposed tools |
 | C2 evidence and no interaction | unverified; saved records preserve the bounded observations, but original launch/census UTC timestamps are absent and later noninteraction is only Main-recorded |
-| C3 future-safe capture sequence | met as a reviewed plan only; no future capture has run |
+| C3 future-safe capture sequence | met prospectively: Correction001 and its independent review PASS; live session-handle capture remains unverified |
 | C4 independent validation and runtime resumption | not met; driver was observed in the past read-only census; current liveness and terminal/retirement evidence are unknown |
 
 Main's `exec_command` launch request was for diagnostic009 with TTY and escalated execution. The nested call returned to the JS wrapper, but the wrapper failed before saving or displaying the nested result. The exact returned session handle and nested tool output are lost. The outer wrapper error was `ReferenceError: crypto is not defined`; no start frame or admission handoff followed. A subsequent read-only host census (its UTC observation time is unavailable) observed one matching driver command at PID 378088, state `S`, 486 census entries, zero census errors, and no matching capture/test process. This is a past observation only; current liveness is unknown. The PID is recorded as an observation only and is not valid identity proof. No signal was sent. A read-only [candidate output check](candidate009-partial-output-check-001.json), SHA-256 `d98172668853c6c6e13db2e8f891c931668c9ea21a58c987b69021dd62671243`, observed all 45 candidate paths vacant at `2026-09-25T00:04:57.642408Z`; no candidate artifacts were present at that observation. It does not establish current vacancy or terminality.
 
 Do not admit, poll, signal, resume, or reuse the candidate009 identity. Do not start candidate010 while candidate009's ownership/retirement remains unresolved. The authorized repo-local environment is `.local/envs/stg-colmap` (Python 3.14.6). The system `python` command was absent; this caused no changes.
+
+The latest [read-only census](host-census-002.json), SHA-256 `c024f1dbb3b5098e5b81b8cc7c5dc0e8052cdf222bd25f8e49b91de9282593dd`, observed one process matching the diagnostic009 driver command at `2026-09-25T04:40:20.361190Z` (PID/PGID 378088, state `S`), in 521 proc entries and with no census errors. This remains a past PID/argv observation only; current liveness and exact session identity are unproven. No process interaction occurred.
 
 ## Initial independent review
 
