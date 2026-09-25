@@ -2,6 +2,8 @@
 
 Calling task: Plan031 under Plan049. Candidate009 preflight and its pre-admission-only independent review passed and were committed in `c74879a`. The saved launch-boundary preflight passed from `2026-09-25T00:00:18.058274Z` to `2026-09-25T00:00:20.367627Z`; see [boundary preflight](../plan031-progress-20260922/main-preflight-049-diagnostic-009-launch-boundary-001.json), SHA-256 `5f6803d850471d573af0a700f5bc86ea09aff588db6e84aa0c13c3a3d2f2f3ff`.
 
+The blocker plan and preserved evidence were checkpointed in local commit `3de65da` (`Record Plan031 lost session handle blocker`).
+
 | Criterion | State |
 | --- | --- |
 | C1 exact-handle recovery route | not met; independent review found no recovery/list/replay API among exposed tools |
