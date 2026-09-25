@@ -1,0 +1,31 @@
+{
+  "schema": "plan049-main-lost-exec-handle/v1",
+  "attempt": {
+    "kind": "diagnostic",
+    "index": 9,
+    "command": "exec /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python -B /home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py diagnostic 9 'Plan049 Correction001 PTY echo pre-admission proof capture after independent source review'",
+    "tty": true,
+    "execution": "require_escalated"
+  },
+  "wrapper": {
+    "operation": "await tools.exec_command(args), then compute output SHA-256 before persisting the exact return and returned session handle",
+    "error": "ReferenceError: crypto is not defined",
+    "failure_point": "The exec wrapper raised after awaiting the nested exec_command result and before apply_patch could save the handle/event. The nested result object was lost with the failed wrapper isolate.",
+    "handle": null,
+    "nested_tool_result": null
+  },
+  "main_actions_after_launch": {
+    "start_frame_sent": false,
+    "admit_sent": false,
+    "payload_started": false,
+    "tests_started": false,
+    "signal_sent": false
+  },
+  "identity_and_terminal": {
+    "session_handle_retained": false,
+    "terminal_proven": false,
+    "candidate_attempt_must_not_be_reused": true,
+    "pid_is_not_session_identity": true
+  },
+  "tool_wrapper_outer_observation": "functions.exec reported Script error: ReferenceError: crypto is not defined at exec_main.mjs:18:14. The nested exec_command result was not emitted by the failed wrapper."
+}

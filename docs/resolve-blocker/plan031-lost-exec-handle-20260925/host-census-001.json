@@ -1,0 +1,17 @@
+{
+  "schema": "plan049-read-only-host-census/v1",
+  "tool": "exec_command",
+  "arguments": {
+    "interpreter": ".local/envs/stg-colmap/bin/python",
+    "operation": "s1_helper_session.census() plus read-only /proc cmdline scan; no signals or writes",
+    "sandbox_permissions": "require_escalated"
+  },
+  "result": {
+    "chunk_id": "ce1807",
+    "wall_time_seconds": 6.1,
+    "exit_code": 0,
+    "original_token_count": 57,
+    "output": "{\"errors\":[],\"host_census_entries\":486,\"matching_workloads\":[{\"argv_match\":\"launch-049-exec.py diagnostic 9\",\"pgid\":378088,\"pid\":378088,\"ppid\":181957,\"start_ticks\":18785375,\"state\":\"S\"}],\"read_only\":true,\"signal_sent\":false}"
+  },
+  "interpretation": "The process row and argv match are observational only; they do not recover or prove the lost Main exec session handle and are not authorization to interact with that process."
+}
