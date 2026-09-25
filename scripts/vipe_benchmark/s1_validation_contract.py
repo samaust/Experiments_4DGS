@@ -736,6 +736,7 @@ def no_timeout_launch(reference,directory,*,diagnostic=False):
     typed_binding(request)
     require(request==dict(schema='plan049-prospective-identity/v1',kind=note['kind'],index=note['attempt_index'],driver=driver,**{key:note[key] for key in ('ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths')}),'exact pre-admission identity request')
     addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md','plan049-correction-015.md','plan049-correction-015-source-scope-addendum-001.md','plan049-correction-015-source-scope-addendum-002.md','plan049-correction-015-source-scope-addendum-003.md','plan049-correction-015-source-scope-addendum-006.md')]
+    addenda.append(file_record(ROOT/'docs/resolve-blocker/plan031-lost-exec-handle-20260925/candidate011-correction-adoption-001.md'))
     require(command_bindings.get('addenda')==addenda and bindings[-len(addenda):]==addenda
             and len({row['path'] for row in addenda})==len(addenda)
             and all(bindings.count(row)==1 for row in addenda),'current ordered correction authority')

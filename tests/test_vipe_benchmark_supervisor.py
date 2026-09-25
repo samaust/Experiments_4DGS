@@ -3671,6 +3671,33 @@ class HelperSessionTests(unittest.TestCase):
                             after(e,'read_json','first_metadata_read_parse_return',lambda path:Path(path).name=='first-result-qualification.json')
                         elif name=='runtime_guard':
                             path=state.root/'runtime.json';write_json(path,fixture['observed_runtime'])
+                            if case['when']=='before':
+                                # Exercise production qualification without the
+                                # fixture-only interpreter adapter: this exact
+                                # admitted venv spelling is a final symlink.
+                                requested=fixture['request']['runtime']['python'];runtime=fixture['observed_runtime']
+                                target=Path(requested).resolve(strict=True)
+                                alias=state.root/'runtime-interpreter-alias';alias.symlink_to(target)
+                                alias_request=copy.deepcopy(fixture['request']);alias_request['runtime']['python']=str(alias)
+                                with self.assertRaisesRegex(ValueError,'loaded interpreter differs from admission'):
+                                    e.qualify_runtime(runtime,alias_request,deadline=deadline)
+                                manifest=e.read_json(runtime['loaded_files']['path'])
+                                manifest['interpreter']['executable']['sha256']='0'*64
+                                changed_manifest=state.root/'runtime-manifest-changed.json';write_json(changed_manifest,manifest)
+                                changed_runtime=copy.deepcopy(runtime);changed_runtime['loaded_files']=file_record(changed_manifest)
+                                with self.assertRaisesRegex(ValueError,'loaded interpreter differs from admission'):
+                                    e.qualify_runtime(changed_runtime,fixture['request'],deadline=deadline)
+                                substituted=state.root/'runtime-interpreter-substitute';substituted.write_bytes(b'not the admitted interpreter')
+                                real_resolve=Path.resolve;resolutions=[]
+                                def substituted_resolution(value,*args,**kwargs):
+                                    if value==Path(requested):
+                                        resolutions.append(value)
+                                        return target if len(resolutions)==1 else substituted
+                                    return real_resolve(value,*args,**kwargs)
+                                with patch.object(Path,'resolve',new=substituted_resolution):
+                                    with self.assertRaisesRegex(ValueError,'interpreter target changed'):
+                                        e.qualify_runtime(runtime,fixture['request'],deadline=deadline)
+                                self.assertEqual(len(resolutions),2)
                             action=lambda:p.operation(e.qualify_runtime,p.operation(e.read_json,path,deadline=deadline),fixture['request'],deadline=deadline)
                             after(e,'read_json','runtime_metadata_read_parse_return',lambda path:Path(path).name=='runtime.json')
                         elif name=='accept_after_read':
@@ -3722,8 +3749,12 @@ class HelperSessionTests(unittest.TestCase):
                         def __iter__(inner):return inner
                         def __next__(inner):return next(inner.stream)
                         def write(inner,data):
+                            path=fd_paths.get(inner.descriptor);production_path=path is not None and Path(path).is_relative_to(state.root)
                             offset=inner.stream.tell();value=inner.stream.write(data)
-                            if observing[0]:write_observations.append(dict(path=fd_paths.get(inner.descriptor),offset=offset,bytes=value,content_hex=bytes(data[:value]).hex(),observed=now[0]))
+                            if observing[0] and production_path:
+                                written=data[:value]
+                                encoded=written.encode(inner.stream.encoding or 'utf-8') if isinstance(written,str) else bytes(written)
+                                write_observations.append(dict(path=path,offset=offset,bytes=len(encoded),text_chars=value if isinstance(written,str) else None,encoding=inner.stream.encoding if isinstance(written,str) else None,content_hex=encoded.hex(),observed=now[0]))
                             return value
                         def __enter__(inner):return inner
                         def __exit__(inner,kind,error,tb):
@@ -3765,6 +3796,9 @@ class HelperSessionTests(unittest.TestCase):
                         if name!='ack_receipt':self.assertIs(state.cache.snapshot,pointer)
                     else:action();observed='real operation completed before W'
                     if name!='worker_popen':self.assertTrue(injected[0],name)
+                    if name=='ack_receipt':
+                        self.assertTrue(any(row['role']=='unrelated' and not row['after_target'] for row in witness.unrelated),dict(case=case,unrelated=witness.unrelated))
+                        self.assertEqual(witness.successor,[row for row in witness.calls if row['role']=='successor'])
                     if name=='array_npy':
                         observing[0]=False
                         # Same typed callback also exposes trace-return W edges
@@ -3840,7 +3874,7 @@ class HelperSessionTests(unittest.TestCase):
                         self.assertEqual(content,bytes(expected),dict(case=case,path=path,reason='exact accepted write bytes'))
                         self.assertEqual(__import__('hashlib').sha256(content).hexdigest(),__import__('hashlib').sha256(expected).hexdigest())
                     partial=[dict(path=str(path),bytes=path.stat().st_size,sha256=__import__('hashlib').sha256(path.read_bytes()).hexdigest(),content_hex=path.read_bytes().hex()) for path in state.root.rglob('*') if path.is_file()]
-                    evidence.append(dict(case,source=source,events=seen,named_target=witness.target,named_successor=witness.successor,named_spec=witness.spec,real_predecessor=injection_observations,write_observations=write_observations,primary=primary_observation,retirement_complete=not owned_descriptors,deadline=deadline,work_deadline=deadline,total_deadline=segment_clock.total_deadline if name=='next_input' else state.clock.total_deadline,exact_injected_time=deadline+offset,observed=observed,actual_operations=operation_observations,descriptor_observations=descriptor_observations,forbidden_successor_entries=[v for v in operation_observations if v['state']=='actual_entry' and v['observed']>=deadline],reference=state.cache.reference(),partial_files=partial,fixture=fixture['request_record']))
+                    evidence.append(dict(case,source=source,events=seen,named_target=witness.target,named_successor=witness.successor,named_spec=witness.spec,unrelated_operations=witness.unrelated,real_predecessor=injection_observations,write_observations=write_observations,primary=primary_observation,retirement_complete=not owned_descriptors,deadline=deadline,work_deadline=deadline,total_deadline=segment_clock.total_deadline if name=='next_input' else state.clock.total_deadline,exact_injected_time=deadline+offset,observed=observed,actual_operations=operation_observations,descriptor_observations=descriptor_observations,forbidden_successor_entries=[v for v in operation_observations if v['state']=='actual_entry' and v['observed']>=deadline],reference=state.cache.reference(),partial_files=partial,fixture=fixture['request_record']))
         self.control_record('plan047-deadline-steps',evidence)
 
     def test_progress_plan048_pure_memo(self):

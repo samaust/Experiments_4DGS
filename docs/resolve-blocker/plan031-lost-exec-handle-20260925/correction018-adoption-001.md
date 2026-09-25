@@ -1,0 +1,5 @@
+# Main adoption — Correction018
+
+Main adopts the exact Correction018 plan SHA-256 `0cd24b3982e148cd5c961ee5fd831a78ffafd9b1956abe5a91e744c1055dd396`, independently reviewed PASS in `correction018-plan-review-002.md` (SHA-256 `9eb80ab8a4011e6be171303b09896f187be703df5b731e0d6afd237fba39c2dc`).
+
+The adopted scope is limited to `scripts/vipe_benchmark/s1_evidence.py::qualify_runtime` plus the existing `runtime_guard` portion of `tests/test_vipe_benchmark_supervisor.py`. Resolve the exact admitted interpreter path strictly before and after the guarded read under the original work deadline, require the canonical target to match the manifest path, compare the complete checked target record, and reject a changed target. Add only the plan’s negative production-path controls within the existing before case; keep all 114 declared cases and their deadlines/assertions. No diagnostic, admission, aggregate, signal, generic symlink following, unrelated path edit, or resource-cap change is authorized. Independent exact-source review is required before focused execution.
