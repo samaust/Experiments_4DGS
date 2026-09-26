@@ -1,0 +1,26 @@
+{
+ "schema": "r18-1-f12-gate-verification/v1",
+ "recorded_utc": "2026-09-26T18:41:00+00:00",
+ "source_commit_baseline": "343d06750f49f5789ce74e9605f9f9e988645c20",
+ "change": "s1_progress.py fine-grained before() work-deadline gates at individual read/hash/parse/serialize/write boundaries inside read_record, _candidate_inventory (decode and append encode/hash), and _publish_segment_row (produced-row read-return and qualified-row write); no-op without an active deadline context",
+ "cases": [
+  {"case": "no-deadline read_record", "result": "ok", "observed": "gate inert, read returns value"},
+  {"case": "late entry (deadline already past)", "result": "ok", "observed": "TimeoutError('progress original work deadline') at entry"},
+  {"case": "read-return at/after W", "result": "ok", "observed": "read_bytes sleeps past W; read-return gate raises TimeoutError instead of granting authority over the bytes"},
+  {"case": "in-time read under deadline", "result": "ok", "observed": "value returned unchanged"},
+  {"case": "corrupted bytes under deadline", "result": "ok", "observed": "original ValueError('progress accepted metadata changed') preserved, not replaced by a deadline error"}
+ ],
+ "existing_tests_on_changed_source": [
+  {"test": "test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_plan047_deadline_steps", "result": "ok", "elapsed_seconds": 82.4, "note": "all 114 callbacks incl. read-return seam injection"},
+  {"test": "test_progress_plan047_complete_final_sample", "result": "ok"},
+  {"test": "test_progress_plan047_result_summary", "result": "ok"},
+  {"test": "test_progress_plan047_limits", "result": "ok"},
+  {"test": "test_progress_plan047_recovery", "result": "ok"},
+  {"test": "test_progress_plan047_state_authority", "result": "ok"}
+ ],
+ "already_addressed_verification": {
+  "F1.2_sites": "context/request reads and source hashing (_prepare_context: operation-wrapped mkdir/fsync/record/read_bytes/read_record/encode), read_record (entry+boundary gates), candidate_inventory (operation wrap; decode/append gates added), ClosedInventory.recheck (loop-entry before(deadline) gates), publish_segment_row (operation wrap; read-return/write gates added), first_record/reconcile_first/preserve_failure (operation-wrapped bodies with W/T deadline selection), s1_recovery.accept_result and prepare_terminal_evidence (operation-wrapped; optional() per-probe before/after checks), stages.segment Publisher construction (Publisher.__init__ @with_deadline with before(deadline) before source re-hash)",
+  "F5.3": "supervisor.py primary_failure dict preserves original class/message/kind/phase/observed/stop_required; final_step appends secondary_failures and never replaces the primary; refresh_evidence sets failure_kind=primary_failure['kind'] with secondary_outcome_kind retaining the final phase kind",
+  "F5.4": "P scenario child boundary traces persisted and correlated (test asserts child_boundaries events incl. P05_pre_head_replace and P01_late_suffix; plan046-publication-faults.json artifact)"
+ }
+}

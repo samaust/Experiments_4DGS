@@ -210,9 +210,16 @@ def validate_record(value):
 def read_record(value, limit=CHECKPOINT_BYTES):
     before()
     validate_record(value)
+    before()
     raw = read_bytes(value['path'], limit)
+    # F1.2: the read-return is itself a work-deadline boundary; a read that
+    # returns at/after W grants no authority over its bytes.
+    before()
     if record(value['path'], raw) != value: raise ValueError('progress accepted metadata changed')
-    return decode(raw, limit)
+    before()
+    value = decode(raw, limit)
+    before()
+    return value
 
 
 def verified_bytes(value):
@@ -1061,8 +1068,12 @@ def _candidate_inventory(output, result, deadline):
     def append(source,row,rec):
         nonlocal total
         inventory_capacity('candidates',len(candidates)+1,MAX_CANDIDATES)
-        raw=encode(row,256*1024);total+=len(raw)
+        before()
+        raw=encode(row,256*1024)
+        before()
+        total+=len(raw)
         inventory_capacity('metadata_bytes',total,MAX_METADATA)
+        before()
         candidates.append((source,row,rec,hashlib.sha256(raw).hexdigest()))
     try:
         raw=operation(read_bytes, root/'result.json', MAX_METADATA, deadline=deadline)
@@ -1070,7 +1081,9 @@ def _candidate_inventory(output, result, deadline):
         if result is not None:raise
         raw=None
     if raw is not None:
+        before()
         parsed=decode(raw, MAX_METADATA, max_depth=64, max_nodes=1048576)
+        before()
         if result is None:result=parsed
         if type(result) is not dict or type(result.get('rows')) is not list:raise ValueError('progress result rows')
         inventory_capacity('candidates',len(result['rows']),MAX_CANDIDATES)
@@ -1128,11 +1141,17 @@ def _publish_segment_row(row,request,loader,clock,publisher,produced_path,qualif
     """The actual segment boundary: structural commit/ack precedes semantics."""
     from .s1_evidence import produced_row, qualify_row
     clock.observe();row_record=write_exclusive(produced_path,encode(row,256*1024));clock.observe()
+    # F1.2: the produced-row read-return and the qualified-row write are
+    # individual work-deadline boundaries, not just the enclosing operation.
+    before()
     if read_record(row_record,256*1024)!=row:raise ValueError('progress produced row readback')
+    before()
     clock.observe();produced_row(row,request,loader=loader,deadline=clock.work_deadline);clock.observe()
     publisher.seal(row,row_record)
     clock.observe();checks=qualify_row(row,request,first=first,loader=loader,progress_context=publisher.reference,deadline=clock.work_deadline);clock.observe()
-    write_exclusive(qualified_path,encode(row,256*1024));clock.observe()
+    before()
+    write_exclusive(qualified_path,encode(row,256*1024))
+    before();clock.observe()
     publisher.seal(row,row_record,qualified=True)
     return checks
 
