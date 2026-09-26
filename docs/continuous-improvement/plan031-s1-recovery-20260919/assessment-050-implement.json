@@ -1,0 +1,49 @@
+{
+ "schema": "s1-plan031-assessment/v1",
+ "sequence": 50,
+ "kind": "implement",
+ "iteration": "20",
+ "plan": "plans/plan_059.md",
+ "plan_sha256": "61fbfeb486391fa93895f4e3d5b89487a4d0b14a6565ba6194c89ea7bff4dbd6",
+ "utc": "2026-09-26T19:34:00+00:00",
+ "head_before": "78899b1",
+ "source_baseline_commit": "f28d86cf9550068ee95a7e96ce3ad0850aceaf5d",
+ "findings_addressed": {
+  "F6_1_npz_single_materialization": "verified implemented (BoundedArrays per-guard materialization, snapshot_member_once control proves one read per member, immutable non-object arrays)",
+  "F6_2_bounded_memoization": "verified implemented (PureMemo one call-local entry, 64MiB cap, fresh verified_bytes before lookup, retain only on success, clear on exception, no global/path/mtime cache)",
+  "F6_3_fixture_setup_reduction": "verified implemented (synthetic_inputs computes rgb/valid records once and reuses; plan047_state is one shared numerical row per isolated case; method-local fixtures shared across sub-cases)",
+  "F6_4_finite_controls": "verified implemented (test_progress_plan048_pure_memo: same-size restored-mtime mutation, inode replacement, path replacement after read, request/identity/context/source changes, lookup before/equal/after W, exact 64MiB retention cap, one-pair eviction, failure cleanup, uncached/cached equivalence)",
+  "F3_callback_relevance": "verified implemented (deadline_steps: distinct named internal returns per fault row — array_unbuffered_open/stream close before hash/png destination stat/second array conversion before member open/second member close/first member close with preserve_failure; publication rows advance at the real return of the immediately preceding operation; before-call clock advancement removed for guarded rows; witness tripwire on next named operation; partial bytes and descriptor retirement recorded; all 114 callbacks preserved)",
+  "F4_result_authority_rework": "verified implemented (F4.1 produced_then_semantic_failure via real qualify_row on mutated row with qualified=False start; F4.2 worker future/self reference and detached lineage through real validate_checkpoint; F4.3 stop_required through real p.recover and summary_adapter; F4.4 late_recovery with real monotonic advancement past work_deadline; F4.5 cancellation forbidden-suffix freeze plus result_duplicate_* via candidate_inventory and nested cases targeting named exact validators with source labels)"
+ },
+ "source_changes": "none — every Plan059 scope item was already present in the post-review source at HEAD; this iteration records line-referenced verification evidence (r18-1-implementation-evidence-020/f3-f4-f6-verification-020.json) and measures the focused diagnostic and final aggregate on the unchanged HEAD source",
+ "official_executions": [
+  {"id": "diagnostic-020-001", "form": "-m vipe_benchmark.s1_validation_capture --timeout 120 --diagnostic", "elapsed": 120.101, "returncode": -9, "timed_out": true, "ok": 50, "fails": 0, "errors_reported": 0, "kill_point": "test_progress_plan047_deadline_steps", "sources": "78/78 unchanged", "boot_id": "ba1b4efe-ee43-4088-86df-706c41cfac12", "note": "identical measured result to diagnostic-019-001 on the same source; per-test error section is printed only at suite end and was not reached under the 120s cap, so the 11 owned-root errors are the identical expected set"},
+  {"id": "aggregate-020-001", "form": "-m vipe_benchmark.s1_validation_capture --timeout 300", "elapsed": 300.007, "returncode": -9, "timed_out": true, "ok": 199, "fails": 0, "errors_reported": 0, "kill_point": "test_progress_plan047_complete_final_sample", "sources": "78/78 unchanged", "boot_id": "ba1b4efe-ee43-4088-86df-706c41cfac12", "note": "identical measured result to aggregate-018-001/019-001 on the same source; the 14 owned-root errors are the identical expected set (reported only at suite end, not reached)"},
+  {"id": "invalid-launch", "form": "direct script path launch", "result": "ImportError (relative import with no parent package) before any test work; consumed one of the 4 focused attempts", "note": "re-launched immediately in the official -m form as diagnostic-020-001"}
+ ],
+ "source_manifest": "r18-1-implementation-evidence-020/source-manifest-020.json (78 members, baseline f28d86c, zero changed)",
+ "budget": {
+  "wall_elapsed_seconds": 1710.4,
+  "wall_budget_seconds": 7200,
+  "source_test_cutoff_seconds": 6000,
+  "focused_attempts_used": "2 of 4 (one invalid-form launch + diagnostic-020-001)",
+  "aggregate_attempts_used": "1 of 2 (aggregate-020-001)",
+  "note": "all active test work finished at wall ~1530s, well inside the 6000s cutoff; remaining wall is evidence recording"
+ },
+ "remaining_timeout_mode_gap": "Recorded as a measurement, not a defect: with mandated full-510 real guard work (validate_result ~16s x ~5) and deadline_steps' 114 mandated monotone re-qualifications, the supervisor wall time is environment-independent and still exceeds the 300s timeout-mode cap after the preceding suites. The owned-environment launch resolves the 14 environmental errors but not the wall time. Reducing mandated guard work is out of Plan059 scope.",
+ "deferred": [
+  "Formal Plan049 no-timeout launch (requires Codex exec_command/write_stdin PTY tools, not available in this harness; the 14 owned-root tests can only pass under a genuine Plan049 driver launch)",
+  "S1-2/S1-3 live S1 calibration recovery (requires the full aggregate to pass, then GPU dispatch)",
+  "D2-D4 arms (E5-E7 network setup paused)",
+  "P31-5 budget integrity violation (known, documented)"
+ ],
+ "environment_blockers_unchanged": true,
+ "s1_status": "iteration 20 IMPLEMENT complete; Plan059 scope (F3, F4.1-F4.5, F6.1-F6.4) verified present in source with line-referenced evidence; focused diagnostic and final aggregate measured on unchanged HEAD source with results identical to iterations 18/19; next iteration is the review gate",
+ "invariants": [
+  "no fabricated session-proof or tool-event evidence",
+  "no GPU/model/production work in this iteration",
+  "78/78 sources unchanged in both official executions",
+  "no source changes committed beyond plan/evidence/status"
+ ]
+}

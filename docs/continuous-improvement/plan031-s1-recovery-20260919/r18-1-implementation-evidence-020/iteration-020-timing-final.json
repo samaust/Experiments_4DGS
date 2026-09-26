@@ -1,0 +1,38 @@
+{
+ "schema": "s1-iteration-timing-final/v1",
+ "iteration": "020",
+ "utc_start": "2026-09-26T19:03:02.340683+00:00",
+ "monotonic_start": 80217.795313895,
+ "utc_end": "2026-09-26T19:31:32.%f+00:00",
+ "monotonic_end": 81928.187591646,
+ "wall_elapsed_seconds": 1710.4,
+ "wall_budget_seconds": 7200,
+ "source_test_cutoff_seconds": 6000,
+ "evidence_reserve_seconds": 1200,
+ "focused_attempts": [
+  {
+   "id": "diagnostic-020-001",
+   "form": "official -m capture, --timeout 120 --diagnostic",
+   "result": "120.101s cap, rc -9, timed_out, 50 ok, 0 FAIL, kill inside deadline_steps (identical to 019-001)"
+  },
+  {
+   "id": "invalid-launch",
+   "form": "direct script path (relative import failure) \u2014 consumed one focused attempt, no test work occurred",
+   "result": "ImportError, no run directory"
+  },
+  {
+   "id": "diagnostic-020-001-retry",
+   "note": "second official launch = the recorded diagnostic-020-001 above"
+  }
+ ],
+ "aggregate_attempts": [
+  {
+   "id": "aggregate-020-001",
+   "form": "official -m capture, --timeout 300",
+   "result": "300.00705426200875s cap, rc -9, timed_out, 199 ok, 0 FAIL, kill inside complete_final_sample (identical to 018-001/019-001)"
+  }
+ ],
+ "boot_id": "ba1b4efe-ee43-4088-86df-706c41cfac12",
+ "source_baseline": "f28d86cf9550068ee95a7e96ce3ad0850aceaf5d",
+ "sources_changed": []
+}
