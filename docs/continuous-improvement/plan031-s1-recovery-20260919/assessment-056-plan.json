@@ -1,0 +1,76 @@
+{
+ "schema": "s1-success-criteria-assessment/v1",
+ "iteration": 23,
+ "stage": "PLAN",
+ "status": "pi_launch_residual_validation_planned_fresh_allocation",
+ "recorded_utc": "2026-09-26T23:41:16.%f+00:00",
+ "objective": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/objective.md",
+  "bytes": 1679,
+  "sha256": "da40b707c0b4f73cf5200bf9bcf6eab310944763d4d4d9c2542e8d2e839eed99"
+ },
+ "previous_assessment": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/assessment-055-implement.json",
+  "bytes": 7657,
+  "sha256": "a4be5c3ee6e00e191891fa69ef63d46814be890169313b30342ea7a03b6ae6a1"
+ },
+ "plan": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_062.md",
+  "bytes": 2935,
+  "sha256": "93d5e47010c11973f63f594611e4d15f35dda726e572127a4d8dd784dbebcade"
+ },
+ "authorization": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/pi-launch/pi-launch-authorization.md",
+  "bytes": 2269,
+  "sha256": "cddba005a119760a6619d91835ec9ac6e103f30d2caa2323551b1399a119c18a"
+ },
+ "class_plan": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_061.md",
+  "bytes": 7838,
+  "sha256": "b9cbb2b2a9bef4eeaaeaab82d7ed48e00da70b0acad0640d6e5619854159f569"
+ },
+ "scope": "Validate the two iteration-22 test-side residual fixes with a fresh no-timeout pi aggregate allocation; no source changes expected unless an attempt exposes a new root cause.",
+ "allocation": {
+  "wall_clock_seconds": 7200,
+  "source_test_cutoff_seconds": 6000,
+  "evidence_reserve_seconds": 1200,
+  "aggregate_attempts_max": 3,
+  "aggregate_index_series": [
+   "4",
+   "5",
+   "6"
+  ],
+  "focused_attempts": 0,
+  "gpu_or_production_work": "none",
+  "cpu_bound": "B+max(1,H)<=8"
+ },
+ "acceptance": {
+  "tests": 249,
+  "errors": 0,
+  "failures": 0,
+  "runner_returncode": 0,
+  "timed_out": false,
+  "sources_unchanged": "78-of-78 byte-identical",
+  "boot_id": "stable"
+ },
+ "invariants_preserved": [
+  "additive only",
+  "no owned-path assertion weakened",
+  "Plan049 chain byte-identical",
+  "no timeout/cap/suite/fixture/gate shrink",
+  "full 510/340/170 acceptance guard",
+  "full parser acceptance case",
+  "114 deadline_steps callbacks",
+  "no session-proof fabrication"
+ ],
+ "stop_conditions": [
+  "acceptance met -> S1-2 met -> stop at separate later GPU authorization (S1-3)",
+  "3/3 attempts consumed without acceptance -> record exact residual set and stop"
+ ],
+ "criteria_snapshot": {
+  "S1-1": "met (narrow) so far",
+  "S1-2": "pending this allocation (248/249 after iteration 22 attempt 3)",
+  "S1-3": "not met - separate later GPU authorization",
+  "S1-4": "met"
+ }
+}
