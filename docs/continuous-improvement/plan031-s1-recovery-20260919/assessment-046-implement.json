@@ -1,0 +1,168 @@
+{
+ "schema": "s1-success-criteria-assessment/v1",
+ "iteration": 18,
+ "stage": "IMPLEMENT",
+ "status": "measured_milestone_allocation_closed_aggregate_continuation_recorded",
+ "recorded_utc": "2026-09-26T18:19:40+00:00",
+ "objective": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/objective.md",
+  "sha256": "da40b707c0b4f73cf5200bf9bcf6eab310944763d4d4d9c2542e8d2e839eed99"
+ },
+ "previous_assessment": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/assessment-045-plan.json",
+  "sha256": "59fbeb0f57e02f00ee73c58c89c308e7265c690ea858131738da7c8b77f66c16"
+ },
+ "plan": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_057.md",
+  "sha256": "d8183fbde786e669188501a9d5806ad24989010576eac1d02e4b579ebe5f1ec6"
+ },
+ "head_before": "21e3d9ef1f2871fa1e0ab8a784f85bb04c9273c6",
+ "source_manifest": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/r18-1-implementation-evidence-018/source-manifest-018.json",
+  "sha256": "e141d73b381accf452637d0775c3fdaf433d92210bb2372252c86afca65de6f0",
+  "members": 78,
+  "baseline_commit": "21e3d9ef1f2871fa1e0ab8a784f85bb04c9273c6",
+  "changed": [
+   "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/stages.py",
+   "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_progress.py",
+   "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/contracts.py"
+  ]
+ },
+ "findings": {
+  "F1": {
+   "F1.1": {
+    "status": "fixed",
+    "change": "stages.segment now calls checked_require_clock(clock) before before(clock.work_deadline); a missing/untrusted clock raises the original expected exception before any deadline side effect",
+    "verification": "clock=None raises the same ValueError; untrusted non-None clock raises the original guard error with no deadline mutation; non-owned suite cases pass"
+   },
+   "F1.2": {
+    "status": "remaining",
+    "note": "Full W-extension through the named compound operations (context/request reads, read_record, candidate_inventory, ClosedInventory.recheck, publish_segment_row, first_record/reconcile_first/preserve_failure, accept_result, prepare_terminal_evidence) with read-return-at-W tests is not implemented in this allocation; recorded as next-iteration scope"
+   }
+  },
+  "F2": {
+   "F2.1": {
+    "status": "verified_already_addressed",
+    "note": "owned_workload re-reads and re-hashes the note and all binding/source/driver/status bytes on every call; no validated_bytes memo exists in current source"
+   },
+   "F2.2": {
+    "status": "verified_already_addressed",
+    "note": "test_l18 calls predispatch_owned before spawn; stable_process_identity records full thread identity; INVOCATION.records persists; unresolved registrations block dispatch"
+   },
+   "F2.3": {
+    "status": "remaining",
+    "note": "Target-specific reachability/positive-control rework of the mismatch ownership cases is not implemented in this allocation"
+   }
+  },
+  "F3": {
+   "status": "remaining",
+   "note": "Callback-relevance rework for deadline_steps/limits/alias cases is not implemented in this allocation; the frozen 114/22 callback sets are unchanged"
+  },
+  "F4": {
+   "status": "remaining",
+    "note": "State/provenance/parser/cancellation coverage rework is not implemented in this allocation"
+  },
+  "F5": {
+   "F5.1": {
+    "status": "documented_no_relaxation",
+    "note": "check_1 timing assertLessEqual(action_end-started, 2) has no margin; a genuine 2.0014s wall-clock violation was observed under load. The assertion is not relaxed per Plan057 (no relaxed assertion/deadline/limit)"
+   },
+   "F5.2": {
+    "status": "verified_already_addressed",
+    "note": "stages/s1_progress record timing violations separately, preserve the original pending primary exception, and check_4 raises on non-empty timing failures"
+   },
+   "F5.3": {
+    "status": "remaining",
+    "note": "P06 original TimeoutError preservation and F5.4 child boundary traces are not implemented in this allocation"
+   }
+  },
+  "F6": {
+   "status": "safe_reductions_applied",
+   "changes": [
+    "s1_progress.primitives fast path: value=='prompts' or ('prompts' in value and 'prompts' in Path(value).parts) instead of Path(value).parts for every string; verified equivalent over 200k random+edge inputs (0 mismatches)",
+    "contracts.validate_static: np.isin(mask,[0,255]).all() replaced by ((mask==0)|(mask==255)).all(); verified equivalent",
+    "PureMemo verified inert on the 510-row sweep by design (single input/archive pair, distinct keys per row -> 0 hits); F6.2 mandates the single pair so no extension was made"
+   ],
+   "sweep_measurement": {
+    "before_seconds": 15.7,
+    "after_seconds": 15.43,
+    "note": "dominant cost is the scientific checks (allclose/IO+sha256) which Plan057 forbids removing; bounded pure-work reduction only"
+   }
+  }
+ },
+ "timing_evidence": {
+  "harness": {
+   "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/r18-1-implementation-evidence-018/run_suite_timing.py",
+   "sha256": "366cd936d548cd014ed6941cab8e5c211b47669c092e37aee90b79fa480bf690",
+   "note": "mirrors official capture: S1_VALIDATION_RUN_DIRECTORY tempdir, os.setsid() session leader, PYTHONPATH=ROOT/scripts, loader.discover without top_level_dir; per-test timing is measurement-only and not an official receipt"
+  },
+  "s1_recovery_baseline": {
+   "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/r18-1-implementation-evidence-018/s1_recovery-baseline.json",
+   "sha256": "fa27b34042e536d9cac8b6b614a9787f6928824bcebf3236c0f5ebe72b95fb7b",
+   "seconds": 450.01,
+   "tests": 41,
+   "errors": "17 KeyError S1_OWNED_ROOT_NOTE (environmental, timeout mode)",
+   "top3": "three reconcile-failure tests ~139s each (O(n^2) failure-path reconcile, by design)"
+  },
+  "supervisor_baseline": {
+   "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/r18-1-implementation-evidence-018/supervisor-baseline3.json",
+   "sha256": "943ced6b38c48750f3273d4811b00563278fe73cb24994516feac8084fc3641a",
+   "seconds": 172.9,
+   "tests": 101,
+   "errors": "12 KeyError S1_OWNED_ROOT_NOTE (environmental); 0 non-owned failures",
+   "top": "test_progress_plan047_deadline_steps 84.0s, complete_final_sample 35.5s, result_summary 15.9s, limits 12.6s"
+  },
+  "sweep_after": {
+   "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/r18-1-implementation-evidence-018/sweep-after.out",
+   "sha256": "1627f8ef49870974775f83172a9089f07d659980c562961fc822be097c21de9e"
+  },
+  "fit_analysis": "timeout-mode whole aggregate cannot fit 300s: s1_recovery alone is ~450s in timeout mode because the three hotspot tests pay the O(n^2) reconcile-failure cost forced by the missing owned root; in owned mode the historical aggregate-016-002 completed in 220.76s (s1_recovery 196.8s, supervisor 23.5s). The per-row publish cadence is protocol semantics (F6.4 preserves both actual supervisor outcomes) and is not changed here."
+ },
+ "official_runs": {
+  "focused_diagnostic": {
+    "run_directory": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-diagnostic-018-001",
+    "receipt": {
+     "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-diagnostic-018-001/execution.json",
+     "schema": "s1-cpu-execution/v1",
+     "returncode": -9,
+     "timed_out": true,
+     "elapsed_seconds": 120.10469091999403,
+     "timeout_seconds": 120,
+     "boot_id": "ba1b4efe-ee43-4088-86df-706c41cfac12"
+    },
+    "result": "hit the fixed 120s cap as predicted (HelperSessionTests now needs ~170s after the post-review progress-protocol test expansions); every non-owned case completed before the cap passed; 11 errors are all owned-root cases (test_l01_ready_reuse, test_l18_descendant_and_foreign_sentinel, test_l31_live_worker_bracket_and_foreign, test_l35_exited_leader_live_descendant, test_progress_p01..p06, test_progress_plan046_ownership) - environmental S1_OWNED_ROOT_NOTE, not code defect; the kill landed inside non-owned test_progress_plan047_deadline_steps which was still running; sources before/after agree exactly (78/78 members unchanged)"
+   ,
+    "attempts_used": "1 of 4 focused attempts"
+  },
+  "whole_aggregate": {
+    "result": "not launched",
+    "reason": "Plan057 section 4 launch inequality 'elapsed + 300 < 6000' for the final aggregate failed at launch decision time (elapsed ~6800s of wall clock; the excess over active work is session idle between tool calls, not execution). Equality cannot launch and exceeding it is forbidden. No cap, suite, or selector was changed.",
+    "continuation": "first action of the next iteration: launch s1-recovery-aggregate-018-001 (unchanged 300s outer timeout, no --diagnostic) under a fresh plan-specific allocation; expected outcome in timeout mode is a measured 300s cap hit inside s1_recovery, retained per gate 3 second branch"
+  }
+ },
+ "budget": {
+  "start_utc": "2026-09-26T16:18:27.873882+00:00",
+  "recorded_utc": "2026-09-26T18:19:40+00:00",
+  "wall_elapsed_seconds": 7272,
+  "total_budget_seconds": 7200,
+  "source_test_cutoff_seconds": 6000,
+  "note": "wall clock exceeds the 7200s total by ~72s; all active source/test work completed by ~5250s (focused diagnostic end 17:42:51Z), inside the 6000s cutoff. The excess is session idle/model latency between tool calls, not executed work. No additional exec was launched after the cutoff; the allocation is closed per section 6."
+ },
+ "milestone_gate": {
+  "1": "met (F1.1 landed with focused evidence; missing-clock case raises the original exception; F2.1/F2.2/F5.2 verified in source)",
+  "2": "met as far as the fixed 120s cap allows: all non-owned cases that completed passed with no new failures versus the recorded baseline; owned KeyErrors documented; P01 timing disposition documented (F5.1, no relaxation)",
+  "3": "second branch: aggregate not launchable within the allocation; measured focused result retained, allocation closed, continuation recorded. Silent relaxation of the 300s cap or suite did not occur.",
+  "4": "met: owned-root cases reported as environment-blocked with the Plan049 prerequisite; no owned-path assertion weakened"
+ },
+ "environment_blocker": "Plan049 owned-root launch requires genuine Codex exec_command/write_stdin PTY tool events for session_proof; this harness has no PTY session tools and fabricating evidence is forbidden. The 14 owned-root cases remain environment-blocked; strict zero-error acceptance is the later owned-environment gate.",
+ "next_iteration": [
+  "launch the unchanged whole aggregate (s1-recovery-aggregate-018-001, 300s) under a fresh allocation and retain the measured result",
+  "implement F1.2 W-extension and F5.3/F5.4 P-evidence corrections",
+  "implement F3 callback relevance and F4 state/provenance coverage rework",
+  "then Plan049 owned-environment strict acceptance"
+ ],
+ "historical_strict_acceptance": false,
+ "implementation_acceptance_complete": false,
+ "ready_for_live_admission": false,
+ "objective_complete": false
+}

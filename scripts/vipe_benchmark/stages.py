@@ -145,10 +145,12 @@ def _s1_deny_vipe(source_roots,native_helpers=None):
 def segment(request, output, config, *, clock=None):
     from .s1_progress import operation,checked_require_clock
     if request.get('job_id')=='S1-calibration-recovery-001':
-        if clock is not None:
-            from .s1_progress import before
-            before(clock.work_deadline)
+        # F1: the trusted clock is required before any derivation from it;
+        # a malformed or untrusted clock must raise its original guard error,
+        # never a deadline side effect from an earlier dereference.
         checked_require_clock(clock)
+        from .s1_progress import before
+        before(clock.work_deadline)
         from .s1_progress import backend_resource_scope
         with backend_resource_scope():
             return operation(_segment,request,output,config,clock=clock,deadline=clock.work_deadline)

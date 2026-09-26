@@ -81,7 +81,9 @@ def primitives(value, depth=0, count=None, *, max_depth=12, max_nodes=65536):
     elif type(value) in (list, tuple):
         for item in value: primitives(item, depth+1, count, max_depth=max_depth, max_nodes=max_nodes)
     elif type(value) is str:
-        if 'prompts' in Path(value).parts:raise ValueError('forbidden evidence path')
+        # Path parts only split on '/', so a '/'-free string can match only
+        # the exact bare name; avoid a Path construction per scanned string.
+        if value == 'prompts' or ('prompts' in value and 'prompts' in Path(value).parts):raise ValueError('forbidden evidence path')
         if len(value.encode()) > 2048: raise ValueError('progress string capacity')
     elif type(value) in (int, float):
         try:finite=math.isfinite(value)
