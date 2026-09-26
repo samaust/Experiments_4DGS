@@ -2874,8 +2874,12 @@ class HelperSessionTests(unittest.TestCase):
                         else:
                             if kind=='paired_env_runner_root':note['ownership_root']=next(r for r in baseline['processes'] if r['pid']==os.getpid())
                             elif kind=='paired_env_foreign_output':note['run_directory']+='-foreign'
-                            elif kind=='stale_dispatch016':note['bindings'][1]['path']=str(original_path.parent/'implementation-dispatch-016.json')
-                            elif kind=='forged_dispatch_env':stack.enter_context(patch.dict(os.environ,{'S1_IMPLEMENTATION_DISPATCH':'/tmp/forged-dispatch'}));note['bindings']=[]
+                            elif kind=='stale_dispatch016':
+                                if original.get('schema')=='plan061-pi-launch/v1':note['bindings'][1]=copy.deepcopy(note['plan'])
+                                else:note['bindings'][1]['path']=str(original_path.parent/'implementation-dispatch-016.json')
+                            elif kind=='forged_dispatch_env':
+                                if original.get('schema')=='plan061-pi-launch/v1':note['driver']=dict(note['authorization'])
+                                else:stack.enter_context(patch.dict(os.environ,{'S1_IMPLEMENTATION_DISPATCH':'/tmp/forged-dispatch'}));note['bindings']=[]
                             elif kind=='capture_omitted':note['ownership_root']['pid']=os.getpid()
                             elif kind=='stdin_inode_replaced':note['stdin_identity']['sha256']='0'*64
                             elif kind=='capture_argv_swapped':note['command'][-1]='999'
@@ -2903,11 +2907,13 @@ class HelperSessionTests(unittest.TestCase):
                             start_path=next(Path(v) for v in original['output_paths'] if v.endswith('-exec-start.json'))
                             log_path=Path(str(start_path).replace('-exec-start.json','-stdout.log'))
                             start_doc=json.loads(actual_read(start_path))
+                            pi_authority=original.get('schema')=='plan061-pi-launch/v1'
                             expected_error={'stdin_inode_replaced':'stdin descriptor identity','capture_argv_swapped':'capture argv',
                                 'driver_log_inode_swapped':'log descriptor identity','ancestor_empty':'ancestry termination',
                                 'ancestor_truncated':'ancestry termination','ancestor_cycle':'ancestry',
                                 'ancestor_terminal_changed':'ancestry termination','wrapper_unproven':'wrapper ownership',
-                                'stale_dispatch016':'dispatch/plan/status','forged_dispatch_env':'dispatch/plan/status',
+                                'stale_dispatch016':'complete exact pi-launch bindings' if pi_authority else 'dispatch/plan/status',
+                                'forged_dispatch_env':'owned pi-launch authority' if pi_authority else 'dispatch/plan/status',
                                 'paired_env_runner_root':'capture root binding','capture_omitted':'capture root binding',
                                 'paired_env_foreign_output':'output/command binding'}[kind]
                             kernel_case=kind in ('stdin_inode_replaced','capture_argv_swapped','driver_log_inode_swapped')
@@ -2922,7 +2928,11 @@ class HelperSessionTests(unittest.TestCase):
                             # Rebuild every affected graph edge at its original
                             # canonical logical path. No runtime authority file
                             # is overwritten by these read-only fixture seams.
-                            if not kernel_case:
+                            # The pi-launch note has no Plan049 authority graph
+                            # (admission/identity_request/session_proof); its
+                            # pinned predicates are verified in the shared section
+                            # and in pi_launch, so no projection is required.
+                            if not kernel_case and not pi_authority:
                                 admitted=json.loads(actual_read(Path(original['admission']['path'])))
                                 command_binding=admitted['bindings']
                                 request_path=command_binding['identity_request']['path']

@@ -661,6 +661,7 @@ def named_creation_controls(test,kind,root):
                 stack.enter_context(patch.object(os,'posix_spawn',side_effect=spawn))
                 stack.enter_context(patch.object(subprocess,'Popen',side_effect=popen))
                 stack.enter_context(patch.object(os,'killpg',side_effect=signal))
+                stack.enter_context(patch.object(os,'kill',side_effect=signal))
                 stack.enter_context(patch.object(os,'waitpid',side_effect=waitpid))
                 stack.enter_context(patch.object(os,'waitid',return_value=SimpleNamespace(si_status=0,si_code=os.CLD_EXITED)))
                 if kind=='registry_owner_dispatch':

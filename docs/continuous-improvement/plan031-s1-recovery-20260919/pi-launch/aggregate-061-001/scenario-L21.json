@@ -1,0 +1,194 @@
+{
+  "scenario": "L21",
+  "mode": "enumeration_failure",
+  "constructor_entry": 93804.49443232,
+  "action_cutoff": 93806.49443232,
+  "safety_cutoff": 93807.49443232,
+  "constructor_end": 93804.49451389,
+  "t0": 93804.49445024,
+  "ready_deadline": 93805.49445024,
+  "setup_deadline": 93806.49445024,
+  "setup_cleanup_deadline": 93807.49445024,
+  "action_end": 93804.508547744,
+  "end": 93804.50856577,
+  "execution_seconds": 0.01411542399728205,
+  "cleanup_seconds": 1.802599581424147e-05,
+  "cleanup_confirmed": false,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "spawning",
+      "pid": null
+    },
+    "sample": {
+      "role": "sample",
+      "state": "pending",
+      "pid": null
+    }
+  },
+  "errors": [
+    {
+      "error_class": "ValueError",
+      "message": "owned root schema",
+      "phase": "startup"
+    },
+    {
+      "error_class": "OSError",
+      "message": "fixture enumeration failure",
+      "phase": "helper_cleanup"
+    }
+  ],
+  "signals": [],
+  "ticks": [
+    93804.49445024,
+    93804.494517875,
+    93804.503448499,
+    93804.508531048
+  ],
+  "events": [
+    {
+      "event": "fixture_spawn_entry",
+      "role": "work",
+      "observed": 93804.494780032,
+      "ready_deadline": 93805.49445024
+    }
+  ],
+  "trace_facts": {
+    "capacity": 256,
+    "total": 1,
+    "dropped": 0,
+    "saturated": false,
+    "first": 93804.494781259,
+    "last": 93804.494781259
+  },
+  "tick_facts": {
+    "capacity": 128,
+    "total": 4,
+    "dropped": 0,
+    "saturated": false,
+    "first": 93804.494453952,
+    "last": 93804.508531589
+  },
+  "owner_error_facts": {
+    "capacity": 32,
+    "total": 2,
+    "dropped": 0,
+    "saturated": false,
+    "first": 93804.504349161,
+    "last": 93804.504356056
+  },
+  "owner_signal_facts": {
+    "capacity": 128,
+    "total": 0,
+    "dropped": 0,
+    "saturated": false,
+    "first": null,
+    "last": null
+  },
+  "request_counts": {
+    "work": {
+      "dispatch": 0,
+      "response": 0
+    },
+    "sample": {
+      "dispatch": 0,
+      "response": 0
+    }
+  },
+  "census_request_count": 0,
+  "max_gap": 0.00893062399700284,
+  "max_turn": 2.042599953711033e-05,
+  "call_observations": [
+    {
+      "operation": "tick",
+      "entered": 93804.494517548,
+      "deadline": 93805.49445024,
+      "returned": 93804.494531187,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "tick",
+      "entered": 93804.503446565,
+      "deadline": 93805.49445024,
+      "returned": 93804.503469645,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "tick",
+      "entered": 93804.508529186,
+      "deadline": 93805.49445024,
+      "returned": 93804.508541565,
+      "confirmed": null,
+      "error": "RuntimeError: S1 helper session poisoned: [{'error_class': 'ValueError', 'message': 'owned root schema', 'phase': 'startup'}, {'error_class': 'OSError', 'message': 'fixture enumeration failure', 'phase': 'helper_cleanup'}]",
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "await_ready",
+      "entered": 93804.494515908,
+      "deadline": 93805.49445024,
+      "returned": 93804.508544879,
+      "confirmed": null,
+      "error": "RuntimeError: S1 helper session poisoned: [{'error_class': 'ValueError', 'message': 'owned root schema', 'phase': 'startup'}, {'error_class': 'OSError', 'message': 'fixture enumeration failure', 'phase': 'helper_cleanup'}]",
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "close",
+      "entered": 93804.508549468,
+      "deadline": 93807.49443232,
+      "returned": 93804.508564136,
+      "confirmed": false,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    }
+  ],
+  "call_observation_facts": {
+    "capacity": 128,
+    "total": 5,
+    "dropped": 0,
+    "saturated": false,
+    "first": 93804.494532146,
+    "last": 93804.508564926
+  },
+  "timing_failures": [],
+  "last_sample": null,
+  "requests": {
+    "work": null,
+    "sample": null
+  },
+  "ownership": [
+    {
+      "role": "work",
+      "state": "spawning",
+      "pid": null,
+      "ownership_unknown": true
+    }
+  ],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 0,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 0,
+      "last_frame": null
+    },
+    "sample": {
+      "sent": 0,
+      "received": 0,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 0,
+      "last_frame": null
+    }
+  },
+  "secondary": []
+}

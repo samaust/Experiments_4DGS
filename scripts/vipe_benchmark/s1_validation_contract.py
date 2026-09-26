@@ -306,12 +306,15 @@ def validate_execution(value, receipt_record, inner):
         require(value.get('wait')==dict(method='Popen.wait',timeout_seconds=None,pid=value['child_pid'],returncode=value['returncode'],completed=True),'actual unbounded wait evidence required')
         note=no_timeout_launch(value.get('launch_note'),directory)
         validate_creation(value.get('creation'),note,value['child_pid'],value['boot_id'])
-        require(value.get('job_ledger')==note['job_ledger'] and type(value.get('runner_job')) is str,'execution runner ledger binding')
-        proof=session_proof(strict_record(session_json(note['admission']['path'])['bindings']['session_proof']),note['kind'],note['attempt_index'],strict_record(note['driver']),
-            strict_record(session_json(note['admission']['path'])['bindings']['identity_request']),note['admission']['path'],note['reason'])
-        state=validate_job_ledger(note,proof,terminal=True)
-        require(state['roots'].get(value['runner_job'],{}).get('identity')==value['creation']['child']
-                and state['roots'][value['runner_job']]['state']=='retired','exact runner root terminal')
+        if note['schema']=='plan061-pi-launch/v1':
+            require(value.get('job_ledger') is None and value.get('runner_job') is None,'pi-launch has no job ledger or runner job')
+        else:
+            require(value.get('job_ledger')==note['job_ledger'] and type(value.get('runner_job')) is str,'execution runner ledger binding')
+            proof=session_proof(strict_record(session_json(note['admission']['path'])['bindings']['session_proof']),note['kind'],note['attempt_index'],strict_record(note['driver']),
+                strict_record(session_json(note['admission']['path'])['bindings']['identity_request']),note['admission']['path'],note['reason'])
+            state=validate_job_ledger(note,proof,terminal=True)
+            require(state['roots'].get(value['runner_job'],{}).get('identity')==value['creation']['child']
+                    and state['roots'][value['runner_job']]['state']=='retired','exact runner root terminal')
 
     return value
 
@@ -395,7 +398,10 @@ def launch_output_paths(directory,kind,index):
 
 def validate_creation(value,note,child_pid,boot):
     require(type(value) is dict and set(value)=={'before','after','retired','child','retirement','authority','cpu_bound'},'complete creation and retirement evidence required')
-    require(value['authority']==file_record(note['admission']['path']) and value['cpu_bound']=='B+max(1,H)≤8','creation Main authority')
+    if note['schema']=='plan061-pi-launch/v1':
+        require(value['authority']==file_record(note['authorization']['path']) and value['cpu_bound']=='B+max(1,H)≤8','creation pi-launch authority')
+    else:
+        require(value['authority']==file_record(note['admission']['path']) and value['cpu_bound']=='B+max(1,H)≤8','creation Main authority')
     root=identity_record(note['ownership_root']);child=identity_record(value['child'])
     require(child['pid']==child_pid and child['ppid']==root['pid'] and child['boot_id']==boot==root['boot_id'] and child['start_ticks']>=root['start_ticks'],'creation child full identity')
     def snapshot(item):
@@ -655,10 +661,65 @@ def session_proof(reference,kind,index,driver,identity_request,admission_path,re
     return proof
 
 
+def typed_identity_binding(value):
+    require(type(value) is dict,'identity binding dictionary')
+    identity_record(value.get('ownership_root'))
+    ancestors=value.get('preexisting_ancestors')
+    require(type(ancestors) is list and ancestors,'typed ancestry list')
+    identity_projection(value['ownership_root'],ancestors)
+    terminal=value.get('ancestry_terminal')
+    require(type(terminal) is dict and set(terminal)=={'pid','ppid'} and type(terminal['pid']) is int and terminal['pid']>0 and type(terminal['ppid']) is int and terminal['ppid']==0,'typed ancestry terminal')
+    require(type(value.get('retained_wrappers')) is list and value['retained_wrappers']==[],'typed retained wrapper list')
+    require(type(value.get('output_paths')) is list and all(type(path) is str for path in value['output_paths']),'typed output paths')
+
+
+PI_RUN = ROOT / 'docs/continuous-improvement/plan031-s1-recovery-20260919/pi-launch'
+
+
+def pi_launch_output_paths(directory,kind,index):
+    prefix=PI_RUN/('driver-061-'+kind+'-'+str(index).zfill(3))
+    return [str(Path(directory)/name) for name in ('receipt.json','execution.json','process-stdout.log','process-stderr.log','stdout.log','stderr.log','stdin.py','runner.py','capture.py')]+[str(prefix)+ending for ending in ('-exec-start.json','-stdout.log','-stderr.log')]
+
+
+def pi_launch(reference,directory,*,diagnostic=False):
+    """Pi-launch authority: live-file-verified launcher/authorization/plan chain; no session proof."""
+    record=strict_record(reference);note=session_json(record['path'])
+    require(note.get('schema')=='plan061-pi-launch/v1' and note.get('execution_mode')=='no-timeout'
+            and 'timeout_seconds' in note and note['timeout_seconds'] is None and note.get('provenance')=='pi-launch',
+            'pi-launch no-timeout launch required')
+    require(note.get('run_directory')==directory and note.get('kind')==('diagnostic' if diagnostic else 'aggregate'),'pi-launch directory/kind')
+    driver=strict_record(note.get('driver'))
+    require(driver['path']==str(PI_RUN/'pi_launch_driver.py'),'fixed pi-launch driver')
+    authorization=strict_record(note.get('authorization'))
+    require(authorization['path']==str(PI_RUN/'pi-launch-authorization.md'),'fixed pi-launch authorization')
+    plan=strict_record(note.get('plan'))
+    require(plan['path']==str(ROOT/'plans/plan_061.md'),'fixed pi-launch plan')
+    bindings=note.get('bindings');require(type(bindings) is list,'pi-launch bindings required')
+    for binding in bindings:strict_record(binding)
+    require(bindings==[driver,authorization,plan],'complete exact pi-launch bindings')
+    sources_check(note.get('sources'))
+    require(note.get('cpu_bound')=='B+max(1,H)≤8','exact owned CPU cap')
+    expected=[str(ROOT/'.local/envs/stg-colmap/bin/python'),'-B','-m','vipe_benchmark.s1_validation_capture',str(directory),'--no-timeout']
+    if diagnostic:expected.append('--diagnostic')
+    require(note.get('command')==expected,'exact pi-launch capture command')
+    settings={key:'1' for key in (*THREADS,'OPENCV_FOR_THREADS_NUM','VIPE_CPU_VALIDATION')}
+    settings['PYTHONPATH']=str(ROOT/'scripts')
+    require(note.get('environment')==settings,'exact pi-launch environment')
+    require(note.get('cwd')==str(ROOT) and note.get('unset_environment')==['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],'exact pi-launch cwd/unset environment')
+    require(note.get('stdin_identity')==dict(bytes=len(STDIN.encode()),sha256=hashlib.sha256(STDIN.encode()).hexdigest(),content=STDIN),'exact pi-launch stdin identity')
+    require(type(note.get('attempt_index')) is int and note['attempt_index']>0 and type(note.get('reason')) is str and note['reason'].strip(),'positive pi-launch attempt/reason')
+    require(note.get('job_ledger') is None and note.get('retained_wrappers')==[],'pi-launch has no job ledger or retained wrapper')
+    typed_identity_binding(note)
+    require(note.get('output_paths')==pi_launch_output_paths(directory,note['kind'],note['attempt_index']),'complete exact pi-launch output paths')
+    return note
+
+
 def no_timeout_launch(reference,directory,*,diagnostic=False):
     """Fresh fixed Plan049 authority; the environment cannot choose a plan."""
     run=ROOT/'docs/resolve-blocker/plan031-progress-20260922'
     record=strict_record(reference);note=session_json(record['path'])
+    if note.get('schema')=='plan061-pi-launch/v1':
+        return pi_launch(reference,directory,diagnostic=diagnostic)
     require(note.get('schema')=='plan049-prospective-launch/v1' and note.get('execution_mode')=='no-timeout'
             and 'timeout_seconds' in note and note['timeout_seconds'] is None,'Plan049 no-timeout launch required')
     require(note.get('run_directory')==directory and note.get('kind')==('diagnostic' if diagnostic else 'aggregate'),'no-timeout launch directory/kind')
@@ -706,17 +767,7 @@ def no_timeout_launch(reference,directory,*,diagnostic=False):
     require(note.get('cwd')==str(ROOT) and note.get('unset_environment')==['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],'exact launch cwd/unset environment')
     require(note.get('stdin_identity')==dict(bytes=len(STDIN.encode()),sha256=hashlib.sha256(STDIN.encode()).hexdigest(),content=STDIN),'exact launch stdin identity')
     require(set(command_bindings)=={'plan','dispatch','status','authorization','ancestor_authorization','driver','command','environment','stdin','run_directory','identity_request','addenda','session_proof','plan054','evidence_amendment','ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths','job_ledger'},'exact admission binding fields')
-    def typed_binding(value):
-        require(type(value) is dict,'identity binding dictionary')
-        identity_record(value.get('ownership_root'))
-        ancestors=value.get('preexisting_ancestors')
-        require(type(ancestors) is list and ancestors,'typed ancestry list')
-        identity_projection(value['ownership_root'],ancestors)
-        terminal=value.get('ancestry_terminal')
-        require(type(terminal) is dict and set(terminal)=={'pid','ppid'} and type(terminal['pid']) is int and terminal['pid']>0 and type(terminal['ppid']) is int and terminal['ppid']==0,'typed ancestry terminal')
-        require(type(value.get('retained_wrappers')) is list and value['retained_wrappers']==[],'typed retained wrapper list')
-        require(type(value.get('output_paths')) is list and all(type(path) is str for path in value['output_paths']),'typed output paths')
-    typed_binding(note);typed_binding(command_bindings)
+    typed_identity_binding(note);typed_identity_binding(command_bindings)
     root=identity_record(note.get('ownership_root'))
     ancestors=note.get('preexisting_ancestors');require(type(ancestors) is list and ancestors,'terminated ancestry required')
     cursor=root['ppid'];seen={root['pid']}
@@ -733,7 +784,7 @@ def no_timeout_launch(reference,directory,*,diagnostic=False):
     identity_request=strict_record(command_bindings.get('identity_request'))
     require(identity_request in bindings,'Main prospective identity request binding')
     request=session_json(identity_request['path'])
-    typed_binding(request)
+    typed_identity_binding(request)
     require(request==dict(schema='plan049-prospective-identity/v1',kind=note['kind'],index=note['attempt_index'],driver=driver,**{key:note[key] for key in ('ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths')}),'exact pre-admission identity request')
     addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md','plan049-correction-015.md','plan049-correction-015-source-scope-addendum-001.md','plan049-correction-015-source-scope-addendum-002.md','plan049-correction-015-source-scope-addendum-003.md','plan049-correction-015-source-scope-addendum-006.md')]
     addenda.append(file_record(ROOT/'docs/resolve-blocker/plan031-lost-exec-handle-20260925/candidate011-correction-adoption-001.md'))

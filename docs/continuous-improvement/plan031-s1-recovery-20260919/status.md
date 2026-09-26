@@ -1,11 +1,70 @@
-# S1 recovery — iteration 22 PLAN (Plan061: pi-launch owned mode, user-authorized)
+# S1 recovery status — iteration 22 IMPLEMENT closed (Plan061 pi-launch owned mode)
 
-The loop restarts under direct user authorization: *"I want to change the tests so they don't need to be launched from Codex. I want them to work when launched by pi."* (recorded verbatim with decision semantics in [pi-launch-authorization.md](pi-launch/pi-launch-authorization.md)). [Plan061](../../../plans/plan_061.md) ([assessment054](assessment-054-plan.json), [plan-link022](plan-link-022.md)) plans an **additive** `pi-launch` provenance class:
+## Current position
 
-- **New note schema** `plan061-pi-launch/v1` + `pi_launch()` verification (driver + authorization + plan file records, live file-verified) replacing only the Codex-session-specific chain (dispatch/admission/session-proof) — for pi notes only.
-- **New pi driver** (`pi-launch/pi_launch_driver.py`, outside the source set → 78-member source set unchanged), mirroring `launch-049-exec.py` minus the session protocol: single-threaded identity sampling, note write, exec-start + driver logs, dup2, `execve` of the exact capture command; no job ledger, no bootstrap/ADMIT, no session proof.
-- **Source changes (3 files, additive dispatches):** `s1_validation_contract.py` (schema dispatch in `no_timeout_launch`/`validate_execution`/`validate_creation`, `pi_launch_output_paths`), `s1_helper_session.py` (`_launch_anchor` + `owned_workload` accept both layouts; plan049 authority block conditional on note schema), `s1_validation_capture.py` (`creation['authority']` per schema). The Plan049 chain stays byte-identical.
-- **No test changes:** the 14 owned tests already branch on `S1_OWNED_ROOT_NOTE`.
-- **Acceptance:** one no-timeout whole-suite aggregate launched by pi's bash tool — expected 249 ok / 0 errors / 78-of-78 sources unchanged (no cap applies; ~365 s expected). At most 3 attempts; 7200 s wall; zero GPU/model/production work.
+- **Iteration 22 / Plan061 — IMPLEMENT CLOSED.** The user-authorized additive
+  `pi-launch` provenance class is implemented and was exercised by three
+  no-timeout full aggregates (plan061 allocation: max 3, now exhausted).
+  No GPU/model/production work; Plan049 chain byte-identical; all mandated
+  gate work preserved (510/340/170 acceptance guard, full parser case,
+  114 deadline_steps callbacks).
 
-All launch-method-independent guarantees preserved verbatim (live census, owned closure, per-thread identities, note digest vs kernel anchor, layout/fd identity, ancestry liveness to pid 0, `B+max(1,H)≤8`). Pi receipts carry `provenance='pi-launch'` and are never presented as Plan049 session-bound evidence. No tests or source edits occurred in PLAN. Timing start: [iteration-022-timing-start](iteration-022-timing-start.json).
+## Implementation (committed)
+
+- `scripts/vipe_benchmark/s1_validation_contract.py`: additive
+  `plan061-pi-launch/v1` support — `PI_RUN`, `pi_launch_output_paths()`,
+  `pi_launch()`, module-level `typed_identity_binding()`; schema dispatch in
+  `no_timeout_launch()`; pi branch in `validate_execution()` (requires
+  `job_ledger is None` and `runner_job is None`); schema-conditional
+  authority in `validate_creation()`.
+- `scripts/vipe_benchmark/s1_helper_session.py`: `LAUNCH_LAYOUTS` for both
+  plan049 and pi layouts; `_launch_anchor()` generalized to select the layout
+  from the live stdin parent and the `-049-`/`-061-` directory names;
+  `owned_workload()` schema-aware (accepts both note schemas, preserves every
+  plan049 re-verification, adds the fixed pi authority check).
+- `scripts/vipe_benchmark/s1_validation_capture.py`: `creation['authority']`
+  binds the note's `admission` (plan049) or `authorization` (pi-launch).
+- `docs/.../pi-launch/pi_launch_driver.py` (new, outside the 78-member source
+  set): writes + self-verifies the launch note via `pi_launch`, publishes the
+  exec-start event, redirects fds, and `execve`s the official module-form
+  capture command.
+- Tests (user-authorized test changes):
+  - `tests/test_vipe_benchmark_supervisor.py::test_progress_plan047_ownership`
+    is schema-aware: pi notes use the authorization record for the
+    forged-authority case and the bindings tuple for the stale-projection
+    case; plan049-only projection is skipped for pi notes; the kernel-anchor
+    note correlation update applies to both schemas.
+  - `tests/test_vipe_benchmark_s1_helper_fixtures.py::named_creation_controls`
+    now fakes `os.kill` like `os.killpg` (synthetic pids must not be
+    real-signaled; real-pid semantics are signal-then-reap).
+
+## Attempt record (all no-timeout, boot ba1b4efe, sources 78/78 unchanged)
+
+| attempt | evidence | result | root cause fixed next |
+|---|---|---|---|
+| 1 | `pi-launch/aggregate-061-001` | 177 ok / 57 error / 23 fail | `owned_workload` early schema gate rejected the pi schema (one line) |
+| 2 | `pi-launch/aggregate-061-002` | 247 ok / 11 error / 3 fail | missed `typed_binding`→`typed_identity_binding` rename; plan049-only `admission` projection in the test |
+| 3 | `pi-launch/aggregate-061-003` | 248 ok / 0 error / 13 fail | all 13 in `test_progress_plan047_ownership`: exec-start/note correlation guard (test) + `os.kill` not faked for synthetic pids (fixture, latent owned-environment bug) |
+
+The two residual fixes (test files only) are applied and committed with this
+milestone. The three per-attempt `plan047-deadline-steps.json` scenario dumps
+(~50 MB each) are recorded by hash in
+`pi-launch/large-artifact-manifest-061.json` and excluded from git to keep
+the evidence tree comparable to prior run directories.
+
+## Success-criteria position
+
+- **S1-1**: met (narrow) so far — additive class; no owned-path assertion
+  weakened; plan049 receipts unchanged.
+- **S1-2**: not yet met — 248/249 under pi; one further aggregate attempt is
+  needed to validate the two residual fixes.
+- **S1-3**: not met — separate later GPU authorization still required.
+- **S1-4**: met — Plan049 chain byte-identical; prior failures/aggregates/
+  reports untouched.
+
+## Next (iteration 23 / Plan062)
+
+Fresh allocation: at most 3 no-timeout pi aggregate attempts (expected: one).
+Launch: `./.local/envs/stg-colmap/bin/python -B docs/continuous-improvement/plan031-s1-recovery-20260919/pi-launch/pi_launch_driver.py aggregate <index> "<reason>"`
+from the repository root. Acceptance: `Ran 249 tests`, `FAILED (errors=0)`
+or `OK`, runner returncode 0, `timed_out false`, 78/78 sources unchanged.
