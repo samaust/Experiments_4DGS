@@ -2403,7 +2403,7 @@ class NumericalEnvelopeTests(unittest.TestCase):
     def test_produced_and_qualified_numerical_rows(self):
         from vipe_benchmark.s1_evidence import produced_row, qualify_row, reconcile_rows
         fixture = S1RecoveryTests(); fixture.setUp(); self.addCleanup(fixture.doCleanups)
-        request = fixture.original
+        request = dict(fixture.original, job_id=s1.JOB)
         row, _ = synthetic_row(fixture.root/'numeric', request)
         self.assertTrue(qualify_row(row, request, first=True))
         self.assertEqual(produced_row(row, request).record(), row['identity'])
