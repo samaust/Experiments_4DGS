@@ -940,7 +940,7 @@ def register_job_pidfd_pin(root_token,target_token,target_identity,descriptor):
 
 def signal_job_pidfd(root_token,target_token,target_identity,descriptor,sig,deadline):
     if not os.environ.get('S1_JOB_LEDGER'):
-        return os.pidfd_send_signal(descriptor,sig,None,0)
+        return signal.pidfd_send_signal(descriptor,sig,None,0)
     with _job_mutex(root_token):
         owner=_job_owner(root_token,JOB_HANDLES.get(root_token));state=_job_state(job_ledger_events())
         root=state['roots'].get(root_token) or state['descendants'].get(root_token)
@@ -955,7 +955,7 @@ def signal_job_pidfd(root_token,target_token,target_identity,descriptor,sig,dead
         from .s1_progress import before
         try:
             before(deadline)
-            os.pidfd_send_signal(descriptor,sig,None,0)
+            signal.pidfd_send_signal(descriptor,sig,None,0)
             result=dict(sent=True,error=None)
         except ProcessLookupError:
             result=dict(sent=False,error='ProcessLookupError')
