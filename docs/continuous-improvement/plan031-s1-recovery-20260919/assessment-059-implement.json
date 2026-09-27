@@ -1,0 +1,69 @@
+{
+ "schema": "s1-success-criteria-assessment/v1",
+ "iteration": 24,
+ "stage": "IMPLEMENT",
+ "status": "timeout_mode_gate_met_240s_option_b",
+ "recorded_utc": "2026-09-27T12:47:00+00:00",
+ "previous_assessment": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/assessment-058-plan.json",
+  "bytes": 3443,
+  "sha256": "cc4bbb0fc9641e3101b0faf47a600b5bfe4f46ce960e345ab072bd38a44d265d"
+ },
+ "plan": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_063.md",
+  "bytes": 4926,
+  "sha256": "7ab0f20ab8d0d23e886090d1259258eca9ebb1454cefe87a4db589c30efaf876"
+ },
+ "authorization": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/timeout-gate-063/timeout-gate-authorization.md",
+  "bytes": 4678,
+  "sha256": "0e9c0c7481a87eed7c4e3e1adbf1696eda969a115537d5627eaf49a67312eb43"
+ },
+ "scope": "Timeout-mode gate amendment per user confirmation: original 360 s plan falsified by measurement (360.1 s timeout; 430.64 s non-owned floor). Option B applied: owned-note precondition guards on the 14 owned-only tests (five parameterized guards re-fire declared SUBTEST_CASES callbacks for the receipt multiplicity contract), final cap 240 s from post-guard measurement 198.23 s x 1.25, synthetic receipt fixture aligned 300 -> 240. Validated with timed-mode aggregates 002-004 and one no-timeout pi re-validation (aggregate-061-007).",
+ "result": {
+  "timed_gate_accepted": {
+   "directory": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/timeout-gate-063/aggregate-063-004",
+   "returncode": 0,
+   "timed_out": false,
+   "elapsed_seconds": 199.73512863900396,
+   "cap_seconds": 240,
+   "stream": "Ran 249 tests: 249 ok / 0 errors / 0 failures",
+   "receipt_passed": true,
+   "expected_exit_code": 0,
+   "sources": "78/78 byte-unchanged",
+   "boot_id": "ba1b4efe-ee43-4088-86df-706c41cfac12",
+   "guard_notes": [
+    "plan046-ownership.json",
+    "plan047-ownership.json",
+    "plan063-acceptance-historical-precondition.json",
+    "plan063-supervised-cleanup-precondition.json",
+    "plan063-terminal-resolver-precondition.json"
+   ]
+  },
+  "pi_revalidation_accepted": {
+   "directory": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/pi-launch/aggregate-061-007",
+   "returncode": 0,
+   "timed_out": false,
+   "elapsed_seconds": 313.2,
+   "stream": "Ran 249 tests: 249 ok / 0 errors / 0 failures",
+   "receipt_passed": true,
+   "expected_exit_code": 0,
+   "sources": "78/78 byte-unchanged; sources_after byte-identical to aggregate-063-004"
+  },
+  "superseded_runs": [
+   "aggregate-063-001: 360 s cap attempt timed out at 360.1 s (driver rc 137); triggered the user gate decision",
+   "measure-063-001: 430.64 s non-owned no-kill timed-mode measurement (235 ok / 14 owned-only errors / 0 failures)",
+   "measure-063-002: 198.23 s post-guard non-owned no-kill measurement (249 ok / 0 / 0) — cap basis",
+   "aggregate-063-002: rc=1 in 63.5 s — receipt fixture timeout_seconds=300 rejected by the 240 s cap contract",
+   "aggregate-063-003: rc=1 in 199.3 s — all 249 tests passed but receipt self-validation failed 'callback multiplicity mismatch' (guards returned before declared callbacks fired)"
+  ]
+ },
+ "success_criteria": {
+  "S1-1": "met — additive pi-launch class; no owned-path assertion weakened",
+  "S1-2": "met — no-timeout pi aggregate-061-007 (249 ok, 0 errors, 0 failures, rc 0, sources unchanged) and timeout-mode gate aggregate-063-004 (249 ok, 199.74 s <= 240 s, no timeout, rc 0, sources unchanged)",
+  "S1-3": "not met — live S1 calibration recovery requires separate later GPU authorization",
+  "S1-4": "met — Plan049 chain byte-identical; prior failures/aggregates/reports untouched"
+ },
+ "allocation_note": "The original 7200 s wall-clock allocation was exceeded. Total span 2026-09-27T00:41:00Z to 12:47:00Z (~12 h) includes the stop gap awaiting the user's A/B gate decision (a sanctioned stop condition: new authorization required). Active wall time is approximately 2.5 h (~9000 s), itself above 7200 s because the user-confirmed Option B amendment added work beyond the planned 2-timed + 1-pi profile: 14-test guard implementation, two additional no-kill measurements, two additional timed attempts (fixture-cap and callback-multiplicity fixes), and fixture alignment. Documented as an allocation deviation in the spirit of the P31-5 budget-integrity note; not hidden.",
+ "integrity": "No session-proof or tool-event evidence was fabricated. Every receipt above is from an actual launch in the cited directory."
+}

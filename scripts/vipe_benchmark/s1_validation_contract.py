@@ -297,7 +297,7 @@ def validate_execution(value, receipt_record, inner):
     contained(interval(inner), bounds)
     if value['schema']=='s1-cpu-execution/v1':
         require('execution_mode' not in value and 'wait' not in value and 'launch_note' not in value,'legacy timed mode cannot claim no-timeout provenance')
-        require(type(value.get('timeout_seconds')) is int and 0 < value['timeout_seconds'] <= 300
+        require(type(value.get('timeout_seconds')) is int and 0 < value['timeout_seconds'] <= 240
                 and value['elapsed_seconds'] <= value['timeout_seconds'], 'execution invocation cap exceeded')
     else:
         require(value.get('execution_mode')=='no-timeout' and 'timeout_seconds' in value and value['timeout_seconds'] is None,'explicit null no-timeout mode required')

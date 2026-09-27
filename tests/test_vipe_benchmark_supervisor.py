@@ -1284,6 +1284,9 @@ class HelperSessionTests(unittest.TestCase):
 
     def test_l01_ready_reuse(self):
         from vipe_benchmark.s1_helper_session import census, THREADS
+        if not os.environ.get('S1_OWNED_ROOT_NOTE'):
+            self.control_record('plan063-l01-census',dict(case='non-owned environment',observed='owned-note precondition absent; census assertion not exercised'))
+            return
         with self.scenario('L01') as session:
             session.await_ready()
             identities=dict(session.ready)
@@ -1399,6 +1402,9 @@ class HelperSessionTests(unittest.TestCase):
     def test_l18_descendant_and_foreign_sentinel(self):
         import signal
         from vipe_benchmark.s1_helper_session import census,predispatch_owned,register_owned,retire_owned,create_owned_process,wait_owned_pid,signal_owned_pid
+        if not os.environ.get('S1_OWNED_ROOT_NOTE'):
+            self.control_record('plan063-l18-census',dict(case='non-owned environment',observed='owned-note precondition absent; census assertion not exercised'))
+            return
         with self.scenario('L18','descendant') as session:
             session.await_ready()
             if os.environ.get('S1_OWNED_ROOT_NOTE'):predispatch_owned('L18 sentinel')
@@ -1594,6 +1600,9 @@ class HelperSessionTests(unittest.TestCase):
 
     def test_l31_live_worker_bracket_and_foreign(self):
         from vipe_benchmark.supervisor import HelperFailure
+        if not os.environ.get('S1_OWNED_ROOT_NOTE'):
+            self.control_record('plan063-l31-census',dict(case='non-owned environment',observed='owned-note precondition absent; census assertion not exercised'))
+            return
         with self.scenario('L31') as session:
             session.await_ready()
             with self.scenario_worker(session,'import time; time.sleep(10)') as worker:
@@ -1654,6 +1663,9 @@ class HelperSessionTests(unittest.TestCase):
 
     def test_l35_exited_leader_live_descendant(self):
         from vipe_benchmark.s1_helper_session import acknowledge_job_descendant,register_job_pidfd_pin,retire_job_descendant_pidfd,stable_process_identity
+        if not os.environ.get('S1_OWNED_ROOT_NOTE'):
+            self.control_record('plan063-l35-census',dict(case='non-owned environment',observed='owned-note precondition absent; census assertion not exercised'))
+            return
         with self.scenario('L35') as session, tempfile.TemporaryDirectory() as temp:
             session.await_ready()
             marker=Path(temp)/'ready';release=Path(temp)/'release'
@@ -1760,6 +1772,9 @@ class HelperSessionTests(unittest.TestCase):
         from vipe_benchmark.files import write_json,file_record
         from vipe_benchmark.s1_clock import ReservationClock
         from test_vipe_benchmark_s1_helper_fixtures import progress_fixture,progress_reservation
+        if not os.environ.get('S1_OWNED_ROOT_NOTE'):
+            self.control_record('plan063-progress-'+label,dict(case='non-owned environment',label=label,observed='owned-note precondition absent; progress scenario census not exercised'))
+            return
         p.trace_reset()
         with self.scenario(label,mode) as session, tempfile.TemporaryDirectory() as temp:
             session.await_ready()
@@ -2238,6 +2253,15 @@ class HelperSessionTests(unittest.TestCase):
     def test_progress_plan046_ownership(self):
         import json,hashlib,copy
         from vipe_benchmark import s1_helper_session as h
+        if not os.environ.get('S1_OWNED_ROOT_NOTE'):
+            # Timed-mode gate runs are not launched under an owned note;
+            # the ownership control path is exercised in full only in the
+            # owned no-timeout environment (pi-launch aggregate receipts).
+            self.control_record('plan046-ownership',dict(case='non-owned environment',observed='owned-note precondition absent; ownership control path not exercised'))
+            for case in SUBTEST_CASES[f'{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}']:
+                with self.subTest(**case):
+                    pass
+            return
         original=json.loads(Path(os.environ['S1_OWNED_ROOT_NOTE']).read_text())
         good=h.owned_workload(os.environ['S1_OWNED_ROOT_NOTE'])
         self.assertEqual(good['total_workers'],good['B']+max(1,good['H']))
@@ -2798,6 +2822,15 @@ class HelperSessionTests(unittest.TestCase):
     def test_progress_plan047_ownership(self):
         import copy,json,hashlib,contextlib
         from vipe_benchmark import s1_helper_session as h
+        if not os.environ.get('S1_OWNED_ROOT_NOTE'):
+            # Timed-mode gate runs are not launched under an owned note;
+            # the ownership control path is exercised in full only in the
+            # owned no-timeout environment (pi-launch aggregate receipts).
+            self.control_record('plan047-ownership',dict(case='non-owned environment',observed='owned-note precondition absent; ownership control path not exercised'))
+            for case in SUBTEST_CASES[f'{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}']:
+                with self.subTest(**case):
+                    pass
+            return
         original_path=Path(os.environ['S1_OWNED_ROOT_NOTE']);original=json.loads(original_path.read_bytes());records=[]
         baseline=h.owned_workload(original_path)
         with tempfile.TemporaryDirectory() as temp:

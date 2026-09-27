@@ -57,3 +57,41 @@ unachievable by construction. Rejected: 340 s (flake-thin, 4% margin),
 Not granted: any suite/fixture/gate shrink, any timeout/cap reduction, any
 change to the 120 s diagnostic cap, any GPU/model/production work, any
 Plan049/pi-launch chain change, any new owned-timeout provenance class.
+
+## Amendment — Option B (user-confirmed, 2026-09-27)
+
+The 360 s cap was empirically falsified before acceptance. The first
+timed-mode 360 s attempt (`aggregate-063-001`) timed out at 360.1 s, and the
+true non-owned timed-mode wall time (measured by replicating the capture
+launch without the external kill, `measure-063-001`) was **430.64 s**:
+235 ok / 14 errors / 0 failures. The 14 non-owned errors were owned-only
+tests performing heavy partial work (~234 s across three `s1_recovery`
+tests) before failing on `KeyError: 'S1_OWNED_ROOT_NOTE'` — non-mandated
+dead weight in timed mode.
+
+The user was presented two options (A: cap 480 s with no further test
+changes; B: owned-note precondition guards on the 14 owned-only tests plus
+an empirical ~240 s cap) and confirmed:
+
+> B
+
+Scope granted by the amendment (replaces the 360 s plan):
+
+- Declare the owned-note precondition on the 14 owned-only tests (11 in
+  `tests/test_vipe_benchmark_supervisor.py`, 3 in
+  `tests/test_vipe_benchmark_s1_recovery.py`) using the house guard pattern;
+  the five parameterized guards re-fire their declared `SUBTEST_CASES`
+  callbacks so the receipt callback-multiplicity contract holds; each guard
+  writes a control/precondition record into the run directory; owned
+  no-timeout runs exercise every test in full, unchanged.
+- Final cap: **240 s** — post-guard non-owned measurement
+  (`measure-063-002`): 249 ok / 0 / 0 in **198.23 s** → 1.25x ≈ 248 s →
+  rounded to 240 s (measured run binds at 83% of cap; ~20% margin over the
+  pre-guard noise floor).
+- Align the `timeout_seconds=300` synthetic receipt fixture in
+  `tests/test_vipe_benchmark_s1_recovery.py` with the 240 s cap; mutation
+  tests keep their 300 s rejection cases (still correctly rejected).
+- Validation: timed-mode aggregates under `timeout-gate-063/`
+  (002: fixture-cap mismatch rc=1; 003: callback-multiplicity mismatch rc=1;
+  004: accepted at 240 s) then one no-timeout pi re-validation
+  (`aggregate-061-007`) on the final source bytes.
