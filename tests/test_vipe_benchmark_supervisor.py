@@ -2932,6 +2932,12 @@ class HelperSessionTests(unittest.TestCase):
                             # (admission/identity_request/session_proof); its
                             # pinned predicates are verified in the shared section
                             # and in pi_launch, so no projection is required.
+                            if not kernel_case and pi_authority:
+                                # The pi-launch note has no Plan049 authority
+                                # graph; the only edge to rebuild is the note
+                                # itself at its original canonical path.
+                                store_projection(original_path,target_note)
+                                target_raw=projected[str(original_path)]
                             if not kernel_case and not pi_authority:
                                 admitted=json.loads(actual_read(Path(original['admission']['path'])))
                                 command_binding=admitted['bindings']

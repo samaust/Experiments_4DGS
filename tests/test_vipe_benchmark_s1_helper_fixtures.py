@@ -953,9 +953,10 @@ def enclosing_creation_controls(test,root):
                 with contextlib.ExitStack() as stack:
                     stack.enter_context(patch.object(h,'predispatch_owned',side_effect=authority))
                     stack.enter_context(patch.object(h,'identity',side_effect=identify))
+                    stack.enter_context(patch.object(os,'kill',side_effect=lambda pid,sig:events.append(('kill',pid))))
                     stack.enter_context(patch.object(subprocess,'Popen',side_effect=create))
                     def stop(process,deadline):
-                        h.signal_owned_pid(process.pid,signal_module.SIGKILL,None);process.wait();return []
+                        h.signal_owned_pid(process.pid,signal.SIGKILL,None);process.wait();return []
                     stack.enter_context(patch.object(sup,'stop_group',side_effect=stop))
                     try:
                         if entry=='helper_worker':
