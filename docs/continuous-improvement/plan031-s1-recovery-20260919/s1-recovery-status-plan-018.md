@@ -1,0 +1,9 @@
+# S1 recovery — iteration 18 PLAN
+
+REVIEW018 is complete: [review018](review-018.md), [assessment044](assessment-044-review.json) and [observations018](s1-recovery-review-observations-018.json) preserve findings R18-F1–F6, the S1-1/S1-4 narrow-met and S1-2/S1-3 unmet criteria, and the R18-1 recommendation. IMPLEMENT017 handoff records ([assessment043](assessment-043-implement.json), [handoff017](s1-recovery-handoff-017.json), [completion002](iteration-017-completion-002.json)) remain unchanged; Plan047 remains incomplete/unaccepted and uncommitted; both017 aggregates remain timed-out/no-receipt.
+
+Fresh PLAN057 finalizes R18-1 as one integrated CPU milestone: fixF1–F5, make all1012 callbacks relevant, and remove bounded redundant pure work so the unchanged whole aggregate can finish within300seconds. New allocation:7200 wall seconds,6000 source/test cutoff,1200 handoff reserve; at most4 focused120s and2 aggregate300s launches; existing42 scenarios/6directscripts only; B+max(1,H)≤8; zero GPU/model/production work; no old allocation transfer.
+
+Environment record: this harness has no Codex PTY session tools, so the Plan049 owned-root launch and its14 owned-root cases are environment-blocked; no session-proof evidence is synthesized. Validation uses the unchanged timeout-mode capture; the milestone gate covers all non-owned cases and strict zero-error acceptance remains the later owned-environment gate. The14 owned KeyErrors are environment, not code defect, matching the direct-runner triage at commit6f3b733.
+
+Source baseline advances from review018 HEAD ebf9d9ad to current worktree commits 5ce0d53/db485e9/4ffb007/ead8b7c/653f51b/965e120/5a456bd/232d8f0; IMPLEMENT recomputes the78-member contract source manifest as the implementation baseline. S1-1/S1-4 narrowly met; S1-2/S1-3 unmet. Main owns status/git; no GPU/model/production work.
