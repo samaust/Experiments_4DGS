@@ -1,0 +1,99 @@
+{
+ "schema": "s1-success-criteria-assessment/v1",
+ "iteration": 24,
+ "stage": "PLAN",
+ "status": "timeout_mode_gate_amendment_planned_360s_user_confirmed",
+ "recorded_utc": "2026-09-27T00:41:00+00:00",
+ "objective": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/objective.md",
+  "bytes": 1679,
+  "sha256": "da40b707c0b4f73cf5200bf9bcf6eab310944763d4d4d9c2542e8d2e839eed99"
+ },
+ "previous_assessment": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/assessment-057-implement.json",
+  "bytes": 6223,
+  "sha256": "5069126b2f7d185440fcbe7a36613123311b758a17eff06dcbe67b40833649dc"
+ },
+ "plan": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_063.md",
+  "bytes": 4926,
+  "sha256": "7ab0f20ab8d0d23e886090d1259258eca9ebb1454cefe87a4db589c30efaf876"
+ },
+ "authorization": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/timeout-gate-063/timeout-gate-authorization.md",
+  "bytes": 2663,
+  "sha256": "5c8fe24b9c82932be4ac23927e5be5ed23c5643de3b50d08e24088d14d00a2aa"
+ },
+ "scope": "Raise the aggregate timeout-mode cap 300s -> 360s (two source constants, four sites), declare the owned-note precondition of test_progress_plan047_ownership via control_record, validate with one timed-mode 360s aggregate (non-owned direct module form) and one no-timeout pi re-validation on the new source bytes.",
+ "allocation": {
+  "wall_clock_seconds": 7200,
+  "source_test_cutoff_seconds": 6000,
+  "evidence_reserve_seconds": 1200,
+  "timed_attempts_max": 2,
+  "no_timeout_pi_attempts_max": 1,
+  "timed_index_series": [
+   "1",
+   "2"
+  ],
+  "pi_index_series": [
+   "7"
+  ],
+  "gpu_or_production_work": "none",
+  "cpu_bound": "B+max(1,H)<=8"
+ },
+ "measurement_basis": [
+  {
+   "run": "aggregate-061-003",
+   "elapsed_seconds": 321.24089011699834
+  },
+  {
+   "run": "aggregate-061-004",
+   "elapsed_seconds": 320.27929319899704
+  },
+  {
+   "run": "aggregate-061-005",
+   "elapsed_seconds": 320.7870631650003
+  },
+  {
+   "run": "aggregate-061-006",
+   "elapsed_seconds": 326.6481315669953
+  }
+ ],
+ "acceptance": {
+  "timed_mode": {
+   "timed_out": false,
+   "elapsed_seconds": "<= 360",
+   "runner_returncode": 0,
+   "tests": 249,
+   "errors": 0,
+   "failures": 0,
+   "sources_unchanged": "78-of-78 byte-identical"
+  },
+  "no_timeout_pi": {
+   "runner_returncode": 0,
+   "timed_out": false,
+   "tests": 249,
+   "errors": 0,
+   "failures": 0,
+   "sources_unchanged": "78-of-78 byte-identical"
+  }
+ },
+ "invariants_preserved": [
+  "no suite/fixture/gate shrink (cap raise weakens no assertion; cap mutation test still enforces at new value)",
+  "Plan049 chain byte-identical",
+  "pi-launch chain unchanged (re-validated on new source bytes)",
+  "diagnostic 120s cap unchanged",
+  "pi receipts provenance=pi-launch; timed gate runs are non-owned ledger-free measurements",
+  "no session-proof fabrication"
+ ],
+ "stop_conditions": [
+  "both validations pass -> S1-2 timeout-mode gate met at 360s -> S1-2 met -> stop at separate later GPU authorization (S1-3)",
+  "2/2 timed attempts consumed without acceptance -> record exact residual and stop"
+ ],
+ "criteria_snapshot": {
+  "S1-1": "met",
+  "S1-2": "met (no-timeout pi) ; timeout-mode gate pending this amendment",
+  "S1-3": "not met - separate later GPU authorization",
+  "S1-4": "met"
+ }
+}
