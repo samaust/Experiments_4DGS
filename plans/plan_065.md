@@ -1,8 +1,9 @@
 # Plan065 — Codex host launch and completion of Plan064
 
-Status: user directly approved host execution. The first controller invocation
-failed before reservation due to the Python 3.11 controller choice. Correcting
-the launcher to the existing Python 3.14 controller; the GPU attempt is unconsumed.
+Status: host execution approved and controller runtime corrected in `6f65ff2`.
+Blocked before reservation by the live resource sampler: storage accounting
+takes about three seconds against a fixed one-second request deadline.
+The single GPU attempt remains unconsumed. See review-019 and host audit below.
 
 ## Scope
 
@@ -111,3 +112,40 @@ admissions and consumed attempts. This permits continuing the one approved
 allocation without resetting history or introducing a second admission.
 The gate also matches dispatch's `systemd` requirement, including rejection of
 Codex's `codex` PID 1, and prints the corrected launcher command.
+
+## Live resource sampling blocker
+
+The Python 3.14 controller continued the existing registration without another
+admission, then stopped with `TimeoutError: S1 resource sample timeout` before
+reservation. The sampler's request deadline is capped at one second in
+`s1_helper_session.Session.submit`; its real `resources` operation calls
+`budget_snapshot` over the run tree. Host probes measured GPU queries at
+0.043710 s and storage at 2.984283 s, then 3.056955 s on repetition. Storage
+alone cannot fit the required deadline, regardless of helper IPC overhead.
+
+`s1-codex-host-audit-025.json` records 449 events (one admission and registration
+only), the exact original 447-event prefix, 78/78 unchanged source records,
+passing unconsumed binding, no surviving helper/worker or GPU compute PIDs,
+and unchanged GPU consumption: 30 historical attempts, 4374.044265 s elapsed,
+zero seconds reserved. Both pre-dispatch failure receipts are preserved.
+
+The read-only launch gate now rejects a storage sample taking one second or
+longer, and verifies the controller thread API. It cannot certify the full
+helper timing from this necessary direct-call check; the supervisor remains
+the authority. No deadlines or accounting rules were relaxed.
+
+## Remaining work requiring a revised scope
+
+The existing scope preserves all 78 hash-bound source files and does not
+authorize changing monitoring deadlines or resetting/replacing the registered
+authorization. Repeated dispatch cannot fix this measured incompatibility.
+A follow-up must profile and optimize exact storage accounting (including
+inode deduplication, symlink exclusion, concurrent changes, and conservative
+download accounting), prove the full helper path meets the deadline, and
+requalify the changed source set. Any replacement of the already registered
+authorization needs an explicit, reviewed amendment; do not overwrite the
+authorization or ledger history to make its hashes match.
+
+The original hash-bound status.md remains unchanged so the unconsumed binding
+continues to validate. This plan and review-019 are the current execution
+status. No terminal result or S1-3 completion is claimed.

@@ -17,6 +17,7 @@ import json
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -39,6 +40,10 @@ def check(name: str, ok: bool, detail: str = '') -> None:
 
 
 print('== S1-3 host launch gate (read-only) ==')
+
+import _thread
+check('controller native joinable thread API', hasattr(_thread, 'start_joinable_thread'),
+      f'Python {sys.version.split()[0]} — use .local/envs/stg-colmap/bin/python')
 
 # 1. ledger byte check
 b = (LOCAL / 'ledger.jsonl').read_bytes()
@@ -82,6 +87,19 @@ try:
     check('validate_binding (fail-closed contract)', True)
 except Exception as e:
     check('validate_binding (fail-closed contract)', False, f'{type(e).__name__}: {e}')
+
+# Necessary latency check: the live helper allows at most one second for the
+# entire resource request. Storage alone exceeding it guarantees failure.
+# This does not certify helper startup/IPC latency or relax the live deadline.
+from vipe_benchmark.budgets import budget_snapshot  # noqa: E402
+try:
+    started = time.monotonic()
+    storage = budget_snapshot(LOCAL)
+    elapsed = time.monotonic() - started
+    check('storage sample below live 1 s resource deadline', elapsed < 1.,
+          f'{elapsed:.3f} s; artifact_bytes={storage["artifact_bytes"]}')
+except Exception as e:
+    check('storage sample below live 1 s resource deadline', False, f'{type(e).__name__}: {e}')
 
 # 6. GPU exclusivity evidence
 # NOTE: the process table is not visible inside a bwrap sandbox, so the
