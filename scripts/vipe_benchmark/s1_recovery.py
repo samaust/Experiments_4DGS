@@ -367,6 +367,8 @@ def active_binding(local, config, captured, command, *, with_reservation=False):
 
 def captured_clock(local, config, reservation, command):
     from .s1_progress import operation,reservation_deadline
+    if type(reservation) is not dict:
+        raise ValueError('captured reservation required for helper clock')
     return operation(_captured_clock,local,config,reservation,command,deadline=reservation_deadline(reservation))
 
 

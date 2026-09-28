@@ -1,0 +1,74 @@
+{
+ "schema": "s1-success-criteria-assessment/v1",
+ "iteration": 22,
+ "stage": "PLAN",
+ "status": "plan_complete_user_authorized_scope_amendment_pi_launch_mode",
+ "recorded_utc": "2026-09-26T22:32:43.%f+00:00",
+ "objective": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/objective.md",
+  "bytes": 1679,
+  "sha256": "da40b707c0b4f73cf5200bf9bcf6eab310944763d4d4d9c2542e8d2e839eed99"
+ },
+ "previous_assessment": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/assessment-053-implement.json",
+  "bytes": 2901,
+  "sha256": "3da5e3c96a7b2706df7e978314bf085fbf0f09008678b06f3a5640838b826dd4"
+ },
+ "authorization": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/pi-launch/pi-launch-authorization.md",
+  "bytes": 2269,
+  "sha256": "cddba005a119760a6619d91835ec9ac6e103f30d2caa2323551b1399a119c18a"
+ },
+ "plan": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_061.md",
+  "bytes": 7838,
+  "sha256": "b9cbb2b2a9bef4eeaaeaab82d7ed48e00da70b0acad0640d6e5619854159f569"
+ },
+ "plan_link": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/plan-link-022.md",
+  "bytes": 2452,
+  "sha256": "d530d03ded1709483a7ea6cf4d77a632419595c7918bb85e88d6f7a434e80876"
+ },
+ "criteria_snapshot": {
+  "S1-1": "met (narrow) so far \u2014 pi-launch mode adds an additive provenance class; no owned-path assertion weakened",
+  "S1-2": "pending \u2014 pi-launch strict acceptance run is the new S1-2 path",
+  "S1-3": "not met \u2014 separate later GPU authorization still required",
+  "S1-4": "met \u2014 Plan049 chain byte-identical; no prior failure/aggregate/report/allocation rewritten or rerun"
+ },
+ "scope": {
+  "type": "pi-launch owned mode (additive provenance class)",
+  "steps": [
+   "pi driver outside source set (keeps 78-member source set)",
+   "plan061-pi-launch/v1 note + pi_launch verification in the contract",
+   "schema dispatch in no_timeout_launch / validate_execution / validate_creation",
+   "_launch_anchor + owned_workload accept both layouts",
+   "no test changes",
+   "one no-timeout whole-suite aggregate launched by pi (max 3 attempts)"
+  ],
+  "resource_limits": {
+   "aggregate_attempts_max": 3,
+   "focused_attempts": 0,
+   "gpu_seconds": 0,
+   "model_forwards": 0,
+   "production_calls": 0,
+   "wall_budget_seconds": 7200,
+   "cpu_bound": "B+max(1,H)<=8",
+   "timeout_cap": null
+  },
+  "invariants_preserved": [
+   "full 510/340/170 acceptance guard",
+   "full parser acceptance case",
+   "114 deadline_steps callbacks",
+   "no suite/fixture/gate shrink",
+   "no timeout/cap change",
+   "Plan049 chain byte-identical",
+   "no session-proof fabrication"
+  ]
+ },
+ "acceptance_gates": [
+  "249 ok / 0 errors / 78-of-78 sources unchanged under a pi-launched no-timeout aggregate, or recorded stop after <=3 attempts",
+  "commit limited to plan/authorization/evidence/status/source-change paths",
+  "pi receipts carry provenance=pi-launch, never presented as Plan049 session-bound evidence"
+ ],
+ "notes": "Restart of the loop under the user authorization recorded in pi-launch-authorization.md."
+}

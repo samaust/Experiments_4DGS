@@ -940,7 +940,7 @@ def register_job_pidfd_pin(root_token,target_token,target_identity,descriptor):
 
 def signal_job_pidfd(root_token,target_token,target_identity,descriptor,sig,deadline):
     if not os.environ.get('S1_JOB_LEDGER'):
-        return os.pidfd_send_signal(descriptor,sig,None,0)
+        return signal.pidfd_send_signal(descriptor,sig,None,0)
     with _job_mutex(root_token):
         owner=_job_owner(root_token,JOB_HANDLES.get(root_token));state=_job_state(job_ledger_events())
         root=state['roots'].get(root_token) or state['descendants'].get(root_token)
@@ -955,7 +955,7 @@ def signal_job_pidfd(root_token,target_token,target_identity,descriptor,sig,dead
         from .s1_progress import before
         try:
             before(deadline)
-            os.pidfd_send_signal(descriptor,sig,None,0)
+            signal.pidfd_send_signal(descriptor,sig,None,0)
             result=dict(sent=True,error=None)
         except ProcessLookupError:
             result=dict(sent=False,error='ProcessLookupError')
@@ -1686,9 +1686,16 @@ def source_membership(records,repository):
     return expected
 
 
+LAUNCH_LAYOUTS=(
+    dict(run='docs/resolve-blocker/plan031-progress-20260922',pattern=r'(diagnostic|aggregate)-049-(\d{3,})',
+         driver_prefix='driver-049',note_prefix='launch-note-049'),
+    dict(run='docs/continuous-improvement/plan031-s1-recovery-20260919/pi-launch',pattern=r'(diagnostic|aggregate)-061-(\d{3,})',
+         driver_prefix='driver-061',note_prefix='launch-note-061'),
+)
+
+
 def _launch_anchor(rows,boot,repository):
     import ast,hashlib,re
-    run=repository/'docs/resolve-blocker/plan031-progress-20260922'
     def cmd(pid):return Path('/proc',str(pid),'cmdline').read_bytes().rstrip(b'\0').split(b'\0')
     cursor=os.getpid();seen=set()
     while cursor in rows and cursor not in seen:
@@ -1704,9 +1711,10 @@ def _launch_anchor(rows,boot,repository):
     if Path('/proc',str(runner),'cwd').resolve()!=repository:raise ValueError('owned runner cwd')
     descriptor=Path('/proc',str(runner),'fd/0');stdin=Path(os.readlink(descriptor))
     directory=stdin.parent
-    matched=re.fullmatch(r'(diagnostic|aggregate)-049-(\d{3,})',directory.name)
-    if stdin.name!='stdin.py' or directory.parent!=run or not matched:raise ValueError('owned stdin location')
-    kind,index=matched.groups()
+    layout=next((item for item in LAUNCH_LAYOUTS if directory.parent==repository/item['run']),None)
+    matched=re.fullmatch(layout['pattern'],directory.name) if layout is not None else None
+    if stdin.name!='stdin.py' or layout is None or not matched:raise ValueError('owned stdin location')
+    run=repository/layout['run'];kind,index=matched.groups()
     if int(index)<1:raise ValueError('owned positive attempt index')
     command=[str(interpreter),'-B','-m','vipe_benchmark.s1_validation_capture',str(directory),'--no-timeout']
     if kind=='diagnostic':command.append('--diagnostic')
@@ -1716,12 +1724,12 @@ def _launch_anchor(rows,boot,repository):
     expected=ast.literal_eval(next(n.value for n in contract.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='STDIN' for t in n.targets))).encode()
     named=stdin.stat();opened=descriptor.stat()
     if (named.st_dev,named.st_ino,named.st_size)!=(opened.st_dev,opened.st_ino,opened.st_size) or stdin.read_bytes()!=expected:raise ValueError('owned stdin descriptor identity')
-    prefix=run/('driver-049-'+kind+'-'+index)
+    prefix=run/(layout['driver_prefix']+'-'+kind+'-'+index)
     start=json.loads(Path(str(prefix)+'-exec-start.json').read_bytes())
     for number,suffix in [(1,'-stdout.log'),(2,'-stderr.log')]:
         live=Path('/proc',str(capture),'fd',str(number)).stat();named=Path(str(prefix)+suffix).stat()
         if (live.st_dev,live.st_ino)!=(named.st_dev,named.st_ino) or start['logs'][str(number)]!={'device':live.st_dev,'inode':live.st_ino}:raise ValueError('owned driver log descriptor identity')
-    note_path=run/('launch-note-049-'+kind+'-'+index+'.json')
+    note_path=run/(layout['note_prefix']+'-'+kind+'-'+index+'.json')
     raw=note_path.read_bytes()
     if start['note']!={'path':str(note_path),'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}:raise ValueError('owned exec-start note correlation')
     return dict(runner=runner,capture=capture,note_path=str(note_path),raw=raw,directory=str(directory),command=command,stdin=(opened.st_dev,opened.st_ino,opened.st_size))
@@ -1829,7 +1837,7 @@ def owned_workload(note_path, *, extra=(), retained=None):
         if hashlib.sha256(raw).hexdigest()!=os.environ.get('S1_OWNED_ROOT_SHA256'):raise ValueError('owned root note digest')
         note=json.loads(raw)
         if str(note_path)!=anchor['note_path'] or raw!=anchor['raw']:raise ValueError('owned note differs from kernel anchor')
-        if note.get('schema')!='plan049-prospective-launch/v1':raise ValueError('owned root schema')
+        if note.get('schema') not in ('plan049-prospective-launch/v1','plan061-pi-launch/v1'):raise ValueError('owned root schema')
         if note.get('execution_mode')!='no-timeout' or 'timeout_seconds' not in note or note['timeout_seconds'] is not None:raise ValueError('owned no-timeout mode')
         root=note['ownership_root']
         expected=dict(boot_id=boot,**{k:rows[root_pid][k] for k in ('pid','ppid','pgid','start_ticks')})
@@ -1838,17 +1846,24 @@ def owned_workload(note_path, *, extra=(), retained=None):
         identity_record(root)
         if note['run_directory']!=anchor['directory'] or note['command']!=anchor['command']:raise ValueError('owned output/command binding')
         if os.environ.get('S1_OWNED_ROOT_NOTE')!=anchor['note_path'] or os.environ.get('S1_VALIDATION_RUN_DIRECTORY',anchor['directory'])!=anchor['directory']:raise ValueError('owned environment locator')
-        run=repository/'docs/resolve-blocker/plan031-progress-20260922'
-        dispatch_path=run/'implementation-dispatch-049.json';dispatch_raw=dispatch_path.read_bytes();dispatch=json.loads(dispatch_raw)
-        dispatch_record=dict(path=str(dispatch_path),bytes=len(dispatch_raw),sha256=hashlib.sha256(dispatch_raw).hexdigest())
-        status=dispatch['implementation_status_snapshot'];plan=dispatch['plan']
-        if dispatch.get('schema')!='plan049-implementation-dispatch/v1' or plan['path']!=str(repository/'plans/plan_049.md') or status['path']!=str(run/'implementation-status-049.md'):raise ValueError('owned fixed Plan049 authority')
-        original_plan=dict(path=str(repository/'plans/plan_049.md'),sha256='a27329ee5c9d9439515093e6797ad72f61bd6faf1e43c5f45f2b2cf4c013cc1f')
-        if plan!=original_plan:raise ValueError('owned original Plan049 dispatch authority')
-        current_plan_raw=(repository/'plans/plan_049.md').read_bytes()
-        current_plan=dict(path=str(repository/'plans/plan_049.md'),bytes=len(current_plan_raw),sha256=hashlib.sha256(current_plan_raw).hexdigest())
-        if dispatch_record not in note['bindings'] or current_plan not in note['bindings'] or note['status']!={k:status[k] for k in ('bytes','sha256')}:raise ValueError('owned dispatch/plan/status binding')
-        if note['cwd']!=str(repository) or str(run/'launch-049-exec.py')!=note['driver']['path']:raise ValueError('owned launch authority')
+        reverify=note['bindings']+note['sources']+[note['driver']]
+        if note.get('schema')=='plan049-prospective-launch/v1':
+            run=repository/'docs/resolve-blocker/plan031-progress-20260922'
+            dispatch_path=run/'implementation-dispatch-049.json';dispatch_raw=dispatch_path.read_bytes();dispatch=json.loads(dispatch_raw)
+            dispatch_record=dict(path=str(dispatch_path),bytes=len(dispatch_raw),sha256=hashlib.sha256(dispatch_raw).hexdigest())
+            status=dispatch['implementation_status_snapshot'];plan=dispatch['plan']
+            if dispatch.get('schema')!='plan049-implementation-dispatch/v1' or plan['path']!=str(repository/'plans/plan_049.md') or status['path']!=str(run/'implementation-status-049.md'):raise ValueError('owned fixed Plan049 authority')
+            original_plan=dict(path=str(repository/'plans/plan_049.md'),sha256='a27329ee5c9d9439515093e6797ad72f61bd6faf1e43c5f45f2b2cf4c013cc1f')
+            if plan!=original_plan:raise ValueError('owned original Plan049 dispatch authority')
+            current_plan_raw=(repository/'plans/plan_049.md').read_bytes()
+            current_plan=dict(path=str(repository/'plans/plan_049.md'),bytes=len(current_plan_raw),sha256=hashlib.sha256(current_plan_raw).hexdigest())
+            if dispatch_record not in note['bindings'] or current_plan not in note['bindings'] or note['status']!={k:status[k] for k in ('bytes','sha256')}:raise ValueError('owned dispatch/plan/status binding')
+            if note['cwd']!=str(repository) or str(run/'launch-049-exec.py')!=note['driver']['path']:raise ValueError('owned launch authority')
+            reverify=note['bindings']+note['sources']+[note['driver'],status]
+        elif note.get('schema')!='plan061-pi-launch/v1':
+            raise ValueError('owned launch schema')
+        else:
+            if note['cwd']!=str(repository) or str(repository/'docs/continuous-improvement/plan031-s1-recovery-20260919/pi-launch/pi_launch_driver.py')!=note['driver']['path']:raise ValueError('owned pi-launch authority')
         ancestors=[];cursor=root['ppid'];seen=set()
         for recorded in note['preexisting_ancestors']:
             if cursor in seen or cursor!=recorded['pid'] or cursor not in rows:raise ValueError('owned truncated/cyclic ancestry')
@@ -1862,7 +1877,7 @@ def owned_workload(note_path, *, extra=(), retained=None):
         # Every successful path still verifies the complete current proof graph.
         no_timeout_launch(dict(path=str(note_path),bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest()),anchor['directory'],diagnostic=note['kind']=='diagnostic')
         source_membership(note['sources'],repository)
-        for rec in note['bindings']+note['sources']+[note['driver'],status]:
+        for rec in reverify:
             current=Path(rec['path']).read_bytes()
             if len(current)!=rec['bytes'] or hashlib.sha256(current).hexdigest()!=rec['sha256']:raise ValueError('owned source/dispatch bytes changed')
         if retained is not None:

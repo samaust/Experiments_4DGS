@@ -1,0 +1,46 @@
+{
+ "schema": "s1-success-criteria-assessment/v1",
+ "iteration": 25,
+ "stage": "PLAN",
+ "status": "s1_3_live_calibration_recovery_authorized_binding_prepared",
+ "recorded_utc": "2026-09-27T13:05:00+00:00",
+ "previous_assessment": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/assessment-059-implement.json",
+  "bytes": 4705,
+  "sha256": "43da59a316795dd25c4f87c9ea67447ec78ce91f3bc12fc8db0812ce38050d8c"
+ },
+ "plan": {
+  "path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_064.md",
+  "bytes": 9447,
+  "sha256": "5e28174c9c504810d0e764ac8c3de1403a5772b54ff6af7b78c788f9ef4b0d73"
+ },
+ "scope": "S1-3 live S1 calibration recovery on explicit user approval (option 1: 'I'm choosing option 1. I approve S1-3. Continue the implementation.'). Job S1-calibration-recovery-001 under the fail-closed binding contract: 1 attempt, 3600 GPU s, no reconstruction, no reset of prior consumption, amendment plan031-s1-s0-token-sum-v1 approved, additional attempt approved. This iteration prepares the binding (bookkeeping chain repair via correction-016, environment restoration with byte-exact hash verification, first passed v2 validation wrapper, authorization document, read-only launch gate) and defines the single host-run dispatch protocol; it changes no scientific source bytes.",
+ "success_criteria": {
+  "S1-1": "met — additive pi-launch class; no owned-path assertion weakened",
+  "S1-2": "met — no-timeout pi aggregate-061-007 and timeout-mode gate aggregate-063-004 on the final source bytes (249 ok / 0 / 0 each; 199.74 s <= 240 s gate)",
+  "S1-3": "in progress — binding prepared and dry-run validated; host dispatch pending GPU exclusivity precondition and user router decision",
+  "S1-4": "met — Plan049 chain byte-identical; 78/78 sources unchanged; prior failures/aggregates/reports and the 447-event ledger prefix untouched"
+ },
+ "environment_restoration": {
+  "vipe_checkout": {
+   "path": "/home/auss/git_repos/samaust/Tridi/vipe",
+   "revision": "de50e6ab1066e32c96d32499a282ecaa2fbf2d90",
+   "source": "https://github.com/samaust/vipe (user public fork), branch tridi at the pinned commit, clean tree",
+   "verification": "265/266 files from qualification/historical-assets.json byte-exact (sha256+bytes); the one missing file is the compiled build artifact vipe_ext.cpython-314-x86_64-linux-gnu.so, which is not in git, not in the 38 frozen records, and not an S1 required asset (S1 forbids the ViPE root at runtime)"
+  },
+  "weights": [
+   {"name": "grounding_checkpoint", "path": "/home/auss/.cache/torch/hub/checkpoints/groundingdino_swint_ogc.pth", "bytes": 693997677, "sha256": "3b3ca2563c77c69f651d7bd133e97139c186df06231157a64c507099c52bc799", "source": "https://huggingface.co/ShilongLiu/GroundingDINO/resolve/main/groundingdino_swint_ogc.pth"},
+   {"name": "sam_checkpoint", "path": "/home/auss/.cache/torch/hub/sam/sam_vit_b_01ec64.pth", "bytes": 375042383, "sha256": "ec2df62732614e57411cdcf32a23ffdf28910380d03139ee0f4fcbe91eb8c912", "source": "https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth"},
+   {"name": "aot_checkpoint", "path": "/home/auss/.cache/torch/hub/aot/R50_DeAOTL_PRE_YTB_DAV.pth", "bytes": 236513959, "sha256": "7e8a8d83310739bac02817f6bf48b6bbe2bbd7d5325722f1084088eb3aee1e06", "source": "R50-DeAOTL PRE_YTB_DAV row of the pinned SAM-Track README (Segment-and-Track-Anything @ 99ca4bd5, Google Drive 1QoChMkTVxdYZ_eBlZhK2acq9KMQZccPJ)"},
+   {"name": "bert_snapshot", "path": "/home/auss/.cache/huggingface/hub/models--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594", "bytes": 441602326, "sha256": "per-file exact (5 files)", "source": "https://huggingface.co/bert-base-uncased (snapshot revision 86b5e0934494bd15c9632b12f734a8a67f723594)"}
+  ],
+  "note": "All restored bytes were verified against the E1 qualification asset records bound in the authorization document; this is environment restoration, not a configuration change. AssetBundle('S1', assets) passes on all nine required S1 assets."
+ },
+ "bookkeeping_repair": {
+  "correction": "s1-recovery-baseline-correction-016.json extends correction-015 with 15 recorded transitions (the 14 unrecorded committed status.md states of iterations 18-24 plus this PLAN update), each with a preserved byte-exact snapshot; the chain ends exactly at the new status.md record (sha256 6e493fc9856da1417573f9db8a229374662a5389eb2ec71892bdcdd983be685e, 3381 bytes).",
+  "chain_head": "s1-recovery-status-implement-017.md (a4d82fc84e521a710e1da86f376118e3a197b9ef77569009fa6e31e4670beb22, uncommitted iteration-17 worktree state preserved)"
+ },
+ "binding_verification": "Dry-run s1_recovery.validate_binding against the fully assembled candidate documents (plan, correction-016 with the 15-transition chain, first passed v2 wrapper binding timeout-gate-063/aggregate-063-004, authorization document with the 447-event ledger snapshot) returns PASS; the canonical request sha256 is d11f35b7023270d1a35cb07bffbafbd1a9b8b0908e4ec0ba751c81aafeca4926.",
+ "allocation_note": "Iteration 25 PLAN is CPU-only bookkeeping and environment restoration; no GPU allocation. The bounded recovery allocation (1 attempt / 3600 s) is consumed only by the host dispatch.",
+ "integrity": "No session-proof or tool-event evidence was fabricated. Every restored asset is hash-verified against the bound E1 asset records; every transition document references preserved snapshot bytes."
+}

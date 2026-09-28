@@ -1,0 +1,125 @@
+{
+ "schema": "s1-plan031-assessment/v1",
+ "sequence": 48,
+ "kind": "implement",
+ "iteration": 19,
+ "plan": "plans/plan_058.md",
+ "plan_sha256": "169dbc4edb341ec820b56508cf670e90c36228c680d9ddbb3b47483ef5aad792",
+ "utc": "2026-09-26T18:49:00+00:00",
+ "head_before": "a2b1634",
+ "source_baseline_commit": "343d06750f49f5789ce74e9605f9f9e988645c20",
+ "findings_addressed": {
+  "F1.2": {
+   "status": "landed",
+   "existing_machinery_verified": [
+    "_prepare_context: operation-wrapped mkdir/fsync/record/read_bytes/read_record/encode under reservation deadline",
+    "read_record: leading before() plus new trailing gates (see delta)",
+    "Publisher.__init__: @with_deadline with before(deadline) before source re-hash",
+    "Consumer._tick: operation(read_record, ..., deadline=...)",
+    "candidate_inventory: operation(_candidate_inventory, ..., deadline=...) plus new decode/append gates",
+    "ClosedInventory.recheck: before(deadline) at each loop entry",
+    "publish_segment_row: operation(..., deadline=clock.work_deadline) with new read-return/write gates",
+    "first_record/reconcile_first/preserve_failure: operation-wrapped bodies selecting W/T deadlines",
+    "s1_recovery.accept_result and prepare_terminal_evidence: operation-wrapped with optional() per-probe before/after checks"
+   ],
+   "delta": "s1_progress.py fine-grained before() gates at individual read/hash/parse/serialize/write boundaries: read_record (post-read, pre/post-hash, post-decode), _candidate_inventory (decode step and append encode/hash), _publish_segment_row (produced-row read-return and qualified-row write). before() is a no-op without an active deadline context, so behavior outside deadline scope is unchanged.",
+   "verification": {
+    "in_process_cases": [
+     "no-deadline read_record returns value (gate inert)",
+     "deadline already past raises TimeoutError at entry",
+     "read returning at/after W raises TimeoutError (read-return-at-W, no authority over bytes)",
+     "in-time read under deadline returns value",
+     "corrupted bytes under deadline still raise original ValueError, not replaced by deadline error"
+    ],
+    "existing_tests_on_changed_source": [
+     "test_progress_plan047_deadline_steps ok in 82.4 s (all 114 callbacks incl. read-return seam injection)",
+     "test_progress_plan047_complete_final_sample ok",
+     "test_progress_plan047_result_summary ok",
+     "test_progress_plan047_limits ok",
+     "test_progress_plan047_recovery ok",
+     "test_progress_plan047_state_authority ok"
+    ],
+    "f11_regression": "stages.segment with clock=None and with an untrusted clock object both raise the original ValueError('trusted reservation clock required') before any deadline side effect"
+   }
+  },
+  "F5.3": {
+   "status": "verified already implemented",
+   "evidence": "supervisor.py preserves primary_failure (original class/message/kind/phase/observed/stop_required) independently; final_step appends secondary_failures without replacing the primary; refresh_evidence sets failure_kind from the primary and records the final phase kind as secondary_outcome_kind. P06 case is owned-root in this environment (recorded, not weakened)."
+  },
+  "F5.4": {
+   "status": "verified already implemented",
+   "evidence": "P scenario tests persist and correlate child boundary traces (child_boundaries events including P05_pre_head_replace and P01_late_suffix, correlation ids, file records); plan046-publication-faults.json artifact present in both diagnostic runs."
+  }
+ },
+ "official_executions": {
+  "aggregate_018_001": {
+   "purpose": "whole aggregate on the committed 343d067 source (first exec of IMPLEMENT019)",
+   "launch_utc": "2026-09-26T18:27:32+00:00",
+   "launch_inequality": "elapsed 136 s: 136+300+300=736 < 6000 (held)",
+   "receipt": "s1-recovery-aggregate-018-001/execution.json",
+   "receipt_sha256": "49b017635e8f2f66f5b24590625ce7c36d855e1805fc9de79f8b005e1c5e6a5e",
+   "receipt_bytes": 36899,
+   "result": "timed_out=true, returncode=-9 (SIGKILL) at elapsed 300.008 s vs the unchanged 300 s cap",
+   "partial_progress": "199 ok, 14 ERROR (exactly the 14 owned-root cases: 3 s1_recovery hotspot tests + l01/l18/l31/l35 + p01-p06 + plan046_ownership), 0 FAIL; kill inside non-owned test_progress_plan047_complete_final_sample in the supervisor suite",
+   "sources_unchanged_before_after": "78/78",
+   "boot_id": "ba1b4efe-ee43-4088-86df-706c41cfac12",
+   "measurement_note": "In the official timeout-mode environment (S1_VALIDATION_RUN_DIRECTORY, setsid, PYTHONPATH) the three s1_recovery hotspot tests fast-fail on the missing owned root (KeyError S1_OWNED_ROOT_NOTE) instead of paying the O(n^2) reconcile-failure path observed ad hoc, so the 300 s cap is consumed in the supervisor suite; the dominant remaining cost is the four slow plan047 progress-protocol tests (deadline_steps ~84 s, complete_final_sample ~35 s, result_summary ~16 s, limits ~13 s), which is the F3/F6.4 deferred scope."
+  },
+  "diagnostic_019_001": {
+   "purpose": "focused re-verification of updated source (attempt 2 of 4)",
+   "launch_utc": "2026-09-26T18:39:10+00:00",
+   "launch_inequality": "elapsed ~1080 s: 1080+120+300=1500 < 6000 (held)",
+   "receipt": "s1-recovery-diagnostic-019-001/execution.json",
+   "receipt_sha256": "e97018362fc338d9f0360470b1ca9e48c855a7f8a2449ea821bac4c23fb1bf00",
+   "receipt_bytes": 36900,
+   "result": "timed_out=true, returncode=-9 at elapsed 120.104 s (120 s cap)",
+   "partial_progress": "50 ok, 11 ERROR (identical owned-root set to diagnostic-018-001), 0 FAIL; kill inside non-owned test_progress_plan047_deadline_steps, which passes standalone in 82.4 s on the changed source",
+   "sources_unchanged_before_after": "78/78",
+   "boot_id": "ba1b4efe-ee43-4088-86df-706c41cfac12"
+  },
+  "aggregate_019_001": {
+   "purpose": "final whole aggregate on the updated source (attempt 2 of 2)",
+   "launch_utc": "2026-09-26T18:42:09+00:00",
+   "launch_inequality": "elapsed ~1013 s: 1013+300+300=1613 < 6000 (held)",
+   "receipt": "s1-recovery-aggregate-019-001/execution.json",
+   "receipt_sha256": "c2c8f17236baf70d3c0ec1376844ae0ea610340e3efc7648b5ee81e09d75e9a5",
+   "receipt_bytes": 36899,
+   "result": "timed_out=true, returncode=-9 at elapsed 300.008 s vs the unchanged 300 s cap",
+   "partial_progress": "199 ok, 14 ERROR (identical owned-root set to aggregate-018-001), 0 FAIL; identical kill point (test_progress_plan047_complete_final_sample)",
+   "sources_unchanged_before_after": "78/78",
+   "boot_id": "ba1b4efe-ee43-4088-86df-706c41cfac12"
+  }
+ },
+ "source_manifest": {
+  "evidence": "r18-1-implementation-evidence-019/source-manifest-019.json",
+  "baseline_commit": "343d06750f49f5789ce74e9605f9f9e988645c20",
+  "members": 78,
+  "changed": ["scripts/vipe_benchmark/s1_progress.py"]
+ },
+ "budget": {
+  "wall_elapsed_seconds": 1369.6,
+  "limit_seconds": 7200,
+  "test_execution_attempts": "2 focused (018-001 counted in iteration 18; 019-001 here), 2 aggregates (018-001, 019-001)",
+  "note": "well inside limits; no wall overrun"
+ },
+ "deferred_to_iteration_20": [
+  "F3 callback-relevance rework (the four slow plan047 progress-protocol tests dominate the remaining timeout-mode aggregate gap)",
+  "F4 state/provenance/parser/cancellation coverage rework"
+ ],
+ "environment_blockers_unchanged": {
+  "owned_root": "14 owned-root tests error on missing S1_OWNED_ROOT_NOTE; only a genuine Plan049 driver launch in an owned environment can pass them; no session-proof evidence synthesized",
+  "pty_session_tools": "not available in this harness (Codex exec_command/write_stdin); formal no-timeout launch remains blocked"
+ },
+ "s1_status": {
+  "S1-1": "narrowly met (receipts, manifests, environment identity)",
+  "S1-2": "unmet (aggregate passes only with owned-root resolution + timeout-mode fit via F3/F6.4)",
+  "S1-3": "unmet (requires S1-2)",
+  "S1-4": "narrowly met"
+ },
+ "invariants": [
+  "no owned-path assertion weakened; no test expectation fabricated; strict zero-error acceptance remains the later owned-environment gate",
+  "no GPU/model/production work; no external network; no new process outside the captured suite",
+  "78/78 source members unchanged across all three official executions",
+  "no new untracked dependency; all receipts under the run directories"
+ ]
+}

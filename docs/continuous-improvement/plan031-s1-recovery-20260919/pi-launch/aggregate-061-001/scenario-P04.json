@@ -1,0 +1,217 @@
+{
+  "scenario": "P04",
+  "mode": "progress_final",
+  "constructor_entry": 93806.473738614,
+  "action_cutoff": 93808.473738614,
+  "safety_cutoff": 93809.473738614,
+  "constructor_end": 93806.473818775,
+  "t0": 93806.473755423,
+  "ready_deadline": 93807.473755423,
+  "setup_deadline": 93808.473755423,
+  "setup_cleanup_deadline": 93809.473755423,
+  "progress_final_outcome": {
+    "event": "progress_final_outcome",
+    "label": "P04",
+    "phase": "startup_or_fixture_preparation",
+    "primary": {
+      "error_class": "RuntimeError",
+      "message": "S1 helper session poisoned: [{'error_class': 'ValueError', 'message': 'owned root schema', 'phase': 'startup'}]"
+    },
+    "secondary": [],
+    "reference": null,
+    "cleanup_confirmed": false,
+    "observed": 93806.486061062,
+    "causal_status": "actual startup failure; no inferred EPERM cause"
+  },
+  "action_end": 93806.486045092,
+  "end": 93806.486061062,
+  "execution_seconds": 0.012306477990932763,
+  "cleanup_seconds": 1.59699993673712e-05,
+  "cleanup_confirmed": false,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "spawning",
+      "pid": null
+    },
+    "sample": {
+      "role": "sample",
+      "state": "pending",
+      "pid": null
+    }
+  },
+  "errors": [
+    {
+      "error_class": "ValueError",
+      "message": "owned root schema",
+      "phase": "startup"
+    }
+  ],
+  "signals": [],
+  "ticks": [
+    93806.473755423,
+    93806.47387253,
+    93806.480914229,
+    93806.485987181
+  ],
+  "events": [
+    {
+      "event": "fixture_spawn_entry",
+      "role": "work",
+      "observed": 93806.474162244,
+      "ready_deadline": 93807.473755423
+    },
+    {
+      "event": "progress_final_outcome",
+      "label": "P04",
+      "phase": "startup_or_fixture_preparation",
+      "primary": {
+        "error_class": "RuntimeError",
+        "message": "S1 helper session poisoned: [{'error_class': 'ValueError', 'message': 'owned root schema', 'phase': 'startup'}]"
+      },
+      "secondary": [],
+      "reference": null,
+      "cleanup_confirmed": false,
+      "observed": 93806.486061062,
+      "causal_status": "actual startup failure; no inferred EPERM cause"
+    }
+  ],
+  "trace_facts": {
+    "capacity": 256,
+    "total": 2,
+    "dropped": 0,
+    "saturated": false,
+    "first": 93806.474163096,
+    "last": 93806.486065503
+  },
+  "tick_facts": {
+    "capacity": 128,
+    "total": 4,
+    "dropped": 0,
+    "saturated": false,
+    "first": 93806.473759606,
+    "last": 93806.485987385
+  },
+  "owner_error_facts": {
+    "capacity": 32,
+    "total": 1,
+    "dropped": 0,
+    "saturated": false,
+    "first": 93806.481894321,
+    "last": 93806.481894321
+  },
+  "owner_signal_facts": {
+    "capacity": 128,
+    "total": 0,
+    "dropped": 0,
+    "saturated": false,
+    "first": null,
+    "last": null
+  },
+  "request_counts": {
+    "work": {
+      "dispatch": 0,
+      "response": 0
+    },
+    "sample": {
+      "dispatch": 0,
+      "response": 0
+    }
+  },
+  "census_request_count": 0,
+  "max_gap": 0.007041699005640112,
+  "max_turn": 1.4566001482307911e-05,
+  "call_observations": [
+    {
+      "operation": "tick",
+      "entered": 93806.473872052,
+      "deadline": 93807.473755423,
+      "returned": 93806.473887369,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "tick",
+      "entered": 93806.480912881,
+      "deadline": 93807.473755423,
+      "returned": 93806.480929494,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "tick",
+      "entered": 93806.485986333,
+      "deadline": 93807.473755423,
+      "returned": 93806.485994818,
+      "confirmed": null,
+      "error": "RuntimeError: S1 helper session poisoned: [{'error_class': 'ValueError', 'message': 'owned root schema', 'phase': 'startup'}]",
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "await_ready",
+      "entered": 93806.47387032,
+      "deadline": 93807.473755423,
+      "returned": 93806.485997488,
+      "confirmed": null,
+      "error": "RuntimeError: S1 helper session poisoned: [{'error_class': 'ValueError', 'message': 'owned root schema', 'phase': 'startup'}]",
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "close",
+      "entered": 93806.486046821,
+      "deadline": 93809.473738614,
+      "returned": 93806.486059407,
+      "confirmed": false,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    }
+  ],
+  "call_observation_facts": {
+    "capacity": 128,
+    "total": 5,
+    "dropped": 0,
+    "saturated": false,
+    "first": 93806.473888364,
+    "last": 93806.486060138
+  },
+  "timing_failures": [],
+  "last_sample": null,
+  "requests": {
+    "work": null,
+    "sample": null
+  },
+  "ownership": [
+    {
+      "role": "work",
+      "state": "spawning",
+      "pid": null,
+      "ownership_unknown": true
+    }
+  ],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 0,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 0,
+      "last_frame": null
+    },
+    "sample": {
+      "sent": 0,
+      "received": 0,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 0,
+      "last_frame": null
+    }
+  },
+  "secondary": []
+}

@@ -1,0 +1,11 @@
+# S1 recovery — iteration 22 PLAN (Plan061: pi-launch owned mode, user-authorized)
+
+The loop restarts under direct user authorization: *"I want to change the tests so they don't need to be launched from Codex. I want them to work when launched by pi."* (recorded verbatim with decision semantics in [pi-launch-authorization.md](pi-launch/pi-launch-authorization.md)). [Plan061](../../../plans/plan_061.md) ([assessment054](assessment-054-plan.json), [plan-link022](plan-link-022.md)) plans an **additive** `pi-launch` provenance class:
+
+- **New note schema** `plan061-pi-launch/v1` + `pi_launch()` verification (driver + authorization + plan file records, live file-verified) replacing only the Codex-session-specific chain (dispatch/admission/session-proof) — for pi notes only.
+- **New pi driver** (`pi-launch/pi_launch_driver.py`, outside the source set → 78-member source set unchanged), mirroring `launch-049-exec.py` minus the session protocol: single-threaded identity sampling, note write, exec-start + driver logs, dup2, `execve` of the exact capture command; no job ledger, no bootstrap/ADMIT, no session proof.
+- **Source changes (3 files, additive dispatches):** `s1_validation_contract.py` (schema dispatch in `no_timeout_launch`/`validate_execution`/`validate_creation`, `pi_launch_output_paths`), `s1_helper_session.py` (`_launch_anchor` + `owned_workload` accept both layouts; plan049 authority block conditional on note schema), `s1_validation_capture.py` (`creation['authority']` per schema). The Plan049 chain stays byte-identical.
+- **No test changes:** the 14 owned tests already branch on `S1_OWNED_ROOT_NOTE`.
+- **Acceptance:** one no-timeout whole-suite aggregate launched by pi's bash tool — expected 249 ok / 0 errors / 78-of-78 sources unchanged (no cap applies; ~365 s expected). At most 3 attempts; 7200 s wall; zero GPU/model/production work.
+
+All launch-method-independent guarantees preserved verbatim (live census, owned closure, per-thread identities, note digest vs kernel anchor, layout/fd identity, ancestry liveness to pid 0, `B+max(1,H)≤8`). Pi receipts carry `provenance='pi-launch'` and are never presented as Plan049 session-bound evidence. No tests or source edits occurred in PLAN. Timing start: [iteration-022-timing-start](iteration-022-timing-start.json).

@@ -70,7 +70,7 @@ def static_mask(labels, semantics, changing, valid, shape=SHAPE):
 
 def validate_static(mask, valid, shape=SHAPE):
     footprint(valid, shape)
-    if mask.dtype != np.uint8 or mask.shape != shape or not np.isin(mask, [0, 255]).all():
+    if mask.dtype != np.uint8 or mask.shape != shape or not ((mask == 0) | (mask == 255)).all():
         raise ValueError('static mask must be uint8 0/255; 255 is usable')
     if (mask[~valid] != 0).any():
         raise ValueError('static evidence outside valid footprint')

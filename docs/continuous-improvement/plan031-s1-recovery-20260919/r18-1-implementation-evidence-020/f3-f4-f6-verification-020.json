@@ -1,0 +1,82 @@
+{
+  "schema": "s1-r18-1-verification/v1",
+  "iteration": "020",
+  "head": "78899b1",
+  "method": "Line-referenced inspection of the committed source at the start of iteration 20 (post-review commits already contain the rework). Each finding below quotes the exact seam that Review018 demanded; no source change was required for any item.",
+  "conclusion": "R18-1 items F3, F4.1-F4.5, F6.1-F6.4 are all present in the current source. The post-review progress-protocol test expansion and the PureMemo/numerical_snapshot/BoundedArrays implementation landed in earlier iterations; this iteration records the verification evidence and measures the focused diagnostic and final aggregate on the unchanged HEAD source.",
+  "F6_1_npz_single_materialization": {
+    "status": "implemented",
+    "evidence": [
+      "s1_evidence.py: PureMemo entry stores only the derived (bytes, arrays) pair; numerical_snapshot() materializes through BoundedArrays once per guard",
+      "tests/test_vipe_benchmark_supervisor.py:3903-3911 (snapshot_member_once): counted __getitem__ shows member_counts=={key:1} for every member, arrays are not writeable, no object dtype, clear() zeroes bytes",
+      "tests line 3998-4014 (retention_cap/eviction): oversized real pair repeats the uncached guard (decode count advances once per repetition), one-pair eviction accounted exactly"
+    ]
+  },
+  "F6_2_bounded_memoization": {
+    "status": "implemented",
+    "evidence": [
+      "s1_evidence.py:70-100 PureMemo: one call-local entry, PURE_MEMO_BYTES=64MiB cap, hits/misses/evictions counters, retain() only on success, clear() on exception, never stores guard decisions",
+      "s1_evidence.py validate_result: creates memo per call, fresh verified_bytes before every lookup (bytes identity in key), retain only after success",
+      "callers reconcile_rows/qualify_row/validate_result each clear memo in finally; no global, path, mtime, inode, or size cache"
+    ]
+  },
+  "F6_3_fixture_setup_reduction": {
+    "status": "implemented",
+    "evidence": [
+      "tests/test_vipe_benchmark_s1_recovery.py:56-67 synthetic_inputs: rgb_record/valid_record computed once and reused for every input row (dict.fromkeys over identities); no per-row re-hash",
+      "tests/test_vipe_benchmark_s1_helper_fixtures.py:473 plan047_state: 'Real serial producer/consumer with one shared numerical row and no child'; one produced_row + one qualify_row per isolated case root",
+      "tests/test_vipe_benchmark_supervisor.py pure_memo/context cases: method-local fixture + request reused across all sub-cases with independent derived documents (deepcopy + targeted mutation)"
+    ]
+  },
+  "F6_4_finite_controls": {
+    "status": "implemented",
+    "evidence": [
+      "tests/test_vipe_benchmark_supervisor.py:3880-4040 test_progress_plan048_pure_memo controls:",
+      "same_size_restored_mtime: XOR middle byte, os.utime restores exact atime/mtime, same size; guard fails, memo cleared",
+      "inode_replacement: os.replace changes inode, fresh read observed, cached guard equals fresh guard",
+      "path_replacement: named path replaced between open and second fstat -> 'descriptor replacement'",
+      "request_changed/identity_changed/context_changed/source_changed: authority mutations rejected before any memo lookup (lookup_calls==[])",
+      "lookup_before_w/lookup_equal_w/lookup_after_w: real lookup return then clock at/after W -> TimeoutError, no member access after W, memo cleared",
+      "retention_cap: exact 64MiB cap accepted, over-cap rejected, real oversized pair stays uncached across 2 repetitions",
+      "eviction: old pair evicted exactly, real second pair evicts first, counters exact",
+      "uncached_valid/invalid_equivalence + failure_cleanup: cached and uncached guards equal; failures clear the memo"
+    ]
+  },
+  "F3_callback_relevance": {
+    "status": "implemented",
+    "evidence": [
+      "tests/test_vipe_benchmark_supervisor.py:3357-3717 test_progress_plan047_deadline_steps: each declared failure row reaches a distinct named internal return:",
+      "array_npy -> array_unbuffered_open_return (Path.open on the array file); array_hash -> real stream close return before the hash; array_png -> png_destination_stat_return",
+      "npz_member -> second array conversion return before member open; npz_finalize -> second member close (zipfile._ZipWriteFile.close hook); cleanup_next_array -> first member close with preserve_failure action and real arrays payload",
+      "publication rows advance at the real return of the immediately preceding operation via operation-wrappers keyed on predecessor (state='preceding_real_return'), not at a pre-operation boundary",
+      "context_read/context_write advance at real record()/encode() returns; cleanup_qualified advances after the real preceding flush/close; produced_json/produced_read use after() wrappers that advance only after the real function returns; produced_guard/qualified_guard use real publish_segment_row with after() on read_record/seal",
+      "preceding_real_metadata_read (record compare) is recorded before each guarded call; witness=named_deadline_witness tripwires the next named operation; operation partial-byte snapshots recorded per descriptor; all 114 SUBTEST_CASES preserved",
+      "tests/test_vipe_benchmark_supervisor.py:4296-4322 test_progress_plan047_deadline_rework: descriptor retirement observed separately from operation completion; partial bytes retained for the array/npz/png rows"
+    ]
+  },
+  "F4_result_authority_rework": {
+    "status": "implemented",
+    "sub_reworks": {
+      "F4_1_state_and_provenance": [
+        "tests lines 3113-3128: produced_then_semantic_failure deepcopies the real fixture row, mutates derived_class to 'invalid', starts qualified=False, asserts counts (produced_lower_bound=1, qualified=0), and the real qualify_row guard fails on the same row"
+      ],
+      "F4_2_worker_future_and_self_reference": [
+        "tests lines 3170-3200: worker_future_reference constructs a future checkpoint (sequence+1, previous=worker's) through real write/record/validate_checkpoint and asserts the consumer's real rejection; worker_self_reference constructs a self-issued reconcile document; worker_detached_identity uses a real Owner.lineage with attached/detached bindings"
+      ],
+      "F4_3_stop_required_recovery": [
+        "tests line 3213: recovered=p.recover(state.cache.reference()) with stop_required asserted true; summary_adapter preserves stop_required; conflict_plus_overflow holds both conditions"
+      ],
+      "F4_4_late_recovery": [
+        "tests lines 2567-2580: late_recovery uses p.time.monotonic -> work_deadline+1 (real clock advancement), tripwired raw guard, verified_progress_reference preserved, scan_complete False, integrity_status 'uncertain'"
+      ],
+      "F4_5_cancellation_and_nested_validators": [
+        "tests lines 2983-3024: forbidden==[] (empty forbidden suffix for read/retain/send after cancellation), pointer freeze, owner-vs-producer ack distinction",
+        "tests result_summary: result_duplicate_* now traverse p.candidate_inventory (enclosing result inventory entry point, source label 'strict result decode/candidate_inventory/validate_result'); nested bool/negative/overflow cases target named exact validators (validate_notice, validate_ack, context_document, validate_checkpoint, ack_correlation, recover) with per-case source labels"
+      ]
+    }
+  },
+  "remaining_timeout_mode_gap": {
+    "finding": "Measured on this exact source in iteration 19: aggregate-018-001 and aggregate-019-001 both reach the 300.008s cap with 199 ok, 14 owned-root ERROR, 0 FAIL, kill inside supervisor's complete_final_sample. The remaining supervisor cost is dominated by mandated full-510 real guard work (validate_result ~16s x ~5 across complete_final_sample/result_summary/deadline_steps accept-after-read paths) plus deadline_steps' 114 re-qualifying callbacks (~0.7s each, mandated monotone re-qualification of retained rows). The memo reduces repeated same-content qualification but cannot reduce distinct-row mandated guard work. The owned-environment launch resolves only the 14 environmental errors (fast owned KeyError path in s1_recovery); the supervisor wall time is environment-independent, so the 300s timeout-mode cap is still expected on this source in either environment. Plan059 §4 records this as the measured result rather than fabricating a fit; reducing mandated full-510 guard work is out of Plan059 scope.",
+    "action": "final aggregate launched after the focused diagnostic; measured values recorded in iteration-020-timing-final.json and the assessment"
+  }
+}

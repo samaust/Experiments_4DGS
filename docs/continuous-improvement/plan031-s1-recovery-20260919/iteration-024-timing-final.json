@@ -1,0 +1,29 @@
+{
+ "schema": "s1-iteration-timing/v1",
+ "iteration": 24,
+ "stage": "final",
+ "recorded_utc": "2026-09-27T12:47:00+00:00",
+ "started_utc": "2026-09-27T00:41:00+00:00",
+ "head_at_start": "99851dc",
+ "boot_id": "ba1b4efe-ee43-4088-86df-706c41cfac12",
+ "total_span_seconds": 43560,
+ "stop_gap": "Stopped at the timeout-gate adjudication point after aggregate-063-001 timed out at the user-confirmed 360 s cap; resumed on the user's Option B confirmation. The gap is user-decision wait time, not active work.",
+ "run_seconds": {
+  "aggregate-063-001_timed_360s_timeout": 360.1,
+  "measure-063-001_no_kill_430s": 430.64,
+  "measure-063-002_no_kill_post_guard": 198.23,
+  "aggregate-063-002_fixture_cap_mismatch": 63.5,
+  "aggregate-063-003_callback_mismatch": 199.3,
+  "aggregate-063-004_accepted_240s": 199.74,
+  "pi-aggregate-061-007_no_timeout": 313.2
+ },
+ "total_run_seconds": 1764.71,
+ "allocation": {
+  "wall_clock_seconds": 7200,
+  "source_test_cutoff_seconds": 6000,
+  "evidence_reserve_seconds": 1200,
+  "timed_attempts_max": 2,
+  "no_timeout_pi_attempts_max": 1
+ },
+ "deviation": "Active wall time (~9000 s including in-process measurements and analysis) exceeds the 7200 s allocation due to the user-confirmed Option B scope amendment (guards on 14 tests, two no-kill measurements, fixture alignment, two corrective timed attempts). Timed-attempt accounting: original allocation 2 timed attempts; consumed aggregate-063-001 (360 s cap, pre-amendment), 002 (fixture-inconsistent source), 003 (callback-multiplicity fix), 004 (accepted) — 002/003 are corrective launches on incoherent source states, not gate measurements. No-timeout pi attempts: 1 of 1 (aggregate-061-007)."
+}
