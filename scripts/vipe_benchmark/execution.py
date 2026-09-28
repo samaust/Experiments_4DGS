@@ -534,6 +534,10 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
         event = next(e for e in ledger.events() if e['event'] == 'component_recovery_authorized' and e['job_id'] == job)
         evidence.update({k: event[k] for k in ('authorization', 'admission', 'semantic_amendment', 'repair_validation', 'configuration', 'baseline_correction')})
         evidence['authorization_event'] = event_ref(event)
+        from .s1_recovery import source_requalification_event
+        requalification = source_requalification_event(ledger.events())
+        if requalification:
+            evidence['source_requalification'] = event_ref(requalification)
     def publish(reservation, outcome):
         from .s1_recovery import terminal_receipt
         return terminal_receipt(local, docs, config, request['recovery_authorization'],

@@ -1,0 +1,41 @@
+test_l25_delayed_actual_reserve (test_vipe_benchmark_supervisor.HelperSessionTests.test_l25_delayed_actual_reserve) ... ok
+test_l26_equal_actual_reserve (test_vipe_benchmark_supervisor.HelperSessionTests.test_l26_equal_actual_reserve) ... ok
+test_l33_blocked_census_refuses_stale (test_vipe_benchmark_supervisor.HelperSessionTests.test_l33_blocked_census_refuses_stale) ... ok
+test_l34_enumeration_error_empty_sample (test_vipe_benchmark_supervisor.HelperSessionTests.test_l34_enumeration_error_empty_sample) ... ok
+test_l35_exited_leader_live_descendant (test_vipe_benchmark_supervisor.HelperSessionTests.test_l35_exited_leader_live_descendant) ... ERROR
+test_l36_ambiguous_native_start_retained (test_vipe_benchmark_supervisor.HelperSessionTests.test_l36_ambiguous_native_start_retained) ... FAIL
+
+======================================================================
+ERROR: test_l35_exited_leader_live_descendant (test_vipe_benchmark_supervisor.HelperSessionTests.test_l35_exited_leader_live_descendant)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py", line 1701, in test_l35_exited_leader_live_descendant
+    selected=acknowledge_job_descendant(worker.pid,child_pid,child_row)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py", line 1188, in acknowledge_job_descendant
+    event=append_job_event('descendant-ack',dict(worker_pid=worker_pid,child_pid=child_pid,census=census_row),guard=guard)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py", line 747, in append_job_event
+    _job_event_data(event,data)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py", line 209, in _job_event_data
+    _job_proc_identity(data['identity'] if event=='descendant-creator-ack' else data['census'])
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py", line 84, in _job_proc_identity
+    if type(value) is not dict or set(value)!=fields:raise ValueError('job process identity schema')
+                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: job process identity schema
+
+======================================================================
+FAIL: test_l36_ambiguous_native_start_retained (test_vipe_benchmark_supervisor.HelperSessionTests.test_l36_ambiguous_native_start_retained)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py", line 1739, in test_l36_ambiguous_native_start_retained
+    self.assertTrue(acquired)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^
+AssertionError: [] is not true
+L36 secondary: {'operation': 'retire_acquired', 'error_class': 'ValueError', 'message': 'different job handle'}
+L36 secondary: {'operation': 'original_cleanup_assertions', 'error_class': 'AssertionError', 'message': 'False is not true'}
+
+----------------------------------------------------------------------
+Ran 6 tests in 3.534s
+
+FAILED (failures=1, errors=1)

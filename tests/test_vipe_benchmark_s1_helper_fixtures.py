@@ -31,7 +31,7 @@ class FaultOwner(Owner):
         self.session.events.append(dict(event='fixture_spawn_return',role=role,pid=pid,entered=entered,observed=time.monotonic(),ready_deadline=self.session.ready_deadline))
         if role == 'work' and self.mode in ('held_spawn','late_spawn'):
             self.session.events.append(dict(event='opaque_spawn_return_held',role=role,pid=pid,observed=time.monotonic(),mode=self.mode))
-            time.sleep(.16 if self.mode == 'held_spawn' else .45)
+            time.sleep(.16 if self.mode == 'held_spawn' else max(0.,self.session.cleanup_deadline-time.monotonic())+.15)
         return pid
 
     def observe_identity(self, pid):
@@ -391,7 +391,9 @@ def _progress_operation(operation,token,sequence,mode):
                 summary=reconcile_rows(output,fixture['request'],deadline=publisher.deadline,publisher=publisher)
             marker=str(Path(args['local'])/'sample-fail') if 'local' in args else os.environ.get('S1_PROGRESS_SAMPLE_FAIL')
             if mode=='progress_final':
-                clock.observe();publisher.publish()
+                # reconcile_rows already durably publishes and acknowledges
+                # the closed inventory, runtime, and first-result reference.
+                clock.observe()
                 if marker:Path(marker).write_text('guarded rows first runtime before failed sample')
             return [None,None] if name=='accept' else summary
         finally:publisher.close()
@@ -657,6 +659,9 @@ def named_creation_controls(test,kind,root):
         def signal(number,sig):events.append(dict(operation='signal',pid=number,signal=int(sig)))
         try:
             with contextlib.ExitStack() as stack:
+                # Synthetic handles/PIDs exercise enclosing dispatch and cleanup,
+                # not the real kernel-handle ledger (covered by owned scenarios).
+                stack.enter_context(patch.dict(os.environ,{'S1_JOB_LEDGER':''}))
                 stack.enter_context(patch.object(h,'identity',side_effect=identity))
                 stack.enter_context(patch.object(os,'posix_spawn',side_effect=spawn))
                 stack.enter_context(patch.object(subprocess,'Popen',side_effect=popen))
@@ -867,7 +872,8 @@ def retire_fixture_processes(processes,primary=None,*,stop=None):
             if os.environ.get('S1_JOB_LEDGER'):
                 from vipe_benchmark.s1_helper_session import _job_state,job_ledger_events
                 ledger=_job_state(job_ledger_events())
-                matches=[row for row in (*ledger['roots'].values(),*ledger['descendants'].values()) if row.get('identity',{}).get('pid')==process.pid]
+                matches=[row for row in (*ledger['roots'].values(),*ledger['descendants'].values())
+                    if row.get('handle',{}).get('kind')=='process' and row.get('identity',{}).get('pid')==process.pid]
                 if len(matches)!=1 or matches[0]['state'] not in ('waited','retired'):
                     raise ValueError('fixture matching handle retirement not durable')
         except BaseException as error:
@@ -891,7 +897,8 @@ def fixture_process_launch(event,command,**kwargs):
         if os.environ.get('S1_JOB_LEDGER'):
             from vipe_benchmark.s1_helper_session import _job_state,job_ledger_events
             ledger=_job_state(job_ledger_events())
-            matches=[row for row in (*ledger['roots'].values(),*ledger['descendants'].values()) if row.get('identity',{}).get('pid')==process.pid]
+            matches=[row for row in (*ledger['roots'].values(),*ledger['descendants'].values())
+                if row.get('handle',{}).get('kind')=='process' and row.get('identity',{}).get('pid')==process.pid]
             if len(matches)!=1 or matches[0]['state']!='live':
                 raise ValueError('fixture returned process handle not durably registered')
     except BaseException as primary:
@@ -951,6 +958,7 @@ def enclosing_creation_controls(test,root):
             fixture=None;caught=None
             try:
                 with contextlib.ExitStack() as stack:
+                    stack.enter_context(patch.dict(os.environ,{'S1_JOB_LEDGER':''}))
                     stack.enter_context(patch.object(h,'predispatch_owned',side_effect=authority))
                     stack.enter_context(patch.object(h,'identity',side_effect=identify))
                     stack.enter_context(patch.object(os,'kill',side_effect=lambda pid,sig:events.append(('kill',pid))))

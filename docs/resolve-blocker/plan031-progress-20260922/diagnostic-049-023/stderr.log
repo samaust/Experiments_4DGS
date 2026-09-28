@@ -1,0 +1,28 @@
+test_partial_constructor_boundaries (test_vipe_benchmark_supervisor.HelperSessionTests.test_partial_constructor_boundaries) ... ok
+test_progress_p01_worker_deadline (test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_p01_worker_deadline) ... ok
+test_progress_p02_reconcile_interruption (test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_p02_reconcile_interruption) ... ok
+test_progress_p03_helper_death (test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_p03_helper_death) ... ok
+test_progress_p04_failed_final_sample (test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_p04_failed_final_sample) ... ok
+test_progress_p05_interrupted_publisher (test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_p05_interrupted_publisher) ... ok
+test_progress_p06_blocked_owner (test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_p06_blocked_owner) ... FAIL
+test_progress_plan047_complete_final_sample (test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_plan047_complete_final_sample) ... ok
+
+======================================================================
+FAIL: test_progress_p06_blocked_owner (test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_p06_blocked_owner)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py", line 2060, in test_progress_p06_blocked_owner
+    def test_progress_p06_blocked_owner(self):self.progress_scenario('P06','progress_normal')
+                                              ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py", line 1898, in progress_scenario
+    if label=='P06':self.assertEqual(caught.primary_failure['phase'],'acceptance')
+                    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'supervisor' != 'acceptance'
+- supervisor
++ acceptance
+
+
+----------------------------------------------------------------------
+Ran 8 tests in 44.605s
+
+FAILED (failures=1)

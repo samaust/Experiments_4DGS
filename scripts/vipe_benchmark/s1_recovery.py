@@ -43,6 +43,76 @@ def event_ref(event):
     return {key: event[key] for key in ('sequence', 'event_sha256')}
 
 
+def source_requalification_event(events):
+    matches = [e for e in events if e['event'] == 's1_source_requalified']
+    if len(matches) > 1:
+        raise ValueError('duplicate S1 source requalification')
+    return matches[0] if matches else None
+
+
+def validate_source_requalification(event, registration, authorization, document):
+    """Narrow source-only amendment; historical allocation/recipe stay intact."""
+    note = read_json(strict_record(event['amendment'])['path'])
+    if (event.get('job_id') != JOB or event.get('authorization') != authorization
+            or note.get('schema') != 'plan066-s1-source-requalification/v1'
+            or note.get('authorization') != authorization
+            or note.get('registration') != event_ref(registration)
+            or note.get('ledger_head') != event_ref(registration)
+            or event['sequence'] != registration['sequence'] + 1
+            or event['previous_sha256'] != registration['event_sha256']
+            or note.get('previous_validation') != document['repair_validation']
+            or note.get('scope') != 'resource-sampler-and-codex-launch; no new allocation; unchanged deadlines'):
+        raise ValueError('S1 source requalification identity/scope/order')
+    for key in ('approval', 'plan', 'review'):
+        strict_record(note[key])
+    old = read_json(strict_record(note['previous_validation'])['path'])
+    new = read_json(strict_record(note['validation'])['path'])
+    before, after = old['sources'], new['sources']
+    paths = [str(p) for p in source_paths()]
+    if ([r['path'] for r in before] != paths or [r['path'] for r in after] != paths):
+        raise ValueError('S1 source requalification exact source membership')
+    changed = [(a,b) for a,b in zip(before, after) if a != b]
+    allowed = {str(ROOT / p) for p in (
+        'scripts/vipe_benchmark/budgets.py', 'scripts/vipe_benchmark/s1_recovery.py',
+        'scripts/vipe_benchmark/execution.py', 'tests/test_vipe_benchmark_budgets.py',
+        'scripts/vipe_benchmark/s1_helper_session.py',
+        'scripts/vipe_benchmark/s1_validation_contract.py',
+        'scripts/vipe_benchmark/supervisor.py',
+        'tests/test_vipe_benchmark_s1_helper_fixtures.py',
+        'tests/test_vipe_benchmark_supervisor.py',
+        'tests/test_vipe_benchmark_s1_recovery.py')}
+    changes = note.get('changes')
+    if (not changed or not {a['path'] for a,b in changed} <= allowed
+            or type(changes) is not list or len(changes) != len(changed)):
+        raise ValueError('S1 source requalification changed-source scope')
+    for (a,b), change in zip(changed, changes):
+        snapshot = strict_record(change['old_snapshot'])
+        if (change.get('before') != a or change.get('after') != b
+                or any(snapshot[k] != a[k] for k in ('bytes', 'sha256'))):
+            raise ValueError('S1 source requalification historical source snapshot')
+        strict_record(b)
+    return note['validation']
+
+
+def register_source_requalification(local, config, amendment):
+    """Validate a prospective append under lock; never rewrite registration."""
+    import time
+    from .ledger import Ledger
+    amendment = strict_record(amendment)
+    note = read_json(amendment['path'])
+    ledger = Ledger(Path(local) / 'ledger.jsonl', config)
+    with ledger.locked() as (stream, events):
+        if source_requalification_event(events) is not None:
+            raise ValueError('duplicate S1 source requalification')
+        payload = dict(event='s1_source_requalified', job_id=JOB,
+                       authorization=note['authorization'], amendment=amendment)
+        candidate = dict(payload, sequence=len(events), previous_sha256=events[-1]['event_sha256'],
+                         recorded_unix=time.time())
+        candidate['event_sha256'] = object_hash(candidate)
+        validate_binding(local, config, note['authorization'], events=events + [candidate])
+        return ledger._append(stream, events, payload)
+
+
 def validate_binding(local, config, authorization, *, events=None, consumed=False):
     """Read-only admission; consumed=True is only for terminal resolution."""
     from .ledger import Ledger
@@ -95,7 +165,10 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
     if (Path(document['original_failure']['path']) != (local / 'jobs/S1-calibration/failure.json').resolve()
             or failure.get('job_id') != 'S1-calibration' or failure.get('status') != 'failed'):
         raise ValueError('wrong original S1 failure artifact')
-    validation = validation_record(document['repair_validation'], document['semantic_amendment'], configuration)
+    requalification = source_requalification_event(events)
+    validation_ref = (read_json(strict_record(requalification['amendment'])['path'])['validation']
+                      if requalification else document['repair_validation'])
+    validation = validation_record(validation_ref, document['semantic_amendment'], configuration)
     if validation.get('baseline') != document['baseline'] or validation.get('plan') != document['plan'] or validation.get('baseline_correction') != document['baseline_correction']:
         raise ValueError('validation baseline/plan mismatch')
     prior = [e for e in events if e['event'] == 'component_recovery_authorized'
@@ -232,7 +305,7 @@ def preservation(local, document, events, authorization):
 
 def lifecycle(events, authorization, document):
     """Validate only a caller-owned snapshot; never acquire a ledger lock."""
-    admission = registration = reservation = temporary = started = finish = None
+    admission = registration = reservation = temporary = started = finish = requalification = None
     for event in events:
         kind = event['event']
         if finish is not None:
@@ -257,8 +330,15 @@ def lifecycle(events, authorization, document):
                     or any(event.get(k) != document[k] for k in BINDINGS)):
                 raise ValueError('S1 lifecycle registration binding/order')
             registration = event
+        elif kind == 's1_source_requalified':
+            if registration is None or reservation is not None or requalification is not None:
+                raise ValueError('S1 source requalification order/duplicate')
+            validate_source_requalification(event, registration, authorization, document)
+            requalification = event
         elif kind == 'reserve':
             evidence = event.get('evidence', {})
+            if evidence.get('source_requalification') != (event_ref(requalification) if requalification else None):
+                raise ValueError('S1 reservation source requalification binding')
             if (not registration or reservation
                     or evidence.get('authorization') != authorization
                     or evidence.get('authorization_event') != event_ref(registration)
@@ -412,6 +492,9 @@ def worker_clock(args, request, config):
 
 def reservation_binding(local, config, events, evidence, command=None):
     document, original = validate_binding(local, config, evidence['authorization'], events=events)
+    requalification = source_requalification_event(events)
+    if evidence.get('source_requalification') != (event_ref(requalification) if requalification else None):
+        raise ValueError('S1 reservation source requalification binding')
     registered = [e for e in events if e['event'] == 'component_recovery_authorized' and e['job_id'] == JOB]
     if len(registered) != 1:
         raise ValueError('unique S1 registration required')
@@ -646,6 +729,7 @@ def terminal_receipt(local, docs, config, authorization, *, error=None,
             baseline_correction=reservation['evidence']['baseline_correction'],
             reservation=event_ref(reservation), authorization_event=reservation['evidence']['authorization_event'],
             admission=reservation['evidence']['admission'], request=reservation['evidence']['request'],
+            source_requalification=reservation['evidence'].get('source_requalification'),
             outcome=outcome, acceptance=outcome.get('acceptance'), first_result=first,
             runtime=runtime, evidence_summary=summary, counts=counts,
             verification_errors=errors, attempt_consumed=True, reconstruction_authorized=False,

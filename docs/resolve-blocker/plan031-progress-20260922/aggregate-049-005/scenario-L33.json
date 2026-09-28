@@ -1,0 +1,167 @@
+{
+  "scenario": "L33",
+  "mode": "census_block",
+  "constructor_entry": 202953.44753939,
+  "action_cutoff": 202955.44753939,
+  "safety_cutoff": 202956.44753939,
+  "constructor_end": 202953.608021883,
+  "t0": 202953.44756238,
+  "ready_deadline": 202954.44756238,
+  "setup_deadline": 202955.44756238,
+  "setup_cleanup_deadline": 202956.44756238,
+  "action_end": 202953.608071156,
+  "end": 202954.018845149,
+  "execution_seconds": 0.1605317659850698,
+  "cleanup_seconds": 0.41077399300411344,
+  "cleanup_confirmed": false,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "spawning",
+      "pid": null
+    },
+    "sample": {
+      "role": "sample",
+      "state": "pending",
+      "pid": null
+    }
+  },
+  "errors": [
+    {
+      "error_class": "ValueError",
+      "message": "owned Owner.run work dispatch CPU capacity",
+      "phase": "startup"
+    }
+  ],
+  "signals": [],
+  "ticks": [
+    202953.44756238,
+    202953.608029894
+  ],
+  "events": [
+    {
+      "event": "fixture_spawn_entry",
+      "role": "work",
+      "observed": 202953.511199693,
+      "ready_deadline": 202954.44756238
+    }
+  ],
+  "trace_facts": {
+    "capacity": 256,
+    "total": 1,
+    "dropped": 0,
+    "saturated": false,
+    "first": 202953.511200824,
+    "last": 202953.511200824
+  },
+  "tick_facts": {
+    "capacity": 128,
+    "total": 2,
+    "dropped": 0,
+    "saturated": false,
+    "first": 202953.447567056,
+    "last": 202953.608030952
+  },
+  "owner_error_facts": {
+    "capacity": 32,
+    "total": 1,
+    "dropped": 0,
+    "saturated": false,
+    "first": 202953.717253651,
+    "last": 202953.717253651
+  },
+  "owner_signal_facts": {
+    "capacity": 128,
+    "total": 0,
+    "dropped": 0,
+    "saturated": false,
+    "first": null,
+    "last": null
+  },
+  "request_counts": {
+    "work": {
+      "dispatch": 0,
+      "response": 0
+    },
+    "sample": {
+      "dispatch": 0,
+      "response": 0
+    }
+  },
+  "census_request_count": 0,
+  "max_gap": 0.16046751401154324,
+  "max_turn": 0.0,
+  "call_observations": [
+    {
+      "operation": "tick",
+      "entered": 202953.608029283,
+      "deadline": 202954.44756238,
+      "returned": 202953.608038513,
+      "confirmed": null,
+      "error": "TimeoutError: S1 monitor tick overrun",
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "await_ready",
+      "entered": 202953.608026212,
+      "deadline": 202954.44756238,
+      "returned": 202953.608041947,
+      "confirmed": null,
+      "error": "TimeoutError: S1 monitor tick overrun",
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "close",
+      "entered": 202953.608074046,
+      "deadline": 202956.44753939,
+      "returned": 202954.018835576,
+      "confirmed": false,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    }
+  ],
+  "call_observation_facts": {
+    "capacity": 128,
+    "total": 3,
+    "dropped": 0,
+    "saturated": false,
+    "first": 202953.608039852,
+    "last": 202954.018839895
+  },
+  "timing_failures": [],
+  "last_sample": null,
+  "requests": {
+    "work": null,
+    "sample": null
+  },
+  "ownership": [
+    {
+      "role": "work",
+      "state": "spawning",
+      "pid": null,
+      "ownership_unknown": true
+    }
+  ],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 0,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 0,
+      "last_frame": null
+    },
+    "sample": {
+      "sent": 0,
+      "received": 0,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 0,
+      "last_frame": null
+    }
+  },
+  "secondary": []
+}

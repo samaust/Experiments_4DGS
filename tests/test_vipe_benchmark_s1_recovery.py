@@ -379,6 +379,67 @@ class S1RecoveryTests(unittest.TestCase):
         Path(evidence['request']['path']).write_text('{}')
         with self.assertRaises(ValueError):self.ledger.reserve(s1.JOB,self.command(evidence),evidence)
 
+    def source_requalification_fixture(self):
+        # Simulate a formerly validated source revision without editing repo files.
+        current_validation = self.document['repair_validation']
+        previous = copy.deepcopy(self.validation)
+        path = str(ROOT/'scripts/vipe_benchmark/budgets.py')
+        current = next(r for r in previous['sources'] if r['path'] == path)
+        snapshot = self.put('old-budget-source.json', {'historical': True})
+        old = dict(snapshot, path=path)
+        previous['sources'] = [old if r['path'] == path else r for r in previous['sources']]
+        self.document['repair_validation'] = self.put('previous-validation.json', previous)
+        # Historical admission happened under the old source; all checks after
+        # registration below run unmocked against the current source and receipts.
+        with patch('vipe_benchmark.ledger.verify_record', side_effect=lambda r:r), \
+             patch.object(s1, 'validation_record', return_value=self.validation):
+            auth, request, evidence = self.register()
+        registration = self.ledger.events()[-1]
+        note = dict(schema='plan066-s1-source-requalification/v1', authorization=auth,
+            registration=s1.event_ref(registration), ledger_head=s1.event_ref(registration),
+            previous_validation=self.document['repair_validation'], validation=current_validation,
+            scope='resource-sampler-and-codex-launch; no new allocation; unchanged deadlines',
+            approval=self.put('source-approval.json', {'approved':True}),
+            plan=self.put('source-plan.json', {}), review=self.put('source-review.json', {}),
+            changes=[dict(before=old, after=current, old_snapshot=snapshot)])
+        return note, auth, evidence
+
+    def test_source_requalification_preserves_allocation_and_binds_reservation(self):
+        note, auth, evidence = self.source_requalification_fixture()
+        prefix = self.ledger.path.read_bytes()
+        amendment = self.put('source-requalification.json', note)
+        event = s1.register_source_requalification(self.root, self.config, amendment)
+        self.assertTrue(self.ledger.path.read_bytes().startswith(prefix))
+        self.assertEqual(s1.validate_binding(self.root,self.config,auth)[1], self.original)
+        with self.assertRaisesRegex(ValueError, 'duplicate'):
+            s1.register_source_requalification(self.root,self.config,amendment)
+        with self.assertRaisesRegex(ValueError, 'requalification binding'):
+            self.ledger.reserve(s1.JOB,self.command(evidence),evidence)
+        evidence['source_requalification'] = s1.event_ref(event)
+        reservation = self.ledger.reserve(s1.JOB,self.command(evidence),evidence)
+        self.assertEqual(reservation['seconds'],3600)
+        self.assertEqual(len([e for e in self.ledger.events() if e['event']=='admission']),1)
+        s1.validate_binding(self.root,self.config,auth,consumed=True)
+        with self.assertRaisesRegex(ValueError,'consumed'):
+            s1.validate_binding(self.root,self.config,auth)
+
+    def test_source_requalification_rejects_scope_and_snapshot_changes_without_append(self):
+        note, auth, evidence = self.source_requalification_fixture()
+        before = self.ledger.path.read_bytes()
+        wrong = copy.deepcopy(note)
+        wrong['scope'] = 'new allocation'
+        with self.assertRaisesRegex(ValueError,'scope'):
+            s1.register_source_requalification(self.root,self.config,self.put('bad-scope.json',wrong))
+        wrong = copy.deepcopy(note)
+        wrong['changes'][0]['old_snapshot'] = self.put('unrelated-snapshot.json', {})
+        with self.assertRaisesRegex(ValueError,'historical source snapshot'):
+            s1.register_source_requalification(self.root,self.config,self.put('bad-snapshot.json',wrong))
+        wrong = copy.deepcopy(note)
+        wrong['ledger_head']['sequence'] += 1
+        with self.assertRaisesRegex(ValueError,'order'):
+            s1.register_source_requalification(self.root,self.config,self.put('bad-order.json',wrong))
+        self.assertEqual(self.ledger.path.read_bytes(),before)
+
     def test_reduced_cumulative_deadline(self):
         _,_,evidence=self.register()
         self.assertEqual(self.ledger.reserve(s1.JOB,self.command(evidence),evidence)['seconds'],90)
@@ -393,8 +454,13 @@ class S1RecoveryTests(unittest.TestCase):
         auth=self.auth()
         real_popen=subprocess.Popen
         def worker(command, **kwargs):
+            # The owned launcher freezes OS argument bytes. Emulate the decoded
+            # argv seen by the real Python worker at this injected boundary.
+            command = [os.fsdecode(value) for value in command]
             request=read_json(command[command.index('--request')+1])
             self.put('jobs/'+s1.JOB+'/config.json',request)
+            for name in ('initial-runtime.json', 'partial-runtime.json'):
+                self.put('jobs/'+s1.JOB+'/'+name,self.observed)
             row,_=synthetic_row(self.root/'numeric',request)
             rows=[dict(row,identity=i.record()) for i in output_identities(self.config,'calibration')]
             import json
@@ -602,6 +668,124 @@ class FailureEvidenceTests(unittest.TestCase):
 
 
 class ReceiptContractTests(unittest.TestCase):
+    def setUp(self):
+        import gc
+        # Mutation fixtures create large cyclic mock/exception graphs. Retire
+        # them after fixture cleanups, before another test starts a timed owner.
+        self.addCleanup(gc.collect)
+
+    def test_only_known_native_nonstart_releases_unbound_thread_reservation(self):
+        from vipe_benchmark import s1_helper_session as h
+        creator=dict(boot_id='boot',pid=1,start_ticks=1,pgid=1,tid=1,thread_start_ticks=1)
+        rows=[dict(event='attempt-open',data=dict(h=1)),dict(event='main-handle',data=dict(session_id=1)),
+              dict(event='root-reserved',data=dict(token='thread',role='H',label='owner',creator=creator))]
+        event=dict(event='root-not-started',data=dict(token='thread',creator=dict(creator),error_class='NativeNotStarted'))
+        self.assertEqual(h._job_state(rows)['H'],2)
+        state=h._job_state(rows+[event]);self.assertEqual(state['H'],1)
+        self.assertEqual(state['roots']['thread']['state'],'retired')
+        with self.assertRaisesRegex(ValueError,'known native non-start'):
+            h._job_state(rows+[dict(event, data=dict(event['data'],error_class='OSError'))])
+        with self.assertRaisesRegex(ValueError,'known native non-start'):
+            h._job_state(rows+[dict(event,data=dict(event['data'],creator=dict(creator,pid=2)))])
+        with self.assertRaisesRegex(ValueError,'known native non-start'):
+            h._job_state(rows+[event,event])
+        wrong=copy.deepcopy(rows);wrong[-1]['data']['role']='B'
+        with self.assertRaisesRegex(ValueError,'known native non-start'):h._job_state(wrong+[event])
+
+    def test_parent_retirement_waits_for_closed_descriptors(self):
+        from vipe_benchmark.s1_helper_session import root_retirable
+        state=dict(roots={'parent':dict(state='waited')},
+            descendants={'child':dict(root='parent',state='retired')},
+            operations={'pin':dict(token='parent',state='open')})
+        self.assertFalse(root_retirable(state,'parent'))
+        state['operations']['pin']['state']='closed'
+        self.assertTrue(root_retirable(state,'parent'))
+        state['descendants']['child']['state']='live'
+        self.assertFalse(root_retirable(state,'parent'))
+
+    def test_job_line_cache_preserves_fresh_chain_and_mutation_checks(self):
+        from vipe_benchmark import s1_helper_session as h
+        raw=h._job_line(0,'0'*64,'attempt-open',dict(kind='aggregate',index=1,h=1,driver_pid=1))
+        h._validate_job_line.cache_clear()
+        first=h._job_read(raw)
+        first[0]['data']['driver_pid']=99
+        self.assertEqual(h._job_read(raw)[0]['data']['driver_pid'],1)
+        self.assertGreater(h._validate_job_line.cache_info().hits,0)
+        with self.assertRaisesRegex(ValueError,'checksum'):
+            h._job_read(raw.replace(b'"driver_pid":1',b'"driver_pid":2'))
+        with self.assertRaisesRegex(ValueError,'schema/chain'):
+            h._job_read(raw+raw)
+        with self.assertRaisesRegex(ValueError,'incomplete'):
+            h._job_read(raw[:-1])
+        # State reuse is keyed by the freshly read exact prefix, never by path,
+        # mtime, caller-owned rows, or the last claimed hash alone.
+        state=h._job_state_raw(raw);state['H']=99
+        self.assertEqual(h._job_state_raw(raw),h._job_state(h._job_read(raw)))
+        row=h._job_read(raw)[-1]
+        suffix=h._job_line(1,row['sha256'],'main-handle',dict(session_id=7,start_event_sha256='a'*64))
+        both=raw+suffix
+        self.assertEqual(h._job_state_raw(both),h._job_state(h._job_read(both)))
+        with self.assertRaisesRegex(ValueError,'duplicate/invalid Main'):
+            h._job_state_raw(both+h._job_line(2,h._job_read(both)[-1]['sha256'],'main-handle',dict(session_id=8,start_event_sha256='a'*64)))
+        with self.assertRaisesRegex(ValueError,'checksum'):
+            h._job_state_raw(both.replace(b'"driver_pid":1',b'"driver_pid":2'))
+        with self.assertRaisesRegex(ValueError,'schema/chain'):
+            h._job_state_raw(both+suffix)
+        with self.assertRaisesRegex(ValueError,'incomplete'):
+            h._job_state_raw(both[:-1])
+        self.assertEqual(h._job_state_raw(raw)['H'],1)
+
+    def test_short_close_wait_preserves_active_cleanup_budget(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from vipe_benchmark.s1_helper_session import Session
+        session=Session.__new__(Session)
+        session.cleanup_deadline=8.
+        session.fixture_safety_end=8.
+        session.progress_cache=Mock()
+        session.owner=SimpleNamespace(cancelled=False)
+        session.state='ready'; session.handle=None
+        self.assertFalse(session.close(10.))
+        self.assertEqual(session.cleanup_deadline,8.)
+        self.assertTrue(session.owner.cancelled)
+        self.assertFalse(session.close(2.))
+        self.assertEqual(session.cleanup_deadline,8.)
+        session.reservation_cleanup_limit=7.
+        self.assertFalse(session.close(20.))
+        self.assertEqual(session.cleanup_deadline,7.)
+
+    def test_nested_job_creator_requires_live_registered_incarnation(self):
+        from vipe_benchmark.s1_validation_contract import validate_job_creators
+        driver=dict(boot_id='boot',pid=10,start_ticks=1,pgid=10)
+        child=dict(boot_id='boot',pid=11,start_ticks=2,pgid=11)
+        rows=[dict(event='root-reserved',data=dict(token='child',creator=driver)),
+              dict(event='root-bound',data=dict(token='child',handle=dict(kind='process'),identity=child)),
+              dict(event='root-reserved',data=dict(token='thread',creator=dict(child)))]
+        validate_job_creators(rows,driver)
+        wrong=copy.deepcopy(rows);wrong[-1]['data']['creator']['pid']=99
+        with self.assertRaisesRegex(ValueError,'live registered creator'):validate_job_creators(wrong,driver)
+        wrong=copy.deepcopy(rows);wrong[-1]['data']['creator']['start_ticks']=3
+        with self.assertRaisesRegex(ValueError,'live registered creator'):validate_job_creators(wrong,driver)
+        with self.assertRaisesRegex(ValueError,'live registered creator'):
+            validate_job_creators([rows[0],rows[2],rows[1]],driver)
+        with self.assertRaisesRegex(ValueError,'live registered creator'):
+            validate_job_creators(rows[:2]+[dict(event='root-wait',data=dict(token='child'))]+rows[2:],driver)
+
+    def test_stdio_sentinels_bind_creation_semantics(self):
+        import json, subprocess
+        from vipe_benchmark.s1_helper_session import _prepare_owned_candidate
+        options = dict(stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+        candidate = _prepare_owned_candidate(subprocess.Popen,(['/bin/true'],),options)
+        bound = json.loads(candidate[0])['options']
+        self.assertEqual(bound['stdin'],dict(sentinel='PIPE'))
+        self.assertEqual(bound['stdout'],dict(sentinel='DEVNULL'))
+        self.assertEqual(bound['stderr'],dict(sentinel='STDOUT'))
+        self.assertEqual(_prepare_owned_candidate(subprocess.Popen,candidate[2],candidate[3])[0],candidate[0])
+        with self.assertRaisesRegex(ValueError,'negative process stdio'):
+            _prepare_owned_candidate(subprocess.Popen,(['/bin/true'],),dict(stdout=-9))
+        with self.assertRaisesRegex(ValueError,'negative process stdio'):
+            _prepare_owned_candidate(subprocess.Popen,(['/bin/true'],),dict(stdout=subprocess.STDOUT))
+
     def fixture(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -830,7 +1014,7 @@ class ReceiptContractTests(unittest.TestCase):
                 child_pid=child.pid
                 result=child.wait()
                 helper.retire_owned(child_pid,child)
-                self.assertEqual(tuple(child.args),command)
+                self.assertEqual(tuple(map(os.fsencode,child.args)),tuple(map(os.fsencode,command)))
             self.assertEqual(result,0,stderr.read_text())
             receipt=json.loads(stdout.read_text())
             self.assertEqual(receipt['pid'],child_pid)
@@ -997,8 +1181,7 @@ class ReceiptContractTests(unittest.TestCase):
                 patch.dict(helper.JOB_OWNERS,{root_token:dict(owner=root_owner)}),\
                 patch.dict(helper.JOB_MUTEXES,{}),\
                 patch.object(helper,'_job_owner',return_value=root_owner),\
-                patch.object(helper,'job_ledger_events',return_value=[]),\
-                patch.object(helper,'_job_state',return_value=close_state),\
+                patch.object(helper,'job_ledger_events',return_value=close_state),\
                 patch.object(helper,'append_job_event',side_effect=lambda event,data:close_events.append(event)),\
                 patch.object(helper.os,'close',side_effect=OSError('uncertain close')):
             with self.assertRaisesRegex(OSError,'uncertain close'):
@@ -1173,6 +1356,7 @@ class ReceiptContractTests(unittest.TestCase):
                         root_token=root_token,nonce='b'*32,handle_object_id=1)
                     process_candidate=_prepare_owned_candidate(__import__('subprocess').Popen,([sys.executable,'-c','pass'],),{})
                     candidate_receipt=_candidate_receipt(process_candidate)
+                    outer['creation']['candidate_sha256']=candidate_receipt['sha256']
                     terminal=dict(method='matching child wait',pid=outer['child_pid'],returncode=0)
                     wait_key=_job_operation_key(owner,'wait',child_identity)
                     ledger_steps=[('main-handle',dict(session_id=12345,start_event_sha256=start_hash)),
@@ -1187,6 +1371,10 @@ class ReceiptContractTests(unittest.TestCase):
                     outer['end']['monotonic']=401.;outer['end']['utc']=(datetime.datetime(2026,1,1,tzinfo=datetime.timezone.utc)+datetime.timedelta(seconds=401)).isoformat();outer['elapsed_seconds']=401.
                     graph.publish();self.assertEqual(graph.validate()['provenance'],graph.provenance)
                     valid=copy.deepcopy(outer)
+                    for bad_hash in (None,'x','0'*64):
+                        outer['creation']['candidate_sha256']=bad_hash;graph.publish()
+                        with self.assertRaisesRegex(ValueError,'candidate'):graph.validate()
+                    outer['creation']['candidate_sha256']=valid['creation']['candidate_sha256'];graph.publish()
                     # Every mutation is rehashed through proof/admission/note.
                     # These are synthetic schema controls, never tool attestations.
                     for fault in ('missing_proof','handle_false','handle_float','handle_string','handle_overwidth','start_handle','poll_argument','poll_return','terminal_poll','missing_handle','error_flag','tool_error','truncation_flag','output_hash','omit_poll','reorder_poll','duplicate_poll','readiness_altered','readiness_truncated','readiness_conflict','request_hash','request_path','request_kind','request_index','request_driver','stale_proof','stale_authorization','stale_plan054','stale_amendment','missing_plan054_binding','wrong_mode','v1_proof','mixed_event','kernel_claim','proof_extra','proof_missing','event_extra','event_missing','ordinal_bool','index_float','stamp_bool','stamp_nonfinite','stamp_reverse','stamp_rollback','stamp_timezone','stamp_extra','readiness_event_bool','duplicate_json','root_float','ancestor_bool','thread_float','root_substitution','ancestor_substitution','thread_substitution','source_stale'):

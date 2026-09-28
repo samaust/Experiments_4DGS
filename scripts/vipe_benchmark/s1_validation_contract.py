@@ -315,6 +315,8 @@ def validate_execution(value, receipt_record, inner):
             state=validate_job_ledger(note,proof,terminal=True)
             require(state['roots'].get(value['runner_job'],{}).get('identity')==value['creation']['child']
                     and state['roots'][value['runner_job']]['state']=='retired','exact runner root terminal')
+            require(state['roots'][value['runner_job']]['candidate']['sha256']==value['creation']['candidate_sha256'],
+                    'capture creation candidate differs from reserved runner')
 
     return value
 
@@ -397,7 +399,9 @@ def launch_output_paths(directory,kind,index):
 
 
 def validate_creation(value,note,child_pid,boot):
-    require(type(value) is dict and set(value)=={'before','after','retired','child','retirement','authority','cpu_bound'},'complete creation and retirement evidence required')
+    require(type(value) is dict and set(value)=={'before','after','retired','child','retirement','authority','cpu_bound','candidate_sha256'},'complete creation and retirement evidence required')
+    require(type(value['candidate_sha256']) is str and re.fullmatch('[0-9a-f]{64}',value['candidate_sha256']),
+            'exact creation candidate hash required')
     if note['schema']=='plan061-pi-launch/v1':
         require(value['authority']==file_record(note['authorization']['path']) and value['cpu_bound']=='B+max(1,H)≤8','creation pi-launch authority')
     else:
@@ -460,6 +464,27 @@ def job_ledger_input(path):
     return path.read_bytes()
 
 
+def validate_job_creators(rows, driver):
+    """Every creator must already belong to the live anchored process tree."""
+    def incarnation(value):
+        return tuple(value[key] for key in ('boot_id','pid','start_ticks','pgid'))
+    live = {incarnation(driver)}
+    processes = {}
+    for row in rows:
+        event, data = row['event'], row['data']
+        if event in ('root-reserved', 'descendant-reserved'):
+            require(incarnation(data['creator']) in live, 'live registered creator incarnation required')
+        elif event in ('root-bound', 'descendant-bound') and data['handle']['kind'] == 'process':
+            identity = incarnation(data['identity'])
+            require(identity not in live, 'duplicate live process incarnation')
+            processes[data['token']] = identity
+            live.add(identity)
+        elif event in ('root-wait', 'descendant-wait-result', 'root-retired', 'descendant-retired'):
+            identity = processes.pop(data['token'], None)
+            if identity is not None:
+                live.remove(identity)
+
+
 def validate_job_ledger(note,proof,*,terminal=False):
     """Fail closed on a missing or ambiguous current logical-job sidecar."""
     from .s1_helper_session import _job_read,_job_state,JOB_LEDGER_LIMIT
@@ -472,6 +497,7 @@ def validate_job_ledger(note,proof,*,terminal=False):
             and reference['schema']=='registered-process-tree-job/v1','required fixed current job ledger')
     raw=job_ledger_input(expected);require(0<len(raw)<=JOB_LEDGER_LIMIT,'job ledger size cap')
     rows=_job_read(raw);state=_job_state(rows)
+    validate_job_creators(rows,note['ownership_root'])
     initial=raw.splitlines(keepends=True)[0]
     require(hashlib.sha256(initial).hexdigest()==reference['initial_sha256'],'exclusive bootstrap bytes/hash')
     require(rows[0]['event']=='attempt-open' and rows[0]['data']==dict(kind=kind,index=index,h=1,driver_pid=note['ownership_root']['pid']),'initial live H reservation')
@@ -494,7 +520,11 @@ def validate_job_ledger(note,proof,*,terminal=False):
         creator=root.get('creator');require(type(creator) is dict and set(creator)=={'boot_id','pid','start_ticks','pgid','tid','thread_start_ticks'}
             and all(type(creator[key]) is int and creator[key]>0 for key in ('pid','start_ticks','pgid','tid','thread_start_ticks'))
             and creator['boot_id']==note['ownership_root']['boot_id'],'actual creator process/thread identity')
-        require(creator['pid'] in (note['ownership_root']['pid'],runner_pid),'root created by driver or runner')
+        if 'start_failure' in root:
+            require(root['state']=='retired' and root['role']=='H' and 'handle' not in root and 'identity' not in root
+                    and root['start_failure']==dict(creator=creator,error_class='NativeNotStarted'),
+                    'explicit native non-start without acquired handle')
+            continue
         if root['state']!='reserved':
             handle=root.get('handle');identity_value=root.get('identity')
             require(type(handle) is dict and set(handle)=={'kind','object_id'} and type(handle['object_id']) is int and handle['object_id']>0,'retained root handle')

@@ -8,9 +8,11 @@ from collections import deque
 from dataclasses import dataclass
 import datetime
 import fcntl
+import functools
 import hashlib
 import json
 import math
+import marshal
 import os
 from pathlib import Path
 import signal
@@ -34,6 +36,7 @@ _JOB_EVENT_FIELDS = {
     'main-handle': ({'session_id','start_event_sha256'}, set()),
     'session-terminal': ({'session_id','terminal'}, set()),
     'root-reserved': ({'token','role','label','creator'}, {'candidate'}),
+    'root-not-started': ({'token','creator','error_class'}, set()),
     'descendant-reserved': ({'token','root','role','label','creator'}, {'candidate'}),
     'root-bound': ({'token','identity','handle','owner'}, set()),
     'descendant-bound': ({'token','identity','handle','owner'}, set()),
@@ -143,6 +146,10 @@ def _job_event_data(event, data):
     if not required <= set(data) or set(data)-required-optional:
         raise ValueError('job ledger event fields')
     _job_value(data)
+    if event=='root-not-started':
+        if (type(data['token']) is not str or len(data['token'])!=32
+                or data['error_class']!='NativeNotStarted' or type(data['creator']) is not dict):
+            raise ValueError('job known native non-start fields')
     if event == 'attempt-open' and (data['kind'] not in ('diagnostic','aggregate') or type(data['index']) is not int or data['index'] < 1 or type(data['h']) is not int or data['h'] != 1 or type(data['driver_pid']) is not int or data['driver_pid'] <= 0):
         raise ValueError('job ledger attempt-open fields')
     if event == 'main-handle' and (type(data['session_id']) is not int or data['session_id'] <= 0 or type(data['start_event_sha256']) is not str or len(data['start_event_sha256']) != 64 or any(c not in '0123456789abcdef' for c in data['start_event_sha256'])):
@@ -273,6 +280,14 @@ def _candidate_bytes(create, args, kwargs):
             if value is None:
                 options[key]=None
             elif type(value) is int:
+                # Popen's negative sentinels describe creation of a pipe or
+                # redirection; they are not inherited kernel descriptors.
+                sentinels = {subprocess.PIPE: 'PIPE', subprocess.DEVNULL: 'DEVNULL'}
+                if key == 'stderr':
+                    sentinels[subprocess.STDOUT] = 'STDOUT'
+                if value in sentinels:
+                    options[key] = dict(sentinel=sentinels[value])
+                    continue
                 if value<0:raise ValueError('negative process stdio descriptor')
                 st=os.fstat(value);options[key]=dict(fd=value,device=st.st_dev,inode=st.st_ino,mode=st.st_mode)
             elif hasattr(value,'fileno'):
@@ -391,42 +406,58 @@ def job_ledger_paths(kind,index,repository=None):
     return Path(str(base)+'.jsonl'),Path(str(base)+'.lock')
 
 
+@functools.lru_cache(maxsize=8192)
+def _validate_job_line(line):
+    """Cache only successful validation of exact bytes, never mutable rows."""
+    def pairs(items):
+        value={}
+        for key,item in items:
+            if key in value:raise ValueError('duplicate job ledger key')
+            value[key]=item
+        return value
+    digit_limit=sys.get_int_max_str_digits()
+    try:
+        if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(20000)
+        row=json.loads(line,object_pairs_hook=pairs,parse_constant=lambda value:(_ for _ in ()).throw(ValueError('nonfinite job ledger number')))
+    finally:
+        if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(digit_limit)
+    def finite(value):
+        if type(value) is float and not math.isfinite(value):raise ValueError('nonfinite job ledger number')
+        if type(value) is dict:
+            for item in value.values():finite(item)
+        if type(value) is list:
+            for item in value:finite(item)
+    finite(row)
+    if type(row) is not dict or set(row)!={'schema','sequence','previous_sha256','utc','event','data','sha256'} or row['schema']!=JOB_LEDGER_SCHEMA or type(row['sequence']) is not int or type(row['event']) is not str or type(row['data']) is not dict:
+        raise ValueError('job ledger schema/chain')
+    _job_event_data(row['event'],row['data'])
+    try:observed=datetime.datetime.fromisoformat(row['utc'])
+    except (TypeError,ValueError):raise ValueError('job ledger UTC') from None
+    if observed.tzinfo is None or observed.utcoffset()!=datetime.timedelta(0):raise ValueError('job ledger UTC timezone')
+    digest=row.pop('sha256')
+    if type(digest) is not str or hashlib.sha256(_job_bytes(row)).hexdigest()!=digest:
+        raise ValueError('job ledger checksum')
+    row['sha256']=digest
+    if _job_bytes(row)!=line+b'\n':raise ValueError('job ledger noncanonical line')
+
+
 def _job_read(raw):
     if not 0<len(raw)<=JOB_LEDGER_LIMIT or not raw.endswith(b'\n'):
         raise ValueError('job ledger length/incomplete line')
     previous='0'*64;rows=[]
     for sequence,line in enumerate(raw.splitlines()):
-        def pairs(items):
-            value={}
-            for key,item in items:
-                if key in value:raise ValueError('duplicate job ledger key')
-                value[key]=item
-            return value
+        # Bound retained keys to 128 MiB; oversized lines remain fully checked.
+        validate = _validate_job_line if len(line)<=16384 else _validate_job_line.__wrapped__
+        validate(line)
         digit_limit=sys.get_int_max_str_digits()
         try:
             if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(20000)
-            row=json.loads(line,object_pairs_hook=pairs,parse_constant=lambda value:(_ for _ in ()).throw(ValueError('nonfinite job ledger number')))
+            row=json.loads(line)
         finally:
             if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(digit_limit)
-        def finite(value):
-            if type(value) is float and not math.isfinite(value):raise ValueError('nonfinite job ledger number')
-            if type(value) is dict:
-                for item in value.values():finite(item)
-            if type(value) is list:
-                for item in value:finite(item)
-        finite(row)
-        if type(row) is not dict or set(row)!={'schema','sequence','previous_sha256','utc','event','data','sha256'} or row['schema']!=JOB_LEDGER_SCHEMA or type(row['sequence']) is not int or row['sequence']!=sequence or row['previous_sha256']!=previous or type(row['event']) is not str or type(row['data']) is not dict:
+        if row['sequence']!=sequence or row['previous_sha256']!=previous:
             raise ValueError('job ledger schema/chain')
-        _job_event_data(row['event'],row['data'])
-        try:observed=datetime.datetime.fromisoformat(row['utc'])
-        except (TypeError,ValueError):raise ValueError('job ledger UTC') from None
-        if observed.tzinfo is None or observed.utcoffset()!=datetime.timedelta(0):raise ValueError('job ledger UTC timezone')
-        digest=row.pop('sha256')
-        if type(digest) is not str or hashlib.sha256(_job_bytes(row)).hexdigest()!=digest:
-            raise ValueError('job ledger checksum')
-        row['sha256']=digest
-        if _job_bytes(row)!=line+b'\n':raise ValueError('job ledger noncanonical line')
-        previous=digest;rows.append(row)
+        previous=row['sha256'];rows.append(row)
     return rows
 
 
@@ -472,7 +503,7 @@ def initialize_job_ledger(kind,index,prepared=None):
     return {key:value[key] for key in ('path','lock','initial_sha256','schema')}
 
 
-def job_ledger_events(path=None):
+def job_ledger_events(path=None,*,state=False):
     global JOB_LEDGER_POISONED
     if JOB_LEDGER_POISONED:raise ValueError('job ledger process state poisoned; stop required')
     path=Path(path or os.environ['S1_JOB_LEDGER'])
@@ -482,7 +513,8 @@ def job_ledger_events(path=None):
     try:
         fcntl.flock(descriptor,fcntl.LOCK_SH)
         if os.fstat(descriptor).st_size:raise ValueError('job ledger append lock is poisoned; stop required')
-        return _job_read(path.read_bytes())
+        raw=path.read_bytes()
+        return _job_state_raw(raw) if state else _job_read(raw)
     finally:
         active=sys.exc_info()[1];retirement_error=None
         try:fcntl.flock(descriptor,fcntl.LOCK_UN)
@@ -501,9 +533,13 @@ def job_ledger_events(path=None):
             else:raise retirement_error
 
 
-def _job_state(rows):
-    roots={};descendants={};operations={};handle=None;terminal=False
-    for ordinal,row in enumerate(rows):
+def _job_state(rows,*,initial=None,offset=0):
+    if initial is None:
+        roots={};descendants={};operations={};handle=None;terminal=False
+    else:
+        roots=initial['roots'];descendants=initial['descendants'];operations=initial['operations']
+        handle=initial['session_id'];terminal=initial['terminal']
+    for ordinal,row in enumerate(rows,offset):
         event=row['event'];data=row['data'];token=data.get('token')
         if event=='attempt-open':
             if ordinal!=0 or data.get('h')!=1:raise ValueError('duplicate/invalid attempt open')
@@ -526,6 +562,12 @@ def _job_state(rows):
                     or owner['boot_id']!=creator['boot_id'] or owner['owner_pid']!=creator['pid']
                     or owner['owner_start_ticks']!=creator['start_ticks']):raise ValueError('root bound owner differs from creator incarnation')
             roots[token].update(data,state='live')
+        elif event=='root-not-started':
+            root=roots.get(token)
+            if (root is None or root['state']!='reserved' or root['role']!='H'
+                    or data['creator']!=root['creator'] or data['error_class']!='NativeNotStarted'):
+                raise ValueError('known native non-start reservation/creator')
+            root.update(state='retired',start_failure=dict(creator=data['creator'],error_class=data['error_class']))
         elif event=='root-wait-claim':
             target=roots.get(token) or descendants.get(token)
             if target is None or target['state']!='live' or data.get('owner')!=target.get('owner'):
@@ -689,6 +731,55 @@ def _job_state(rows):
     return dict(roots=roots,descendants=descendants,operations=operations,B=B,H=H,session_id=handle,terminal=terminal)
 
 
+_JOB_STATE_CACHE = None
+
+
+def _job_json(function,value,**kwargs):
+    digit_limit=sys.get_int_max_str_digits()
+    try:
+        if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(20000)
+        return function(value,**kwargs)
+    finally:
+        if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(digit_limit)
+
+
+def _cache_job_state(raw,state,count,last):
+    global _JOB_STATE_CACHE
+    # Only immutable bytes are retained. Callers always own their decoded state.
+    # marshal encodes only this process's validated JSON primitive graph. Never
+    # load a marshalled value from disk or from a caller-supplied ledger.
+    _JOB_STATE_CACHE=(raw,marshal.dumps(state),count,last)
+
+
+def _job_state_raw(raw):
+    """Replay an exact fresh byte snapshot, reusing only an unchanged prefix."""
+    if not 0<len(raw)<=JOB_LEDGER_LIMIT or not raw.endswith(b'\n'):
+        raise ValueError('job ledger length/incomplete line')
+    cached=_JOB_STATE_CACHE
+    if cached is not None and raw.startswith(cached[0]):
+        previous,encoded,count,last=cached
+        state=marshal.loads(encoded)
+        if raw==previous:return state
+        rows=[]
+        for ordinal,line in enumerate(raw[len(previous):].splitlines(),count):
+            validate=_validate_job_line if len(line)<=16384 else _validate_job_line.__wrapped__
+            validate(line)
+            digit_limit=sys.get_int_max_str_digits()
+            try:
+                if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(20000)
+                row=json.loads(line)
+            finally:
+                if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(digit_limit)
+            if row['sequence']!=ordinal or row['previous_sha256']!=last:
+                raise ValueError('job ledger schema/chain')
+            last=row['sha256'];rows.append(row)
+        state=_job_state(rows,initial=state,offset=count);count+=len(rows)
+    else:
+        rows=_job_read(raw);state=_job_state(rows);count=len(rows);last=rows[-1]['sha256']
+    _cache_job_state(raw,state,count,last)
+    return state
+
+
 def append_job_event(event,data,path=None,*,guard=None):
     global JOB_LEDGER_POISONED
     if JOB_LEDGER_POISONED:raise ValueError('job ledger poisoned after ambiguous append; stop required')
@@ -714,20 +805,20 @@ def append_job_event(event,data,path=None,*,guard=None):
             except BaseException as marker_error:
                 return OSError('job ledger %s stop: poison marker persistence failed; durable stop unverified: %r'%(reason,marker_error))
             return None
-        raw=path.read_bytes();rows=_job_read(raw)
-        state=_job_state(rows)
+        raw=path.read_bytes();state=_job_state_raw(raw)
+        lines=raw.splitlines();count=len(lines);last=_job_json(json.loads,lines[-1])['sha256']
         if guard is not None:
             replacement=guard(state)
             if replacement is not None:event,data=replacement
         _job_event_data(event,data)
-        line=_job_line(len(rows),rows[-1]['sha256'],event,data)
+        line=_job_line(count,last,event,data)
         digit_limit=sys.get_int_max_str_digits()
         try:
             if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(20000)
             proposed=json.loads(line)
         finally:
             if digit_limit and digit_limit<20000:sys.set_int_max_str_digits(digit_limit)
-        _job_state(rows+[proposed])
+        next_state=_job_state([proposed],initial=_job_state_raw(raw),offset=count)
         if len(raw)+len(line)>JOB_LEDGER_LIMIT:
             marker_error=poison('cap')
             if marker_error is not None:raise marker_error
@@ -741,14 +832,16 @@ def append_job_event(event,data,path=None,*,guard=None):
                 os.fsync(file_fd)
                 observed=path.read_bytes()
                 if observed!=raw+line:raise OSError('job ledger append readback mismatch')
-                return _job_read(observed)[-1]
+                _validate_job_line.__wrapped__(line[:-1])
+                _cache_job_state(observed,next_state,count+1,proposed['sha256'])
+                return proposed
             except BaseException as primary:
                 # A failed write/fsync/readback never becomes committed evidence.
                 # Restore only the previously verified prefix while holding the lock.
                 try:
                     os.ftruncate(file_fd,len(raw));os.fsync(file_fd)
                     rollback=path.read_bytes()
-                    if rollback!=raw or _job_read(rollback)!=rows:
+                    if rollback!=raw:
                         raise OSError('job ledger rollback prefix mismatch')
                 except BaseException as rollback_error:
                     marker_error=poison('uncertain')
@@ -823,7 +916,7 @@ def _wait_job_handle(token,handle,method,args,kwargs,*,thread=False):
     mutex=_job_mutex(token)
     with mutex:
         owner=_job_owner(token,handle)
-        state=_job_state(job_ledger_events())
+        state=job_ledger_events(state=True)
         row=state['roots'].get(token) or state['descendants'].get(token)
         if row is None or row.get('owner')!=owner:raise ValueError('wait owner differs from durable registration')
         cached=JOB_OWNERS[token].get('wait_receipt')
@@ -858,7 +951,7 @@ def _wait_job_handle(token,handle,method,args,kwargs,*,thread=False):
         if token in state['roots']:
             append_job_event('root-wait',dict(token=token,terminal=terminal,handle_object_id=id(handle),owner=owner,operation_key=operation_key))
         else:
-            fresh=_job_state(job_ledger_events())
+            fresh=job_ledger_events(state=True)
             open_pins=[value for value in fresh['operations'].values() if value['kind']=='pin' and value['token']==token and value['state']=='open']
             if open_pins:
                 append_job_event('descendant-wait-result',dict(token=token,terminal=terminal,handle_object_id=id(handle),owner=owner,operation_key=operation_key))
@@ -875,7 +968,7 @@ def wait_owned_pid(pid,flags=0):
     token,handle=owned
     if type(handle) is not int or handle!=pid:raise ValueError('waitpid does not match the retained exact spawn result')
     with _job_mutex(token):
-        owner=_job_owner(token,handle);state=_job_state(job_ledger_events())
+        owner=_job_owner(token,handle);state=job_ledger_events(state=True)
         row=state['roots'].get(token) or state['descendants'].get(token)
         if row is None or row.get('owner')!=owner or row['state']!='live':raise ValueError('waitpid target not live')
         operation_key=_job_operation_key(owner,'wait',row['identity'])
@@ -895,7 +988,7 @@ def wait_owned_pid(pid,flags=0):
             if result[0]==0:return result
             terminal=dict(method='matching child wait',pid=pid,wait_status=result[1])
             JOB_OWNERS[token]['wait_receipt']=dict(operation_key=operation_key,terminal=terminal,returncode=result[1],waitpid=True)
-            fresh=_job_state(job_ledger_events())
+            fresh=job_ledger_events(state=True)
             if token in fresh['roots']:
                 append_job_event('root-wait',dict(token=token,terminal=terminal,handle_object_id=id(handle),owner=owner,operation_key=operation_key))
             else:
@@ -918,7 +1011,7 @@ def wait_owned_pid(pid,flags=0):
         if token in state['roots']:
             append_job_event('root-wait',dict(token=token,terminal=terminal,handle_object_id=id(handle),owner=owner,operation_key=operation_key))
         else:
-            fresh=_job_state(job_ledger_events())
+            fresh=job_ledger_events(state=True)
             open_pins=[value for value in fresh['operations'].values() if value['kind']=='pin' and value['token']==token and value['state']=='open']
             if open_pins:
                 append_job_event('descendant-wait-result',dict(token=token,terminal=terminal,handle_object_id=id(handle),owner=owner,operation_key=operation_key))
@@ -942,7 +1035,7 @@ def signal_job_pidfd(root_token,target_token,target_identity,descriptor,sig,dead
     if not os.environ.get('S1_JOB_LEDGER'):
         return signal.pidfd_send_signal(descriptor,sig,None,0)
     with _job_mutex(root_token):
-        owner=_job_owner(root_token,JOB_HANDLES.get(root_token));state=_job_state(job_ledger_events())
+        owner=_job_owner(root_token,JOB_HANDLES.get(root_token));state=job_ledger_events(state=True)
         root=state['roots'].get(root_token) or state['descendants'].get(root_token)
         if root is None or root['state']!='live' or root.get('owner')!=owner:raise ValueError('pidfd signal root owner/state')
         key=_job_operation_key(owner,'signal:'+str(int(sig)),target_identity)
@@ -971,7 +1064,7 @@ def close_job_pidfd(root_token,target_token,target_identity,descriptor):
     if not os.environ.get('S1_JOB_LEDGER'):
         os.close(descriptor);return None
     with _job_mutex(root_token):
-        owner=_job_owner(root_token,JOB_HANDLES.get(root_token));state=_job_state(job_ledger_events())
+        owner=_job_owner(root_token,JOB_HANDLES.get(root_token));state=job_ledger_events(state=True)
         pin=next((value for value in state['operations'].values() if value['kind']=='pin' and value['token']==target_token and value['target']==target_identity and value['descriptor']==descriptor),None)
         if pin is None or pin['owner']!=owner:raise ValueError('pidfd close lacks exact durable pin')
         key=_job_operation_key(owner,'close',dict(token=target_token,target=target_identity,descriptor=descriptor))
@@ -996,29 +1089,53 @@ def close_job_pidfd(root_token,target_token,target_identity,descriptor):
         return result
 
 
-def signal_owned_pid(pid,sig,deadline):
+def signal_owned_pid(pid,sig,deadline,*,tree=False):
     """Signal one retained process incarnation through one durable pidfd operation."""
     owned=JOB_PROCESSES.get(pid)
     if not os.environ.get('S1_JOB_LEDGER') or owned is None:
         return os.kill(pid,sig)
     token,handle=owned
-    state=_job_state(job_ledger_events());target=state['roots'].get(token) or state['descendants'].get(token)
+    state=job_ledger_events(state=True);target=state['roots'].get(token) or state['descendants'].get(token)
     if target is None or target['state']!='live' or target['identity']['pid']!=pid:raise ValueError('signal exact live owned pid')
     owner_token=token
     root_handle=JOB_HANDLES.get(owner_token)
     if root_handle is None:raise ValueError('signal owning process handle unavailable')
-    identity_value=target['identity'];registration=JOB_OWNERS[owner_token]
-    selected=next(((key[1],key) for key,value in registration.get('pidfds',{}).items()
-        if key[0]==token and value['identity']==identity_value),None)
-    if selected is None:
-        before=stable_process_identity(pid)
-        if any(before[key]!=identity_value[key] for key in ('boot_id','pid','start_ticks','pgid')):raise ValueError('signal target incarnation changed')
-        descriptor=os.pidfd_open(pid,0)
-        after=stable_process_identity(pid)
-        if any(after[key]!=identity_value[key] for key in ('boot_id','pid','start_ticks','pgid')):raise ValueError('signal pidfd incarnation changed')
-        register_job_pidfd_pin(owner_token,token,identity_value,descriptor)
-    else:descriptor=selected[0]
-    return signal_job_pidfd(owner_token,token,identity_value,descriptor,sig,deadline)
+    targets=[(token,target)]
+    if tree:
+        for child_token,child in state['descendants'].items():
+            if child['root']!=token or child['state']=='retired' or child.get('handle',{}).get('kind')!='process':continue
+            if (child['state']!='live' or not child.get('creator_acknowledged')
+                    or child['identity']['pgid']!=pid):
+                raise ValueError('owned helper descendant identity/creation unresolved')
+            targets.append((child_token,child))
+    registration=JOB_OWNERS[owner_token];pinned=[]
+    # Pin the complete known tree before signalling its leader or descendants.
+    for target_token,row in targets:
+        identity_value=row['identity'];target_pid=identity_value['pid']
+        selected=next(((key[1],key) for key,value in registration.get('pidfds',{}).items()
+            if key[0]==target_token and value['identity']==identity_value),None)
+        if selected is None:
+            before=stable_process_identity(target_pid)
+            if any(before[key]!=identity_value[key] for key in ('boot_id','pid','start_ticks','pgid')):raise ValueError('signal target incarnation changed')
+            descriptor=os.pidfd_open(target_pid,0)
+            after=stable_process_identity(target_pid)
+            if any(after[key]!=identity_value[key] for key in ('boot_id','pid','start_ticks','pgid')):raise ValueError('signal pidfd incarnation changed')
+            register_job_pidfd_pin(owner_token,target_token,identity_value,descriptor)
+        else:descriptor=selected[0]
+        pinned.append((target_token,identity_value,descriptor))
+    results=[signal_job_pidfd(owner_token,target_token,value,descriptor,sig,deadline)
+             for target_token,value,descriptor in pinned]
+    return results[0]
+
+
+def retire_owned_descendants(pid,deadline):
+    """Retire pinned helper descendants before reaping their direct parent."""
+    owned=JOB_PROCESSES.get(pid)
+    if owned is None:return
+    token,_=owned
+    for (target_token,descriptor),pin in list(JOB_OWNERS[token].get('pidfds',{}).items()):
+        if target_token!=token:
+            retire_job_descendant_pidfd(dict(token=target_token,root=token,identity=pin['identity']),descriptor,deadline)
 
 
 def _job_creator():
@@ -1052,7 +1169,7 @@ def bind_job_root(token,identity_value,handle,*,thread=False):
     if type(identity_value) is not dict:raise ValueError('job identity')
     with _JOB_REGISTRY_LOCK:
         if token in JOB_HANDLES:raise ValueError('duplicate job handle')
-        state=_job_state(job_ledger_events());session_id=state['session_id']
+        state=job_ledger_events(state=True);session_id=state['session_id']
         if type(session_id) is not int:raise ValueError('Main session binding unavailable')
         current=identity(os.getpid());boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
         owner=dict(boot_id=boot,owner_pid=os.getpid(),owner_start_ticks=current['start_ticks'],main_session_id=session_id,
@@ -1079,7 +1196,7 @@ def wait_job_root(token,handle,*,terminal,retire=True,perform_wait=False,wait_ar
         thread=type(handle).__name__=='_ThreadHandle' or isinstance(handle, __import__('threading').Thread)
         method=handle.join if thread else handle.wait
         _wait_job_handle(token,handle,method,tuple(wait_args),dict(wait_kwargs or {}),thread=thread)
-    state=_job_state(job_ledger_events());row=state['roots'].get(token) or state['descendants'].get(token)
+    state=job_ledger_events(state=True);row=state['roots'].get(token) or state['descendants'].get(token)
     receipt=JOB_OWNERS.get(token,{}).get('wait_receipt')
     if row is None or receipt is None or row['state'] not in ('waited','retired'):
         raise ValueError('durable same-handle wait result required')
@@ -1093,7 +1210,7 @@ def wait_job_root(token,handle,*,terminal,retire=True,perform_wait=False,wait_ar
         if not retire:raise ValueError('descendant terminal required')
         return
     if retire:
-        current=_job_state(job_ledger_events());root=current['roots'][token]
+        current=job_ledger_events(state=True);root=current['roots'][token]
         if root['state']=='waited' and not any(child['root']==token and child['state']!='retired' for child in current['descendants'].values()):
             append_job_event('root-retired',dict(token=token,terminal=root['terminal']))
 
@@ -1102,7 +1219,7 @@ def finalize_waited_job_root(token,handle,pid):
     """Finish only the exact already-waited process tree; never repeat its wait."""
     if JOB_HANDLES.get(token) is not handle:
         raise ValueError('waited root exact returned handle')
-    state=_job_state(job_ledger_events());root=state['roots'].get(token)
+    state=job_ledger_events(state=True);root=state['roots'].get(token)
     if root is None or root.get('handle')!=dict(kind='process',object_id=id(handle)) or root.get('identity',{}).get('pid')!=pid:
         raise ValueError('waited root handle/identity')
     terminal=root.get('terminal')
@@ -1114,7 +1231,7 @@ def finalize_waited_job_root(token,handle,pid):
         raise ValueError('waited root descendants unresolved')
     if root['state']=='waited':
         append_job_event('root-retired',dict(token=token,terminal=root['terminal']))
-    if _job_state(job_ledger_events())['roots'][token]['state']!='retired':
+    if job_ledger_events(state=True)['roots'][token]['state']!='retired':
         raise ValueError('waited root retirement not durable')
     if JOB_PROCESSES.get(pid)==(token,handle):del JOB_PROCESSES[pid]
 
@@ -1142,11 +1259,18 @@ def acknowledge_job_descendant(worker_pid,child_pid,census_row):
     return selected
 
 
+def root_retirable(state,token):
+    return (state['roots'][token]['state']=='waited'
+        and not any(row['root']==token and row['state']!='retired' for row in state['descendants'].values())
+        and not any(row['token']==token and row['state'] in ('claimed','intent','open','uncertain','poll-intent')
+                    for row in state['operations'].values()))
+
+
 def retire_job_descendant_pidfd(selected,pidfd,deadline):
     """A live-opened pidfd witnesses terminal state for a reparented child."""
     if selected is None:return
     import select
-    state=_job_state(job_ledger_events())
+    state=job_ledger_events(state=True)
     token=selected['token'];row=state['descendants'].get(token)
     if row is None or row['state'] not in ('live','waited','retired') or row.get('identity')!=selected['identity']:
         raise ValueError('L35 descendant identity changed')
@@ -1161,7 +1285,7 @@ def retire_job_descendant_pidfd(selected,pidfd,deadline):
         if not poll.poll(0):raise ValueError('L35 pidfd not terminal by original safety deadline')
         receipts[receipt_key]=dict(identity=selected['identity'],terminal=True)
     close_job_pidfd(selected['root'],token,selected['identity'],pidfd)
-    after=_job_state(job_ledger_events());row=after['descendants'][token]
+    after=job_ledger_events(state=True);row=after['descendants'][token]
     # Another retained pidfd for the same identity may be owned by stop_group.
     # Retirement waits until each exact descriptor has one durable close receipt.
     pins=[value for value in after['operations'].values() if value['kind']=='pin' and value['token']==token and value['target']==selected['identity']]
@@ -1172,9 +1296,9 @@ def retire_job_descendant_pidfd(selected,pidfd,deadline):
     owner=_job_owner(selected['root'],JOB_HANDLES[selected['root']])
     operation_key=_job_operation_key(owner,'pidfd-terminal',selected['identity'])
     append_job_event('descendant-retired',dict(token=token,method='identity-bound pidfd terminal',identity=selected['identity'],owner=owner,operation_key=operation_key))
-    after=_job_state(job_ledger_events())
+    after=job_ledger_events(state=True)
     root=after['roots'][selected['root']]
-    if root['state']=='waited' and not any(item['root']==selected['root'] and item['state']!='retired' for item in after['descendants'].values()):
+    if root_retirable(after,selected['root']):
         append_job_event('root-retired',dict(token=selected['root'],terminal=root['terminal'],method='matching wait and pidfd terminal'))
 
 
@@ -1589,7 +1713,7 @@ def create_owned_process(event,create,*args,deadline=None,admission_observer=Non
         # Creation uncertainty stays reserved if this complete identity read fails.
         bind_job_root(token,stable_process_identity(pid),handle)
         JOB_PROCESSES[pid]=(token,handle)
-        state=_job_state(job_ledger_events())
+        state=job_ledger_events(state=True)
         if token in state['descendants']:
             child=state['descendants'][token]
             census_row=stable_process_identity(pid)
@@ -1610,7 +1734,7 @@ def retire_owned(pid,handle=None):
     if owned is not None and handle is not None and owned[1] is not handle:
         raise ValueError('different returned process handle')
     if owned is None and handle is not None and os.environ.get('S1_JOB_LEDGER'):
-        state=_job_state(job_ledger_events())
+        state=job_ledger_events(state=True)
         matches=[(token,row) for token,row in state['roots'].items() if row.get('identity',{}).get('pid')==pid and JOB_HANDLES.get(token) is handle]
         if len(matches)!=1 or matches[0][1]['state']!='retired' or any(child['root']==matches[0][0] and child['state']!='retired' for child in state['descendants'].values()):
             raise ValueError('same-handle retired tree required for repeat cleanup')
@@ -1622,19 +1746,19 @@ def retire_owned(pid,handle=None):
                 if key[2] is None:del INVOCATION.records[key]
     if owned is not None:
         token,handle=owned
-        state=_job_state(job_ledger_events())
+        state=job_ledger_events(state=True)
         if token in state['roots']:
             current=state['roots'][token]
             for (target_token,descriptor),pin in list(JOB_OWNERS[token].get('pidfds',{}).items()):
                 if target_token==token:
                     operation=next((value for value in state['operations'].values() if value['kind']=='pin' and value['token']==token and value['descriptor']==descriptor),None)
                     if operation is not None and operation['state']=='open':close_job_pidfd(token,token,pin['identity'],descriptor)
-                    state=_job_state(job_ledger_events())
+                    state=job_ledger_events(state=True)
             if current['state']=='waited':
                 if not any(child['root']==token and child['state']!='retired' for child in state['descendants'].values()):
                     finalize_waited_job_root(token,handle,pid)
             elif current['state']!='retired':raise ValueError('retire_owned unresolved root')
-            retired=_job_state(job_ledger_events())['roots'][token]['state']=='retired'
+            retired=job_ledger_events(state=True)['roots'][token]['state']=='retired'
         else:
             child=state['descendants'].get(token)
             if child is None or child['state'] not in ('waited','retired'):raise ValueError('retire_owned unresolved descendant')
@@ -1642,16 +1766,16 @@ def retire_owned(pid,handle=None):
             registration=JOB_OWNERS[token]
             for (target_token,descriptor),pin in list(registration.get('pidfds',{}).items()):
                 if target_token==token:
-                    close_job_pidfd(child['root'],token,pin['identity'],descriptor)
-            state=_job_state(job_ledger_events());child=state['descendants'][token];parent=state['roots'][child['root']]
+                    close_job_pidfd(token,token,pin['identity'],descriptor)
+            state=job_ledger_events(state=True);child=state['descendants'][token];parent=state['roots'][child['root']]
             if child['state']=='waited':
                 if any(value['kind']=='pin' and value['token']==token and value['state']!='closed' for value in state['operations'].values()):return
                 receipt=JOB_OWNERS[token].get('wait_receipt')
                 if receipt is None:raise ValueError('descendant wait receipt unavailable')
                 append_job_event('descendant-retired',dict(token=token,method='matching child wait',terminal=child['terminal'],
                     handle_object_id=id(handle),owner=child['owner'],operation_key=receipt['operation_key']))
-                state=_job_state(job_ledger_events());child=state['descendants'][token];parent=state['roots'][child['root']]
-            if parent['state']=='waited' and not any(row['root']==child['root'] and row['state']!='retired' for row in state['descendants'].values()):
+                state=job_ledger_events(state=True);child=state['descendants'][token];parent=state['roots'][child['root']]
+            if root_retirable(state,child['root']):
                 append_job_event('root-retired',dict(token=child['root'],terminal=parent['terminal']))
             retired=child['state']=='retired'
         if retired:
@@ -1775,7 +1899,7 @@ def creation_identity_snapshot(root_pid):
         pid=record['pid']
         if pid not in after or any(rows[pid][key]!=after[pid][key] or after[pid][key]!=record[key] for key in ('pid','ppid','pgid','start_ticks')):raise ValueError('creation PID identity changed')
     if os.environ.get('S1_JOB_LEDGER'):
-        state=_job_state(job_ledger_events());B=state['B'];H=state['H']
+        state=job_ledger_events(state=True);B=state['B'];H=state['H']
     else:
         B=sum(len(record['threads']) for record in records);H=0
     return dict(root_pid=root_pid,processes=records,B=B,H=H,charge=owned_charge(B,H),complete=True)
@@ -1827,7 +1951,7 @@ def owned_workload(note_path, *, extra=(), retained=None):
             rec.setdefault('creation_parent',row['ppid']);rec.setdefault('creation_event','owned descendant census')
             INVOCATION.records[key]=rec;records.append(dict(rec));threads[pid]=len(tids)
         if os.environ.get('S1_JOB_LEDGER'):
-            logical=_job_state(job_ledger_events());B=logical['B'];H=logical['H']
+            logical=job_ledger_events(state=True);B=logical['B'];H=logical['H']
             if unresolved:raise ValueError('owned unresolved process identity blocks dispatch')
         else:
             B=sum(threads.values())+sum(max(1,len(r['threads'])) for r in unresolved);H=0
@@ -1925,10 +2049,12 @@ class Owner:
 
     def signal_group(self, pid, sig):
         if os.environ.get('S1_JOB_LEDGER'):
-            signal_owned_pid(pid,sig,self.session.cleanup_deadline)
+            signal_owned_pid(pid,sig,self.session.cleanup_deadline,tree=True)
         else:os.killpg(pid, sig)
 
     def reap_child(self, pid):
+        if os.environ.get('S1_JOB_LEDGER'):
+            retire_owned_descendants(pid,self.session.cleanup_deadline)
         result=wait_owned_pid(pid,os.WNOHANG)
         if result[0]==pid:retire_owned(pid)
         return result
@@ -2164,6 +2290,12 @@ class Session:
             self.primary=dict(error_class=type(exc).__name__,message=str(exc)[:1024],phase='startup',cause=None if exc.__cause__ is None else dict(error_class=type(exc.__cause__).__name__,message=str(exc.__cause__)[:1024]))
             self.poisoned=True
             if self.owner is not None: self.owner.cancelled=True
+            if isinstance(exc,NativeNotStarted) and getattr(self,'job_thread',None) is not None:
+                try:
+                    append_job_event('root-not-started',dict(token=self.job_thread,creator=_job_creator(),error_class='NativeNotStarted'))
+                except BaseException as retirement:
+                    self.state='launch_unknown';exc.add_note('known non-start ledger retirement failed: '+repr(retirement))
+                    raise exc from retirement
             if self.state=='launch_entered' and not isinstance(exc,NativeNotStarted):
                 self.state='launch_unknown'
             else:
@@ -2422,7 +2554,14 @@ class Session:
         self.events.append(dict(event='dispatch',role=role,request_id=sequence,dispatch=now))
 
     def close(self, deadline):
-        if self.fixture_safety_end is not None: deadline=min(deadline,self.fixture_safety_end)
+        limits=(self.fixture_safety_end,getattr(self,'reservation_cleanup_limit',None))
+        for limit in limits:
+            if limit is not None:deadline=min(deadline,limit)
+        # A short wait cannot revoke the retained owner's cleanup budget. A
+        # later explicit retirement window is still capped by its allocation.
+        self.cleanup_deadline=max(self.cleanup_deadline,deadline)
+        for limit in limits:
+            if limit is not None:self.cleanup_deadline=min(self.cleanup_deadline,limit)
         self.progress_cache.freeze('session close')
         self.poisoned=True
         if self.owner is not None: self.owner.cancelled=True

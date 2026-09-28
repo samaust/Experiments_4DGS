@@ -1,0 +1,516 @@
+{
+  "scenario": "L32",
+  "mode": "normal",
+  "constructor_entry": 200655.986631739,
+  "action_cutoff": 200657.986631739,
+  "safety_cutoff": 200658.986631739,
+  "constructor_end": 200655.98673974,
+  "t0": 200655.986654528,
+  "ready_deadline": 200656.986654528,
+  "setup_deadline": 200657.986654528,
+  "setup_cleanup_deadline": 200658.986654528,
+  "action_end": 200656.087223394,
+  "end": 200656.097359531,
+  "execution_seconds": 0.10059165497659706,
+  "cleanup_seconds": 0.010136137017980218,
+  "cleanup_confirmed": true,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "reaped",
+      "pid": 157,
+      "pgid": 157,
+      "start_ticks": 25818577,
+      "wait_status": 15
+    },
+    "sample": {
+      "role": "sample",
+      "state": "reaped",
+      "pid": 158,
+      "pgid": 158,
+      "start_ticks": 25818577,
+      "wait_status": 15
+    }
+  },
+  "errors": [],
+  "signals": [
+    {
+      "pid": 157,
+      "signal": 15,
+      "monotonic": 200656.088423337
+    },
+    {
+      "pid": 158,
+      "signal": 15,
+      "monotonic": 200656.088423337
+    }
+  ],
+  "ticks": [
+    200655.986654528,
+    200655.986744304,
+    200655.991865646,
+    200655.996952805,
+    200656.002054167,
+    200656.007139034,
+    200656.012232424,
+    200656.017321005,
+    200656.022454096,
+    200656.027628567,
+    200656.045775694,
+    200656.045796459,
+    200656.050873951,
+    200656.056018549,
+    200656.061084847,
+    200656.066146681,
+    200656.071212062,
+    200656.076278166,
+    200656.081405351,
+    200656.086517172
+  ],
+  "events": [
+    {
+      "event": "fixture_spawn_entry",
+      "role": "work",
+      "observed": 200655.987038432,
+      "ready_deadline": 200656.986654528
+    },
+    {
+      "event": "fixture_spawn_return",
+      "role": "work",
+      "pid": 157,
+      "entered": 200655.987038432,
+      "observed": 200655.987388695,
+      "ready_deadline": 200656.986654528
+    },
+    {
+      "event": "fixture_spawn_entry",
+      "role": "sample",
+      "observed": 200655.987606004,
+      "ready_deadline": 200656.986654528
+    },
+    {
+      "event": "fixture_spawn_return",
+      "role": "sample",
+      "pid": 158,
+      "entered": 200655.987606004,
+      "observed": 200655.987851986,
+      "ready_deadline": 200656.986654528
+    },
+    {
+      "event": "ready",
+      "role": "sample",
+      "received": 200656.022499264,
+      "identity": {
+        "pid": 158,
+        "pgid": 158,
+        "start_ticks": 25818577,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "ready",
+      "role": "work",
+      "received": 200656.027664847,
+      "identity": {
+        "pid": 157,
+        "pgid": 157,
+        "start_ticks": 25818577,
+        "threads": {
+          "OMP_NUM_THREADS": "1",
+          "OPENBLAS_NUM_THREADS": "1",
+          "MKL_NUM_THREADS": "1",
+          "NUMEXPR_NUM_THREADS": "1"
+        }
+      }
+    },
+    {
+      "event": "monitor_resume",
+      "monotonic": 200656.045775694
+    },
+    {
+      "event": "dispatch",
+      "role": "sample",
+      "request_id": 1,
+      "dispatch": 200656.045783147
+    },
+    {
+      "event": "response",
+      "role": "sample",
+      "request_id": 1,
+      "dispatch": 200656.045783147,
+      "received": 200656.086541154,
+      "acquisition_start": 200656.052815136,
+      "acquisition_end": 200656.07079664,
+      "pre_generation": 1,
+      "post_generation": 2
+    },
+    {
+      "event": "worker_retired",
+      "generation": 2
+    }
+  ],
+  "trace_facts": {
+    "capacity": 256,
+    "total": 10,
+    "dropped": 0,
+    "saturated": false,
+    "first": 200655.987039757,
+    "last": 200656.086596957
+  },
+  "tick_facts": {
+    "capacity": 128,
+    "total": 20,
+    "dropped": 0,
+    "saturated": false,
+    "first": 200655.986658468,
+    "last": 200656.086517358
+  },
+  "owner_error_facts": {
+    "capacity": 32,
+    "total": 0,
+    "dropped": 0,
+    "saturated": false,
+    "first": null,
+    "last": null
+  },
+  "owner_signal_facts": {
+    "capacity": 128,
+    "total": 2,
+    "dropped": 0,
+    "saturated": false,
+    "first": 200656.088434475,
+    "last": 200656.088439807
+  },
+  "request_counts": {
+    "work": {
+      "dispatch": 0,
+      "response": 0
+    },
+    "sample": {
+      "dispatch": 1,
+      "response": 1
+    }
+  },
+  "census_request_count": 2,
+  "max_gap": 0.00517447100719437,
+  "max_turn": 0.00011087398161180317,
+  "call_observations": [
+    {
+      "operation": "tick",
+      "entered": 200655.986743883,
+      "deadline": 200656.986654528,
+      "returned": 200655.986763155,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "tick",
+      "entered": 200655.991863222,
+      "deadline": 200656.986654528,
+      "returned": 200655.991888342,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "tick",
+      "entered": 200655.99695083,
+      "deadline": 200656.986654528,
+      "returned": 200655.996973686,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "tick",
+      "entered": 200656.002052318,
+      "deadline": 200656.986654528,
+      "returned": 200656.002074092,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "tick",
+      "entered": 200656.007136417,
+      "deadline": 200656.986654528,
+      "returned": 200656.007162187,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "tick",
+      "entered": 200656.012229225,
+      "deadline": 200656.986654528,
+      "returned": 200656.012262327,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "tick",
+      "entered": 200656.017320334,
+      "deadline": 200656.986654528,
+      "returned": 200656.017389761,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "tick",
+      "entered": 200656.022451149,
+      "deadline": 200656.986654528,
+      "returned": 200656.022565746,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [],
+      "ready_after": [
+        "sample"
+      ]
+    },
+    {
+      "operation": "tick",
+      "entered": 200656.027626548,
+      "deadline": 200656.986654528,
+      "returned": 200656.027679362,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [
+        "sample"
+      ],
+      "ready_after": [
+        "sample",
+        "work"
+      ]
+    },
+    {
+      "operation": "await_ready",
+      "entered": 200655.986741872,
+      "deadline": 200656.986654528,
+      "returned": 200656.032736761,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [],
+      "ready_after": [
+        "sample",
+        "work"
+      ]
+    },
+    {
+      "operation": "tick",
+      "entered": 200656.045794092,
+      "deadline": 200656.544890251,
+      "returned": 200656.045815684,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [
+        "sample",
+        "work"
+      ],
+      "ready_after": [
+        "sample",
+        "work"
+      ]
+    },
+    {
+      "operation": "tick",
+      "entered": 200656.050873354,
+      "deadline": 200656.544890251,
+      "returned": 200656.050959407,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [
+        "sample",
+        "work"
+      ],
+      "ready_after": [
+        "sample",
+        "work"
+      ]
+    },
+    {
+      "operation": "tick",
+      "entered": 200656.056016806,
+      "deadline": 200656.544890251,
+      "returned": 200656.056028742,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [
+        "sample",
+        "work"
+      ],
+      "ready_after": [
+        "sample",
+        "work"
+      ]
+    },
+    {
+      "operation": "tick",
+      "entered": 200656.06108417,
+      "deadline": 200656.544890251,
+      "returned": 200656.061091917,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [
+        "sample",
+        "work"
+      ],
+      "ready_after": [
+        "sample",
+        "work"
+      ]
+    },
+    {
+      "operation": "tick",
+      "entered": 200656.066146195,
+      "deadline": 200656.544890251,
+      "returned": 200656.066152388,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [
+        "sample",
+        "work"
+      ],
+      "ready_after": [
+        "sample",
+        "work"
+      ]
+    },
+    {
+      "operation": "tick",
+      "entered": 200656.071210052,
+      "deadline": 200656.544890251,
+      "returned": 200656.071222368,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [
+        "sample",
+        "work"
+      ],
+      "ready_after": [
+        "sample",
+        "work"
+      ]
+    },
+    {
+      "operation": "tick",
+      "entered": 200656.076277539,
+      "deadline": 200656.544890251,
+      "returned": 200656.076347404,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [
+        "sample",
+        "work"
+      ],
+      "ready_after": [
+        "sample",
+        "work"
+      ]
+    },
+    {
+      "operation": "tick",
+      "entered": 200656.081404372,
+      "deadline": 200656.544890251,
+      "returned": 200656.081461084,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [
+        "sample",
+        "work"
+      ],
+      "ready_after": [
+        "sample",
+        "work"
+      ]
+    },
+    {
+      "operation": "tick",
+      "entered": 200656.086516388,
+      "deadline": 200656.544890251,
+      "returned": 200656.086549411,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [
+        "sample",
+        "work"
+      ],
+      "ready_after": [
+        "sample",
+        "work"
+      ]
+    },
+    {
+      "operation": "close",
+      "entered": 200656.087226421,
+      "deadline": 200658.986631739,
+      "returned": 200656.09735496,
+      "confirmed": true,
+      "error": null,
+      "ready_before": [
+        "sample",
+        "work"
+      ],
+      "ready_after": [
+        "sample",
+        "work"
+      ]
+    }
+  ],
+  "call_observation_facts": {
+    "capacity": 128,
+    "total": 20,
+    "dropped": 0,
+    "saturated": false,
+    "first": 200655.986764116,
+    "last": 200656.097356971
+  },
+  "timing_failures": [],
+  "last_sample": null,
+  "requests": {
+    "work": null,
+    "sample": null
+  },
+  "ownership": [],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 320,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 320,
+      "last_frame": {
+        "bytes": 320,
+        "sha256": "7e7a4ce7790efa672da5a701cad50b3d5cb6c3331af483b5914492814af37238",
+        "complete_observed": 200656.022562895
+      }
+    },
+    "sample": {
+      "sent": 285,
+      "received": 680,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 965,
+      "last_frame": {
+        "bytes": 358,
+        "sha256": "4debb4cdc8dd21e77f6bed80ed61dbcbd565dbf670415b8d9b1fcb6e91763c62",
+        "complete_observed": 200656.076341065
+      }
+    }
+  },
+  "secondary": []
+}

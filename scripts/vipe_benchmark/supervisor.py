@@ -8,6 +8,9 @@ import time
 
 from .files import file_record, read_json, safe_path
 
+# Ownership survives instrumentation that wraps the callable itself.
+_STOP_GROUP_PINS = {}
+
 
 class SupervisionFailure(RuntimeError):
     def __init__(self, message, *, kind, stop_required, verified_progress_reference=None):
@@ -38,13 +41,18 @@ def stop_group(process, deadline):
     job_token=None;pin_state=None;waited_root=False
     if os.environ.get('S1_JOB_LEDGER'):
         from .s1_helper_session import JOB_HANDLES,JOB_OWNERS,_job_state,job_ledger_events,stable_process_identity,retire_job_descendant_pidfd,register_job_pidfd_pin,signal_job_pidfd,close_job_pidfd
-        state=_job_state(job_ledger_events())
+        state=job_ledger_events(state=True)
         matches=[(token,row) for token,row in state['roots'].items()
             if row.get('role')=='B' and row.get('identity',{}).get('pid')==process.pid
             and row.get('handle',{}).get('object_id')==id(process) and JOB_HANDLES.get(token) is process]
         if len(matches)!=1:raise ValueError('stop_group exact retained B handle/root')
         job_token,root=matches[0]
         bound=root['identity']
+        if root['state']=='live' and process.returncode is not None and not Path('/proc',str(process.pid)).exists():
+            # poll() may already have reaped this exact Popen child. Its same-
+            # handle wait returns that terminal result before logical retirement.
+            process.wait(timeout=max(.01,deadline-time.monotonic()))
+            state=job_ledger_events(state=True);root=state['roots'][job_token]
         if root['state']=='retired':
             if any(child['root']==job_token and child['state']!='retired' for child in state['descendants'].values()):
                 raise ValueError('repeat stop_group tree unresolved')
@@ -56,8 +64,8 @@ def stop_group(process, deadline):
                     raise ValueError('repeat stop_group PID/group reuse')
             if group_processes(pgid):raise ValueError('repeat stop_group foreign group')
             process.wait(timeout=max(.01, deadline - time.monotonic()))
-            pins=getattr(stop_group,'_pinned',{}).get(job_token)
-            if pins is not None:del stop_group._pinned[job_token]
+            pins=_STOP_GROUP_PINS.get(job_token)
+            if pins is not None:del _STOP_GROUP_PINS[job_token]
             from .s1_helper_session import JOB_PROCESSES
             if JOB_PROCESSES.get(process.pid)==(job_token,process):del JOB_PROCESSES[process.pid]
             return group_processes(pgid)
@@ -75,15 +83,14 @@ def stop_group(process, deadline):
             if any(observed[key]!=bound[key] for key in ('boot_id','pid','ppid','pgid','start_ticks')):
                 raise ValueError('stop_group root identity changed')
         elif not waited_root:
-            prior=getattr(stop_group,'_pinned',{}).get(job_token)
+            prior=_STOP_GROUP_PINS.get(job_token)
             if prior is None or prior['signals']!='complete' or process.returncode is None:
                 raise ValueError('stop_group unobserved root exit before safe signal phase')
-        if not hasattr(stop_group,'_pinned'):stop_group._pinned={}
-        pin_state=stop_group._pinned.get(job_token)
+        pin_state=_STOP_GROUP_PINS.get(job_token)
         expected={token:child for token,child in state['descendants'].items() if child['root']==job_token}
         if pin_state is None:
             pin_state=dict(pins={},root_pin=None,signals='complete' if waited_root else 'unstarted')
-            stop_group._pinned[job_token]=pin_state
+            _STOP_GROUP_PINS[job_token]=pin_state
         for (target_token,descriptor),pin in JOB_OWNERS[job_token].get('pidfds',{}).items():
             selected=dict(token=target_token,root=job_token,identity=pin['identity'])
             pin_state['pins'].setdefault((target_token,descriptor),(selected,descriptor))
@@ -94,7 +101,9 @@ def stop_group(process, deadline):
                 pin_state['root_pin']=(selected,descriptor)
             elif child is None or selected['root']!=job_token or selected['identity']!=child.get('identity'):
                 raise ValueError('repeat stop_group descendant pidfd identity changed')
-            os.fstat(descriptor)
+            pin=next(value for value in state['operations'].values()
+                if value['kind']=='pin' and value['token']==target_token and value['descriptor']==descriptor)
+            if pin['state']!='closed':os.fstat(descriptor)
         if not waited_root and pin_state['root_pin'] is None:
             before=stable_process_identity(process.pid)
             if any(before[key]!=bound[key] for key in ('boot_id','pid','ppid','pgid','start_ticks')):raise ValueError('stop_group root pin census changed')
@@ -145,7 +154,7 @@ def stop_group(process, deadline):
     if job_token is not None:
         from .s1_helper_session import retire_job_descendant_pidfd
         for (token,descriptor),(selected,_) in list(pin_state['pins'].items()):
-            retire_job_descendant_pidfd(selected,descriptor,deadline)
+            if token!=job_token:retire_job_descendant_pidfd(selected,descriptor,deadline)
         remaining=group_processes(pgid)
         if remaining:return remaining
         if pin_state['root_pin'] is not None:
@@ -155,9 +164,9 @@ def stop_group(process, deadline):
             from .s1_helper_session import finalize_waited_job_root
             finalize_waited_job_root(job_token,process,process.pid)
         else:retire_owned(process.pid,handle=process)
-        if _job_state(job_ledger_events())['roots'][job_token]['state']!='retired':
+        if job_ledger_events(state=True)['roots'][job_token]['state']!='retired':
             raise ValueError('stop_group root tree retirement not durable')
-        del stop_group._pinned[job_token]
+        del _STOP_GROUP_PINS[job_token]
     else:retire_owned(process.pid)
     return remaining if job_token is not None else group_processes(pgid)
 
@@ -395,6 +404,12 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
         raise
     start = reservation['monotonic_start']
     deadline = start + reservation['seconds']
+    if is_s1:
+        helper=lifecycle.helpers[0]
+        # Reservation replaces the startup budget; close() only bounds a wait.
+        safety=getattr(helper,'fixture_safety_end',None)
+        helper.reservation_cleanup_limit=deadline
+        helper.cleanup_deadline=min(deadline,safety) if safety is not None else deadline
     cleanup_reserve = min(30., reservation['seconds'] / 4)
     run_deadline = deadline - cleanup_reserve
     process, stopped, error = None, [], None
@@ -403,7 +418,14 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
     result_record = None
     acceptance = None
     old_handlers = {}
+    launching=False;deferred_signal=None
     def interrupted(signum, _):
+        nonlocal deferred_signal
+        # Keep creation/binding and retention atomic with respect to our signal
+        # handler. Deliver cancellation immediately after the handle is retained.
+        if launching:
+            deferred_signal=signum
+            return
         raise InterruptedError(f'supervisor received signal {signum}')
     try:
         for sig in (signal.SIGTERM, signal.SIGINT):
@@ -443,11 +465,16 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
             if is_s1 and time.monotonic() >= run_deadline:
                 raise TimeoutError('S1 original work deadline immediately before worker launch')
             from .s1_helper_session import create_owned_process
-            process = create_owned_process('supervisor worker',subprocess.Popen,command, deadline=run_deadline if is_s1 else None, stdout=log, stderr=subprocess.STDOUT,
-                                       start_new_session=True, env=env)
+            launching=True
+            try:
+                process = create_owned_process('supervisor worker',subprocess.Popen,command, deadline=run_deadline if is_s1 else None, stdout=log, stderr=subprocess.STDOUT,
+                                           start_new_session=True, env=env)
+            finally:launching=False
+            if deferred_signal is not None:interrupted(deferred_signal,None)
             from .s1_helper_session import register_owned
             register_owned(process.pid,'supervisor worker')
             ledger.note('started', job_id=job_id, pid=process.pid, pgid=process.pid)
+            exit_observed = False
             while True:
                 reading = (monitored_call(sampler, min(run_deadline, time.monotonic()+1.), sampler,
                     ledger.config, peak, worker=process, phase='worker_sample', lifecycle=lifecycle) if is_s1 else sampler())
@@ -477,8 +504,19 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
                 if time.monotonic() >= run_deadline:
                     failure_kind, stop_required = 'job_deadline', False
                     raise TimeoutError('worker deadline reached; remaining allocation reserved for cleanup')
-                exit_code = lifecycle.helpers[0].worker_exit() if is_s1 else process.poll()
+                if is_s1:exit_code=lifecycle.helpers[0].worker_exit()
+                else:
+                    # Preserve the kernel parent identity until its registered
+                    # descendants are signalled and the whole tree is retired.
+                    exited=os.waitid(os.P_PID,process.pid,os.WEXITED|os.WNOHANG|os.WNOWAIT)
+                    exit_code=None if exited is None else (exited.si_status if exited.si_code==os.CLD_EXITED else -exited.si_status)
                 if exit_code is not None:
+                    if not is_s1 and not exit_observed:
+                        # The worker may write after the preceding sample and
+                        # exit before this observation. Sample its final files
+                        # before acceptance and temporary-directory retirement.
+                        exit_observed = True
+                        continue
                     if exit_code:
                         failure_kind, stop_required = 'worker_failure', False
                         raise RuntimeError(f'worker exited {exit_code}')

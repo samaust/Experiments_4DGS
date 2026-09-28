@@ -49,18 +49,34 @@ class SupervisorTests(unittest.TestCase):
         self.assertEqual(self.ledger.totals()['cpu']['attempts'], 1)
 
     def test_native_kernel_caches_stay_in_monitored_attempt_and_override_external_paths(self):
+        import time
         from vipe_benchmark.supervisor import directory_bytes
         keys = ['TRITON_HOME', 'TRITON_CACHE_DIR', 'TRITON_DUMP_DIR', 'TRITON_OVERRIDE_DIR',
                 'TORCHINDUCTOR_CACHE_DIR', 'CUDA_CACHE_PATH']
         outside = self.root / 'outside-run'
-        code = ('import os,sys,json; from pathlib import Path; '
+        code = ('import os,sys,json,time; from pathlib import Path; '
+                'gate=Path(sys.argv[1]).parent/"sample-gate"; '
+                '\nwhile not gate.exists(): time.sleep(.001)\n'
                 'p=Path(sys.argv[1]); p.mkdir(); '
                 f'caches={{k:os.environ[k] for k in {keys!r}}}; '
                 '[(Path(v).mkdir(parents=True,exist_ok=True), '
                 '(Path(v)/"kernel.bin").write_bytes(b"x"*4096)) for v in caches.values()]; '
                 '(p/"result.json").write_text(json.dumps(dict(status="complete",caches=caches)))')
+        samples=[]
+        def sample():
+            reading=dict(artifact_bytes=directory_bytes(self.root));samples.append(reading)
+            if len(samples)==2:
+                # Force writes and exit between the first worker sample and
+                # exit observation. A final sample must account for them.
+                (self.root/'sample-gate').touch()
+                pid=next(row['pid'] for row in self.ledger.events() if row['event']=='started')
+                until=time.monotonic()+1.
+                while os.waitid(os.P_PID,pid,os.WEXITED|os.WNOHANG|os.WNOWAIT) is None:
+                    self.assertLess(time.monotonic(),until);time.sleep(.001)
+            return reading
         with patch.dict('os.environ', {key: str(outside) for key in keys}):
-            self.run_worker(code, sample_resources=lambda: dict(artifact_bytes=directory_bytes(self.root)))
+            self.run_worker(code, sample_resources=sample)
+        self.assertGreaterEqual(len(samples),3)
         result = read_json(self.root / 'output/result.json')
         temporary = self.root / 'output-temporary'
         self.assertTrue(all(Path(value).is_relative_to(temporary) for value in result['caches'].values()))
@@ -1039,14 +1055,27 @@ class HelperIntegrationTests(unittest.TestCase):
 
     def test_real_close_repeated_and_descendant_cleanup(self):
         # A real group with a descendant exercises enumeration and group termination.
+        import os
         from test_vipe_benchmark_s1_helper_fixtures import nested_worker_code
         process = self.worker(nested_worker_code(10,parent_wait=True))
         limit = self.time.monotonic()+2
         while len(self.sup.group_processes(process.pid))<2 and self.time.monotonic()<limit:
             self.time.sleep(.005)
         self.assertGreaterEqual(len(self.sup.group_processes(process.pid)),2)
+        if os.environ.get('S1_JOB_LEDGER'):
+            # /proc visibility precedes completion of the child's registration.
+            from vipe_benchmark.s1_helper_session import _job_state,job_ledger_events
+            acknowledged=False
+            while self.time.monotonic()<limit:
+                jobs=_job_state(job_ledger_events())
+                roots={token for token,row in jobs['roots'].items()
+                    if row.get('identity',{}).get('pid')==process.pid}
+                children=[row for row in jobs['descendants'].values() if row['root'] in roots]
+                acknowledged=bool(children) and all(row.get('creator_acknowledged') for row in children)
+                if acknowledged:break
+                self.time.sleep(.005)
+            self.assertTrue(acknowledged)
         self.assertEqual(self.sup.stop_group(process,limit),[])
-        import os
         if os.environ.get('S1_JOB_LEDGER'):
             from vipe_benchmark.s1_helper_session import _job_state,job_ledger_events
             jobs=_job_state(job_ledger_events())
@@ -1103,7 +1132,7 @@ class HelperIntegrationTests(unittest.TestCase):
                 return None
             popen=self.sup.subprocess.Popen
             def worker(argv,**kwargs):
-                self.assertEqual(argv,command)
+                self.assertEqual(tuple(map(os.fsencode,argv)),tuple(map(os.fsencode,command)))
                 value=json.loads(kwargs['env']['VIPE_S1_RESERVATION_CLOCK'])
                 ReservationClock.from_reservation(captured[0]).match(value)
                 self.assertTrue(all(kwargs['env'][key]=='1' for key in ('OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS','NUMEXPR_NUM_THREADS')))
@@ -1182,7 +1211,8 @@ class HelperSessionTests(unittest.TestCase):
                 yield current
             finally:
                 pending=sys.exception()
-                secondary=[];cleaned=False;action_end=self.time.monotonic();ended=action_end
+                secondary=[];cleaned=False
+                action_end=getattr(current,'fixture_action_finished',self.time.monotonic());ended=action_end
                 def secondary_step(label,operation):
                     try:return operation()
                     except BaseException as error:
@@ -1266,7 +1296,8 @@ class HelperSessionTests(unittest.TestCase):
             sampler or self.sampler,load(),{},lifecycle=life)
 
     def reject_ready(self, label, mode):
-        with self.scenario(label,mode,ready_seconds=.08,setup_seconds=.18,total_seconds=.3) as session:
+        with self.scenario(label,mode,ready_seconds=.08,setup_seconds=.18,
+                           total_seconds=.6 if mode=='held_spawn' else .3) as session:
             with self.assertRaises((ValueError,RuntimeError,TimeoutError,EOFError)):
                 session.await_ready()
             self.assertFalse(len(session.ready)==2)
@@ -1342,7 +1373,9 @@ class HelperSessionTests(unittest.TestCase):
 
     def test_l08_late_owner_retained(self):
         from vipe_benchmark.s1_helper_session import OWNERS
-        with self.scenario('L08','late_spawn',ready_seconds=.06,setup_seconds=.12,total_seconds=.2) as session:
+        # Leave time for the actual owned creation gate, then hold its return
+        # beyond cleanup. All cutoffs remain inside the unchanged 1/2/3 s caps.
+        with self.scenario('L08','late_spawn',ready_seconds=.5,setup_seconds=.6,total_seconds=.7) as session:
             with self.assertRaises(TimeoutError): session.await_ready()
             self.assertFalse(session.close(session.cleanup_deadline))
             self.assertTrue(any(event['event']=='opaque_spawn_return_held' and event['mode']=='late_spawn' for event in session.events))
@@ -1483,7 +1516,7 @@ class HelperSessionTests(unittest.TestCase):
 
     def admission_rejected(self,label,equality):
         from vipe_benchmark import supervisor as sup
-        with self.scenario(label,ready_seconds=.15,setup_seconds=.3,total_seconds=.5) as session:
+        with self.scenario(label,ready_seconds=.5,setup_seconds=1.,total_seconds=1.5) as session:
             life=sup.HelperLifecycle(retain=True);life.helpers=[session]
             calls=[];reserve_entries=[]
             with tempfile.TemporaryDirectory() as temp:
@@ -1683,6 +1716,10 @@ class HelperSessionTests(unittest.TestCase):
                 child_row=next(row for row in observed['processes'] if row['pid']==child_pid)
                 if child_row['ppid']!=worker_row['pid'] or child_row['boot_id']!=worker_row['boot_id']:
                     raise ValueError('L35 live worker/child census ancestry')
+                stable_child=stable_process_identity(child_pid)
+                if any(stable_child[key]!=child_row[key] for key in ('boot_id','pid','ppid','pgid','start_ticks')):
+                    raise ValueError('L35 stable census incarnation changed')
+                child_row=stable_child
                 selected=acknowledge_job_descendant(worker.pid,child_pid,child_row)
                 if selected is not None:
                     pinned=os.pidfd_open(child_pid,0)
@@ -1710,7 +1747,7 @@ class HelperSessionTests(unittest.TestCase):
         original=_thread.start_joinable_thread; handles=[];acquired=[]
         def ambiguous(*args,**kwargs):
             handles.append(original(*args,**kwargs))
-            owner=args[0].__self__;limit=started+.15
+            owner=args[0].__self__;limit=started+.4
             while not any(r.get('pid') for r in owner.records.values()) and self.time.monotonic()<limit:self.time.sleep(.001)
             acquired.extend(dict(r) for r in owner.records.values() if r.get('pid'))
             raise RuntimeError('ambiguous native creation after start')
@@ -1719,7 +1756,7 @@ class HelperSessionTests(unittest.TestCase):
         try:
             with patch.object(_thread,'start_joinable_thread',side_effect=ambiguous):
                 with self.assertRaisesRegex(RuntimeError,'ambiguous native creation'):
-                    session.__init__(ready_seconds=.05,setup_seconds=.1,total_seconds=.2)
+                    session.__init__(ready_seconds=.5,setup_seconds=.6,total_seconds=.7)
             session.fixture_action_end=action_end;session.fixture_safety_end=safety_end
             self.assertTrue(acquired)
             self.assertEqual(session.state,'launch_unknown')
@@ -1747,6 +1784,9 @@ class HelperSessionTests(unittest.TestCase):
                 if handles:
                     session.handle=handles[0]
                     if session.owner is not None:session.owner.handle=handles[0]
+                    if session.job_thread is not None:
+                        from vipe_benchmark.s1_helper_session import bind_job_root
+                        bind_job_root(session.job_thread,session.owner.native_job_identity,handles[0],thread=True)
                 cleaned=session.close(safety_end)
             final_step('retire_acquired',retire)
             ended=self.time.monotonic()
@@ -1777,6 +1817,14 @@ class HelperSessionTests(unittest.TestCase):
             return
         p.trace_reset()
         with self.scenario(label,mode) as session, tempfile.TemporaryDirectory() as temp:
+            original_close=session.close
+            def begin_cleanup(deadline):
+                # Supervision can retire helpers before it returns the injected
+                # failure. Charge that actual retirement to cleanup exactly once.
+                if not hasattr(session,'fixture_action_finished'):
+                    session.fixture_action_finished=self.time.monotonic()
+                return original_close(deadline)
+            session.close=begin_cleanup
             session.await_ready()
             root=Path(temp);fixture=progress_fixture(root/'fixture',states=label=='P04')
             write_json(root/'progress-fixture.json',fixture)
@@ -1803,7 +1851,10 @@ class HelperSessionTests(unittest.TestCase):
                     class Disposable:
                         path=root/'ledger.jsonl';config=load();jobs={'S1-calibration-recovery-001':dict(resource='gpu')}
                         def reserve(inner,job,command,evidence,**kwargs):
-                            reservation=progress_reservation(fixture,1.4);reservation['command']=command
+                            # P04 must reach its final-sample fault after both
+                            # qualified rows. Its disposable allocation remains
+                            # inside the unchanged 2 s action / 1 s cleanup caps.
+                            reservation=progress_reservation(fixture,1.6 if label=='P04' else 1.4);reservation['command']=command
                             observed.append(reservation);return reservation
                         def note(inner,*a,**k):pass
                         def finish(inner,job,status,elapsed,**evidence):outcome.update(status=status,elapsed=elapsed,**evidence)
@@ -1985,6 +2036,11 @@ class HelperSessionTests(unittest.TestCase):
                     publication=outcome.get('terminal_publication_status'),primary=dict(error_class=type(caught).__name__,message=str(caught),kind=getattr(caught,'kind',None),stop_required=getattr(caught,'stop_required',None)),primary_observations=primary_observations,finish=outcome,protocol_trace=p.trace_snapshot(),fixture_scope='two-row final-sample loss, not full acceptance' if label=='P04' else label,durable_copies=copied,original_pair=pair,original_clock=observed[0] if observed else reservation,
                     child_boundaries=child_boundaries,late_parent_entries=late_parent_entries,cutoff_observations=cutoff_observations,production_return=self.time.monotonic(),owner_block_entered=getattr(session.owner,'progress_block_entered',None)))
             finally:
+                # The remaining steps release an injected block and retire its
+                # retained owners. Charge them to the existing cleanup budget,
+                # starting before any safety operation, not to the action.
+                if not hasattr(session,'fixture_action_finished'):
+                    session.fixture_action_finished=self.time.monotonic()
                 pending=sys.exception();frozen=None;cleanup_errors=[];safety_steps=[]
                 def safety_step(name,function):
                     observation=dict(operation=name,entered=self.time.monotonic(),action_cutoff=session.fixture_action_end,safety_cutoff=session.fixture_safety_end,completed=False);safety_steps.append(observation)
@@ -2002,6 +2058,12 @@ class HelperSessionTests(unittest.TestCase):
                     session.events.append(dict(event='plan047_production_cutoff',observed=self.time.monotonic(),reference=life.progress.reference(),ownership=life.ownership(),safety_cutoff=session.fixture_safety_end))
                 frozen=safety_step('frozen_snapshot',lambda:life.progress.snapshot)
                 safety_step('cutoff_record',cutoff)
+                def fixture_retirement_budget():
+                    # Production is over. The fault fixture has its separately
+                    # recorded original 3 s safety cutoff for retained ownership.
+                    session.reservation_cleanup_limit=session.fixture_safety_end
+                    session.cleanup_deadline=session.fixture_safety_end
+                safety_step('fixture_retirement_budget',fixture_retirement_budget)
                 safety_step('owner_release',lambda:setattr(session.owner,'released',True))
                 def reap():
                     if not life.reap(session.fixture_safety_end):raise AssertionError('progress helpers not retired')
@@ -2243,7 +2305,7 @@ class HelperSessionTests(unittest.TestCase):
                         if kwargs.get('phase')=='prelaunch':return {'bounded':'context'}
                         raise RuntimeError('no late reconciliation fixture')
                     def popen(*args,**kwargs):started.append(now[0]);raise RuntimeError('pure Popen boundary reached')
-                    with patch.object(sup,'HelperLifecycle',return_value=life),patch.object(sup,'monitored_call',side_effect=monitor),patch.object(sup.time,'monotonic',side_effect=lambda:now[0]),patch.object(sup.subprocess,'Popen',side_effect=popen):
+                    with patch.dict(os.environ,{'S1_JOB_LEDGER':''}),patch.object(sup,'HelperLifecycle',return_value=life),patch.object(sup,'monitored_call',side_effect=monitor),patch.object(sup.time,'monotonic',side_effect=lambda:now[0]),patch.object(sup.subprocess,'Popen',side_effect=popen):
                         with self.assertRaises(sup.SupervisionFailure):sup.supervise(Ledger(),'S1-calibration-recovery-001',['unused'],root/'output',evidence={},sample_resources=self.sampler)
                     self.assertEqual(len(started),1 if case['kind']=='before' else 0)
                     if case['kind']!='before':self.assertIn('immediately before worker launch',outcome['error'])
@@ -3128,8 +3190,11 @@ class HelperSessionTests(unittest.TestCase):
                     shutil.copytree(pristine,full.output)
                     return SimpleNamespace(pid=os.getpid(),poll=lambda:0,wait=lambda **kw:0)
                 def lifecycle(**kwargs):return real_lifecycle(session_factory=Facade,**kwargs)
+                def serial_creation(event,create,*args,deadline=None,admission_observer=None,**kwargs):
+                    # This facade creates no kernel child or owned job handle.
+                    return create(*args,**kwargs)
                 # Only transport/process creation and retirement are replaced.
-                with patch.object(sup,'HelperLifecycle',side_effect=lifecycle),patch.object(sup.subprocess,'Popen',side_effect=popen),patch.object(sup,'stop_group',return_value=[]),patch.object(h,'register_owned',return_value=None),patch.object(p,'prepare_context',wraps=p.prepare_context) as prepared:
+                with patch.object(sup,'HelperLifecycle',side_effect=lifecycle),patch.object(sup.subprocess,'Popen',side_effect=popen),patch.object(h,'create_owned_process',side_effect=serial_creation),patch.object(sup,'stop_group',return_value=[]),patch.object(h,'register_owned',return_value=None),patch.object(p,'prepare_context',wraps=p.prepare_context) as prepared:
                     actual=cpu.session_operation
                     def operation(value,session,sequence):
                         if value['operation']=='prelaunch':
@@ -3526,6 +3591,9 @@ class HelperSessionTests(unittest.TestCase):
                             raise RuntimeError('pure worker Popen reached')
                         stack.enter_context(patch.object(sup,'HelperLifecycle',return_value=life));stack.enter_context(patch.object(sup,'monitored_call',side_effect=monitor));stack.enter_context(patch.object(sup.subprocess,'Popen',side_effect=popen))
                         from vipe_benchmark import s1_helper_session as worker_ownership
+                        # The syscall below is an intentional pure exception,
+                        # not an ambiguous native creation to reserve in the job.
+                        stack.enter_context(patch.dict(os.environ,{'S1_JOB_LEDGER':''}))
                         def forbidden_registration(*args,**kwargs):
                             witness.successor.append(dict(operation='post_creation_registration',entered=now[0]))
                             raise AssertionError('registration after absent worker handle')
