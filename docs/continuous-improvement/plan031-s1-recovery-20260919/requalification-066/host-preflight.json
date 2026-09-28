@@ -1,0 +1,44 @@
+{
+  "start": {
+    "tool": "exec_command",
+    "arguments": {
+      "cmd": "bash scripts/run_s1_calibration_recovery.sh --check",
+      "workdir": "/home/auss/git_repos/samaust/Experiments_4DGS",
+      "sandbox_permissions": "require_escalated",
+      "justification": "Run the read-only host preflight for the approved S1 GPU dispatch after source registration.",
+      "prefix_rule": [
+        "bash",
+        "scripts/run_s1_calibration_recovery.sh"
+      ],
+      "yield_time_ms": 1000,
+      "max_output_tokens": 2500
+    },
+    "result": {
+      "chunk_id": "13845c",
+      "wall_time_seconds": 1.000997968,
+      "session_id": 88872,
+      "original_token_count": 0,
+      "output": ""
+    },
+    "started": "2026-09-28T23:51:53.436Z",
+    "returned": "2026-09-28T23:51:57.152Z"
+  },
+  "terminal": {
+    "tool": "write_stdin",
+    "arguments": {
+      "session_id": 88872,
+      "chars": "",
+      "yield_time_ms": 1000,
+      "max_output_tokens": 2500
+    },
+    "result": {
+      "chunk_id": "01ee7c",
+      "wall_time_seconds": 0.000009856,
+      "exit_code": 0,
+      "original_token_count": 283,
+      "output": "== S1-3 host launch gate (read-only) ==\n  [ok] controller native joinable thread API — Python 3.14.6 — use .local/envs/stg-colmap/bin/python\n  [ok] ledger prefix byte-identical (447-event baseline) — sha256=f39a418ed9c6… bytes=335749\n  [ok] authorization document present — /home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-calibration-recovery-authorization-001.json\n  [ok] E1 interpreter present — /home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/environment/bin/python\n  [ok] E1 import chain (python/torch/numpy) — 3.11.15 2.5.1+cu124 1.26.4\n  [ok] AssetBundle(S1) passes — 11 asset records\n  [ok] validate_binding (fail-closed contract)\n  [ok] storage sample below live 1 s resource deadline — 0.845 s; artifact_bytes=67755831296\n  [ok] GPU exclusively free (no compute PIDs) — no compute apps\n       gpu: NVIDIA GeForce RTX 4090, 24564 MiB, 866 MiB, 33 %\n\nGO: all preconditions hold. The single host dispatch may now run:\n\n  bash scripts/run_s1_calibration_recovery.sh --run\n"
+    },
+    "started": "2026-09-28T23:52:07.469Z",
+    "returned": "2026-09-28T23:52:07.471Z"
+  }
+}
