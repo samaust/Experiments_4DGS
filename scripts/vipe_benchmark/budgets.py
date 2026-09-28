@@ -40,27 +40,43 @@ def _root(path):
     return safe_path(path).resolve()
 
 
+class _Inventory(dict):
+    """Fresh stat records, indexed during the single non-following traversal."""
+    def __init__(self):
+        super().__init__()
+        self.scopes = {name: {} for name in
+                       ('assets', 'transfers', 'uv-transfers', 'setup-cache', 'managed-python')}
+        self.partials = {}
+
+
 def _scan_once(root):
-    files = {}
-    pending = [root]
+    files = _Inventory()
+    pending = [(str(root), '')]
     while pending:
-        base = pending.pop()
+        base, scope = pending.pop()
         with os.scandir(base) as entries:
             for entry in entries:
-                if entry.name == 'prompts':
+                name = entry.name
+                if name == 'prompts':
+                    continue
+                path = entry.path
+                entry_scope = scope or name
+                if entry.is_dir(follow_symlinks=False):
+                    pending.append((path, entry_scope))
                     continue
                 info = entry.stat(follow_symlinks=False)
-                path = base / entry.name
-                if stat.S_ISDIR(info.st_mode):
-                    pending.append(path)
-                elif stat.S_ISREG(info.st_mode):
+                if stat.S_ISREG(info.st_mode):
                     files[path] = info
+                    if entry_scope in files.scopes:
+                        files.scopes[entry_scope][path] = info
+                    if name.endswith('.partial'):
+                        files.partials[path] = (info, entry_scope)
     return files
 
 
 def _inventory(root):
     if not root.exists():
-        return {}
+        return _Inventory()
     return _scan_once(root)
 
 
@@ -168,14 +184,11 @@ def record_download_progress(run_root, transfer_id, output, bytes_received, rese
 
 def _snapshot_once(root):
     files = _inventory(root)
-    # Inventory paths are constructed underneath this root without following
-    # symlinks. Classify by their first relative component once; repeatedly
-    # constructing/relativizing Paths across a large environment dominates scans.
-    root_depth = len(root.parts)
-    scopes = {path: path.parts[root_depth] for path in files}
     receipts, active, uv_sessions, direct_progress = [], [], {}, {}
-    for path, info in files.items():
-        scope, name = scopes[path], path.name
+    candidates = ((scope, path, info) for scope in ('assets', 'transfers', 'uv-transfers')
+                  for path, info in files.scopes[scope].items())
+    for scope, path, info in candidates:
+        name = os.path.basename(path)
         direct = ((scope == 'transfers' and name.startswith('transfer-')) or
                   (scope == 'assets' and '.transfer-' in name)) and name.endswith('.json')
         intent = scope == 'transfers' and name.startswith('active-') and name.endswith('.json')
@@ -183,7 +196,7 @@ def _snapshot_once(root):
         uv = scope == 'uv-transfers' and name.startswith(('active-', 'transfer-')) and name.endswith('.json')
         if not (direct or intent or uv or progress_record):
             continue
-        value = _document(path, info, mutable=progress_record or (uv and name.startswith('active-')))
+        value = _document(Path(path), info, mutable=progress_record or (uv and name.startswith('active-')))
         if uv:
             identifier = value.get('transfer_id')
             if not isinstance(identifier, str) or not identifier:
@@ -241,20 +254,21 @@ def _snapshot_once(root):
             continue
         # Both names may coexist while a writer publishes a hardlink. This is
         # one transfer, so count its payload once, including after rename.
-        size = max((files[p].st_size for p in (partial, output) if p in files), default=0)
+        size = max((files[str(p)].st_size for p in (partial, output) if str(p) in files), default=0)
         recorded_charge = recorded['charge'] if recorded is not None else 0
         total += max(0, size - recorded_charge)
         progress[output] = max(progress.get(output, 0), size, recorded_charge)
         claimed.update((partial, output))
 
     cache_scopes = ('setup-cache', 'managed-python')
-    direct_paths = claimed | known_outputs | {_partial(p) for p in known_outputs}
-    for path, info in files.items():
-        if path in claimed or not path.name.endswith('.partial'):
+    direct_paths = {str(p) for p in claimed | known_outputs | {_partial(p) for p in known_outputs}}
+    claimed = {str(p) for p in claimed}
+    for path, (info, scope) in files.partials.items():
+        if path in claimed:
             continue
-        if scopes[path] in cache_scopes and path not in direct_paths:
+        if scope in cache_scopes and path not in direct_paths:
             continue  # Already in the retained package/cache acquisition proxy.
-        matching = [r for r in receipts if r['output_path'] and _partial(r['output_path']) == path]
+        matching = [r for r in receipts if r['output_path'] and str(_partial(r['output_path'])) == path]
         covered = 0
         for receipt in matching:
             identity = receipt.get('partial_identity')
@@ -267,19 +281,19 @@ def _snapshot_once(root):
                 covered = max(covered, min(receipt['received'], info.st_size))
         extra = max(0, info.st_size - covered)
         total += extra
-        output = path.with_suffix('')
+        output = Path(path).with_suffix('')
         progress[output] = max(progress.get(output, 0), extra)
         direct_paths.add(path)
 
     # Legacy teacher acquisition can rename its payload before the attempt
     # receipt exists. Count unreceipted non-JSON asset payloads conservatively.
-    for path, info in files.items():
-        if (scopes[path] == 'assets' and path not in direct_paths and
-                not path.name.endswith(('.json', '.partial')) and not path.name.startswith('.')):
+    for path, info in files.scopes['assets'].items():
+        if (path not in direct_paths and
+                not path.endswith(('.json', '.partial')) and not os.path.basename(path).startswith('.')):
             total += info.st_size
 
-    cache_bytes = sum(info.st_size for path, info in files.items() if path not in direct_paths and
-                      scopes[path] in cache_scopes)
+    cache_bytes = sum(info.st_size for scope in cache_scopes
+                      for path, info in files.scopes[scope].items() if path not in direct_paths)
     uv_bytes = sum(uv_sessions.values())
     return dict(download_bytes=total + max(uv_bytes, cache_bytes),
                 artifact_bytes=_footprint(files), logical_artifact_bytes=sum(info.st_size for info in files.values()),

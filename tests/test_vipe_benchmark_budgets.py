@@ -105,6 +105,19 @@ class BudgetTests(unittest.TestCase):
         self.payload('job/lost.bin.partial', 29)
         self.assertEqual(self.charge(), 29)
 
+    def test_nested_scope_indexes_are_fresh_and_preserve_publication_charges(self):
+        self.payload('ordinary/assets/unreceipted', 101)
+        self.payload('assets/nested/teacher.bin', 7)
+        self.payload('setup-cache/nested/wheel', 11)
+        output = self.payload('ordinary/nested/download.partial', 13)
+        self.assertEqual(self.charge(), 31)
+        output.rename(output.with_suffix(''))
+        self.receipt('published', output.with_suffix(''), 13)
+        self.assertEqual(self.charge(), 31)
+        self.payload('setup-cache/nested/wheel', 19)
+        self.payload('assets/nested/teacher.bin', 23)
+        self.assertEqual(self.charge(), 55)
+
     def test_uv_uses_larger_wire_or_retained_package_scope(self):
         self.payload('setup-cache/wheel/extracted.py', 19)
         self.payload('managed-python/python/bin/python', 11)
