@@ -42,8 +42,8 @@ print('== S1-3 host launch gate (read-only) ==')
 
 # 1. ledger byte check
 b = (LOCAL / 'ledger.jsonl').read_bytes()
-check('ledger byte-identical (447-event baseline)',
-      hashlib.sha256(b).hexdigest() == LEDGER_SHA and len(b) == LEDGER_BYTES,
+check('ledger prefix byte-identical (447-event baseline)',
+      hashlib.sha256(b[:LEDGER_BYTES]).hexdigest() == LEDGER_SHA and len(b) >= LEDGER_BYTES,
       f'sha256={hashlib.sha256(b).hexdigest()[:12]}… bytes={len(b)}')
 
 # 2. authorization document exists
@@ -74,7 +74,9 @@ try:
 except Exception as e:
     check('AssetBundle(S1) passes', False, f'{type(e).__name__}: {e}')
 
-# 5. full binding validation (read-only part of host admission)
+# 5. Full binding validation also checks every event after the baseline and
+# rejects any consumed attempt. An existing matching, unconsumed registration
+# is safe: execute_s1_recovery reuses it without another admission.
 try:
     document, request = validate_binding(LOCAL, config, file_record(AUTH))
     check('validate_binding (fail-closed contract)', True)
@@ -85,7 +87,7 @@ except Exception as e:
 # NOTE: the process table is not visible inside a bwrap sandbox, so the
 # compute-apps query there is meaningless. Refuse to certify GO unless the
 # process table is actually visible (i.e. run on the host).
-sandboxed = Path('/proc/1/comm').read_text().strip() in ('bwrap', 'unshare') if Path('/proc/1/comm').exists() else False
+sandboxed = not Path('/proc/1/comm').exists() or Path('/proc/1/comm').read_text().strip() != 'systemd'
 nvidia = shutil.which('nvidia-smi')
 if not nvidia:
     check('GPU compute-app report', False, 'nvidia-smi not found on host')
@@ -109,7 +111,4 @@ if failures:
     sys.exit(1)
 print('GO: all preconditions hold. The single host dispatch may now run:')
 print()
-print('  PYTHONPATH=scripts python -B -m basketball_vipe_benchmark \\')
-print('    --run-id plan031-20260913T032700Z component-recovery \\')
-print('    --job S1-calibration-recovery-001 \\')
-print('    --authorization docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-calibration-recovery-authorization-001.json')
+print('  bash scripts/run_s1_calibration_recovery.sh --run')

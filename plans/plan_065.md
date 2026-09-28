@@ -1,8 +1,8 @@
 # Plan065 — Codex host launch and completion of Plan064
 
-Status: launcher implemented and validated in commit `e5538cf`; live dispatch
-blocked by automatic approval review before process creation. Direct user
-approval of the one-shot host GPU execution is required to continue.
+Status: user directly approved host execution. The first controller invocation
+failed before reservation due to the Python 3.11 controller choice. Correcting
+the launcher to the existing Python 3.14 controller; the GPU attempt is unconsumed.
 
 ## Scope
 
@@ -86,3 +86,28 @@ No admission, registration, reservation, or GPU run occurred. After rejection,
 the ledger still had 447 lines and the exact baseline SHA256 above. The bound
 iteration-25 status remains unchanged because no scientific outcome exists.
 Steps 1–2 are complete; steps 3–4 remain pending explicit execution approval.
+
+## Approved execution and controller correction
+
+The user subsequently replied "I approve" to the exact single-attempt host
+execution request. The approved command passed host preflight, appended
+admission 447 and registration 448, then stopped before reservation with
+`RuntimeError: S1 requires native joinable ownership thread`. No worker or GPU
+attempt started. A pre-dispatch block receipt preserves this failure.
+
+The initial launcher incorrectly reused the E1 **worker** Python 3.11 as the
+controller. Imports and the selected CPU mutation test were insufficient to
+verify the controller's native thread requirement. The existing controller
+`.local/envs/stg-colmap/bin/python` is Python 3.14.6 and provides
+`_thread.start_joinable_thread`; E1 Python 3.11 does not. The corrected launcher
+checks that capability before any admission and uses Python 3.14 for control.
+The bound request still selects the unchanged E1 Python for model execution.
+
+Read-only `validate_binding` passes with the matching, unconsumed registration.
+`execute_s1_recovery` explicitly reuses that registration and skips admission.
+The launch gate now verifies the unchanged 447-event prefix and delegates tail
+validation to the existing strict lifecycle contract, which rejects duplicate
+admissions and consumed attempts. This permits continuing the one approved
+allocation without resetting history or introducing a second admission.
+The gate also matches dispatch's `systemd` requirement, including rejection of
+Codex's `codex` PID 1, and prints the corrected launcher command.

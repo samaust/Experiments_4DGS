@@ -15,7 +15,8 @@ if [[ $(cat /proc/1/comm) != systemd ]]; then
     exit 1
 fi
 
-recovery_python=.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/environment/bin/python
+recovery_python=.local/envs/stg-colmap/bin/python
+"$recovery_python" -B -c 'import _thread; assert hasattr(_thread, "start_joinable_thread"), "S1 controller requires native joinable ownership thread"'
 "$recovery_python" -B docs/continuous-improvement/plan031-s1-recovery-20260919/s1-live-launch-gate-025.py
 if [[ $mode == --check ]]; then
     exit 0
