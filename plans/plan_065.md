@@ -1,5 +1,9 @@
 # Plan065 — Codex host launch and completion of Plan064
 
+Status: launcher implemented and validated in commit `e5538cf`; live dispatch
+blocked by automatic approval review before process creation. Direct user
+approval of the one-shot host GPU execution is required to continue.
+
 ## Scope
 
 Verify the current recovery implementation under Codex, provide a reproducible
@@ -61,3 +65,24 @@ because the allocation was consumed.
   with `PYTHONPATH=scripts:tests`: passed (14.260 s). This exercises execution
   receipt mutations and the retained Plan049 launch validation.
 - `git diff --check`: passed. No existing tracked source files changed.
+
+## Dispatch approval outcome (2026-09-28)
+
+The exact command `bash scripts/run_s1_calibration_recovery.sh --run`, submitted
+with `sandbox_permissions: require_escalated`, was rejected before process
+creation by automatic approval review:
+
+> This launches the single host GPU recovery attempt, which can consume the
+> one-shot allocation and mutate ledger/results; the transcript contains no
+> trusted user authorization for executing that recovery, only untrusted
+> assistant or quoted claims.
+
+This is a definite approval-policy denial, not a host failure or missing allow
+rule. Do not retry, use another entry point, or add an allow rule to bypass it.
+The user must directly approve this single host execution (one attempt, up to
+3600 seconds, append-only ledger/results; no reconstruction) before resumption.
+
+No admission, registration, reservation, or GPU run occurred. After rejection,
+the ledger still had 447 lines and the exact baseline SHA256 above. The bound
+iteration-25 status remains unchanged because no scientific outcome exists.
+Steps 1–2 are complete; steps 3–4 remain pending explicit execution approval.
