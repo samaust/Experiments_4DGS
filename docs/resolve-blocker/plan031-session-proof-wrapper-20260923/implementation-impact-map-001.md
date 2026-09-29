@@ -1,0 +1,83 @@
+# Correction005 implementation impact map — preparation only
+
+Basis: `correction-005.md`, exact SHA-256 `8a1aa58a1b3e6ef51f2dba85db30635a4323345ae8a556ea8e5d10adf0c2e3f7`, with inherited Correction003/004 scope. **No source change, implementation approval, capability result or launch clearance is provided.** This is a text-only map of prospective changes and prerequisites. The current v1 contract remains authoritative.
+
+Here **R** means `docs/resolve-blocker/plan031-progress-20260922/` and **W** means this wrapper run directory. Line references below identify the inspected snapshots, not permanent patch offsets.
+
+## Inspected file hashes
+
+| File | SHA-256 |
+| --- | --- |
+| `scripts/vipe_benchmark/s1_validation_contract.py` | `089e84762118fd4f0ed3f39766d9d7a691f3c460d25d0900e3c908aeb1cd2c42` |
+| `R/launch-049-exec.py` | `733db7743d1eb26ece68f7b260a04bd6bdcb996290f6367b64191b781a91d463` |
+| `tests/test_vipe_benchmark_s1_recovery.py` | `e13314e490978b22c1d1dcbc9c205d44d5da64a13dc35c7ad62f1edea77e70a0` |
+| `W/correction-003.md` | `f0ed80e07959619af0dd656f6f86d77119269037321a28bbda5bc8618a78119c` |
+| `W/correction-004.md` | `78dd6246fb1ac0c5b77b96c269141b913da0f6e9a1cb14b13f8d1e53addb535b` |
+| `W/correction-005.md` | `8a1aa58a1b3e6ef51f2dba85db30635a4323345ae8a556ea8e5d10adf0c2e3f7` |
+
+Only the three named code paths were inspected for this assignment. No other source module was read, imported or executed. The global 78/249/1028 inventory was not recollected; those are preservation requirements, not newly measured results.
+
+## Prerequisites separating possible code from blocked evidence
+
+**A — explicit evidence authorization.** The user must explicitly approve any change from paired UTC/monotonic stamps to ordered UTC observations without a physical-bound guarantee. A fixed adopted amendment/authorization, its exact hashes and a reviewed dispatch/status binding are required. Correction017 is only a prospective path; its vacancy and runtime ordering relative to016 must be decided then. Preserve Correction008's existing hashes and historical evidence.
+
+**B — writer/accounting decision.** An adequate platform facility must establish the complete startup-to-retirement writer/transport process/thread accounting, or a separately specified and authorized alternative proof/trust model must replace that requirement. A sampled writer self-report and terminal exit0 cannot supply this proof by themselves. The numeric `B+max(1,H)≤8` limit is not waived. Until B is resolved, live bootstrap and driver launch are blocked, even if parsing and file-state code could be written under a separate grant.
+
+**C — finite terminal evidence boundary.** Acceptance must explicitly end at a reviewed trusted Main/tool transcript boundary or an atomic durable-return facility. A second archiver cannot eliminate its own terminal-return dependency. No code-only recursive archive is a solution. Exact archival/failure schemas, ownership and loss behavior depend on this decision.
+
+**D — concrete protocol and preservation package.** Before source implementation: pin all schema literals/nested writer identities, canonical frame tokens, path-family/legacy parser table, generated-start response bounds, response-fragment handling, bootstrap failure retirement, Main serialization code location and archive protocol. Preserve mandatory UTC ordering and native-duration absent/malformed semantics. Save exact before-source records, task diff, assertion/declaration/source preservation map and path-specific inverse. No guessed final-authority hashes or current-authorization bypass may be inserted to make fixtures pass.
+
+Rows marked **static after authorization** describe code that does not itself establish live capability. Every row is presently preparation only; this assignment grants no edits or tests.
+
+## Contract impact
+
+| Current function/branch | Prospective change and retained behavior | Readiness/prerequisite |
+| --- | --- | --- |
+| `session_proof`, lines437–456: exact 15-field v1 schema, fixed Correction008/authorization hashes | Add a disjoint authorized v2 branch with the 19 exact proof keys and fixed new authority/start/intent records. Preserve `proof_mode='session-bound/v1'`, false cross-namespace-kernel claim, old fixed hashes, and explicit v1 historical validation. Reject mixed versions and v2 under old authority. Do not make version selectable by environment or an untrusted schema alone. | Static after A/D; history-versus-prospective dispatch policy must be explicit. |
+| `session_proof`, lines457–484: identity request, ancestry, readiness and final-two-poll prerequisites | Retain all existing local-root, terminated-chain, exact handle/role/readiness predicates. Validate writer identities as a separate role/schema; do not reuse a driver's handle or treat writer PID equality as cross-namespace identity. | Static correlation after D; truth/completeness of writer accounting remains B. |
+| `session_proof`, lines485–528: v1 stamps and event loop | Preserve v1 stamp checks. V2 validates the 11-key event with exact timing keys, ordered UTC observations, `monotonic_boundary_status='unmeasured'`, absent native duration→null and present exact finite nonnegative int/float excluding bool. Read and bind unique fixed raw escrows; compare decoded native arguments/result/session and exact UTF-8 output hash, including CR/LF. Retain original start-command/prefix/permission/cwd/tty checks, live positive same-handle returns, empty polls, roles and sole readiness output. | Static after A/D; on-disk validation cannot independently prove that a tool call happened or that Main compared original bytes in the actual return context. |
+| `no_timeout_launch`, lines531–574 and604–611: fixed authority, 18-key admission and ordered addenda | Add the reviewed 22-key v2 binding case and adopted authority list consistently with driver and fixture. Bind amendment/authorization, writer-start/intent, events and unique escrows in the prospective note. Ensure bootstrap launch escrow is verified through its start record dependency and included in the adopted immediate-byte-verification policy. Keep command/environment/STDIN/source/output/root fields exact and reject extra/missing/mixed bindings. | Static after A/D; no new authority files created here. |
+| `no_timeout_launch`, lines575–603 and612–616: exact local identities, B/H and artifacts | Preserve existing root/ancestor/output checks, H=0 at capture admission, actual root-thread B, charge calculation and150GiB bound. A v2 admission written before writer exit is only a prospective condition; its use depends on a separately accepted pre-ADMIT retirement gate. | Schema checks could be static after A/D; sufficiency of retirement/charge evidence blocked on B/C. Never replace H=0 with an arbitrary writer count. |
+| `session_json`417 and `strict_record`39 | Existing duplicate-key/nonfinite rejection and canonical strict file records are useful primitives. Any new raw-byte decoder must retain exact bytes as well as parsed typed values; do not weaken these shared functions or generic file handling to accept generated/self-issued records. | Prefer narrow v2-local validation after D; no general parser/cache refactor needed. |
+
+`source_paths`32, declaration/cache/collection functions65–162, global `STDIN`/`ARGV`/suite order, interval checks167–191, and source equality196 remain unchanged. `validate_execution`276 retains its timed-v1 versus no-timeout-v2 split, actual successful wait, `no_timeout_launch` call306 and `validate_creation` call307. Its capture/runner retirement records must not be repurposed as writer-session terminal evidence. `validate_creation`389 and identity primitives337–382 need no proposed relaxation; a required change there would reopen scope review.
+
+## Driver impact
+
+| Current `R/launch-049-exec.py` branch | Prospective change and retained behavior | Readiness/prerequisite |
+| --- | --- | --- |
+| `main`52, pattern scan57–75, high-water rejection76, admission/directory vacancy78–85 | Replace the limited entry scan with the independently reviewed all-family parser and phase-aware gate. Main selects a wholly vacant fresh index before writer creation; driver entry allows only the two exact acknowledged current-attempt bootstrap files, forbids every future/competing path and higher/unknown occupancy, and runs before identity publication181. Preserve retired lower indices, capture-exec count semantics77 and exclusive later writes. | Static after D and scope grant; actual fresh preflight is C4. Driver cannot certify the Main tool handle from files alone. |
+| `main`86–108: dispatch, source enumeration, capture command/environment | Integrate only separately adopted authority/version selection. Keep exact78 source membership100, argv, STDIN extraction, thread environment and diagnostic selector unchanged. Update hash-bound dispatch/status by a separately reviewed authority procedure, not by weakening fixed-hash checks. | A/D. |
+| Identity functions `process`109, `local_identity`145; readiness181–183 | Preserve initial root/ancestry checks, exact readiness and literal `ADMIT\n` handoff. A writer retirement gate cannot be inferred merely from intent or a file named terminal. Main must already have observed the real writer handle's terminal and satisfied the adopted full-retirement condition before sending ADMIT. | Existing identity logic stays; new gate blocked on B/C and exact trust semantics. |
+| Admission checks184–210, `expected`199, note bindings209 | Mirror the contract's v2 dictionary, authority order and all required writer/raw/event records. Keep exact typed comparison, local recheck201 and H=0/root-thread check208. No post-send/terminal record enters the immutable proof/admission/note retroactively. | Static after A/D; actual terminal correlation remains Main/independent review responsibility under C. |
+| Note publication211–213; bound-byte loop219; local rechecks221,231 and `os.execve`237 | Ensure every newly bound pre-admission dependency is reverified with existing source/authority bytes. Preserve exactly the current three live-boundary identity checks, descriptor/log preparation, process-replacement topology and final capture exec. No observer or writer remains during capture. | Static binding work after A/D; no runtime clearance without B/C/C4. |
+
+`stamp`17 continues to measure driver-local times; it cannot generate genuine Main tool-call-boundary stamps. `record`18 and `publish`21 remain existing driver evidence helpers. The latter's current single-write/flush/fsync/readback implementation is not automatically a substitute for the proposed writer's full-write loop, no-follow open and directory-fsync protocol. A broad publication refactor is outside this map.
+
+## New writer and Main procedure
+
+Correction003 proposes exactly one new `R/main-049-escrow-writer.py`, not a module under the enumerated source globs. After authorization/D, deterministic parsing/state transitions could be implemented: S2 exact launch escrow; C2 generated start/readback; E2/T2 raw/event pairing; I2 intent with `terminal_action='F2'`; P2/A2 acyclic proof/admission; F2 JSON intent binding with no further file write or R2. Exclusive fixed paths, full byte writes, file/directory fsync, reopen/hash, bounds and failure states belong here. Preserve the special C2 generated-record acknowledgment rather than falsely comparing it to the command payload. No code or new file was created by this assignment.
+
+Keeping this writer under R avoids adding a79th enumerated member, but its exact source must be separately hash-bound as executable authority; exclusion from the78 is not permission for unbound code. The Main pure-JS lossless serializer/frame transport and pre-writer index scan are a separate reviewed procedure, with an exact location still to be chosen under D. Python file validation cannot substitute for comparing an actual parsed tool return inside Main. PTY translation, tool chunk limits, durability and failure retirement need real capability evidence before use, under separately granted probe scope and B. New archival code is blocked on C; no additional archiver topology should be chosen from this map.
+
+No capture/helper edit is proposed or inspected here. If a writer must remain alive during capture, stop and seek the separate source/topology review required by Correction003 rather than changing their ownership assumptions indirectly.
+
+## Existing test landing points and preservation
+
+All additions must stay inside `ReceiptContractTests.test_execution_mutations` at line744, specifically its existing `label=='cap'` branch788. That branch is one existing typed callback, declared in `SUBTEST_CASES` at2426 with the `cap` row2453. **Do not add a test method, a `self.subTest` site, a callback ID or a SUBTEST_CASES row.** Add ordinary bounded control loops inside this existing branch while retaining every existing assertion expression, order and multiplicity. Do not convert current v1 positive evidence into an unmarked v2 fixture or remove v1 negative cases.
+
+| Existing fixture/control point | Prospective additive controls after authorization |
+| --- | --- |
+| Synthetic no-timeout setup788–878; `routed_record`, `routed_strict`, `routed_json`821–837; v1 events/proof847–854 | Build a separate disposable routed v2 graph and authority branch; retain original v1 graph and timed-mode controls. Extend routing for exact new bootstrap/raw/intent records; synthetic native objects are labeled synthetic, not tool evidence. |
+| Rehashed fault loop881–945 and readiness/start-argument controls949–1001 | Add v1/v2 mixture, authority/hash/path mismatch, duplicate/missing escrow, byte-versus-parsed mismatch, wrong driver/writer handle, malformed duration, reversed UTC, unmeasured-status, start-readback correlation and intent/admission binding cases. Rehash enclosing graphs so failures reach the intended predicate. Restore fixture state after each fault. |
+| Actual-driver AST seams1004–1039: entry, literal handoff, `local_identity`, final exec stub | Add pure two-phase path-gate and bootstrap-allowlist controls using disposable files/input seams. Preserve no real subprocess/observer creation. Cover competing file/index, occupied future outputs, unknown legacy names and mutated bootstrap bytes. Keep the final two AST nodes and existing exec seam semantics usable. |
+| Role/chain cases1042 onward, exactly-three live-check assertion1108–1109, no-timeout/wait/identity/retirement controls1121–1230 | Preserve all root/ancestor typing and current three live identity checks. Add refusal controls for absent/unaccepted writer-retirement evidence only after its actual contract is decided. Mock success demonstrates branch behavior, not B or C capability. |
+| New writer's deterministic parser/publication states, exercised within the same existing branch only | Once source exists and testing is authorized, use pure input/filesystem seams for opcode ordering, framing bounds, short writes, fsync/readback errors, occupied/symlink/partial targets, C2 generated acknowledgment, F2 no-write and duplicate-send refusal. A persistent real tool writer is a separate capability probe, never hidden inside these controls. |
+
+Preserve the ordered78 source members,249 methods and1,028 typed callbacks, all existing assertions/declarations, unchanged runner/capture argv and STDIN, CPU-only scope, W/C and protocol/scenario deadlines,64MiB memo,150GiB artifacts, exact CPU limit and no operational ceiling. The future preservation audit must inspect AST/declarations/source membership against a saved baseline; this task did not execute such an audit. The inverse applies before accepted v2 history; afterward retain historical v2 validation and disable future v2 only by new authority, as Correction003 requires.
+
+## Current disposition
+
+Authorization could permit static parser/schema/binding/path-gate/control implementation after D, but none of that proves the live interface, full writer accounting or finite terminal acceptance. A/B/C decisions and remaining specification details must precede their dependent changes; they are not TODO branches that may default to success. Independent source validation precedes any separately authorized probe or launch. C1–C3 remain **not met**, C4 **unverified**. No diagnostic008, writer, probe, parallel test, alternate wrapper or aggregate is cleared.
+
+Only this new map was written. No source/tests/authority/status edits, imports, code execution, tests, probes, workload, prompt read, delegation or commit occurred. Time and CPU consumption were not measured. Main owns integration and any subsequent user decision.

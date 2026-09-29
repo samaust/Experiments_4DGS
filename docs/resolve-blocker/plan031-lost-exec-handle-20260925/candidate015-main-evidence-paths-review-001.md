@@ -1,0 +1,7 @@
+# Candidate015 supplemental Main evidence-path review 001
+
+**Verdict: PASS for the supplemental path-vacancy check only.** `candidate015-main-evidence-paths-001.json` hashes to SHA-256 `4ce92ad24a25c0e675dd7d64ae62ef8279a54a1b78d404a672f9bcc19dac5892`. Its 14 absolute Main-owned receipt paths are distinct, each records `vacant`, and each remains absent now as a file, directory, and symlink. This is separate from the 45 driver-owned output states in the final boundary.
+
+The supplemental record binds the current final boundary `candidate015-launch-boundary-001.json` at SHA-256 `e4bc39384d315dea3a36ff49758283978ddfaa82e8687700a453567d53697e85` and its independent PASS review `candidate015-launch-boundary-review-001.md` at `d6b33efee767f96e9707b2ab02f799e6fae8a3c0cd9f47e2af95e7a5ab95c20f`; both current files rehash exactly. It correctly states `launch_not_authorized=true` for this supplemental artifact. The already reviewed final boundary remains the only gate clearing **one exact candidate015 bootstrap `exec_command`**; this check neither replaces nor expands it. No start frame, poll, admission, test, diagnostic payload, or aggregate is cleared.
+
+Checks used read-only JSON/SHA/path existence and symlink inspection. No project import/test, process/session contact, launch, start frame, poll, admission, or source edit occurred. Reviewer CPU/wall time, peak memory, and future state were not measured.

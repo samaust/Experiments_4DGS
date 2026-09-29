@@ -1,0 +1,9 @@
+# Candidate015 post-ADMIT poll013 review
+
+**Verdict: PASS for this one saved empty poll.** It clears exactly one next justified `write_stdin` poll on Main handle 13761 with explicit `chars: ""` and immediate raw-return preservation. It does not establish workload completion or clear a nonempty send, repeated admission, or test.
+
+The raw call/return `candidate015-postadmit-poll-013-raw.json` is 314 bytes, SHA-256 `bd59255e109896205d083989120c4d6007239b892135c58685406003e537156b`. Its decoded arguments exactly equal the event arguments: `{session_id: 13761, chars: "", yield_time_ms: 1000, max_output_tokens: 20000}`. Its decoded result equals the event result and canonical `main-session-049-diagnostic-015-poll-013.json` (131 bytes, SHA-256 `4bd6b72224806eb890f5410fbd04922040d9fef45531bd98a8d7125d748e9928`). The event's raw-return record matches that canonical file. Local `candidate015-postadmit-poll-event-013.json` and canonical `main-session-049-diagnostic-015-poll-event-013.json` are byte-identical: 1,190 bytes, SHA-256 `678e486b123cc59f11292f801b744c93e83061fbb21c530453ed366e6d917156`.
+
+The event has schema `plan049-main-session-poll/v1`, diagnostic index 15, poll ordinal 13, and `write_stdin`. The return retains live handle 13761, chunk `deec45`, wall time 5.000586045 seconds, zero tokens, and empty output with SHA-256 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`. No exit code, error, output, or truncation is recorded. Its admission-file record still matches the exact 75,606-byte reviewed file, SHA-256 `7584468e8ba41b5dc3ff4a94f832ec548bd0eb049eb528f56d7e6c523e603e6a`.
+
+Poll012 returned at 2026-09-25T10:57:26Z. Poll013's conservative UTC interval 10:58:28Z–10:58:37Z follows it and contains the pre-call clock read at 10:58:29Z and raw-save mtime at 10:58:34.898522Z. Handle identity rests on the Main tool result, not a self-reported PID. The reviewer did not contact the session.

@@ -1,0 +1,5 @@
+# Independent validation addendum 001 — synthetic Add File overwrite
+
+The follow-up record reports two `tools.apply_patch` `*** Add File` calls on the same synthetic path: first `original\n`, then `replacement\n`. Both returned `{}`. I read the saved record, the appended section of `synthetic-direct-patch-probe-001.md`, and the resulting file. The first and second contents differ; the resulting file is exactly `replacement\n`, not `original\n`. Its independently computed SHA-256 is `1d054714357ce5ee01723ed91fcaa69206e221faaf9c1fad64f73be2e5d051da`, matching the record. This corroborates the recorded overwrite and confirms that the exposed `Add File` path cannot be treated as `O_EXCL` exclusive creation. The original tool calls are represented by the saved synthetic record; I did not rerun them.
+
+This strengthens the C1 finding in `validation.md` and changes none of its C1–C4 dispositions. No live session, driver, admission, signal, test, or source/runtime work was performed; no existing evidence was changed or deleted. Addendum duration was not measured and is unknown.

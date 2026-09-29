@@ -1,0 +1,5 @@
+# Correction019 revision002 adoption — 2026-09-25
+
+Main adopts the exact [revision002 proposal](correction019-revision002-proposal.md), SHA-256 `ee0b7c569d1842c7d53987f42ae2ade36aed80af8f19c563c00f0c5432166331`, after independent PASS review in [review001](correction019-revision002-review-001.md), SHA-256 `d4b4aae7a9a90421d401a2ebaf5e5beae93304d2a5ea963cf1cd9c9469ddd3eb`.
+
+This adoption relies on the user's existing authorization to fix the pidfd API bug before regenerating missing diagnostic data and to choose recommended bounded steps autonomously. It permits only the two already reviewed `os.pidfd_send_signal` → `signal.pidfd_send_signal` substitutions, source revalidation, and later reviewed serial focused/full CPU checks. Candidate015 remains failed and unaccepted because its exact Main terminal result was not recovered. The plan's unchanged assertions, behavioral deadlines, CPU-only scope, process/artifact caps, fresh launch proof, independent reviews and final aggregate gates remain controlling. No diagnostic launch is cleared by this adoption alone.

@@ -1,0 +1,21 @@
+{
+  "schema": "candidate016-pre-admission-abort/v1",
+  "started_utc": "2026-09-25 22:14:33 UTC",
+  "returned_utc": "2026-09-25T22:14:33Z",
+  "arguments": {
+    "session_id": 11457,
+    "chars": "\u0004",
+    "yield_time_ms": 1000,
+    "max_output_tokens": 4000
+  },
+  "raw_result": {
+    "chunk_id": "94f437",
+    "wall_time_seconds": 2.005e-05,
+    "exit_code": 1,
+    "original_token_count": 163,
+    "output": "Traceback (most recent call last):\r\n  File \"/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py\", line 354, in <module>\r\n    if __name__=='__main__':main()\r\n                            ~~~~^^\r\n  File \"/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py\", line 285, in main\r\n    if sys.stdin.readline()!='ADMIT\\n':raise ValueError('explicit Main admission handoff required')\r\n                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\r\nValueError: explicit Main admission handoff required\r\n"
+  },
+  "reason": "Candidate016 event001 was returned NEEDS_REVISION because its canonical arguments were not fully substantiated by the saved raw send receipt. Main terminated the exact unadmitted session before tests or diagnostic payload at the explicit ADMIT gate.",
+  "driver_terminal_gate": "docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py:285",
+  "reviewed_retirement_intent_sha256": "d175cfb4173b2deef99b644fc671d2db2b0c560ab934b20be4b71e0cd7ade063"
+}

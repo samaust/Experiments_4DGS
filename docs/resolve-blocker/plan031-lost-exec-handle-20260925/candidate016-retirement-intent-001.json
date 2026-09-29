@@ -1,0 +1,53 @@
+{
+  "schema": "candidate016-pre-admission-retirement-intent/v1",
+  "attempt": {
+    "kind": "diagnostic",
+    "index": 16,
+    "main_session_id": 11457
+  },
+  "reason": "The independent event001 review needs revision because its canonical call arguments are not fully substantiated by the saved raw send receipt. Preserve the actual event; do not admit or run tests.",
+  "review": {
+    "path": "/tmp/candidate016-event001-review-astra-001.md",
+    "sha256": "802b33a0c1418ea53618bc9141cc5429626f132b602734f11ffe1b0e89f10a47",
+    "verdict": "NEEDS_REVISION"
+  },
+  "current_evidence": {
+    "event001": {
+      "path": "docs/resolve-blocker/plan031-progress-20260922/main-session-049-diagnostic-016-event-001.json",
+      "sha256": "a965cf85eca2b428097e45b697901a6f34d3103e2d9021eae64a1a5bfff23f04"
+    },
+    "raw_send": {
+      "path": "docs/resolve-blocker/plan031-lost-exec-handle-20260925/candidate016-start-frame-send-001.json",
+      "sha256": "fdae4363a231d2626c1a73623bd448c52e08b60b51665bf1a8ca546df4f427ed"
+    },
+    "identity_request": {
+      "path": "docs/resolve-blocker/plan031-progress-20260922/launch-identity-049-diagnostic-016.json",
+      "sha256": "00dc10086901628b9282cf3fa044767c21f7be978f9ca9ee45066379f0ce5b05"
+    },
+    "ledger": {
+      "path": "docs/resolve-blocker/plan031-progress-20260922/.job-ledger-diagnostic-049-016.jsonl",
+      "sha256": "16d494e567bf791d6a9c893e0ed16395e232127da66e5a05927fb6a90f71c561",
+      "rows": 2,
+      "events": ["attempt-open", "main-handle"]
+    },
+    "admission_path_exists": false,
+    "launch_note_exists": false,
+    "driver_exec_start_exists": false,
+    "capture_logs_exist": false,
+    "attempt_directory_exists": false,
+    "tests_or_diagnostic_payload_started": false
+  },
+  "proposed_single_action": {
+    "tool": "write_stdin",
+    "arguments": {
+      "session_id": 11457,
+      "chars": "\u0004",
+      "yield_time_ms": 1000,
+      "max_output_tokens": 4000
+    },
+    "expected_driver_path": "docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py:285",
+    "expected_effect": "The pre-admission sys.stdin.readline() rejects EOT instead of ADMIT\\n and exits with ValueError before creating an admission, launch note, capture process, runner, or test payload.",
+    "capture_requirements": "Bracket the call with direct UTC reads; persist the exact explicit arguments and complete raw same-handle return immediately, before the post-call UTC read. Do not retry or contact any other identity."
+  },
+  "scope": "Retirement only. This intent authorizes no ADMIT, test, diagnostic payload, aggregate, source change, attempt-index reuse, or other session contact."
+}

@@ -1,0 +1,37 @@
+{
+  "schema": "main-exec-return-capture-order/v1",
+  "attempt": "diagnostic016",
+  "session_handle": 11457,
+  "provenance": "The actual Main functions.exec wrapper issued for Candidate016 is preserved in the parent tool transcript. This record transcribes its executed ordering; it does not infer ordering from file mtimes.",
+  "ordered_actions": [
+    {
+      "ordinal": 1,
+      "action": "clock__curr_time before nested exec_command",
+      "observed_utc": "2026-09-25 21:23:55 UTC"
+    },
+    {
+      "ordinal": 2,
+      "action": "await tools.exec_command(exact arguments in candidate016-main-exec-start-001.json)"
+    },
+    {
+      "ordinal": 3,
+      "action": "Immediately call store(\"candidate016_exec_raw\", raw) on the complete nested tool-return object"
+    },
+    {
+      "ordinal": 4,
+      "action": "Store the positive returned session_id 11457 under candidate016_session_id"
+    },
+    {
+      "ordinal": 5,
+      "action": "Serialize the exact arguments and raw result, then durably add candidate016-main-exec-start-001.json"
+    },
+    {
+      "ordinal": 6,
+      "action": "Only after apply_patch persistence succeeded, read the post-call clock",
+      "observed_utc": "2026-09-25 21:24:00 UTC"
+    }
+  ],
+  "raw_return_persisted_before_post_clock": true,
+  "persistence_error": null,
+  "assertion_scope": "This is Main's transcript-backed ordering attestation. It proves no tool-native terminal state or test admission."
+}

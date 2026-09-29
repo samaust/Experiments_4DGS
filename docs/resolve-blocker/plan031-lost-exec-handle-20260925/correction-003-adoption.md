@@ -1,0 +1,9 @@
+# Main adoption — Plan056 Correction003
+
+Main adopts [Correction003](correction-003-proposal.md), SHA-256 `b3163aa43f0b839d4917bcdd3f9032b7c414e7fdeda6ecbf3192441af2120617`, for diagnostic006's local process-tree retirement only, after the independent exact-proposal **PASS** in [Correction003 review](correction-003-review-001.md), SHA-256 `b0bce6127e1e6f2b24e1613940d92a7b9fda136650a4d062f90268c4f1cfac8c`.
+
+The user directly attested as computer administrator that they restarted the computer and that the process group retired. Diagnostic006's identity request reports old boot ID `83359f83-d706-4b7b-8873-f5933bd41054` and PID/PGID 140549; the later kernel boot record is `072f8a59-03c2-4df4-af1f-c44aa0407253`, after the diagnostic006 Main launch and cleanup observations. The independent reviewer accepts that combination as retirement evidence for diagnostic006's local process group and descendants on that administrator-identified computer.
+
+This releases only diagnostic006's local B process-tree charge. Diagnostic006's lost native exec session remains unknown and retains **H=1**. Candidate009 remains a separate lost native session and retains **H=1** under Correction002. The two identity requests, indices, and output sets remain consumed and untouched; neither was admitted or tested. Correction003 neither broadens Correction002 nor proves any native-session terminal result.
+
+Candidate010 remains uncleared. Its prior preflight records are preserved but superseded for capacity: preflight004 counted only candidate009's unresolved H. A new independent readiness decision and fresh final boundary checks must account for both historical H charges. With candidate010 reserving B=1/H=1, current local B=0 after the two separately reviewed reboot dispositions, old H=2, projected H=3 and charge `1 + max(1,3) = 4≤8`. No start frame, admission, test, diagnostic or aggregate is authorized by this adoption alone.

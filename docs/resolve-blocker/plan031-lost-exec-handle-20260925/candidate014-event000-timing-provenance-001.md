@@ -1,0 +1,3 @@
+# Candidate014 event000 capture timing provenance
+
+The raw nested `exec_command` result has no UTC fields. Main anchors the event receipt to the nanosecond filesystem modification timestamp of `candidate014-main-exec-start-001.json` and subtracts the tool-reported `wall_time_seconds` to derive the start stamp. This records the measured tool duration and durable-return capture time; the file timestamp may be a small upper bound on the nested tool return. No timestamp is inferred from the driver identity request or self-reported PID. The independent reviewer must decide whether this provenance satisfies the frozen event contract before any start frame is sent.

@@ -1,0 +1,20 @@
+{
+  "schema": "main-exec-command-raw-return/v1",
+  "tool": "exec_command",
+  "arguments": {
+    "cmd": "env -u S1_JOB_LEDGER PYTHONPATH=scripts OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 OPENCV_FOR_THREADS_NUM=1 VIPE_CPU_VALIDATION=1 .local/envs/stg-colmap/bin/python -B -c 'import os; from vipe_benchmark.s1_helper_session import signal_job_pidfd; assert not os.environ.get(\"S1_JOB_LEDGER\"); fd=os.pidfd_open(os.getpid());\ntry:\n result=signal_job_pidfd(\"probe-root\",\"probe-target\",{},fd,0,None); assert result is None; print(\"PASS: signal_job_pidfd used signal.pidfd_send_signal(fd, 0, None, 0) against self; signal 0 made no process state change\")\nfinally:\n os.close(fd)'",
+    "workdir": "/home/auss/git_repos/samaust/Experiments_4DGS",
+    "yield_time_ms": 30000,
+    "max_output_tokens": 1000
+  },
+  "result": {
+    "chunk_id": "5e1b9c",
+    "wall_time_seconds": 0.000009083,
+    "exit_code": 0,
+    "original_token_count": 31,
+    "output": "PASS: signal_job_pidfd used signal.pidfd_send_signal(fd, 0, None, 0) against self; signal 0 made no process state change\n"
+  },
+  "pre_call_utc": "2026-09-25 21:04:49 UTC",
+  "post_call_utc": "2026-09-25 21:04:49 UTC",
+  "capture_note": "Exact nested exec_command result was immediately retained with store() before post-call clock read; this file serializes that retained return and the actual nested call arguments."
+}

@@ -1,0 +1,34 @@
+{
+  "evidence_id": "candidate015-local-job-reboot-retirement-001",
+  "scope": "Candidate015 local execution job and descendants; does not reconstruct the lost tool terminal result or authorize reuse of its identity, attempt index, or output paths",
+  "user_attestation": "The user directly reported: I rebooted the computer.",
+  "last_exact_handle_observation": {
+    "handle": 13761,
+    "poll_ordinal": 85,
+    "observed_utc": "2026-09-25T12:48:18Z/2026-09-25T12:48:23Z",
+    "result": "same session handle 13761, empty output, no exit/error",
+    "event_path": "../plan031-progress-20260922/main-session-049-diagnostic-015-poll-event-085.json",
+    "event_sha256": "33839a0e0fa671a834372ba133ac28068eb379cc1e83fe52df8ddf9ed547be4e"
+  },
+  "post_reboot_observation": {
+    "observed_utc": "2026-09-25T20:51:02Z",
+    "kernel_boot_id": "ba1b4efe-ee43-4088-86df-706c41cfac12",
+    "kernel_boot_time_utc": "2026-09-25T20:46:04Z",
+    "proc_uptime_seconds": 298.11,
+    "workload_process_census": "No matching s1_helper_session.py, candidate015, diagnostic-015, or plan031 runner/capture process was observed.",
+    "tool_handle_probe": {
+      "path": "candidate015-postadmit-poll-086-error.json",
+      "tool": "write_stdin",
+      "args": {"session_id": 13761, "chars": "", "yield_time_ms": 1000, "max_output_tokens": 24000},
+      "error": "Unknown process id 13761",
+      "interpretation": "The tool's exact returned handle is no longer pollable. This error is not an exec terminal return."
+    }
+  },
+  "decision_basis": "The exact Main handle returned live before the user-reported reboot. The current kernel boot time is later than that last live observation, and the exact handle now returns Unknown process id. A full reboot necessarily retires processes and descendants from the previous local kernel; the fresh scoped census corroborates their absence.",
+  "limits": [
+    "No successful terminal output, exit code, or status for outer session 13761 was recovered.",
+    "No claim is made about a platform-side record that might outlive the local process job.",
+    "Candidate015 remains preserved as failed historical evidence: 73 tests, 81 failures, 47 errors.",
+    "Do not reuse candidate015 identity, index, or output paths; this record releases only its local execution-job ownership after independent review."
+  ]
+}

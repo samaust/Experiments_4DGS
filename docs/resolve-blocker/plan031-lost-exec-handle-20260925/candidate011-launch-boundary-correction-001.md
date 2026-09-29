@@ -1,0 +1,5 @@
+# Candidate011 launch-boundary correction001
+
+Preserve `candidate011-launch-boundary-001.json`; its source/authority hashes, artifact scan, output-path checks, high-water and capacity accounting are useful. Its process matcher was too broad: it used substring search over full `/proc/PID/cmdline`, so it classified the sandbox's serialized policy/command argument and this Main audit shell's embedded script text as Plan049 workloads. The observations were PID1 `codex-linux-sandbox`, PID2 `/bin/bash -c` running this audit script, and PID3 `python3 -`; none is the Plan049 driver, capture module, or pytest. The reported two matches were therefore false positives, and this record is not the final launch boundary.
+
+Run a fresh final boundary snapshot using Plan049's preflight matcher rule: exact driver argv token, exact capture module token after `-m`, or pytest executable basename; exclude embedded shell text and the audit's own command body. Recheck all source/authority/artifact/path/high-water/ownership criteria and bind the exact current launch intent. This correction makes no source or behavior changes and grants no launch clearance by itself.

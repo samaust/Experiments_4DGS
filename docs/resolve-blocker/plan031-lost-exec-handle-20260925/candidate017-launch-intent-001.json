@@ -1,0 +1,70 @@
+{
+  "schema": "plan049-diagnostic-launch-intent/v1",
+  "kind": "diagnostic",
+  "index": 17,
+  "reason": "Plan049 unchanged CPU-only serial diagnostic after Correction019 pidfd API fix with exact outer-call argument capture",
+  "command": "exec /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python -B /home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py diagnostic 17 'Plan049 unchanged CPU-only serial diagnostic after Correction019 pidfd API fix with exact outer-call argument capture'",
+  "exec_arguments": {
+    "cmd": "exec /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python -B /home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py diagnostic 17 'Plan049 unchanged CPU-only serial diagnostic after Correction019 pidfd API fix with exact outer-call argument capture'",
+    "justification": "Run the reviewed Plan049 CPU-only diagnostic after the exact AF_UNIX datagram socket retry succeeded.",
+    "login": false,
+    "max_output_tokens": 10000,
+    "prefix_rule": [
+      "exec",
+      "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+      "-B",
+      "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py"
+    ],
+    "sandbox_permissions": "require_escalated",
+    "shell": "/bin/bash",
+    "tty": true,
+    "workdir": "/home/auss/git_repos/samaust/Experiments_4DGS",
+    "yield_time_ms": 1000
+  },
+  "required_justification": "Run the reviewed Plan049 CPU-only diagnostic after the exact AF_UNIX datagram socket retry succeeded.",
+  "observed_utc": "2026-09-25T22:34:48Z",
+  "no_launch_yet": true,
+  "launch_review_scope": "One exact exec_command bootstrap only after an independently reviewed fresh final source, authority, storage, process/thread, capacity, output-path and high-water boundary. This does not clear a start frame, poll, identity reuse, admission, ADMIT, tests or diagnostic payload.",
+  "readiness_review_scope": "Independent review of this exact intent and reviewed Candidate017 preflight only. A separate fresh final launch boundary/review remains required.",
+  "capture_contract": "Pass the exact literal exec_arguments object. Before the nested exec_command call, read UTC. Immediately retain the complete raw result and positive session_id, then persist the complete actual arguments object and complete raw result together in a fresh exclusive artifact. Only after successful persistence read the post-call UTC bound. Build event000 from those exact saved bytes and bounds. Stop if a positive handle cannot be retained or persistence fails.",
+  "poll_contract": "Every write_stdin call explicitly includes session_id, chars, yield_time_ms, and max_output_tokens; readiness frame bytes are exact and nonempty, later proof polls use chars:\"\". Persist the complete actual argument object and complete raw result immediately; never synthesize omitted fields or infer defaults. Independent review precedes each next contact.",
+  "preflight": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-lost-exec-handle-20260925/candidate017-launch-preflight-002.json",
+    "bytes": 78227,
+    "sha256": "d9d5e75a684c657aeb9e268346c04c8f355b1c9f36d838ec071c3b46deb364c3"
+  },
+  "preflight_review": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-lost-exec-handle-20260925/candidate017-preflight-review-astra-001.md",
+    "bytes": 5105,
+    "sha256": "d362bd436fcefcf883fe0ae1470b3762a9b0bebd5612cd06a71f27e8f2551579"
+  },
+  "source_driver": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+    "bytes": 29818,
+    "sha256": "bdf68e0eaef6648d4097c5f819527fff94573bacc202176309c5832a915f59b8"
+  },
+  "validator": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_contract.py",
+    "bytes": 56903,
+    "sha256": "2f522e8636b486ad7141daef105cb3980f11dc03b971728b68c9ec2cf245d2c0"
+  },
+  "template_source": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-lost-exec-handle-20260925/candidate015-launch-intent-002.json",
+    "bytes": 4899,
+    "sha256": "30edccf1957ffbb00ce980ec6ae00d925b08d735edd97e043c8ae794098eb657"
+  },
+  "supersedes_candidate016": {
+    "event001_review": "NEEDS_REVISION; exact returned args were not fully evidenced; preserve it unchanged",
+    "retirement_review": "PASS; exact same-handle pre-admission EOT terminal; index016 consumed"
+  },
+  "constraints": {
+    "cpu_only": true,
+    "serial": true,
+    "timeout": null,
+    "original_assertions_and_deadlines_unchanged": true,
+    "artifact_cap_bytes": 161061273600,
+    "process_charge": "B+max(1,H)≤8",
+    "no_gpu_model_device_or_production_operations": true,
+    "prompts_content_read": false
+  }
+}

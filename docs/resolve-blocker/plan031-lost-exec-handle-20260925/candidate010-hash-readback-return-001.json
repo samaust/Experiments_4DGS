@@ -1,0 +1,24 @@
+{
+  "schema": "plan049-main-control-tool-return/v1",
+  "purpose": "read-only rehash of retained candidate010 event001 output bytes",
+  "tool": "exec_command",
+  "arguments": {
+    "cmd": "python3 -c 'import json,hashlib,pathlib; p=pathlib.Path(\"docs/resolve-blocker/plan031-progress-20260922/main-session-049-diagnostic-010-event-001.json\"); d=json.loads(p.read_text()); print(json.dumps({\"event_file_sha256\":hashlib.sha256(p.read_bytes()).hexdigest(),\"stored_output_sha256\":d[\"output_sha256\"],\"correct_output_sha256\":hashlib.sha256(d[\"result\"][\"output\"].encode(\"utf-8\")).hexdigest(),\"output_bytes\":len(d[\"result\"][\"output\"].encode(\"utf-8\")),\"session_id\":d[\"result\"].get(\"session_id\")}))'",
+    "shell": "/bin/bash",
+    "login": false,
+    "workdir": "/home/auss/git_repos/samaust/Experiments_4DGS",
+    "yield_time_ms": 10000,
+    "max_output_tokens": 300
+  },
+  "result": {
+    "chunk_id": "67d48d",
+    "wall_time_seconds": 0.000008685,
+    "exit_code": 0,
+    "original_token_count": 80,
+    "output": "{\"event_file_sha256\": \"0210f36fc11d052ddf337ed747404098986f81246c1b1dcc886ada3758e758d2\", \"stored_output_sha256\": \"15bcbf380b27e9ddcf3cb863495f7936daad2e0990acb01dd19b3205b48912ca\", \"correct_output_sha256\": \"4780a8b1d5dc604f7b58b3456c4bdab0c37629c097fcd87dfed90b51e0193921\", \"output_bytes\": 2336, \"session_id\": 87565}\n"
+  },
+  "started_utc": null,
+  "started_utc_status": "not captured; no original invocation time is reconstructed",
+  "invalid_initial_started_utc": "2026-09-25T05:59:00Z",
+  "returned_utc": "2026-09-25T06:05:55.316Z"
+}
