@@ -3,11 +3,14 @@ import numpy as np
 
 from .config import ROOT, training_cameras
 from .contracts import depth as validate_depth, sample_depth
-from .files import digest, file_record, load_array, read_json
+from .files import digest, file_record, load_array, read_json, verify_record
 
 
 def evaluate(rows, predictions, config, *, provenance, frozen_fit=None):
     from basketball_scale import scale_statistics
+    if not isinstance(provenance.get('inputs'), dict):
+        raise ValueError('scale input manifest binding required')
+    verify_record(provenance['inputs'])
     p = read_json(ROOT / 'configs/basketball-rev2/scale.json')
     required = set(training_cameras(config))
     if len(rows) != len(required) or {r['identity']['camera'] for r in rows} != required:
@@ -26,6 +29,8 @@ def evaluate(rows, predictions, config, *, provenance, frozen_fit=None):
                 fit['provenance']['component_sha256'] != provenance['component_sha256'] or
                 fit['scale_protocol_sha256'] != digest(ROOT / 'configs/basketball-rev2/scale.json')):
             raise ValueError('frozen fit is incomplete, changed or belongs to another candidate')
+        if fit['provenance'].get('inputs') != provenance['inputs']:
+            raise ValueError('frozen fit input manifest differs from check')
         frozen = fit['scale']
     samples, missing = [], []
     for row in sorted(rows, key=lambda r: r['identity']['camera']):

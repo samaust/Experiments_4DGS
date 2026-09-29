@@ -398,7 +398,8 @@ def predict_depth(request, output, config):
     if not repeat:
         scale = evaluate(rows, predictions, config,
                          provenance=dict(component=component, component_sha256=component_hash,
-                                         configuration=file_record(output / 'config.json')),
+                                         configuration=file_record(output / 'config.json'),
+                                         inputs=request['inputs']),
                          frozen_fit=request.get('frozen_fit'))
         scale.update(component=component, component_sha256=component_hash)
         write_json(output / 'scale.json', scale)

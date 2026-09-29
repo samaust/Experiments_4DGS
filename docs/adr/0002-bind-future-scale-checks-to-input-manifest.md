@@ -1,0 +1,3 @@
+# Bind future scale checks to the exact input manifest
+
+`vipe_benchmark.scale.evaluate` previously compared a frozen fit with a check by candidate and scale protocol, while the request-level audit separately established that historical D0/D1 fits and checks used the same immutable input manifest. Future scale results now record the verified request input-manifest file record in their provenance, and a check requires its fit to carry that same record. This keeps the shared scale interface fail closed if a later request substitutes inputs. Historical D0/D1 receipts remain immutable and retain their separately verified request-level provenance; they are not rewritten or retroactively described as having the new field.

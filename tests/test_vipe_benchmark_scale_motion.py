@@ -27,7 +27,9 @@ class ScaleAdapterTests(unittest.TestCase):
         self.rows = [dict(identity=Identity('depth', c, 100).record(), K=self.K.tolist(),
                           samples=file_record(self.root / 'samples.npz')) for c in training_cameras(self.config)]
         self.predictions = {c: file_record(self.root / 'depth.npz') for c in training_cameras(self.config)}
-        self.provenance = dict(component_sha256='synthetic-test-component', sample_manifest_sha256='fixture')
+        write_json(self.root / 'inputs.json', {'sample': 'original'})
+        self.provenance = dict(component_sha256='synthetic-test-component',
+                               inputs=file_record(self.root / 'inputs.json'))
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -62,7 +64,19 @@ class ScaleAdapterTests(unittest.TestCase):
         for row in self.rows:
             row['identity']['frame'] = 175
         with self.assertRaisesRegex(ValueError, 'another candidate'):
-            evaluate(self.rows, self.predictions, self.config, provenance=dict(component_sha256='changed'),
+            evaluate(self.rows, self.predictions, self.config,
+                     provenance=dict(self.provenance, component_sha256='changed'),
+                     frozen_fit=file_record(self.root / 'fit.json'))
+
+    def test_frozen_check_rejects_changed_input_manifest(self):
+        fit = evaluate(self.rows, self.predictions, self.config, provenance=self.provenance)
+        write_json(self.root / 'fit.json', fit)
+        write_json(self.root / 'other-inputs.json', {'sample': 'changed'})
+        for row in self.rows:
+            row['identity']['frame'] = 175
+        changed = dict(self.provenance, inputs=file_record(self.root / 'other-inputs.json'))
+        with self.assertRaisesRegex(ValueError, 'input manifest'):
+            evaluate(self.rows, self.predictions, self.config, provenance=changed,
                      frozen_fit=file_record(self.root / 'fit.json'))
 
 
