@@ -87,3 +87,20 @@ When outside-sandbox execution is denied, unavailable, or fails:
    or imply that an allow rule overrides an explicit denial or fixes a host error.
 6. Wait for the user to resolve the permission issue before continuing the
    affected work.
+
+## Agent skills
+
+### Issue tracker
+
+For issue lookup, creation, or triage, use GitHub Issues in
+`samaust/Experiments_4DGS`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+For issue triage, use the five canonical label names. See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+For domain terms and design decisions, use the single-context layout.
+See `docs/agents/domain.md`.
