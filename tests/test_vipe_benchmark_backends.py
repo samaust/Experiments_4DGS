@@ -659,6 +659,35 @@ class DepthTests(unittest.TestCase):
         with self.assertRaisesRegex(BackendError, 'already-metric'):
             DA3Backend(model, FakeRuntime()).predict(rgb, self.K, valid)
 
+    def test_da3_nonuniform_processed_focal_and_native_validity(self):
+        rgb, valid = image((2, 3))
+        valid[1, 2] = False
+        processed_K = np.array([[[300., 0., 1.25], [0., 900., .75],
+                                 [0., 0., 1.]]])
+
+        class Model:
+            def input_processor(self, images, **kwargs):
+                return np.zeros((1, 3, 2, 3)), None, processed_K.copy()
+            def _prepare_model_inputs(self, pixels, ext, K):
+                return pixels[None], None, K[None]
+            def forward(self, pixels, **kwargs):
+                return None
+            def output_processor(self, output):
+                return SimpleNamespace(depth=np.array([[2., 0., np.nan],
+                                                       [np.inf, 4., 6.]]), conf=None)
+
+        result = DA3Backend(Model(), FakeRuntime()).predict(rgb, self.K, valid)
+        # Independent reference: mean(300, 900) / 300 = 2, including unequal axes.
+        self.assertEqual(result.metadata['factor'], 2.)
+        self.assertEqual(result.metadata['focal_conversion_count'], 1)
+        np.testing.assert_array_equal(result.valid, [[True, False, False],
+                                                     [False, True, False]])
+        np.testing.assert_allclose(result.depth[result.valid], [4., 8.])
+        self.assertTrue(np.isnan(result.depth[~result.valid]).all())
+        np.testing.assert_array_equal(result.raw_depth,
+                                      [[2., 0., np.nan], [np.inf, 4., 6.]])
+        np.testing.assert_allclose(result.metadata['native_processed_K'], processed_K[0])
+
     def test_metric3d_resized_focal_unpad_and_native_clamp(self):
         rgb, valid = image((540, 960)); calls = {}
         class Model:
