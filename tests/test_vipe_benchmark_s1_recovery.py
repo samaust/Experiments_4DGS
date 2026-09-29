@@ -75,6 +75,14 @@ class S1RequestCapacityTests(unittest.TestCase):
 
 
 class S1NextIdentityTests(unittest.TestCase):
+    def setUp(self):
+        import json
+        snapshot = ROOT / 'docs/continuous-improvement/plan031-s1-recovery-20260919/requalification-069/post-dispatch-ledger-003.jsonl'
+        prefix = snapshot.read_bytes()
+        live = ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z/ledger.jsonl'
+        self.assertTrue(live.read_bytes().startswith(prefix))
+        self.historical_events = [json.loads(line) for line in prefix.splitlines()]
+
     def test_fourth_identity_requires_exact_process_file_amendment(self):
         local = ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z'
         proposal = ROOT / 'docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-calibration-recovery-authorization-004.json'
@@ -90,19 +98,19 @@ class S1NextIdentityTests(unittest.TestCase):
                              authorization_context=dict(draft['authorization_context'], stage='DO'))
             valid = root / 'valid.json'
             write_json(valid, candidate)
-            self.assertEqual(s1.validate_binding(local, load(), file_record(valid))[0]['job_id'], s1.JOB_4)
+            self.assertEqual(s1.validate_binding(local, load(), file_record(valid), events=self.historical_events)[0]['job_id'], s1.JOB_4)
 
             old = root / 'old.json'
             write_json(old, {key: value for key, value in candidate.items() if key != 'process_file_amendment'})
             with self.assertRaises(ValueError):
-                s1.validate_binding(local, load(), file_record(old))
+                s1.validate_binding(local, load(), file_record(old), events=self.historical_events)
 
             copied = root / 'substituted-amendment.json'
             write_json(copied, read_json(amendment))
             substituted = root / 'substituted.json'
             write_json(substituted, dict(candidate, process_file_amendment=file_record(copied)))
             with self.assertRaises(ValueError):
-                s1.validate_binding(local, load(), file_record(substituted))
+                s1.validate_binding(local, load(), file_record(substituted), events=self.historical_events)
             with self.assertRaisesRegex(ValueError, 'explicit S1 calibration'):
                 s1.validate_binding(local, load(), file_record(proposal))
         self.assertEqual((local / 'ledger.jsonl').read_bytes(), ledger_before)
@@ -112,7 +120,6 @@ class S1NextIdentityTests(unittest.TestCase):
         path = ROOT / 'docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-calibration-recovery-authorization-004.json'
         draft = read_json(path)
         before = (local / 'ledger.jsonl').read_bytes()
-        self.assertEqual(len(before), 363162)
         with tempfile.TemporaryDirectory() as directory, patch.object(s1, 'validation_record', return_value=read_json(draft['repair_validation']['path'])):
             approved = dict(draft, additional_attempt_approved=True,
                             process_file_amendment=file_record(ROOT / 'docs/research/vipe-alternatives/issue3-preparation/s1-process-file-amendment-001.json'),
@@ -121,7 +128,7 @@ class S1NextIdentityTests(unittest.TestCase):
             candidate = Path(directory) / 'candidate.json'
             write_json(candidate, approved)
             record = file_record(candidate)
-            document, request = s1.validate_binding(local, load(), record)
+            document, request = s1.validate_binding(local, load(), record, events=self.historical_events)
             self.assertEqual(document['job_id'], s1.JOB_4)
             self.assertEqual(request['job_id'], 'S1-calibration')
             for field, value in [('previous_recovery_failure_event_sha256', '0' * 64),
@@ -129,7 +136,7 @@ class S1NextIdentityTests(unittest.TestCase):
                 changed = Path(directory) / (field + '.json')
                 write_json(changed, dict(approved, **{field: value}))
                 with self.assertRaises(ValueError):
-                    s1.validate_binding(local, load(), file_record(changed))
+                    s1.validate_binding(local, load(), file_record(changed), events=self.historical_events)
             with self.assertRaisesRegex(ValueError, 'explicit S1 calibration'):
                 s1.validate_binding(local, load(), file_record(path))
         self.assertEqual((local / 'ledger.jsonl').read_bytes(), before)
@@ -156,8 +163,7 @@ class S1NextIdentityTests(unittest.TestCase):
         path = ROOT / 'docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-calibration-recovery-authorization-003.json'
         draft = read_json(path)
         before = (local / 'ledger.jsonl').read_bytes()
-        self.assertEqual(len(before), 363162)
-        historical_events = Ledger(local / 'ledger.jsonl', load()).events()[:459]
+        historical_events = self.historical_events[:459]
         with tempfile.TemporaryDirectory() as directory, patch.object(s1, 'validation_record', return_value=read_json(draft['repair_validation']['path'])):
             review = dict(draft, additional_attempt_approved=True,
                           process_file_amendment=file_record(ROOT / 'docs/research/vipe-alternatives/issue3-preparation/s1-process-file-amendment-001.json'),
@@ -193,7 +199,7 @@ class S1NextIdentityTests(unittest.TestCase):
         original = (local / 'ledger.jsonl').read_bytes()
         # Review the historical pre-dispatch snapshot. The live second
         # identity is now consumed, so it cannot serve as a new-attempt gate.
-        historical_events = Ledger(local / 'ledger.jsonl', load()).events()[:453]
+        historical_events = self.historical_events[:453]
         with tempfile.TemporaryDirectory() as directory, patch.object(s1, 'validation_record', return_value=read_json(document['repair_validation']['path'])):
             path = Path(directory) / 'authorization.json'
             write_json(path, document)

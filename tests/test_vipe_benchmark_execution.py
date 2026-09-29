@@ -23,6 +23,46 @@ from vipe_benchmark.supervisor import SupervisionFailure
 
 
 class FrozenHandoffTests(unittest.TestCase):
+    def test_s1_terminal_validation_uses_its_finish_snapshot_after_later_notes(self):
+        from vipe_benchmark.files import canonical, object_hash
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            job = 'S1-calibration-recovery-004'
+            write_json(root / 'jobs' / job / 'result.json', dict(status='complete'))
+            record = file_record(root / 'jobs' / job / 'result.json')
+            # Routing fixture; the full recovery validator owns the scientific
+            # contract. Keep the real hash chain and successful result binding.
+            finish = dict(sequence=0, previous_sha256=None, event='finish',
+                          job_id=job, status='complete', result=record)
+            finish['event_sha256'] = object_hash(finish)
+            (root / 'ledger.jsonl').write_text(canonical(finish) + '\n')
+            ledger = Ledger(root / 'ledger.jsonl', load())
+            ledger.note('later_setup_review', authorization='fixture')
+            with patch('vipe_benchmark.s1_recovery.resolved_result') as validate:
+                self.assertEqual(result_record(root, job), record)
+                self.assertEqual(validate.call_args.args[2], [finish])
+            self.assertEqual(len(ledger.events()), 2)
+
+    def test_s1_result_lookup_accepts_reviewed_consumed_prefix_and_rejects_unknown_recovery(self):
+        from vipe_benchmark.config import ROOT
+        snapshot = ROOT / 'docs/continuous-improvement/plan031-s1-recovery-20260919/requalification-069/post-dispatch-ledger-003.jsonl'
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            before = snapshot.read_bytes()
+            (root / 'ledger.jsonl').write_bytes(before)
+            self.assertIsNone(result_record(root, 'S1-calibration'))
+            self.assertEqual((root / 'ledger.jsonl').read_bytes(), before)
+            from vipe_benchmark.files import canonical, object_hash
+            events = Ledger(root / 'ledger.jsonl', load()).events()
+            extra = dict(event='component_recovery_authorized', original_job_id='S1-calibration',
+                         job_id='S1-calibration-recovery-005', sequence=len(events),
+                         previous_sha256=events[-1]['event_sha256'], recorded_unix=0.)
+            extra['event_sha256'] = object_hash(extra)
+            with (root / 'ledger.jsonl').open('a') as stream:
+                stream.write(canonical(extra) + '\n')
+            with self.assertRaisesRegex(ValueError, 'reviewed identities'):
+                result_record(root, 'S1-calibration')
+
     def test_completed_report_is_returned_without_readmission_or_another_pass(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

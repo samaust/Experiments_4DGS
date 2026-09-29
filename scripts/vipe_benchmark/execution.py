@@ -21,12 +21,15 @@ def result_path(local, job):
 def result_record(local, job):
     path = result_path(local, job)
     ledger = Ledger(local / 'ledger.jsonl', load())
-    state = ledger.states().get(job, {})
+    events = ledger.events()
+    state = ledger.states(events).get(job, {})
     if state.get('event') != 'finish' or state.get('status') != 'complete' or not state.get('result'):
-        recoveries = [e for e in ledger.events() if e['event'] == 'component_recovery_authorized'
+        recoveries = [e for e in events if e['event'] == 'component_recovery_authorized'
                       and e['original_job_id'] == job]
-        if job == 'S1-calibration' and len(recoveries) > 2:
-            raise ValueError('S1 recovery exceeds the two reviewed identities')
+        if job == 'S1-calibration':
+            identities = [event['job_id'] for event in recoveries]
+            if identities != sorted(S1_RECOVERY_JOBS)[:len(identities)]:
+                raise ValueError('S1 recovery differs from the reviewed identities')
         if recoveries:
             record = result_record(local, recoveries[-1]['job_id'])
             if record:
@@ -37,7 +40,7 @@ def result_record(local, job):
                     raise ValueError('component recovery result has wrong original arm')
                 return record
         if job == 'S3-reconstruction':
-            recoveries = [e for e in ledger.events() if e['event'] == 'reconstruction_recovery_authorized']
+            recoveries = [e for e in events if e['event'] == 'reconstruction_recovery_authorized']
             if recoveries:
                 record = result_record(local, recoveries[-1]['job_id'])
                 if record:
@@ -48,7 +51,9 @@ def result_record(local, job):
         return None
     if job in S1_RECOVERY_JOBS:
         from .s1_recovery import resolved_result
-        resolved_result(local, load(), ledger.events(), state)
+        # Validate the completed attempt through its finish; later allocations
+        # belong to subsequent work. The entire live hash chain was checked above.
+        resolved_result(local, load(), events[:state['sequence'] + 1], state)
     record = state['result']
     if Path(record['path']).resolve() != path.resolve():
         raise ValueError('ledger result identity differs from allocated job')

@@ -1,0 +1,196 @@
+{
+  "scenario": "L05",
+  "mode": "identity_failure",
+  "constructor_entry": 294169.000554637,
+  "action_cutoff": 294171.000554637,
+  "safety_cutoff": 294172.000554637,
+  "constructor_end": 294169.000653669,
+  "t0": 294169.000576812,
+  "ready_deadline": 294169.08057681203,
+  "setup_deadline": 294169.180576812,
+  "setup_cleanup_deadline": 294169.300576812,
+  "action_end": 294169.031414186,
+  "end": 294169.031424995,
+  "execution_seconds": 0.030859549005981535,
+  "cleanup_seconds": 1.0808988008648157e-05,
+  "cleanup_confirmed": true,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "reaped",
+      "pid": 696771,
+      "wait_status": 15
+    },
+    "sample": {
+      "role": "sample",
+      "state": "pending",
+      "pid": null
+    }
+  },
+  "errors": [
+    {
+      "error_class": "ValueError",
+      "message": "fixture identity capture after actual spawn",
+      "phase": "startup"
+    }
+  ],
+  "signals": [
+    {
+      "pid": 696771,
+      "signal": 15,
+      "monotonic": 294169.0182104
+    }
+  ],
+  "ticks": [
+    294169.000576812,
+    294169.000662639,
+    294169.005771126
+  ],
+  "events": [
+    {
+      "event": "fixture_spawn_entry",
+      "role": "work",
+      "observed": 294169.000929287,
+      "ready_deadline": 294169.08057681203
+    },
+    {
+      "event": "fixture_spawn_return",
+      "role": "work",
+      "pid": 696771,
+      "entered": 294169.000929287,
+      "observed": 294169.00135513,
+      "ready_deadline": 294169.08057681203
+    }
+  ],
+  "trace_facts": {
+    "capacity": 256,
+    "total": 2,
+    "dropped": 0,
+    "saturated": false,
+    "first": 294169.000930454,
+    "last": 294169.001357082
+  },
+  "tick_facts": {
+    "capacity": 128,
+    "total": 3,
+    "dropped": 0,
+    "saturated": false,
+    "first": 294169.000580755,
+    "last": 294169.005771785
+  },
+  "owner_error_facts": {
+    "capacity": 32,
+    "total": 1,
+    "dropped": 0,
+    "saturated": false,
+    "first": 294169.001454398,
+    "last": 294169.001454398
+  },
+  "owner_signal_facts": {
+    "capacity": 128,
+    "total": 1,
+    "dropped": 0,
+    "saturated": false,
+    "first": 294169.018224909,
+    "last": 294169.018224909
+  },
+  "request_counts": {
+    "work": {
+      "dispatch": 0,
+      "response": 0
+    },
+    "sample": {
+      "dispatch": 0,
+      "response": 0
+    }
+  },
+  "census_request_count": 0,
+  "max_gap": 0.005108487035613507,
+  "max_turn": 3.776501398533583e-05,
+  "call_observations": [
+    {
+      "operation": "tick",
+      "entered": 294169.000662172,
+      "deadline": 294169.08057681203,
+      "returned": 294169.000701142,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "tick",
+      "entered": 294169.005769127,
+      "deadline": 294169.08057681203,
+      "returned": 294169.005784175,
+      "confirmed": null,
+      "error": "RuntimeError: S1 helper session poisoned: [{'error_class': 'ValueError', 'message': 'fixture identity capture after actual spawn', 'phase': 'startup'}]",
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "await_ready",
+      "entered": 294169.000660443,
+      "deadline": 294169.08057681203,
+      "returned": 294169.005788016,
+      "confirmed": null,
+      "error": "RuntimeError: S1 helper session poisoned: [{'error_class': 'ValueError', 'message': 'fixture identity capture after actual spawn', 'phase': 'startup'}]",
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "close",
+      "entered": 294169.005795589,
+      "deadline": 294169.300576812,
+      "returned": 294169.031401053,
+      "confirmed": true,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "close",
+      "entered": 294169.031417638,
+      "deadline": 294172.000554637,
+      "returned": 294169.031423226,
+      "confirmed": true,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    }
+  ],
+  "call_observation_facts": {
+    "capacity": 128,
+    "total": 5,
+    "dropped": 0,
+    "saturated": false,
+    "first": 294169.000702041,
+    "last": 294169.031424005
+  },
+  "timing_failures": [],
+  "last_sample": null,
+  "requests": {
+    "work": null,
+    "sample": null
+  },
+  "ownership": [],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 0,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 0,
+      "last_frame": null
+    },
+    "sample": {
+      "sent": 0,
+      "received": 0,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 0,
+      "last_frame": null
+    }
+  },
+  "secondary": []
+}
