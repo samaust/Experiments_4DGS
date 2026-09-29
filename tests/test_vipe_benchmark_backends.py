@@ -742,6 +742,47 @@ class DepthTests(unittest.TestCase):
         self.assertIsNone(result.confidence)
         self.assertTrue((result.raw_depth == .5).all())
 
+    def test_depth_pro_native_inverse_depth_clamp_and_validity(self):
+        rgb, footprint = image()
+        footprint[0, 0] = False
+        focal = float(self.K[0, 0])
+        width = rgb.shape[1]
+
+        class Model:
+            def __init__(self, canonical):
+                self.canonical = canonical
+
+            def forward(self, x):
+                return np.full((1, 1, 1536, 1536), self.canonical, np.float32), None
+
+            def infer(self, x, *, f_px, interpolation_mode):
+                assert interpolation_mode == 'bilinear'
+                assert float(f_px) == focal
+                canonical, _ = self.forward(np.zeros((1, 3, 1536, 1536), np.float32))
+                inverse = canonical[0, 0] * (width / float(f_px))
+                # Uniform maps are unchanged by native bilinear restoration.
+                depth = 1. / np.clip(inverse, 1e-4, 1e4)
+                return {'depth': np.full(footprint.shape, depth[0, 0], np.float32)}
+
+        for canonical, expected_depth, low, high, valid_count in (
+            (0.5, 400., 0, 0, 23),
+            (0., 10000., 24, 0, 23),
+            (3e6, 1e-4, 0, 24, 23),
+            (np.nan, np.nan, 0, 0, 0),
+        ):
+            with self.subTest(canonical=canonical):
+                result = DepthProBackend(Model(canonical), lambda x: np.array(x), FakeRuntime()).predict(
+                    rgb, self.K, footprint)
+                self.assertEqual(int(result.valid.sum()), valid_count)
+                self.assertTrue(np.isnan(result.depth[~result.valid]).all())
+                if valid_count:
+                    np.testing.assert_allclose(result.depth[result.valid], expected_depth, rtol=1e-6)
+                self.assertEqual(result.metadata['inverse_clamp_low_pixels'], low)
+                self.assertEqual(result.metadata['inverse_clamp_high_pixels'], high)
+                self.assertEqual(result.metadata['native_raw_nonfinite'],
+                    1536 * 1536 if np.isnan(canonical) else 0)
+                self.assertIsNone(result.confidence)
+
 
 class FactoryTests(unittest.TestCase):
     def sam3_fixture(self, *, missing=(), unexpected=(), load_calls=1):
