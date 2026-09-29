@@ -64,11 +64,14 @@ class S1NextIdentityTests(unittest.TestCase):
             previous_recovery_failure_event_sha256=outcome['finish']['event_sha256'],
             prior_ledger_snapshot=file_record(ROOT / 'docs/continuous-improvement/plan031-s1-recovery-20260919/requalification-066/post-dispatch-ledger.jsonl'))
         original = (local / 'ledger.jsonl').read_bytes()
+        # Review the historical pre-dispatch snapshot. The live second
+        # identity is now consumed, so it cannot serve as a new-attempt gate.
+        historical_events = Ledger(local / 'ledger.jsonl', load()).events()[:453]
         with tempfile.TemporaryDirectory() as directory, patch.object(s1, 'validation_record', return_value=read_json(document['repair_validation']['path'])):
             path = Path(directory) / 'authorization.json'
             write_json(path, document)
             authorization = file_record(path)
-            checked, original_request = s1.validate_binding(local, load(), authorization)
+            checked, original_request = s1.validate_binding(local, load(), authorization, events=historical_events)
             self.assertEqual(checked['job_id'], s1.JOB_2)
             planned_local = Path(directory) / 'planned'
             planned_request = dict(original_request, job_id=s1.JOB_2,
@@ -85,7 +88,7 @@ class S1NextIdentityTests(unittest.TestCase):
             bad = dict(document, previous_recovery_failure_event_sha256='0' * 64)
             write_json(Path(directory) / 'bad.json', bad)
             with self.assertRaises(ValueError):
-                s1.validate_binding(local, load(), file_record(Path(directory) / 'bad.json'))
+                s1.validate_binding(local, load(), file_record(Path(directory) / 'bad.json'), events=historical_events)
         self.assertEqual((local / 'ledger.jsonl').read_bytes(), original)
 
 

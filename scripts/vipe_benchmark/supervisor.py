@@ -12,6 +12,10 @@ from .files import file_record, read_json, safe_path
 # Ownership survives instrumentation that wraps the callable itself.
 _STOP_GROUP_PINS = {}
 
+# gpu_reading makes two five-second nvidia-smi queries. Leave five more seconds
+# for the budget snapshot, census and transport before monitoring is lost.
+S1_MONITOR_GAP_SECONDS = 15.
+
 
 class SupervisionFailure(RuntimeError):
     def __init__(self, message, *, kind, stop_required, verified_progress_reference=None):
@@ -284,6 +288,7 @@ def monitored_call(function, deadline, sampler, config, peak, *, worker=None,
     lifecycle = lifecycle if lifecycle is not None else HelperLifecycle()
     primary = None
     session = None
+    previous_recovery = False
     try:
         session = lifecycle.acquire()
         # Idle time between supervised phases is not an active monitor tick.
@@ -292,6 +297,11 @@ def monitored_call(function, deadline, sampler, config, peak, *, worker=None,
         if session.ready.keys() != {'work','sample'}:
             session.await_ready()
         session.set_worker(worker)
+        previous_recovery = getattr(session, 'recover_samples', False)
+        session.recover_samples = phase == 'worker_sample'
+        if session.recover_samples:
+            session.sample_expiry_count = 0
+            session.first_sample_expired_at = None
         if phase == 'initial_sample':
             deadline = min(deadline, session.setup_deadline)
         sample_only = function is sampler or function == sampler
@@ -314,10 +324,17 @@ def monitored_call(function, deadline, sampler, config, peak, *, worker=None,
                     peak[field] = max(peak.get(field, 0), value[field])
                     if peak[field] > config[key]*2**30:
                         raise RuntimeError('S1 resource ceiling exceeded: ' + field)
+                if role == 'late_sample':
+                    # A stale reading can prove a violation, never safety.
+                    continue
                 if sample_only or (completed is not None and dispatch >= completed):
                     if time.monotonic() >= deadline:
                         raise TimeoutError('S1 return deadline reached')
                     if phase == 'initial_sample': session.accepted_initial = True
+                    if session.recover_samples and session.sample_expiry_count and ledger is not None:
+                        ledger.note('monitor_gap_recovered', job_id=job_id,
+                            expired_samples=session.sample_expiry_count,
+                            gap_seconds=time.monotonic()-session.first_sample_expired_at)
                     return value if sample_only else result
                 if not task_dispatched:
                     session.submit('work', function, deadline)
@@ -340,6 +357,8 @@ def monitored_call(function, deadline, sampler, config, peak, *, worker=None,
             raise primary from exc
         raise
     finally:
+        if session is not None:
+            session.recover_samples = previous_recovery
         if primary is not None or not lifecycle.retain:
             cleanup_deadline = deadline
             if phase == 'initial_sample' and session is not None:
@@ -477,8 +496,12 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
             ledger.note('started', job_id=job_id, pid=process.pid, pgid=process.pid)
             exit_observed = False
             while True:
-                reading = (monitored_call(sampler, min(run_deadline, time.monotonic()+1.), sampler,
-                    ledger.config, peak, worker=process, phase='worker_sample', lifecycle=lifecycle) if is_s1 else sampler())
+                # Each reading still expires after one second. A delayed
+                # reading is discarded; allow the retained helper a bounded
+                # interval to return a subsequent fresh reading.
+                reading = (monitored_call(sampler, min(run_deadline, time.monotonic()+S1_MONITOR_GAP_SECONDS), sampler,
+                    ledger.config, peak, worker=process, phase='worker_sample', lifecycle=lifecycle,
+                    ledger=ledger, job_id=job_id) if is_s1 else sampler())
                 for key in peak:
                     peak[key] = max(peak[key], reading.get(key, 0))
                 if peak['device_bytes'] > ledger.config['gpu_peak_device_gib_limit'] * 2**30:

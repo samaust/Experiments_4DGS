@@ -41,6 +41,10 @@ class FaultOwner(Owner):
         return value
 
     def observe(self):
+        if (self.mode == 'census_once_late' and self.census_request is not None
+                and not getattr(self, 'delayed_census', False)):
+            self.delayed_census = True
+            time.sleep(1.05)
         if self.mode == 'census_block' and getattr(self,'armed',False) and not self.released:
             self.block_entered = time.monotonic()
             while not self.released: time.sleep(.005)
@@ -121,6 +125,12 @@ def main(role, token, fd, mode):
             os._exit(8)
         if role == 'sample' and mode in ('sample_late','phase_late','post_task'):
             time.sleep({'sample_late':1.05,'phase_late':.2,'post_task':.06}[mode])
+        if role == 'sample' and mode in ('sample_once_late','sample_once_late_over_limit','sample_once_late_foreign') and sequence == 1:
+            time.sleep(1.05)
+            if mode == 'sample_once_late_over_limit':
+                return dict(device_bytes=2**64,artifact_bytes=0,download_bytes=0,gpu_pids=[])
+            if mode == 'sample_once_late_foreign':
+                return dict(device_bytes=0,artifact_bytes=0,download_bytes=0,gpu_pids=[os.getpid()])
         if mode == 'artifact' and role == 'work':
             return artifact_checks(operation, session_token, sequence)
         return session_operation(operation,session_token,sequence)

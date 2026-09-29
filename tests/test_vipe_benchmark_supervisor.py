@@ -1165,6 +1165,101 @@ class HelperSessionTests(unittest.TestCase):
         self.sampler = dict(operation='constant', args=dict(value=self.reading))
         self.operation = dict(operation='constant', args=dict(value=37))
 
+    def test_worker_sample_discards_one_late_reply_then_accepts_fresh_reply(self):
+        from test_vipe_benchmark_s1_helper_fixtures import session as fixture_session
+        from vipe_benchmark.supervisor import HelperLifecycle, monitored_call
+        session = fixture_session('sample_once_late')
+        try:
+            session.await_ready()
+            session.cleanup_deadline = self.time.monotonic()+4.
+            lifecycle = HelperLifecycle(retain=True)
+            lifecycle.helpers.append(session)
+            notes=[]
+            class LedgerNotes:
+                def note(self, event, **fields): notes.append(dict(event=event, **fields))
+            value = monitored_call(self.sampler, self.time.monotonic()+3., self.sampler,
+                                   load(), {}, lifecycle=lifecycle, phase='worker_sample',
+                                   ledger=LedgerNotes(), job_id='cpu-monitor-fixture')
+            self.assertEqual(value, self.reading)
+            self.assertEqual(session.sample_expiry_count, 1)
+            self.assertEqual(session.last_sample['request_id'], 2)
+            self.assertIn('sample_discarded', [row['event'] for row in session.events])
+            self.assertEqual(len(notes),1)
+            self.assertEqual(notes[0]['event'],'monitor_gap_recovered')
+            self.assertEqual(notes[0]['expired_samples'],1)
+            self.assertGreaterEqual(notes[0]['gap_seconds'],0)
+            self.assertFalse(session.recover_samples)
+        finally:
+            self.assertTrue(session.close(self.time.monotonic()+3.))
+
+    def test_worker_sample_recovery_stops_at_gap_deadline(self):
+        from test_vipe_benchmark_s1_helper_fixtures import session as fixture_session
+        from vipe_benchmark.supervisor import HelperLifecycle, monitored_call
+        session = fixture_session('sample_late')
+        try:
+            session.await_ready()
+            session.cleanup_deadline = self.time.monotonic()+4.
+            lifecycle = HelperLifecycle(retain=True)
+            lifecycle.helpers.append(session)
+            with self.assertRaisesRegex(TimeoutError, 'deadline'):
+                monitored_call(self.sampler, self.time.monotonic()+1.3, self.sampler,
+                               load(), {}, lifecycle=lifecycle, phase='worker_sample')
+            self.assertIsNone(session.last_sample)
+            self.assertGreaterEqual(session.sample_expiry_count, 1)
+            self.assertFalse(session.recover_samples)
+        finally:
+            self.assertTrue(session.close(self.time.monotonic()+3.))
+
+    def test_worker_sample_late_pre_census_preserves_helper_sequence(self):
+        from test_vipe_benchmark_s1_helper_fixtures import session as fixture_session
+        from vipe_benchmark.supervisor import HelperLifecycle, monitored_call
+        session = fixture_session('census_once_late')
+        try:
+            session.await_ready()
+            session.cleanup_deadline = self.time.monotonic()+4.
+            lifecycle = HelperLifecycle(retain=True)
+            lifecycle.helpers.append(session)
+            value = monitored_call(self.sampler, self.time.monotonic()+3., self.sampler,
+                                   load(), {}, lifecycle=lifecycle, phase='worker_sample')
+            self.assertEqual(value, self.reading)
+            self.assertEqual(session.sample_expiry_count, 1)
+            self.assertEqual(session.last_sample['request_id'], 2)
+            self.assertIn('wire', [row['stage'] for row in session.events if row['event']=='sample_discarded'])
+        finally:
+            self.assertTrue(session.close(self.time.monotonic()+3.))
+
+    def test_late_sample_still_stops_on_observed_resource_ceiling(self):
+        from test_vipe_benchmark_s1_helper_fixtures import session as fixture_session
+        from vipe_benchmark.supervisor import HelperLifecycle, monitored_call
+        session = fixture_session('sample_once_late_over_limit')
+        try:
+            session.await_ready()
+            session.cleanup_deadline = self.time.monotonic()+4.
+            lifecycle = HelperLifecycle(retain=True)
+            lifecycle.helpers.append(session)
+            with self.assertRaisesRegex(RuntimeError, 'resource ceiling exceeded: device_bytes'):
+                monitored_call(self.sampler, self.time.monotonic()+3., self.sampler,
+                               load(), {}, lifecycle=lifecycle, phase='worker_sample')
+            self.assertIsNone(session.last_sample)
+        finally:
+            self.assertTrue(session.close(self.time.monotonic()+3.))
+
+    def test_late_sample_still_stops_on_foreign_gpu_pid(self):
+        from test_vipe_benchmark_s1_helper_fixtures import session as fixture_session
+        from vipe_benchmark.supervisor import HelperLifecycle, monitored_call
+        session = fixture_session('sample_once_late_foreign')
+        try:
+            session.await_ready()
+            session.cleanup_deadline = self.time.monotonic()+4.
+            lifecycle = HelperLifecycle(retain=True)
+            lifecycle.helpers.append(session)
+            with self.assertRaisesRegex(RuntimeError, 'exclusive GPU access lost'):
+                monitored_call(self.sampler, self.time.monotonic()+3., self.sampler,
+                               load(), {}, lifecycle=lifecycle, phase='worker_sample')
+            self.assertIsNone(session.last_sample)
+        finally:
+            self.assertTrue(session.close(self.time.monotonic()+3.))
+
     def scenario(self, label, mode='normal', **bounds):
         from test_vipe_benchmark_s1_helper_fixtures import session
         from vipe_benchmark.s1_helper_session import census

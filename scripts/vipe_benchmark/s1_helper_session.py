@@ -2259,6 +2259,8 @@ class Session:
         self.census_requests = Counter(); self.census_sequence = 0
         self.worker_pid = None; self.worker_generation = 0; self.worker_root = None
         self.last_sample = None; self.accepted_initial = False
+        self.recover_samples = False
+        self.sample_expiry_count = 0; self.first_sample_expired_at = None
         self.decision_clock = time.monotonic
         self.fixture_action_end = self.fixture_safety_end = None
         from .s1_progress import RetainedProgress
@@ -2341,7 +2343,7 @@ class Session:
         self.owner.census_request=dict(generation=self.census_sequence,request_id=request['id'],
             worker_generation=self.worker_generation,worker_pid=self.worker_pid)
 
-    def validate_census(self, snap, request, decision):
+    def validate_census(self, snap, request, decision, *, allow_late=False):
         if not isinstance(snap,Census) or snap.status!='success': raise ValueError('required census failed/unknown')
         if any(type(v) is not int or not 0<v<=UINT64_MAX for v in (snap.generation,snap.request_id)) or type(snap.worker_generation) is not int or not 0<=snap.worker_generation<=UINT64_MAX:
             raise ValueError('invalid census generation type')
@@ -2351,7 +2353,8 @@ class Session:
                 snap.worker_generation!=self.worker_generation): raise ValueError('census binding mismatch')
         if any(type(v) not in (int,float) or not math.isfinite(v) for v in (snap.acquisition_start,snap.completed,decision)):
             raise ValueError('invalid census timestamp')
-        if not request['dispatch']<=snap.acquisition_start<=snap.completed<=decision<request['deadline']:
+        if not (request['dispatch']<=snap.acquisition_start<=snap.completed<=decision
+                and (allow_late or decision<request['deadline'])):
             raise ValueError('stale census interval/deadline')
         if type(snap.rows) is not tuple or type(snap.helpers) is not tuple or type(snap.helper_rows) is not tuple or len(snap.rows)+len(snap.helper_rows)>64 or len(snap.helpers)!=2: raise ValueError('census identity capacity')
         if any(type(row) is not ProcessIdentity for row in (*snap.helpers,*snap.helper_rows,*snap.rows)): raise ValueError('invalid census immutable identity')
@@ -2439,7 +2442,8 @@ class Session:
         self.max_gap=max(self.max_gap,gap)
         if gap>.1: raise TimeoutError('S1 monitor tick overrun')
         if self.fixture_action_end is not None: deadline=min(deadline,self.fixture_action_end)
-        if now>=deadline: raise TimeoutError('S1 phase deadline reached')
+        if now>=deadline:
+            raise TimeoutError('S1 monitor recovery deadline reached' if self.recover_samples else 'S1 phase deadline reached')
         if self.owner.errors and not self.owner.cancelled: raise RuntimeError(str(list(self.owner.errors)))
         if self.owner.cancelled or self.poisoned: raise RuntimeError('S1 helper session poisoned: '+str(list(self.owner.errors)))
         found=[]; self.role_turn=not self.role_turn
@@ -2447,10 +2451,32 @@ class Session:
             try:
                 request=self.requests[role]
                 if request and now>=request['deadline']:
-                    raise TimeoutError('S1 resource sample timeout' if role=='sample' else 'S1 work timeout')
+                    if role!='sample' or not self.recover_samples:
+                        raise TimeoutError('S1 resource sample timeout' if role=='sample' else 'S1 work timeout')
+                    if not request.get('expired'):
+                        request['expired']=True
+                        self.sample_expiry_count+=1
+                        if self.first_sample_expired_at is None:self.first_sample_expired_at=now
+                        self.events.append(dict(event='sample_expired',request_id=request['id'],deadline=request['deadline'],observed=now))
                 if role=='sample' and request and request.get('stage') in ('pre','post'):
                     snap=self.owner.census_reply
                     if snap is not None:
+                        if request.get('expired'):
+                            decision=time.monotonic()
+                            self.validate_census(snap,request,decision,allow_late=True)
+                            self.owner.census_reply=None
+                            if request['stage']=='pre':
+                                # The helper has not seen this ID yet. Send it
+                                # and drain its reply before issuing the next.
+                                request['pre']=snap
+                                request['stage']='wire'
+                                self.wires[role].queue(self.envelope(role,request['id'],'request',request['operation_payload']))
+                            else:
+                                self.sample_authority(request,snap,decision)
+                                self.requests[role]=None
+                                self.events.append(dict(event='sample_discarded',request_id=request['id'],stage='post'))
+                                found.append(('late_sample',request['candidate']['value'],time.monotonic(),request['dispatch']))
+                            continue
                         decision=time.monotonic()
                         if decision>=request['deadline']: raise TimeoutError('S1 resource sample timeout at census decision')
                         self.validate_census(snap,request,decision)
@@ -2485,9 +2511,16 @@ class Session:
                 real_received=time.monotonic(); self.max_turn=max(self.max_turn,real_received-now)
                 if self.max_turn>.1: raise TimeoutError('S1 control tick overrun')
                 received=self.decision_clock() if message is not None else real_received
-                if received>=deadline: raise TimeoutError('S1 phase deadline reached at receipt')
+                if received>=deadline:
+                    raise TimeoutError('S1 monitor recovery deadline reached at receipt' if self.recover_samples else 'S1 phase deadline reached at receipt')
                 if request and received>=request['deadline']:
-                    raise TimeoutError('S1 resource sample timeout' if role=='sample' else 'S1 work timeout')
+                    if role!='sample' or not self.recover_samples:
+                        raise TimeoutError('S1 resource sample timeout' if role=='sample' else 'S1 work timeout')
+                    if not request.get('expired'):
+                        request['expired']=True
+                        self.sample_expiry_count+=1
+                        if self.first_sample_expired_at is None:self.first_sample_expired_at=received
+                        self.events.append(dict(event='sample_expired',request_id=request['id'],deadline=request['deadline'],observed=received))
                 if message is None: continue
                 if role not in self.ready:
                     if received>=self.ready_deadline: raise TimeoutError('S1 ready deadline reached')
@@ -2510,6 +2543,16 @@ class Session:
                             raise ProgressIntegrityError(payload['value'].get('message','progress integrity failure'))
                         raise RuntimeError('helper operation failed: '+str(payload['value']))
                     if role=='sample':
+                        if request.get('expired'):
+                            value=payload['value']
+                            pids=value.get('gpu_pids') if type(value) is dict else None
+                            owned={row.pid for row in request['pre'].rows}
+                            if type(pids) is list and any(pid not in owned for pid in pids):
+                                raise GPUOwnershipError('exclusive GPU access lost: late sample PID absent from pre-census')
+                            self.requests[role]=None
+                            self.events.append(dict(event='sample_discarded',request_id=request['id'],stage='wire'))
+                            found.append(('late_sample',value,received,request['dispatch']))
+                            continue
                         validate_acquisition(payload,request['dispatch'],received,request['deadline'])
                         request.update(candidate=payload,response_observed=received)
                         self.request_census(request,'post')
