@@ -770,18 +770,17 @@ class DepthTests(unittest.TestCase):
             (3e6, 1e-4, 0, 24, 23),
             (np.nan, np.nan, 0, 0, 0),
         ):
-            with self.subTest(canonical=canonical):
-                result = DepthProBackend(Model(canonical), lambda x: np.array(x), FakeRuntime()).predict(
-                    rgb, self.K, footprint)
-                self.assertEqual(int(result.valid.sum()), valid_count)
-                self.assertTrue(np.isnan(result.depth[~result.valid]).all())
-                if valid_count:
-                    np.testing.assert_allclose(result.depth[result.valid], expected_depth, rtol=1e-6)
-                self.assertEqual(result.metadata['inverse_clamp_low_pixels'], low)
-                self.assertEqual(result.metadata['inverse_clamp_high_pixels'], high)
-                self.assertEqual(result.metadata['native_raw_nonfinite'],
-                    1536 * 1536 if np.isnan(canonical) else 0)
-                self.assertIsNone(result.confidence)
+            result = DepthProBackend(Model(canonical), lambda x: np.array(x), FakeRuntime()).predict(
+                rgb, self.K, footprint)
+            self.assertEqual(int(result.valid.sum()), valid_count)
+            self.assertTrue(np.isnan(result.depth[~result.valid]).all())
+            if valid_count:
+                np.testing.assert_allclose(result.depth[result.valid], expected_depth, rtol=1e-6)
+            self.assertEqual(result.metadata['inverse_clamp_low_pixels'], low)
+            self.assertEqual(result.metadata['inverse_clamp_high_pixels'], high)
+            self.assertEqual(result.metadata['native_raw_nonfinite'],
+                1536 * 1536 if np.isnan(canonical) else 0)
+            self.assertIsNone(result.confidence)
 
 
 class FactoryTests(unittest.TestCase):
@@ -977,6 +976,10 @@ class FactoryTests(unittest.TestCase):
 
 # Literal ordered callback contract consumed without importing this module.
 SUBTEST_CASES = {
+    'test_vipe_benchmark_backends.SAM2Tests.test_duplicate_successor_fails_and_resets_for_both_shared_sam2_arms': [
+        {'component': 'S2'},
+        {'component': 'S4'},
+    ],
     'test_vipe_benchmark_backends.AssetAndDetectorTests.test_phrase_ambiguity_and_capacity_fail_before_casting': [
         {'phrase': ''},
         {'phrase': 'person basketball'},
