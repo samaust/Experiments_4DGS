@@ -1084,13 +1084,16 @@ class Metric3DBackend:
         raw = _plane(native_depth)
         if raw.shape != target:
             raise BackendError('Metric3D output does not match the native padded input grid')
-        restored_raw = _resize_valid(self.runtime, raw[top:top + rh, left:left + rw], (h, w))
+        unpadded_raw = raw[top:top + rh, left:left + rw]
+        restored_raw = _resize_valid(self.runtime, unpadded_raw, (h, w))
         processed_K = K.copy(); processed_K[:2] *= scale
         # Native hub example uses the continuous scale, including when integer
         # raster dimensions truncate. Record both to avoid a hidden K correction.
         values, _, conversion = contracts.metric_depth(restored_raw, 'D3', processed_K=processed_K)
         saturated = np.isfinite(values) & (values >= 300)
-        below = np.isfinite(values) & (values <= 0)
+        # metric_depth marks nonpositive canonical pixels invalid, so count
+        # native lower-clamp evidence before that conversion discards them.
+        below = np.isfinite(unpadded_raw) & (unpadded_raw <= 0)
         values = np.clip(values, 0, 300)
         confidence = None
         if native_confidence is not None:

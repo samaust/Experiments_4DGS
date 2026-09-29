@@ -19,6 +19,8 @@ from vipe_benchmark.backends import (
     _build_native, _sam2, _sam3_image_processor, _legacy_vipe_segmentation, _s1_aot_module, _s1_tracker,
 )
 from vipe_benchmark.files import file_record
+from vipe_benchmark import setup_recipes
+from vipe_benchmark.runtime import REMOTE_ASSETS, TARGETS
 
 
 class FakeTensor(np.ndarray):
@@ -703,6 +705,25 @@ class DepthTests(unittest.TestCase):
         self.assertEqual(result.metadata['saturated_fraction'], 1.)
         self.assertIsNone(result.confidence)
 
+    def test_metric3d_unpadded_lower_clamp_evidence_and_off_center_focal(self):
+        rgb, valid = image((500, 1000))
+        K = np.array([[1200., 0., 413.], [0., 900., 207.], [0., 0., 1.]])
+        raw = np.full((1, 1, 616, 1064), 10., np.float32)
+        raw[0, 0, 0, 0] = -5.  # Padding is excluded from native image evidence.
+        raw[0, 0, 42, 0] = -5.
+        result = Metric3DBackend(
+            SimpleNamespace(inference=lambda _: (raw, None, {})), FakeRuntime()
+        ).predict(rgb, K, valid)
+        self.assertEqual(result.metadata['resized_shape'], [532, 1064])
+        self.assertEqual(result.metadata['pad'], [42, 42, 0, 0])
+        self.assertEqual(result.metadata['focal_conversion_count'], 1)
+        self.assertAlmostEqual(result.metadata['factor'], 1200 * 1.064 / 1000)
+        self.assertAlmostEqual(result.metadata['native_processed_K'][0][2], 413 * 1.064)
+        self.assertEqual(result.metadata['native_canonical_nonpositive'], 2)
+        self.assertEqual(result.metadata['native_below_clamp_pixels'], 1)
+        self.assertAlmostEqual(result.depth[250, 500], 12.768, places=3)
+        self.assertFalse(result.valid[0, 0])
+
     def test_depth_pro_focal_device_tensor_native_inversion_and_no_extra_factor(self):
         rgb, valid = image(); calls = {}
         class Model:
@@ -892,6 +913,22 @@ class FactoryTests(unittest.TestCase):
         self.assertEqual(calls[0], ('hub', ('/explicit/metric3d_source', 'metric3d_vit_large'),
                                    {'source': 'local', 'pretrain': False}))
         self.assertEqual(calls[1][1], 'exact checkpoint')
+
+    def test_metric3d_e6_dependency_and_asset_prerequisites(self):
+        self.assertEqual(TARGETS['E6'], dict(python='3.10', torch='2.0.1+cu118',
+            torchvision='0.15.2+cu118', numpy='1.23.1'))
+        self.assertEqual(REMOTE_ASSETS['metric3d_checkpoint'], (
+            'JUGGHM/Metric3D', '80d2d1410afb4b23cd9d18c6be9144483d4b70b6',
+            ['metric_depth_vit_large_800k.pth']))
+        self.assertEqual(SOURCE_PINS['metric3d_source'],
+            'eb5b6fac0dc155e4e52f576e304fbf11655ff339')
+        self.assertEqual(setup_recipes.EDITABLE['E6'], [])
+        requirements = setup_recipes.recipe('E6')['requirements']
+        for pin in ('xformers==0.0.21', 'mmcv==1.7.2', 'yapf==0.40.1'):
+            self.assertIn(pin, requirements)
+        self.assertIn(('mmcv.utils', None, ['Config']), setup_recipes.CORE_IMPORTS['E6'])
+        self.assertIn(('hubconf', 'metric3d_source', ['metric3d_vit_large']),
+            setup_recipes.CORE_IMPORTS['E6'])
 
 
 
