@@ -29,6 +29,8 @@ LIMITS = dict(gpu_concurrency=1, gpu_peak_device_gib_limit=22,
     reconstruction_attempts=0, cleanup_reserve_seconds_max=30)
 BINDINGS = ('semantic_amendment', 'repair_validation', 'configuration',
             'original_request_sha256', 'baseline_correction')
+PROCESS_FILE_AMENDMENT = ROOT / 'docs/research/vipe-alternatives/issue3-preparation/s1-process-file-amendment-001.json'
+PROCESS_FILE_AMENDMENT_SHA256 = 'e273a23b2b5b594ce8e1deae48b659e27c3a8f4ee1b28d680ea21cfb005c84dc'
 
 
 # Compatibility exports keep admission and execution on one static contract.
@@ -311,8 +313,29 @@ def preservation(local, document, events, authorization):
             or [r for r in records if r['path'] == snap['path']] !=
                 [{k: snap[k] for k in ('path', 'sha256', 'bytes')} ]):
         raise ValueError('exact baseline preservation categories required')
+    process_amendment = document.get('process_file_amendment')
+    amended_record = None
+    if process_amendment is not None:
+        if (strict_record(process_amendment) != file_record(PROCESS_FILE_AMENDMENT)
+                or process_amendment['sha256'] != PROCESS_FILE_AMENDMENT_SHA256):
+            raise ValueError('exact S1 process-file amendment required')
+        note = read_json(process_amendment['path'])
+        agents = [record for record in frozen if record['path'] == str((ROOT / 'AGENTS.md').resolve())]
+        if (len(agents) != 1 or set(note) != {'schema', 'issue', 'scope', 'baseline',
+                'baseline_correction', 'old', 'new'}
+                or note['schema'] != 'plan031-s1-process-file-preservation-amendment/v1'
+                or note['issue'] != 3
+                or note['scope'] != 'AGENTS.md process instructions only; no scientific input, allocation, attempt, or approval change'
+                or note['baseline'] != document['baseline']
+                or note['baseline_correction'] != document['baseline_correction']
+                or note['old'] != agents[0]
+                or note['new'] != file_record(ROOT / 'AGENTS.md')):
+            raise ValueError('S1 process-file preservation scope changed')
+        strict_record(note['new'])
+        amended_record = agents[0]
     for record in frozen:
-        strict_record(record)
+        if record != amended_record:
+            strict_record(record)
     if correction.get('bookkeeping_policy') != 'separate immutable old/new hash transitions; never scientific evidence':
         raise ValueError('explicit bookkeeping policy required')
     current = bookkeeping[0]

@@ -1,0 +1,3 @@
+# Bind S1 process-file changes through a narrow amendment
+
+The S1 recovery baseline freezes `AGENTS.md` alongside scientific evidence. Issue #3 changed that process instruction file after the baseline, so exact preservation rejects an otherwise source-qualified REVIEW proposal. Admit only the recorded old and current `AGENTS.md` byte records through a hash-pinned, authorization-bound amendment. Keep every scientific record, ledger prefix, consumed attempt, and approval gate under the existing exact checks. This permits review of the new proposal without rewriting historical evidence or authorizing a GPU attempt.

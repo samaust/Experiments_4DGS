@@ -1,0 +1,9 @@
+# S1 process-file preservation review
+
+Issue #3 changed repository process instructions in `AGENTS.md` after the S1 recovery baseline. The baseline freezes 4,485 bytes with SHA-256 `3d09a19b0bf8e4bfcf7c25f5b001a769f2cce372a425fc1dd1a14fc299ef620f`; the current file is 4,873 bytes with SHA-256 `21c986e57de9b8c4f6d0eb9cf15596b3f005c79706285da23be947944d930ab8`. The [decision](../../../adr/0001-s1-process-file-preservation.md) permits only this process-file substitution. The [amendment](s1-process-file-amendment-001.json) pins both records, the original baseline, and correction-016; the admission code pins the amendment's own SHA-256. All other frozen records remain byte-exact.
+
+The public admission boundary rejects an authorization without this exact amendment, a substituted amendment, and a REVIEW-stage proposal. Tests for the 467-event consumed prefix pass with the amendment bound. No earlier authorization, attempt, or ledger event was rewritten. The live ledger remains 467 events, SHA-256 `d958d128e3b8c7a7263e0e07ba6d91e3c7ec5ae7ba855935895673fc69418f96`.
+
+The [fresh CPU qualification](s1-requalification-001/validation.json) binds all 79 current S1 source records to a passing receipt: 277 tests, 1,030 subtests, zero failures, errors, or skips, with no source changes during execution. It used no GPU, model job, download, setup, or new calibration attempt. The previous requalification-070 and failed integrated capture remain historical evidence.
+
+The refreshed authorization remains at `REVIEW` with `additional_attempt_approved=false` and `reconstruction_authorized=false`. A separate explicit approval and the existing serial admission checks are required before any calibration dispatch. This review establishes only the process-file exception and source-bound readiness for review; it does not assess S1 reconstruction or comparative benchmark quality.
