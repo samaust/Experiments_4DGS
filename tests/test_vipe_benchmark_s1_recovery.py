@@ -15,6 +15,30 @@ from vipe_benchmark.config import ROOT, load
 from vipe_benchmark.files import canonical, file_record, object_hash, read_json, write_json
 from vipe_benchmark.ledger import Ledger
 from vipe_benchmark.execution import component_recovery_request, result_record
+from vipe_benchmark.s1_progress import REQUEST_BYTES, read_request_record
+
+
+class S1RequestCapacityTests(unittest.TestCase):
+    def test_frozen_request_and_exact_capacity_boundary(self):
+        request_path = ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z/requests/S1-calibration-recovery-001.json'
+        raw = request_path.read_bytes()
+        self.assertEqual(len(raw), 353132)
+        expected = read_json(request_path)
+        self.assertEqual(read_request_record(file_record(request_path), expected), expected)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'request.json'
+            path.write_bytes(raw + b' ' * (REQUEST_BYTES - len(raw)))
+            self.assertEqual(read_request_record(file_record(path), expected), expected)
+            path.write_bytes(raw + b' ' * (REQUEST_BYTES + 1 - len(raw)))
+            with self.assertRaisesRegex(ValueError, 'progress request capacity'):
+                read_request_record(file_record(path), expected)
+
+    def test_bound_request_mismatch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'request.json'
+            write_json(path, {'job_id': 'S1-calibration-recovery-001'})
+            with self.assertRaisesRegex(ValueError, 'progress request binding'):
+                read_request_record(file_record(path), {'job_id': 'S1-calibration-recovery-002'})
 
 
 def synthetic_assets(root, put):

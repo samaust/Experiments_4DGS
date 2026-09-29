@@ -20,6 +20,7 @@ import time
 
 SCHEMA = 's1-verified-progress/v2'
 CHECKPOINT_BYTES = 1024 * 1024
+REQUEST_BYTES = 512 * 1024
 SMALL_BYTES = 8192
 CONTROL_BYTES = 4096
 MAX_GENERATIONS = 1024
@@ -220,6 +221,17 @@ def read_record(value, limit=CHECKPOINT_BYTES):
     value = decode(raw, limit)
     before()
     return value
+
+
+def read_request_record(value, expected=None):
+    """Apply the same bounded, hash-checked request read in gates and workers."""
+    validate_record(value)
+    if value['bytes'] > REQUEST_BYTES:
+        raise ValueError('progress request capacity')
+    request = read_record(value, REQUEST_BYTES)
+    if expected is not None and request != expected:
+        raise ValueError('progress request binding')
+    return request
 
 
 def verified_bytes(value):
@@ -450,7 +462,7 @@ def _prepare_context(local, clock, request, authorization, session, work, config
             ('guard',Path(__file__).with_name('s1_evidence.py')),('progress',Path(__file__)))},
         frames=config['fit_snapshots']+config['selection_snapshots'])
     context_document(value)
-    if operation(read_record,clock.mapping()['request'],256*1024) != request: raise ValueError('progress request binding')
+    operation(read_request_record,clock.mapping()['request'],request)
     reference=write_exclusive(root/'context.json',operation(encode,value,SMALL_BYTES))
     operation(fsync_dir,root); operation(fsync_dir,root.parent); operation(read_record,reference,SMALL_BYTES); clock.observe()
     return reference
@@ -699,7 +711,7 @@ class Publisher:
         self.reference=reference;self.context=context_document(read_record(reference,SMALL_BYTES))
         if canonical(reference['path'])!=Path(self.context['root'])/'context.json':raise ValueError('progress context path')
         if clock is not None:clock_match(clock,self.context['clock'])
-        if request is not None and read_record(self.context['clock']['request'],256*1024)!=request:raise ValueError('progress worker request')
+        if request is not None: read_request_record(self.context['clock']['request'],request)
         from .s1_helper_session import identity
         self.binding=process_binding(identity(os.getpid()));self.producer=producer;self.request_id=request_id
         self.deadline=self.context['clock']['work_deadline'];before(self.deadline)

@@ -508,6 +508,9 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
             raise ValueError('saved unstarted request differs from the explicit dispatch')
     else:
         write_json(request_path, request)
+    if job == 'S1-calibration-recovery-001':
+        from .s1_progress import read_request_record
+        read_request_record(file_record(request_path), request)
     python = request.get('runtime', {}).get('python', str(ROOT / '.local/envs/stg-colmap/bin/python'))
     command = [python, str(ROOT / 'scripts/basketball_vipe_worker.py'), '--operation', operation,
                '--config', str(ROOT / 'configs/vipe-alternatives/benchmark-v1.json'),

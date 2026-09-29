@@ -68,6 +68,8 @@ sys.path.insert(0, str(ROOT))
 from vipe_benchmark.config import load  # noqa: E402
 from vipe_benchmark.files import file_record  # noqa: E402
 from vipe_benchmark.s1_recovery import validate_binding  # noqa: E402
+from vipe_benchmark.s1_progress import read_request_record, REQUEST_BYTES  # noqa: E402
+from vipe_benchmark.ledger import Ledger  # noqa: E402
 from vipe_benchmark.backends import AssetBundle  # noqa: E402
 
 config = load()
@@ -87,6 +89,20 @@ try:
     check('validate_binding (fail-closed contract)', True)
 except Exception as e:
     check('validate_binding (fail-closed contract)', False, f'{type(e).__name__}: {e}')
+
+# The exact frozen dispatch request must pass the same bounded read used in
+# prelaunch and by the publisher. This check never reserves or writes a job.
+try:
+    reservations = [event for event in Ledger(LOCAL / 'ledger.jsonl', config).events()
+                    if event['event'] == 'reserve' and event['job_id'] == 'S1-calibration-recovery-001']
+    if len(reservations) != 1:
+        raise ValueError('unique frozen S1 reservation required')
+    request_record = reservations[0]['evidence']['request']
+    read_request_record(request_record)
+    check('frozen S1 request fits progress read bound', True,
+          f'{request_record["bytes"]} <= {REQUEST_BYTES} bytes')
+except Exception as e:
+    check('frozen S1 request fits progress read bound', False, f'{type(e).__name__}: {e}')
 
 # Necessary latency check: the live helper allows at most one second for the
 # entire resource request. Storage alone exceeding it guarantees failure.
