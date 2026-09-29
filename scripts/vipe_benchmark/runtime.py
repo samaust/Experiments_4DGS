@@ -732,6 +732,8 @@ def setup(request, output, config):
     if qualification.get('status') != 'complete' or qualification.get('forwards') != 0 or type(qualification.get(
             'cuda_context_initialized')) is not bool:
         raise ValueError('native import qualification was incomplete or performed model forwards')
+    if environment == 'E5' and qualification['cuda_context_initialized'] is not False:
+        raise ValueError('E5 setup import qualification initialized a CUDA context')
     run([python, str(ROOT / 'scripts/vipe_benchmark/runtime_inventory.py'), '--output', str(output / 'inventory.json')],
         'inventory', offline=True)
     inventory = read_json(output / 'inventory.json')

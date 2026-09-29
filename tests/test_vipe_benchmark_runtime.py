@@ -467,6 +467,34 @@ runtime.download('https://fixture.invalid/blob', root / 'data.bin', root / 'tran
         for key in ('inventory', 'imports', 'dependency_lock', 'build_inputs'):
             verify_record(result['runtime'][key])
 
+    def test_e5_offline_editable_receives_locked_dynamic_build_dependency(self):
+        request, assets = self.fixture_request('E5')
+        events = []
+        fake = self.fake_subprocess(request, assets, events)
+        def package_command(command, **kwargs):
+            if '-e' in command:
+                requirements = (self.root / 'E5/requirements.txt').read_text()
+                if 'editables~=0.3\n' not in requirements:
+                    raise ModuleNotFoundError("No module named 'editables'")
+                self.assertEqual(kwargs['env']['UV_OFFLINE'], '1')
+                self.assertTrue(any('--require-hashes' in cmd for cmd, _ in events))
+            return fake(command, **kwargs)
+        with self.mocked_setup(request, assets, events), \
+             patch.object(runtime.subprocess, 'run', side_effect=package_command):
+            runtime.setup(request, self.root / 'E5', self.config)
+        result = read_json(self.root / 'E5/result.json')
+        self.assertEqual(result['runtime']['versions'], dict(python='3.11', torch='2.5.1+cu124',
+            torchvision='0.20.1+cu124', numpy='1.26.4'))
+        self.assertEqual(read_json(result['runtime']['imports']['path'])['forwards'], 0)
+
+    def test_e5_import_qualification_cannot_initialize_cuda(self):
+        request, assets = self.fixture_request('E5')
+        request['_fixture_cuda_initialized'] = True
+        with self.mocked_setup(request, assets, []):
+            with self.assertRaisesRegex(ValueError, 'CUDA context'):
+                runtime.setup(request, self.root / 'E5-cuda', self.config)
+        self.assertFalse((self.root / 'E5-cuda/result.json').exists())
+
     def test_e2_requires_sam2_extension_flags_and_exact_transformers(self):
         request, assets = self.fixture_request('E2')
         request['_fixture_cuda_initialized'] = True

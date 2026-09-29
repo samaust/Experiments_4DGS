@@ -256,7 +256,7 @@ def components(local):
 def setup_result_record(local, environment):
     """Resolve an authorized successful recovery without relabeling its failure."""
     original = result_record(local, environment + '-setup')
-    if original or environment not in ('E1', 'E2', 'E3', 'E4'):
+    if original or environment not in ('E1', 'E2', 'E3', 'E4', 'E5'):
         return original
     ledger = Ledger(local / 'ledger.jsonl', load())
     recoveries = [event for event in ledger.events() if event['event'] == 'setup_recovery_authorized'
@@ -277,6 +277,8 @@ def setup_result_record(local, environment):
         imports = read_json(result['runtime']['imports']['path'])
         if imports.get('status') != 'complete' or imports.get('forwards') != 0:
             raise ValueError('setup recovery lacks completed import-only qualification')
+        if environment == 'E5' and imports.get('cuda_context_initialized') is not False:
+            raise ValueError('E5 setup recovery must not initialize a CUDA context')
     return recovered
 
 

@@ -25,7 +25,7 @@ EXTRAS = {
     'E5': ['xformers==0.0.28.post3', 'pre-commit', 'trimesh', 'einops', 'huggingface_hub',
            'imageio', 'opencv-python', 'open3d', 'fastapi', 'uvicorn', 'requests', 'typer>=0.9.0',
            'pillow', 'omegaconf', 'evo', 'e3nn', 'moviepy==1.0.3', 'plyfile', 'pillow_heif',
-           'safetensors', 'pycolmap', 'hatchling>=1.25', 'hatch-vcs>=0.4', 'scipy', 'addict'],
+           'safetensors', 'pycolmap', 'hatchling>=1.25', 'hatch-vcs>=0.4', 'editables~=0.3', 'scipy', 'addict'],
     'E6': ['xformers==0.0.21', 'opencv-python', 'Pillow', 'DateTime', 'matplotlib', 'plyfile',
            'HTML4Vision', 'timm', 'tensorboardX', 'imgaug', 'iopath', 'imagecorruptions', 'mmcv==1.7.2', 'yapf==0.40.1', 'scipy'],
     'E7': ['timm', 'pillow_heif', 'matplotlib', 'pillow', 'setuptools-scm', 'opencv-python', 'scipy'],
@@ -108,8 +108,17 @@ def recovery_request(local, authorization):
     events = Ledger(Path(local) / 'ledger.jsonl', load()).events()
     matching = [event for event in events if event['event'] == 'setup_recovery_authorized' and
                 event['authorization'] == authorization and event['job_id'] == document['job_id']]
-    if len(matching) != 1 or document['environment'] not in ('E1', 'E2', 'E3', 'E4'):
+    if len(matching) != 1 or document['environment'] not in ('E1', 'E2', 'E3', 'E4', 'E5'):
         raise ValueError('setup recovery is not registered in this run')
+    if document['environment'] == 'E5':
+        from .e5_recovery import validate
+        document = validate(local, load(), authorization, events)
+        assets = read_json(verify_record(document['asset_provenance'])['path'])
+        result = request(local, 'E5')
+        result.update(job_id=document['job_id'], recovery_authorization=authorization,
+            reuse_assets={'da3_snapshot': assets['da3_snapshot']},
+            reuse_source_archives={'da3_source': assets['da3_source']['archive']})
+        return result
     if document['environment'] in ('E1', 'E2', 'E4'):
         result = request(local, document['environment'])
         result.update(job_id=document['job_id'], recovery_authorization=authorization)
