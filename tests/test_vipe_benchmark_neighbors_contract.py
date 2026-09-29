@@ -1,4 +1,4 @@
-"""Hand-calculated Plan 031 neighbor scores and public result diagnostics."""
+"""Hand-calculated Plan 031 neighbor scores and public failure contract."""
 import json
 from pathlib import Path
 import sys
@@ -21,7 +21,7 @@ class NeighborContractTests(unittest.TestCase):
         # Counts: 3, 3, 2, 0. Jaccard: 3/7, 3/7, 2/4, 0.
         self.assertEqual(rank('N0', 10, tracks, training=list(tracks))['neighbors'], [2, 8, 3])
         self.assertEqual(rank('N1', 10, tracks, training=list(tracks))['neighbors'], [3, 2, 8])
-        self.assertEqual(rank('N1', 10, tracks, training=list(tracks))['zero_support_cameras'], [4])
+        self.assertNotIn(4, [row['camera'] for row in rank('N1', 10, tracks, training=list(tracks))['candidates']])
 
     def test_n2_full_tuple_recomputed_after_each_choice(self):
         tracks = {1: {1, 2, 3, 4}, 2: {1, 2}, 3: {2, 3},
@@ -52,7 +52,7 @@ class NeighborContractTests(unittest.TestCase):
         self.assertEqual(result['neighbors'], [3, 4, 2])
         self.assertEqual(result['rounds'][0][0]['score'], [1, 1, 1, .5, round(1/3, 12), 3, -3])
 
-    def test_public_request_result_records_zero_and_geometric_failures(self):
+    def test_public_request_result_blocks_zero_and_geometric_failures(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             footprint = root / 'valid.npy'
@@ -76,8 +76,9 @@ class NeighborContractTests(unittest.TestCase):
                 self.assertEqual(reference['status'], 'blocked')
                 self.assertEqual(reference['neighbors'], [])
                 self.assertIn('fewer than three', reference['reason'])
-                self.assertEqual(reference['zero_support_cameras'], [4])
-                self.assertEqual(reference['ineligible_geometry_cameras'], [3] if method == 'N2' else [])
+                self.assertEqual(reference['partial_neighbors'], [2, 3] if method == 'N0' else [2])
+                if method == 'N2':
+                    self.assertEqual([row['camera'] for row in reference['rounds'][0]], [2])
                 self.assertFalse(result['all_references_have_three_neighbors'])
 
 
