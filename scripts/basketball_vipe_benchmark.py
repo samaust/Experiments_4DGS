@@ -262,7 +262,7 @@ def main():
     p = sub.add_parser('setup-recovery')
     p.add_argument('--authorization', type=Path, required=True)
     p = sub.add_parser('component-recovery')
-    p.add_argument('--job', choices=['S1-calibration-recovery-001', 'S1-calibration-recovery-002'])
+    p.add_argument('--job', choices=['S1-calibration-recovery-001', 'S1-calibration-recovery-002', 'S1-calibration-recovery-003'])
     p.add_argument('--authorization', type=Path, required=True)
     p = sub.add_parser('reconstruction-recovery')
     p.add_argument('--authorization', type=Path, required=True)

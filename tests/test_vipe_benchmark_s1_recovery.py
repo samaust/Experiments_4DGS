@@ -42,7 +42,7 @@ class S1RequestCapacityTests(unittest.TestCase):
 
 
 class S1NextIdentityTests(unittest.TestCase):
-    def test_clock_and_helper_paths_accept_only_two_reviewed_identities(self):
+    def test_clock_and_helper_paths_accept_three_reviewed_identities(self):
         from vipe_benchmark.s1_clock import ReservationClock
         from vipe_benchmark.s1_cpu_helper import helper_job
         outcome = read_json(ROOT / 'docs/continuous-improvement/plan031-s1-recovery-20260919/requalification-066/dispatch-outcome.json')
@@ -50,8 +50,37 @@ class S1NextIdentityTests(unittest.TestCase):
         clock = ReservationClock.from_reservation(reservation)
         self.assertEqual(clock.job_id, s1.JOB_2)
         self.assertEqual(helper_job({'reservation': reservation}), s1.JOB_2)
+        third = dict(reservation, job_id=s1.JOB_3)
+        self.assertEqual(ReservationClock.from_reservation(third).job_id, s1.JOB_3)
+        self.assertEqual(helper_job({'reservation': third}), s1.JOB_3)
         with self.assertRaises(ValueError):
-            ReservationClock.from_reservation(dict(reservation, job_id='S1-calibration-recovery-003'))
+            ReservationClock.from_reservation(dict(reservation, job_id='S1-calibration-recovery-004'))
+
+    def test_third_identity_binds_consumed_live_prefix_without_mutation(self):
+        local = ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z'
+        path = ROOT / 'docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-calibration-recovery-authorization-003.json'
+        draft = read_json(path)
+        before = (local / 'ledger.jsonl').read_bytes()
+        self.assertEqual(len(before), 351609)
+        with tempfile.TemporaryDirectory() as directory, patch.object(s1, 'validation_record', return_value=read_json(draft['repair_validation']['path'])):
+            review = dict(draft, additional_attempt_approved=True,
+                          authorization='Synthetic CPU validation only',
+                          authorization_context=dict(draft['authorization_context'], stage='DO'))
+            candidate = Path(directory) / 'candidate.json'
+            write_json(candidate, review)
+            record = file_record(candidate)
+            document, request = s1.validate_binding(local, load(), record)
+            self.assertEqual(document['job_id'], s1.JOB_3)
+            self.assertEqual(request['job_id'], 'S1-calibration')
+            for field, value in [('previous_recovery_failure_event_sha256', '0' * 64),
+                                 ('prior_ledger_snapshot', draft['ledger_baseline'])]:
+                changed = Path(directory) / (field + '.json')
+                write_json(changed, dict(review, **{field: value}))
+                with self.assertRaises(ValueError):
+                    s1.validate_binding(local, load(), file_record(changed))
+            with self.assertRaisesRegex(ValueError, 'explicit S1 calibration'):
+                s1.validate_binding(local, load(), file_record(path))
+        self.assertEqual((local / 'ledger.jsonl').read_bytes(), before)
 
     def test_consumed_prefix_allows_only_bound_next_identity_read_only(self):
         local = ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z'

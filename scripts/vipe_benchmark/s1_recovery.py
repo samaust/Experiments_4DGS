@@ -16,6 +16,8 @@ SCHEMA = 'vipe-benchmark-s1-amendment-calibration-recovery/v1'
 JOB = 'S1-calibration-recovery-001'
 SCHEMA_2 = 'vipe-benchmark-s1-amendment-calibration-recovery/v2'
 JOB_2 = 'S1-calibration-recovery-002'
+SCHEMA_3 = 'vipe-benchmark-s1-amendment-calibration-recovery/v3'
+JOB_3 = 'S1-calibration-recovery-003'
 AMENDMENT = 'plan031-s1-s0-token-sum-v1'
 LIMITS = dict(gpu_concurrency=1, gpu_peak_device_gib_limit=22,
     gpu_total_seconds_limit=93600, cpu_max_workers=8,
@@ -126,9 +128,9 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
     states = ledger.states(events)
     document = read_json(strict_record(authorization)['path'])
     job = document.get('job_id')
-    if job not in (JOB, JOB_2):
+    if job not in (JOB, JOB_2, JOB_3):
         raise ValueError('unrecognized S1 recovery identity')
-    required = dict(schema=SCHEMA if job == JOB else SCHEMA_2, job_id=job, original_job_id='S1-calibration',
+    required = dict(schema={JOB: SCHEMA, JOB_2: SCHEMA_2, JOB_3: SCHEMA_3}[job], job_id=job, original_job_id='S1-calibration',
         attempts_limit=1, seconds_limit=3600, gpu_total_seconds_limit=93600,
         reset_previous_consumption=False, changes_to_prescribed_configuration=True,
         unrelated_attempts_reopened=False, reconstruction_authorized=False,
@@ -181,7 +183,7 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
     if job == JOB:
         if prior and (len(prior) != 1 or prior[0]['job_id'] != JOB or prior[0]['authorization'] != authorization):
             raise ValueError('different or second S1 allocation')
-    else:
+    elif job == JOB_2:
         predecessor = strict_record(document['previous_recovery_authorization'])
         finished = states.get(JOB, {})
         if (len(prior) not in (1, 2) or prior[0]['job_id'] != JOB
@@ -191,6 +193,17 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
                 or finished.get('cleanup_confirmed') is not True or finished.get('surviving_pids')
                 or finished.get('event_sha256') != document.get('previous_recovery_failure_event_sha256')):
             raise ValueError('new S1 identity requires the exact consumed cleaned-up predecessor')
+    else:
+        predecessor = strict_record(document['previous_recovery_authorization'])
+        finished = states.get(JOB_2, {})
+        if (len(prior) not in (2, 3) or [event['job_id'] for event in prior[:2]] != [JOB, JOB_2]
+                or prior[0]['authorization'] != read_json(predecessor['path'])['previous_recovery_authorization']
+                or prior[1]['authorization'] != predecessor
+                or any(event['job_id'] != JOB_3 or event['authorization'] != authorization for event in prior[2:])
+                or finished.get('event') != 'finish' or finished.get('status') != 'failed'
+                or finished.get('cleanup_confirmed') is not True or finished.get('cleanup_uncertain') is not False
+                or finished.get('surviving_pids') or finished.get('event_sha256') != document.get('previous_recovery_failure_event_sha256')):
+            raise ValueError('third S1 identity requires exact consumed cleaned-up second attempt')
     if not consumed and (job in states or any(s['event'] == 'reserve' for s in states.values())):
         raise ValueError('consumed S1 identity or active attempt')
     total = ledger.totals(events)['gpu']
@@ -315,18 +328,25 @@ def preservation(local, document, events, authorization):
             or actual != prefix or hashlib.sha256(prefix).hexdigest() != snap['sha256']
             or len(prefix) != snap['bytes'] or events[n-1]['event_sha256'] != snap['last_event_sha256']):
         raise ValueError('preserved ledger prefix required')
-    if document['job_id'] == JOB_2:
+    if document['job_id'] in (JOB_2, JOB_3):
         prior = strict_record(document['prior_ledger_snapshot'])
-        if prior['path'] != str((ROOT / 'docs/continuous-improvement/plan031-s1-recovery-20260919/requalification-066/post-dispatch-ledger.jsonl').resolve()):
+        snapshot = ('requalification-066/post-dispatch-ledger.jsonl' if document['job_id'] == JOB_2
+                    else 'requalification-067/post-dispatch-ledger-002.jsonl')
+        if prior['path'] != str((ROOT / 'docs/continuous-improvement/plan031-s1-recovery-20260919' / snapshot).resolve()):
             raise ValueError('wrong consumed predecessor snapshot')
         frozen_bytes = Path(prior['path']).read_bytes()
         live_bytes = (Path(local) / 'ledger.jsonl').read_bytes()
+        count = 453 if document['job_id'] == JOB_2 else 459
+        predecessor_job = JOB if document['job_id'] == JOB_2 else JOB_2
         if (len(frozen_bytes) != prior['bytes'] or not live_bytes.startswith(frozen_bytes)
-                or len(events) < 453 or events[452].get('event') != 'finish'
-                or events[452].get('job_id') != JOB
-                or events[452].get('event_sha256') != document.get('previous_recovery_failure_event_sha256')):
+                or len(events) < count or events[count-1].get('event') != 'finish'
+                or events[count-1].get('job_id') != predecessor_job
+                or events[count-1].get('event_sha256') != document.get('previous_recovery_failure_event_sha256')):
             raise ValueError('consumed S1 prefix changed')
-        lifecycle(events[453:], authorization, document)
+        if document['job_id'] == JOB_3:
+            previous = read_json(document['previous_recovery_authorization']['path'])
+            lifecycle(events[453:459], document['previous_recovery_authorization'], previous)
+        lifecycle(events[count:], authorization, document)
     else:
         lifecycle(events[n:], authorization, document)
     return [dict(record=r, matches=True) for r in frozen]
@@ -389,6 +409,11 @@ def lifecycle(events, authorization, document):
         elif kind == 'gpu_ownership_failure':
             if not reservation or not event.get('phase') or not event.get('foreign_pids'):
                 raise ValueError('S1 lifecycle ownership diagnostic outside active phase')
+        elif kind == 'monitor_gap_recovered':
+            if (not started or job != JOB_3 or type(event.get('expired_samples')) is not int
+                    or event['expired_samples'] < 1 or type(event.get('gap_seconds')) not in (int, float)
+                    or not 0 < event['gap_seconds'] <= 15):
+                raise ValueError('S1 recovered monitor gap outside bounded worker phase')
         elif kind == 'finish':
             if (not reservation or event.get('reservation') != event_ref(reservation)
                     or event.get('status') not in ('complete', 'failed')):
@@ -465,7 +490,7 @@ def active_binding(local, config, captured, command, *, with_reservation=False):
     events = Ledger(Path(local) / 'ledger.jsonl', config).events()
     states = Ledger(Path(local) / 'ledger.jsonl', config).states(events)
     active = states.get(captured['job_id']) if captured is not None else next(
-        (states.get(job) for job in (JOB_2, JOB) if states.get(job, {}).get('event') == 'reserve'), None)
+        (states.get(job) for job in (JOB_3, JOB_2, JOB) if states.get(job, {}).get('event') == 'reserve'), None)
     if not active or active.get('event') != 'reserve':
         raise ValueError('missing active S1 reservation')
     from .s1_clock import typed_equal
@@ -499,7 +524,7 @@ def worker_clock(args, request, config):
     import sys
     from .s1_clock import ReservationClock
     path = args.request.resolve()
-    if request.get('job_id') not in (JOB, JOB_2) or path.name != request['job_id'] + '.json' or path.parent.name != 'requests':
+    if request.get('job_id') not in (JOB, JOB_2, JOB_3) or path.name != request['job_id'] + '.json' or path.parent.name != 'requests':
         raise ValueError('canonical worker request path required')
     local = path.parent.parent
     command = [request['runtime']['python'], str((ROOT / 'scripts/basketball_vipe_worker.py').resolve()),
@@ -546,7 +571,7 @@ def reservation_binding(local, config, events, evidence, command=None):
 
 def resolved_result(local, config, events, finish):
     job = finish.get('job_id')
-    if job not in (JOB, JOB_2): raise ValueError('S1 result identity')
+    if job not in (JOB, JOB_2, JOB_3): raise ValueError('S1 result identity')
     registered = [e for e in events if e['event'] == 'component_recovery_authorized' and e['job_id'] == job]
     if (len(registered) != 1 or finish.get('cleanup_confirmed') is not True
             or finish.get('surviving_pids') or finish.get('deadline_exceeded')
@@ -730,7 +755,7 @@ def terminal_receipt(local, docs, config, authorization, *, error=None,
         pass
     job = reservation['job_id'] if reservation is not None else (
         supplied_document.get('job_id', JOB) if isinstance(supplied_document, dict) else JOB)
-    if job not in (JOB, JOB_2): raise ValueError('S1 terminal identity')
+    if job not in (JOB, JOB_2, JOB_3): raise ValueError('S1 terminal identity')
     if reservation is None:
         if any(e.get('job_id') == job and e['event'] == 'reserve' for e in events):
             raise ValueError('consumed S1 publication belongs to active supervisor')
