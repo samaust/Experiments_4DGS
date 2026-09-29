@@ -1,0 +1,254 @@
+[
+  {
+    "order": 1,
+    "parent": 19,
+    "title": "Qualify S1 recovery controls and produce a REVIEW proposal",
+    "blockers": [],
+    "deliver": "Make the next calibration proposal reviewable without starting a model job, after verifying the sampling and terminal-publication controls.",
+    "criteria": [
+      "Preserve recoveries 001\u2013004, the primary timeout and secondary publication failure, historical hashes, allocations and cleanup evidence.",
+      "Exercise the worker request/result and admission/ledger boundaries with CPU fake runtimes: two-second sampling, shorter caller deadlines, stale replies, foreign PIDs, resource ceilings and primary/secondary failure preservation.",
+      "Produce passing source-bound qualification on the final integrated source and a fresh numbered REVIEW proposal binding the live ledger, exact assets, frozen request and cleanup.",
+      "Prove REVIEW cannot register, reserve or dispatch; consumed, skipped, altered and unknown identities are rejected.",
+      "The concrete proposal retains 510 rows, the 256 KiB progress bound, one GPU and a maximum 3,600-second attempt; no reconstruction allocation is granted."
+    ],
+    "file": "docs/specs/plan031-execution/tickets/01-qualify-s1-recovery-controls-and-produce-a-review-proposal.md",
+    "number": 24,
+    "url": "https://github.com/samaust/Experiments_4DGS/issues/24",
+    "blocked_by": []
+  },
+  {
+    "order": 2,
+    "parent": 19,
+    "title": "Execute the explicitly approved S1 calibration attempt",
+    "blockers": [
+      1
+    ],
+    "deliver": "After separate explicit approval of the concrete proposal and passing live admission, dispatch exactly one new calibration attempt and retain its auditable outcome.",
+    "criteria": [
+      "Require recorded explicit approval for the exact fresh identity, source qualification, request and bounded allocation; generic resume is insufficient.",
+      "Check live ledger, assets, remaining budgets, GPU exclusivity and cleanup ownership before registration and dispatch.",
+      "Retain result or failure, first-result evidence or explicit unavailability, terminal publication status, allocation charges and confirmed worker/helper cleanup.",
+      "Validate the full 510-row membership and hashes before accepting a successful result; report calibration separately from reconstruction.",
+      "No automatic retry or history replacement occurs. Keep unresolved approval, missing outcome or cleanup uncertainty open; a failed attempt is reported honestly rather than treated as successful calibration."
+    ],
+    "file": "docs/specs/plan031-execution/tickets/02-execute-the-explicitly-approved-s1-calibration-attempt.md",
+    "number": 25,
+    "url": "https://github.com/samaust/Experiments_4DGS/issues/25",
+    "blocked_by": [
+      24
+    ]
+  },
+  {
+    "order": 3,
+    "parent": 20,
+    "title": "Repair E5 packaging and produce a REVIEW proposal",
+    "blockers": [],
+    "deliver": "Make the prescribed offline DA3 editable build reproducibly receive its missing dependency and provide a concrete bounded recovery proposal.",
+    "criteria": [
+      "Include Hatchling\u2019s dynamic editables~=0.3 requirement in resolved, hash-locked dependencies before the offline editable build; retain prescribed E5 core pins and DA3 source/checkpoint.",
+      "Verify the complete setup request/result and admission/ledger path using CPU fake package commands, including missing dependency, changed recipe, orphaned result and altered approval rejection.",
+      "Provide private build-source extraction and hash-verified reusable asset provenance without modifying the original failed environment.",
+      "Produce a fresh numbered REVIEW proposal bound to the original cleaned-up failure, repaired recipe, current source qualification and existing cumulative resource charges.",
+      "REVIEW cannot allocate; identify one bounded additional setup attempt requiring separate approval, with no fallback runtime or model forward."
+    ],
+    "file": "docs/specs/plan031-execution/tickets/03-repair-e5-packaging-and-produce-a-review-proposal.md",
+    "number": 26,
+    "url": "https://github.com/samaust/Experiments_4DGS/issues/26",
+    "blocked_by": []
+  },
+  {
+    "order": 4,
+    "parent": 20,
+    "title": "Execute and qualify the approved E5 recovery",
+    "blockers": [
+      3
+    ],
+    "deliver": "Build exactly one separately approved E5 recovery and expose its qualified environment to checked D2 requests.",
+    "criteria": [
+      "Require explicit DO approval for the exact reviewed identity and allocation; verify live admission, source, assets, budgets and serial setup ownership.",
+      "Preserve the original failure and charges; execute once with a private build tree and no fallback, automatic retry or model smoke forward.",
+      "Qualify native imports with zero model constructors/forwards, network use or CUDA context initialization during qualification.",
+      "Freeze dependency lock, runtime inventory and build provenance; the downstream resolver accepts only the successful hash-verified ledger-bound result.",
+      "Retain actual build outcome, cleanup and resource evidence; keep failed or missing qualification open and do not release D2 on a partial build."
+    ],
+    "file": "docs/specs/plan031-execution/tickets/04-execute-and-qualify-the-approved-e5-recovery.md",
+    "number": 27,
+    "url": "https://github.com/samaust/Experiments_4DGS/issues/27",
+    "blocked_by": [
+      26
+    ]
+  },
+  {
+    "order": 5,
+    "parent": 21,
+    "title": "Complete D2 fit and check",
+    "blockers": [
+      4
+    ],
+    "deliver": "Use the qualified recovered E5 runtime to complete the original unconsumed D2 fit/check slots with immutable scale evidence.",
+    "criteria": [
+      "Record the applicable explicit resume for the blocked but unconsumed D2 slots and pass current stage-order and source-bound admission checks.",
+      "Run frame-100 fit and frame-175 check with their prescribed 30-input membership, frozen DA3 conversion, precision, masks and intrinsics.",
+      "Bind check to the successful frozen fit, identical input manifest, candidate and protocol; a failed fit gate blocks check before inference.",
+      "Verify result hashes, counts, scale gates, allocation charges and cleanup while preserving D0/D1 and other completed evidence.",
+      "Use one GPU and original remaining allocations; no repeat after consumption. Keep unresolved stages open absent a user-approved scope disposition; consistency is not independent physical accuracy."
+    ],
+    "file": "docs/specs/plan031-execution/tickets/05-complete-d2-fit-and-check.md",
+    "number": 28,
+    "url": "https://github.com/samaust/Experiments_4DGS/issues/28",
+    "blocked_by": [
+      27
+    ]
+  },
+  {
+    "order": 6,
+    "parent": 21,
+    "title": "Complete D3 and D4 checks using existing fits",
+    "blockers": [],
+    "deliver": "Complete the remaining Metric3D and Depth Pro checks in protocol order while reusing their already qualified runtimes and frozen fits.",
+    "criteria": [
+      "Reuse E6/E7 qualifications and existing D3/D4 fits without rebuild or refit; verify current immutable result and manifest bindings.",
+      "Run D3 check then D4 check serially, respecting existing stage-order checks and accounted D2 blocked states; E5 recovery is not a prerequisite.",
+      "Each check retains its prescribed frame-175 30-input membership, candidate conversion, fit scale, masks, intrinsics and frozen gates.",
+      "Verify wrong manifest/candidate/role, altered fit and corrupt membership rejection through the request/result boundary; capture actual gate and cleanup evidence.",
+      "Retain all charges and earlier hashes; no automatic retries or new allocations. Missing or failed checks remain explicit without unsupported physical-depth accuracy claims."
+    ],
+    "file": "docs/specs/plan031-execution/tickets/06-complete-d3-and-d4-checks-using-existing-fits.md",
+    "number": 29,
+    "url": "https://github.com/samaust/Experiments_4DGS/issues/29",
+    "blocked_by": []
+  },
+  {
+    "order": 7,
+    "parent": 22,
+    "title": "Validate the independent annotation import workflow",
+    "blockers": [],
+    "deliver": "Provide a usable human annotation handoff and a verifiable import path that admits complete independent review while refusing proxy substitution.",
+    "criteria": [
+      "Prepare the exact accepted 232-image/role handoff with primary revisions, contributor attestations, blind independent review, adjudication and final layer hashes.",
+      "Validate semantic, instance, static/changing, ignored/valid layers and required temporal associations through the existing annotation import boundary.",
+      "CPU fixtures reject proxy-as-human substitution, same-person primary/review, absent blindness or attestations, changed revisions, duplicate/substituted membership and unresolved disagreements.",
+      "Rejected imports cannot publish qualified truth, consume unintended allocations or replace historical proxy evidence.",
+      "List the precise external human evidence required; templates and synthetic fixtures are engineering validation only and do not complete the actual human import."
+    ],
+    "file": "docs/specs/plan031-execution/tickets/07-validate-the-independent-annotation-import-workflow.md",
+    "number": 30,
+    "url": "https://github.com/samaust/Experiments_4DGS/issues/30",
+    "blocked_by": []
+  },
+  {
+    "order": 8,
+    "parent": 22,
+    "title": "Import the supplied independently reviewed annotations",
+    "blockers": [
+      7
+    ],
+    "deliver": "Accept the actual supplied human-reviewed bundle as immutable scoring truth after complete validation against the prescribed inputs.",
+    "criteria": [
+      "Require the external primary, blind independent-review and adjudicated bundle with actual attestations; do not fabricate evidence or contact contributors without authorization.",
+      "Verify all 232 prescribed images/roles, required layers and temporal associations, immutable revisions and final hashes, with zero unresolved required disagreements.",
+      "Import through the checked controller and ledger with CPU accounting and qualified result provenance; preserve proxy history.",
+      "Expose the exact accepted bundle record to scoring, and reject changed bytes or incomplete evidence before publishing qualification.",
+      "Keep missing human inputs open; reviewed segmentation is not independent metric-depth reference evidence."
+    ],
+    "file": "docs/specs/plan031-execution/tickets/08-import-the-supplied-independently-reviewed-annotations.md",
+    "number": 31,
+    "url": "https://github.com/samaust/Experiments_4DGS/issues/31",
+    "blocked_by": [
+      30
+    ]
+  },
+  {
+    "order": 9,
+    "parent": 23,
+    "title": "Qualify scoring and eligibility through the aggregate interface",
+    "blockers": [],
+    "deliver": "Demonstrate the frozen metrics and finalist rules through a complete aggregate request/result path before scoring real benchmark evidence.",
+    "criteria": [
+      "Use independently calculated small fixtures for prescribed metrics, eligibility, ranking and ties through existing aggregation/checkpoint/report interfaces.",
+      "Reject missing, failed, corrupt, orphaned or proxy-only evidence from independent scoring and finalist decisions.",
+      "Verify exact input/truth/result bindings, fit/check role isolation, frozen protocol thresholds and preservation of previous checkpoints.",
+      "Represent validated, failed, blocked and unavailable arms without disguising unsupported physical-depth claims.",
+      "Record affected test validation with fake runtimes; fixture scores cannot be published as actual scientific results or grant downstream experiment allocations."
+    ],
+    "file": "docs/specs/plan031-execution/tickets/09-qualify-scoring-and-eligibility-through-the-aggregate-interface.md",
+    "number": 32,
+    "url": "https://github.com/samaust/Experiments_4DGS/issues/32",
+    "blocked_by": []
+  },
+  {
+    "order": 10,
+    "parent": 23,
+    "title": "Score actual component evidence and freeze finalist decisions",
+    "blockers": [
+      2,
+      5,
+      6,
+      8,
+      9
+    ],
+    "deliver": "Score the actual qualified component outcomes with independent reviewed truth and produce reproducible frozen finalist decisions.",
+    "criteria": [
+      "Use exact ledger-verified component results, accepted input records and the independently reviewed annotation bundle; no orphaned artifacts enter scores.",
+      "Apply the frozen metrics, role separation, eligibility, ties and finalist rules without tuning or replacing previous frozen checkpoints.",
+      "Retain failed, blocked and unavailable arm accounting; S1 calibration is not reconstruction and cannot satisfy reconstruction-based metrics.",
+      "Freeze metric artifacts, selected or blocked finalist decisions, dependency reasons and lineage with CPU resource charges.",
+      "Keep absent required truth or unresolved required outcomes open; record physical-depth accuracy as unverified without independent metric references."
+    ],
+    "file": "docs/specs/plan031-execution/tickets/10-score-actual-component-evidence-and-freeze-finalist-decisions.md",
+    "number": 33,
+    "url": "https://github.com/samaust/Experiments_4DGS/issues/33",
+    "blocked_by": [
+      25,
+      28,
+      29,
+      31,
+      32
+    ]
+  },
+  {
+    "order": 11,
+    "parent": 23,
+    "title": "Resolve downstream stages through checked admission",
+    "blockers": [
+      10
+    ],
+    "deliver": "Resolve geometry, combined and repeat handoffs against frozen decisions, executing only authorized eligible stages and preserving precise dependency blockers.",
+    "criteria": [
+      "Check existing prerequisite results, stage order, current source admission, unconsumed allocations and applicable explicit authority before each stage.",
+      "Refuse missing reconstruction and other prerequisites; S1 calibration approval cannot authorize reconstruction or provide reconstruction evidence.",
+      "Execute only authorized eligible stages with one GPU and frozen scientific contracts; capture exact results or failures, accounting and cleanup.",
+      "Record blocked, skipped, unavailable or consumed states with exact reasons; no retry pool, new allocation or retrospective eligibility tuning is introduced.",
+      "Verify handoffs and negative admission cases through request/result and ledger fixtures. Required unstarted work cannot be silently disposed of; retain unresolved blocks unless the frozen protocol or explicit user disposition permits them."
+    ],
+    "file": "docs/specs/plan031-execution/tickets/11-resolve-downstream-stages-through-checked-admission.md",
+    "number": 34,
+    "url": "https://github.com/samaust/Experiments_4DGS/issues/34",
+    "blocked_by": [
+      33
+    ]
+  },
+  {
+    "order": 12,
+    "parent": 23,
+    "title": "Produce and validate the final benchmark assessment",
+    "blockers": [
+      11
+    ],
+    "deliver": "Provide a reproducible final assessment of the validated benchmark evidence, failures, blockers and limits on scientific claims.",
+    "criteria": [
+      "Bind the report to actual frozen metrics, annotation truth, candidate results, downstream outcomes and ledger/resource lineage.",
+      "Cover every prescribed arm and explain failed, blocked, skipped or unavailable outcomes without concealing unfinished prerequisites.",
+      "State independent physical-depth accuracy only with actual independent metric references and uncertainty; otherwise explicitly retain the unverified limitation.",
+      "Record final full-suite results with exact failures/skips, preservation checks and independent Standards and Spec reviews; do not claim a clean suite where it failed.",
+      "Preserve earlier reports and provide a child-by-child completion assessment. Do not close or modify parent issues as part of ticket publication or report delivery."
+    ],
+    "file": "docs/specs/plan031-execution/tickets/12-produce-and-validate-the-final-benchmark-assessment.md",
+    "number": 35,
+    "url": "https://github.com/samaust/Experiments_4DGS/issues/35",
+    "blocked_by": [
+      34
+    ]
+  }
+]
