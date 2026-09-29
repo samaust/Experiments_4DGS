@@ -121,8 +121,10 @@ class AssetBundle:
                     raise BackendError(f'{component}: {name} must select {expected_name}')
             self.records[name] = record
             self.paths[name] = path
-        self.provenance = dict(component=component, assets=self.records,
+        self.provenance = dict(component=component,
                                assets_sha256=run(object_hash,self.records))
+        if component != 'S1':
+            self.provenance['assets'] = self.records
 
     def __getitem__(self, name):
         return str(self.paths[name])

@@ -19,6 +19,39 @@ from vipe_benchmark.s1_progress import REQUEST_BYTES, read_request_record
 
 
 class S1RequestCapacityTests(unittest.TestCase):
+    def test_frozen_s1_asset_provenance_fits_produced_row(self):
+        from vipe_benchmark.backends import AssetBundle
+        from vipe_benchmark.s1_progress import encode
+        request = read_json(ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z/requests/S1-calibration-recovery-003.json')
+        bundle = AssetBundle('S1', request['assets'])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            def put(name, value):
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                write_json(path, value)
+                return file_record(path)
+            row_request = {'inputs': synthetic_inputs(root / 'inputs', put, load())}
+            row, _ = synthetic_row(root / 'numeric', row_request)
+            # The failed first frame retained 42 assignments. The real row was
+            # not written, so reproduce its observed detection cardinality.
+            evidence = read_json(ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration-recovery-003/calibration/camera0/frame50-failure-evidence.json')
+            self.assertEqual(len(evidence['assignments']), 42)
+            row['semantics'] = {str(i): dict(row['semantics']['1'], id=i,
+                assignment=evidence['assignments'][i - 1]) for i in range(1, 43)}
+            row['metadata']['detections'] *= 42
+            row['metadata'].update(bundle.provenance)
+            self.assertNotIn('assets', row['metadata'])
+            self.assertEqual(row['metadata']['assets_sha256'], object_hash(bundle.records))
+            self.assertLessEqual(len(encode(row, 256 * 1024)), 256 * 1024)
+            from vipe_benchmark.s1_evidence import check_compact_asset_provenance
+            fourth = dict(request, job_id='S1-calibration-recovery-004')
+            check_compact_asset_provenance(row, fourth)
+            changed = copy.deepcopy(row)
+            changed['metadata']['assets_sha256'] = '0' * 64
+            with self.assertRaisesRegex(ValueError, 'compact asset provenance'):
+                check_compact_asset_provenance(changed, fourth)
+
     def test_frozen_request_and_exact_capacity_boundary(self):
         request_path = ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z/requests/S1-calibration-recovery-001.json'
         raw = request_path.read_bytes()
@@ -42,7 +75,33 @@ class S1RequestCapacityTests(unittest.TestCase):
 
 
 class S1NextIdentityTests(unittest.TestCase):
-    def test_clock_and_helper_paths_accept_three_reviewed_identities(self):
+    def test_fourth_identity_binds_consumed_467_event_prefix(self):
+        local = ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z'
+        path = ROOT / 'docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-calibration-recovery-authorization-004.json'
+        draft = read_json(path)
+        before = (local / 'ledger.jsonl').read_bytes()
+        self.assertEqual(len(before), 363162)
+        with tempfile.TemporaryDirectory() as directory, patch.object(s1, 'validation_record', return_value=read_json(draft['repair_validation']['path'])):
+            approved = dict(draft, additional_attempt_approved=True,
+                            authorization='Synthetic CPU validation only',
+                            authorization_context=dict(draft['authorization_context'], stage='DO'))
+            candidate = Path(directory) / 'candidate.json'
+            write_json(candidate, approved)
+            record = file_record(candidate)
+            document, request = s1.validate_binding(local, load(), record)
+            self.assertEqual(document['job_id'], s1.JOB_4)
+            self.assertEqual(request['job_id'], 'S1-calibration')
+            for field, value in [('previous_recovery_failure_event_sha256', '0' * 64),
+                                 ('prior_ledger_snapshot', draft['ledger_baseline'])]:
+                changed = Path(directory) / (field + '.json')
+                write_json(changed, dict(approved, **{field: value}))
+                with self.assertRaises(ValueError):
+                    s1.validate_binding(local, load(), file_record(changed))
+            with self.assertRaisesRegex(ValueError, 'explicit S1 calibration'):
+                s1.validate_binding(local, load(), file_record(path))
+        self.assertEqual((local / 'ledger.jsonl').read_bytes(), before)
+
+    def test_clock_and_helper_paths_accept_four_reviewed_identities(self):
         from vipe_benchmark.s1_clock import ReservationClock
         from vipe_benchmark.s1_cpu_helper import helper_job
         outcome = read_json(ROOT / 'docs/continuous-improvement/plan031-s1-recovery-20260919/requalification-066/dispatch-outcome.json')
@@ -53,15 +112,19 @@ class S1NextIdentityTests(unittest.TestCase):
         third = dict(reservation, job_id=s1.JOB_3)
         self.assertEqual(ReservationClock.from_reservation(third).job_id, s1.JOB_3)
         self.assertEqual(helper_job({'reservation': third}), s1.JOB_3)
+        fourth = dict(reservation, job_id=s1.JOB_4)
+        self.assertEqual(ReservationClock.from_reservation(fourth).job_id, s1.JOB_4)
+        self.assertEqual(helper_job({'reservation': fourth}), s1.JOB_4)
         with self.assertRaises(ValueError):
-            ReservationClock.from_reservation(dict(reservation, job_id='S1-calibration-recovery-004'))
+            ReservationClock.from_reservation(dict(reservation, job_id='S1-calibration-recovery-005'))
 
     def test_third_identity_binds_consumed_live_prefix_without_mutation(self):
         local = ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z'
         path = ROOT / 'docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-calibration-recovery-authorization-003.json'
         draft = read_json(path)
         before = (local / 'ledger.jsonl').read_bytes()
-        self.assertEqual(len(before), 351609)
+        self.assertEqual(len(before), 363162)
+        historical_events = Ledger(local / 'ledger.jsonl', load()).events()[:459]
         with tempfile.TemporaryDirectory() as directory, patch.object(s1, 'validation_record', return_value=read_json(draft['repair_validation']['path'])):
             review = dict(draft, additional_attempt_approved=True,
                           authorization='Synthetic CPU validation only',
@@ -69,7 +132,7 @@ class S1NextIdentityTests(unittest.TestCase):
             candidate = Path(directory) / 'candidate.json'
             write_json(candidate, review)
             record = file_record(candidate)
-            document, request = s1.validate_binding(local, load(), record)
+            document, request = s1.validate_binding(local, load(), record, events=historical_events)
             self.assertEqual(document['job_id'], s1.JOB_3)
             self.assertEqual(request['job_id'], 'S1-calibration')
             for field, value in [('previous_recovery_failure_event_sha256', '0' * 64),
@@ -77,8 +140,8 @@ class S1NextIdentityTests(unittest.TestCase):
                 changed = Path(directory) / (field + '.json')
                 write_json(changed, dict(review, **{field: value}))
                 with self.assertRaises(ValueError):
-                    s1.validate_binding(local, load(), file_record(changed))
-            with self.assertRaisesRegex(ValueError, 'explicit S1 calibration'):
+                    s1.validate_binding(local, load(), file_record(changed), events=historical_events)
+            with self.assertRaisesRegex(ValueError, 'consumed S1 identity'):
                 s1.validate_binding(local, load(), file_record(path))
         self.assertEqual((local / 'ledger.jsonl').read_bytes(), before)
 

@@ -20,6 +20,22 @@ REQUIRED = ('detector_raw_token_logits', 'detector_raw_boxes_cxcywh',
     'detector_native_phrase_utf8', 'detector_native_phrase_offsets')
 
 
+def check_compact_asset_provenance(row, request):
+    """Bind compact S1 row provenance to the full frozen request manifest."""
+    from .s1_recovery import JOB_4
+    if request.get('job_id') != JOB_4:
+        return
+    from .backends import REQUIRED_ASSETS
+    from .files import object_hash
+    assets = request.get('assets', {})
+    metadata = row.get('metadata', {})
+    if (type(metadata) is not dict or 'assets' in metadata
+            or not all(name in assets for name in REQUIRED_ASSETS['S1'])
+            or metadata.get('assets_sha256') != object_hash(
+                {name: assets[name] for name in REQUIRED_ASSETS['S1']})):
+        raise ValueError('S1 compact asset provenance changed')
+
+
 @with_deadline
 def load_array(record):
     # Keep hash verification and the subsequent NPY load as separate W gates.
@@ -386,6 +402,7 @@ def produced_row(row, request, *, loader=None):
     operation(strict_record,parent['rgb'])
     if not isinstance(row.get('semantics'), dict) or not isinstance(row.get('metadata'), dict):
         raise ValueError('produced row serialized fields required')
+    check_compact_asset_provenance(row, request)
     for key in ('instances', 'semantic_static', 'diagnostics', 'valid'):
         operation(strict_record,row[key])
     valid = operation(load_array,row['valid'])
@@ -590,6 +607,7 @@ def _qualify_row(row, request, *, first=False, loader=None, memo=None):
     from .backends import s1_class_assignments
     from .access import Identity, RGBLoader
     if request.get('job_id') not in S1_RECOVERY_JOBS:raise ValueError('S1 row request binding changed')
+    check_compact_asset_provenance(row, request)
     validate_row_numerics(row)
     identity = Identity(**row['identity'])
     if first and identity.record() != dict(branch='calibration', camera=0, frame=50, pair_start=None):
