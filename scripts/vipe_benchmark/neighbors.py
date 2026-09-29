@@ -44,16 +44,21 @@ def rank(method, reference, tracks, *, training, points=None, cameras=None, foot
     tracks = {c: set(t) for c, t in tracks.items()}
     candidates = []
     support = {}
+    zero_support_cameras = []
+    ineligible_geometry_cameras = []
     for other in sorted(training):
         if other == reference:
             continue
         count = len(tracks[reference] & tracks[other])
         union = len(tracks[reference] | tracks[other])
         if not count:
+            zero_support_cameras.append(other)
             continue
         candidates.append(dict(camera=other, shared=count, jaccard=count / union))
         if method == 'N2':
             support[other] = eligible_support(reference, other, tracks, points, cameras, footprints)
+            if not support[other]['points']:
+                ineligible_geometry_cameras.append(other)
     if method == 'N0':
         candidates.sort(key=lambda r: (-r['shared'], r['camera']))
     elif method == 'N1':
@@ -67,7 +72,9 @@ def rank(method, reference, tracks, *, training, points=None, cameras=None, foot
                      (method != 'N2' or support[r['camera']]['points'])]
         if not available:
             return dict(status='blocked', neighbors=[], partial_neighbors=selected,
-                        reason='fewer than three positive-support eligible training neighbors', rounds=rounds)
+                        reason='fewer than three positive-support eligible training neighbors', rounds=rounds,
+                        zero_support_cameras=zero_support_cameras,
+                        ineligible_geometry_cameras=ineligible_geometry_cameras)
         if method == 'N2':
             scores = []
             for r in available:
@@ -85,5 +92,7 @@ def rank(method, reference, tracks, *, training, points=None, cameras=None, foot
             chosen = available[0]
         selected.append(chosen['camera'])
     return dict(status='complete', neighbors=selected, candidates=candidates, rounds=rounds,
+                zero_support_cameras=zero_support_cameras,
+                ineligible_geometry_cameras=ineligible_geometry_cameras,
                 occupied_reference_cells=len(covered_cells) if method == 'N2' else None,
                 covered_point_ids=sorted(covered_points) if method == 'N2' else None)
