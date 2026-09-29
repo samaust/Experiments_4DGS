@@ -157,6 +157,52 @@ class SourceArchiveTests(unittest.TestCase):
 
 
 class SegmentationWorkerTests(unittest.TestCase):
+    def test_sam2_public_reconstruction_request_keeps_pairs_independent(self):
+        import cv2
+        from vipe_benchmark.backends import SegmentationResult
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            valid = np.ones((540, 960), bool)
+            np.save(root / 'valid.npy', valid)
+            cv2.imwrite(str(root / 'rgb.png'), np.zeros((540, 960, 3), np.uint8))
+            image = file_record(root / 'rgb.png')
+            footprint = file_record(root / 'valid.npy')
+            frames = (0, 1, 20, 21)
+            identities = [Identity('reconstruction', 1, frame, frame - frame % 20)
+                          for frame in frames]
+            rows = [dict(identity=Identity('reconstruction', 1, frame).record(), rgb=image, valid=footprint,
+                         K=np.eye(3).tolist(), grid='distorted-opencv-integer')
+                    for frame in frames]
+            write_json(root / 'inputs.json', dict(rgb=rows))
+            labels = np.zeros(valid.shape, np.int32)
+            labels[20:25, 30:35] = 1
+            calls = []
+            class Backend:
+                def segment(self, rgbs, footprints, *, frame_ids):
+                    calls.append(tuple(frame_ids))
+                    self_valid = footprints[0]
+                    return [SegmentationResult(labels.copy(),
+                            {'1': {'class': 'person', 'native_class': 'person', 'score': .9}},
+                            self_valid.copy(), {'pair_reset': True, 'frame_ids': list(frame_ids),
+                                                'successor_detector_rerun': False}) for _ in rgbs]
+            cuda = types.SimpleNamespace(synchronize=lambda: None, max_memory_allocated=lambda: 0,
+                                          max_memory_reserved=lambda: 0)
+            with patch.dict(sys.modules, {'torch': types.SimpleNamespace(cuda=cuda)}), \
+                    patch('vipe_benchmark.stages._model_runtime', return_value={}), \
+                    patch('vipe_benchmark.stages.output_identities', return_value=identities), \
+                    patch('vipe_benchmark.backends.build_backend', return_value=Backend()):
+                for component in ('S2', 'S4'):
+                    request = dict(component=component, branch='reconstruction', job_id=f'{component}-reconstruction',
+                                   inputs=file_record(root / 'inputs.json'), assets={})
+                    segment(request, root / component, load())
+                    result = read_json(root / component / 'result.json')
+                    self.assertEqual(result['component'], component)
+                    self.assertEqual(len(result['rows']), 4)
+                    self.assertEqual([row['identity']['frame'] for row in result['rows']], list(frames))
+                    self.assertTrue(all(row['metadata']['pair_reset'] for row in result['rows']))
+                    self.assertTrue(all(not row['metadata']['successor_detector_rerun'] for row in result['rows']))
+            self.assertEqual(calls, [(0, 1), (20, 21)] * 2)
+
     def test_worker_retains_grid_identity_and_validates_first_output_before_continuing(self):
         import cv2
         from vipe_benchmark.backends import SegmentationResult

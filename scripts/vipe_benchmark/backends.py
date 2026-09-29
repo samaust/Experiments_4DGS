@@ -543,6 +543,8 @@ class SAM2Backend:
                         if internal not in (0, 1):
                             raise BackendError('SAM 2 propagated outside the admitted pair')
                         if internal == 1:
+                            if successor is not None:
+                                raise BackendError('SAM 2 returned the successor frame more than once')
                             ids = [int(i) for i in ids]
                             values = _numpy(output)
                             if values.ndim == 4 and values.shape[1] == 1:

@@ -257,6 +257,23 @@ class SAM2Tests(unittest.TestCase):
             backend.segment([rgb, rgb], [valid, valid], frame_ids=[0, 1])
         self.assertEqual(video.resets, 1)
 
+    def test_duplicate_successor_fails_and_resets_for_both_shared_sam2_arms(self):
+        rgb, valid = image()
+        for component in ('S2', 'S4'):
+            with self.subTest(component=component):
+                backend, detector, video = self.make_backend()
+                backend.component = component
+                def duplicate(state, **kwargs):
+                    assert kwargs == dict(start_frame_idx=0, max_frame_num_to_track=1, reverse=False)
+                    logits = np.ones((2, 1, *valid.shape), np.float32)
+                    yield 1, [1, 2], logits
+                    yield 1, [1, 2], logits
+                video.propagate_in_video = duplicate
+                with self.assertRaisesRegex(BackendError, 'more than once'):
+                    backend.segment([rgb, rgb], [valid, valid], frame_ids=[0, 1])
+                self.assertEqual(detector.calls, 1)
+                self.assertEqual((video.starts, video.resets), (1, 1))
+
     def test_native_postprocessing_skip_fails_pair_and_resets_before_export(self):
         import warnings
         message = ('CUDA kernel error\nsecond error line\n\n'
