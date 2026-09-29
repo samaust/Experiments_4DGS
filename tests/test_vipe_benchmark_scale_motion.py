@@ -102,6 +102,32 @@ class MotionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             model.advance(Identity('calibration', 2, 151), image, 'synthetic')
 
+    def test_mog2_shadow_and_foreground_exclusion_stays_within_role(self):
+        class NativeModel:
+            def apply(self, rgb, *, learningRate):
+                self.learning_rate = learningRate
+                native = np.zeros(rgb.shape[:2], np.uint8)
+                native[7, 7] = 127
+                native[22, 22] = 255
+                return native
+
+        image = np.zeros((30, 30, 3), np.uint8)
+        fit = RoleMOG2('calibration', 1, 50)
+        fit.model = NativeModel()
+        excluded, native, evidence = fit.advance(Identity('calibration', 1, 50), image, 'fit-rgb')
+        self.assertEqual(fit.model.learning_rate, .02)
+        self.assertEqual(evidence['cold_start_frame'], 50)
+        self.assertEqual(evidence['context_frames'], [50])
+        self.assertEqual(evidence['shadow_pixels'], 1)
+        self.assertEqual((int(native[7, 7]), int(native[22, 22])), (127, 255))
+        self.assertTrue(excluded[7, 7] and excluded[22, 22])
+        self.assertEqual(int(excluded.sum()), 162)
+        self.assertFalse(excluded[15, 15])
+        with self.assertRaisesRegex(ValueError, 'duplicate, skipped, reordered'):
+            fit.advance(Identity('calibration', 1, 150), image, 'selection-rgb')
+        selection = RoleMOG2('calibration', 1, 150)
+        self.assertNotEqual(fit.state, selection.state)
+
     def test_pair_static_uses_union(self):
         np.testing.assert_array_equal(pair_union(np.array([[0, 1]], bool), np.array([[1, 0]], bool)), [[1, 1]])
 
