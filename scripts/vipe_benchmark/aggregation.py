@@ -723,6 +723,7 @@ def mask_stage(request, output, config):
                   statement='Only matching frozen annotation identities are scored; paired tracker contexts are retained and grouped.',
                   strata_scope='full images with an eligible reviewed tag; unknown tags excluded',
                   physical_accuracy='unverified')
+    result.update(scoring_mode=request.get('scoring_mode', 'legacy'), inputs=request['inputs'])
     write_json(output / 'mask-metrics.json', result)
     return result
 
@@ -956,6 +957,8 @@ def finalist_stage(request, output, config):
                   depth_control=file_record(output / 'depth-control.json'))
     if config:
         result['isolated_geometry_metrics'] = file_record(output / 'geometry-metrics.json')
+    result.update(scoring_mode=request.get('scoring_mode', 'legacy'), inputs=request.get('inputs'),
+                  annotations=masks.get('annotations'))
     write_json(output / 'finalists.json', result)
     return result
 
@@ -995,8 +998,56 @@ def final_stage(request, output, config):
     if config:
         write_json(output / 'combined-geometry-metrics.json', geometry_metrics(request.get('combined', {}), config, combined_slots=frozen['combined']))
         result['combined_geometry_metrics'] = file_record(output / 'combined-geometry-metrics.json')
+    result.update(scoring_mode=request.get('scoring_mode', 'legacy'), inputs=frozen.get('inputs'),
+                  annotations=frozen.get('annotations'))
     write_json(output / 'aggregate-final.json', result)
     return result
+
+
+def validate_scoring_request(request, config):
+    """Keep independent scoring separate from saved historical proxy policy."""
+    mode = request.get('scoring_mode', 'legacy')
+    if mode not in ('legacy', 'independent'):
+        raise ValueError('unknown scoring mode')
+    if mode != 'independent':
+        return
+    stage = request['stage']
+    if stage == 'masks':
+        from .annotations import validate
+        annotations = _document(request['annotations'])
+        if annotations.get('schema') == PROXY_SCHEMA:
+            raise ValueError('independent scoring requires reviewed human annotations')
+        validate(annotations, _document(request['inputs']), config)
+        return
+    parent_record = request.get('mask_metrics' if stage == 'finalists' else 'finalists')
+    if not isinstance(parent_record, dict) or 'path' not in parent_record:
+        raise ValueError('independent scoring requires a successful ledger-bound parent checkpoint')
+    parent = _document(parent_record)
+    if parent.get('scoring_mode') != 'independent' or parent.get('evidence_kind') != 'reviewed-annotation':
+        raise ValueError('independent scoring requires an independent frozen parent checkpoint')
+    if parent.get('inputs') != request.get('inputs') or parent.get('annotations') != request.get('annotations'):
+        raise ValueError('independent scoring input/truth bindings differ from the frozen parent')
+    # Verify the bound truth and inputs even if the next stage only reads scores.
+    annotations = _document(request['annotations'])
+    if annotations.get('schema') != 'vipe-benchmark-annotations/v1' or annotations.get('human_ground_truth') is False:
+        raise ValueError('independent scoring truth cannot be proxy evidence')
+    _document(request['inputs'])
+    if stage == 'finalists' and parent.get('human_ground_truth') is not True:
+        raise ValueError('independent selection requires human ground truth')
+    if stage == 'finalists':
+        counts_record = parent.get('raw_counts')
+        if not isinstance(counts_record, dict) or 'path' not in counts_record:
+            raise ValueError('independent selection requires raw metric count bindings')
+        counts = _document(counts_record)
+        source = counts.get('source_request', {})
+        if source.get('scoring_mode') != 'independent' or any(source.get(field) != request.get(field)
+                for field in ('inputs', 'annotations')):
+            raise ValueError('independent raw metric counts have different input/truth bindings')
+        if any(row.get('evidence_kind') == 'model-assisted-proxy' for row in counts.get('rows', [])):
+            raise ValueError('proxy raw counts cannot enter independent selection')
+    if stage == 'finalists' and any('model-assisted-proxy' in row.get('evidence_kinds', [])
+            for row in parent.get('comparisons', {}).values()):
+        raise ValueError('proxy comparisons cannot enter independent selection')
 
 
 def run(request, output, config):
@@ -1005,6 +1056,7 @@ def run(request, output, config):
     started = time.monotonic()
     result = dict(status='incomplete', stage=request['stage'], request_sha256=object_hash(request))
     try:
+        validate_scoring_request(request, config)
         operation = {'masks': mask_stage, 'finalists': finalist_stage, 'final': final_stage}[request['stage']]
         evidence = operation(request, output, config)
         artifact = {'masks': 'mask-metrics.json', 'finalists': 'finalists.json', 'final': 'aggregate-final.json'}[request['stage']]

@@ -564,7 +564,7 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
     return result
 
 
-def aggregate_request(local, stage, config):
+def aggregate_request(local, stage, config, *, scoring_mode=None):
     request = dict(job_id='aggregate', stage=stage, inputs=result_artifact(local, 'prepare', 'inputs'))
     if stage == 'masks':
         request.update(annotations=result_artifact(local, 'annotations', 'annotations'),
@@ -587,6 +587,11 @@ def aggregate_request(local, stage, config):
             repeats={j: record for j in ('R-S', 'R-D', 'R-G') if (record := result_record(local, j))})
     else:
         raise ValueError('unknown aggregate stage')
+    if scoring_mode is not None:
+        request['scoring_mode'] = scoring_mode
+        request['annotations'] = result_artifact(local, 'annotations', 'annotations')
+        from .aggregation import validate_scoring_request
+        validate_scoring_request(request, config)
     amendment = read_json(local / 'annotations/annotations.json').get('policy')
     if amendment:
         request['amendment'] = amendment

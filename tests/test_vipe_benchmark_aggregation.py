@@ -370,5 +370,174 @@ class SelectionCheckpointTests(unittest.TestCase):
             self.assertEqual(static['availability'], 'partial')
 
 
+class IndependentWorkerQualificationTests(unittest.TestCase):
+    def checkpoint_fixture(self, root):
+        rows = []
+        for method in ('S1', 'S2', 'S3', 'S4', 'M0', 'M1', 'M2'):
+            metrics = [('pixel', 'person'), ('pixel', 'basketball'), ('pixel', 'usable_static'),
+                       ('fraction', 'foreground_leakage'), ('fraction', 'retained_static_features'),
+                       ('boundary', 'semantic_foreground')]
+            for kind, metric in metrics:
+                counts = dict(tp=4, fp=1, fn=1, negative_images=0, negative_false_positive_pixels=0) if kind == 'pixel' else (
+                    dict(numerator=1 if metric == 'foreground_leakage' else 4, denominator=5) if kind == 'fraction' else
+                    dict(predicted_boundary=5, truth_boundary=5, matched_prediction=2 if method == 'S3' else 4,
+                         matched_truth=2 if method == 'S3' else 4))
+                for frame in (100, 175):
+                    rows.append(dict(method=method, identity=Identity('calibration', 1, frame).record(),
+                        kind=kind, metric=metric, counts=counts if method not in ('S4', 'M2') else None,
+                        status='complete' if method not in ('S4', 'M2') else 'failed', reason='fixture worker failed',
+                        strata=['all'], evidence_kind='reviewed-annotation'))
+        comparisons = aggregation.aggregate_rows(rows, ['S1', 'S2', 'S3', 'S4', 'M0', 'M1', 'M2'], resamples=20)
+        write_json(root/'inputs.json', dict(rgb=[]))
+        write_json(root/'truth.json', dict(schema='vipe-benchmark-annotations/v1', status='reviewed', human_ground_truth=True))
+        inputs, truth = file_record(root/'inputs.json'), file_record(root/'truth.json')
+        write_json(root/'raw-counts.json', dict(rows=rows, source_request=dict(scoring_mode='independent',
+            inputs=inputs, annotations=truth)))
+        write_json(root/'masks.json', dict(status='complete', comparisons=comparisons, scoring_mode='independent',
+            evidence_kind='reviewed-annotation', human_ground_truth=True, inputs=inputs, annotations=truth,
+            raw_counts=file_record(root/'raw-counts.json'), semantic_class_presence=dict(person=True, basketball=True)))
+        return dict(job_id='aggregate', stage='finalists', scoring_mode='independent', inputs=inputs,
+            annotations=truth, mask_metrics=file_record(root/'masks.json'))
+
+    def test_hand_calculated_metrics_ties_and_failures_freeze_through_worker_and_ledger(self):
+        from vipe_benchmark.config import load
+        from vipe_benchmark.execution import aggregate_record
+        from vipe_benchmark.ledger import Ledger
+        from vipe_benchmark import reporting
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            request = self.checkpoint_fixture(root)
+            output = root/'jobs/aggregate-finalists'
+            result = aggregation.run(request, output, {})
+            self.assertEqual(result['status'], 'complete')
+            frozen = read_json(result['evidence']['path'])
+            self.assertEqual(frozen['finalists']['S']['selected'], 'S1')
+            self.assertEqual([r['id'] for r in frozen['finalists']['S']['ranking']], ['S1', 'S2', 'S3'])
+            self.assertIn('S4', frozen['finalists']['S']['ineligible'])
+            self.assertEqual(frozen['finalists']['M']['selected'], 'M0')
+            self.assertIn('M2', frozen['finalists']['M']['ineligible'])
+            self.assertEqual(frozen['selection_evidence']['S']['S1']['person_dice'], .8)
+            self.assertEqual(frozen['selection_evidence']['S']['S1']['leakage'], .2)
+            self.assertAlmostEqual(frozen['selection_evidence']['S']['S3']['boundary_f1'], .4)
+            self.assertEqual(frozen['physical_accuracy'], 'unverified')
+            self.assertTrue(all(r['status'] == 'blocked' for r in frozen['combined'].values()))
+            ledger = Ledger(root/'ledger.jsonl', load())
+            self.assertIsNone(aggregate_record(root, 'finalists'))  # Orphan until checkpoint publication.
+            ledger.reserve('aggregate', ['fake CPU worker'], request)
+            ledger.checkpoint('aggregate', 1., result=file_record(output/'result.json'))
+            self.assertEqual(aggregate_record(root, 'finalists', artifact=True), result['evidence'])
+            masks = read_json(request['mask_metrics']['path'])
+            rows = reporting.paired_rows(masks['comparisons'], {'S2': 'S1'}, request['mask_metrics'], scope='masks')
+            row = next(r for r in rows if r['domain'] == 'calibration/selection' and r['metric'] == 'person' and r['field'] == 'dice')
+            self.assertEqual(row['estimate'], 0.)
+            self.assertEqual(row['interval_95'], [0., 0.])
+            before = Path(result['evidence']['path']).read_bytes()
+            with self.assertRaises(FileExistsError):
+                aggregation.run(request, output, {})
+            self.assertEqual(Path(result['evidence']['path']).read_bytes(), before)
+            Path(result['evidence']['path']).write_text('{}')
+            with self.assertRaisesRegex(ValueError, 'changed file'):
+                aggregate_record(root, 'finalists')
+
+    def test_independent_request_uses_only_successful_ledger_bound_parents(self):
+        from vipe_benchmark.config import load
+        from vipe_benchmark.execution import aggregate_request
+        from vipe_benchmark.ledger import Ledger
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            request = self.checkpoint_fixture(root)
+            ledger = Ledger(root/'ledger.jsonl', load())
+            for job, field in (('prepare', 'inputs'), ('annotations', 'annotations')):
+                folder = root/job
+                write_json(folder/'result.json', dict(status='complete', **{field: request[field]}))
+                ledger.reserve(job, ['fake CPU worker'], {})
+                ledger.finish(job, 'complete', 1., result=file_record(folder/'result.json'))
+            write_json(root/'annotations/annotations.json', read_json(request['annotations']['path']))
+            output = root/'jobs/aggregate-finalists'
+            receipt = aggregation.run(request, output, {})
+            with self.assertRaises(ValueError):
+                aggregate_request(root, 'final', load(), scoring_mode='independent')
+            ledger.reserve('aggregate', ['fake CPU worker'], request)
+            ledger.checkpoint('aggregate', 1., result=file_record(output/'result.json'))
+            accepted = aggregate_request(root, 'final', load(), scoring_mode='independent')
+            self.assertEqual(accepted['finalists'], receipt['evidence'])
+            self.assertEqual(accepted['annotations'], request['annotations'])
+            self.assertEqual(accepted['scoring_mode'], 'independent')
+            self.assertEqual(ledger.totals()['gpu']['attempts'], 0)
+
+    def test_changed_truth_input_and_role_membership_are_not_selection_evidence(self):
+        from vipe_benchmark.files import digest
+        from vipe_benchmark.config import ROOT
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            request = self.checkpoint_fixture(root)
+            for field in ('inputs', 'annotations'):
+                changed = dict(request, **{field: dict(request[field], sha256='changed')})
+                with self.assertRaisesRegex(ValueError, 'bindings'):
+                    aggregation.run(changed, root/field, {})
+            common = dict(status='passed', scale_protocol_sha256=digest(ROOT/'configs/basketball-rev2/scale.json'),
+                          provenance=dict(component='D1', component_sha256='candidate'))
+            write_json(root/'fit.json', dict(common, role='selection'))
+            fit = file_record(root/'fit.json')
+            write_json(root/'check.json', dict(common, role='fit', frozen_fit=fit))
+            request['scales'] = dict(D1=dict(fit=fit, check=file_record(root/'check.json')))
+            receipt = aggregation.run(request, root/'roles', {})
+            frozen = read_json(receipt['evidence']['path'])
+            self.assertFalse(frozen['depth_gates']['D1']['eligible'])
+            self.assertEqual((frozen['depth_gates']['D1']['fit'], frozen['depth_gates']['D1']['check']),
+                             ('unverified', 'unverified'))
+            # A fit-domain score cannot create a selection-domain estimate.
+            masks = read_json(request['mask_metrics']['path'])
+            masks['comparisons'] = {key: value for key, value in masks['comparisons'].items() if '/fit/' in key}
+            write_json(root/'fit-only.json', masks)
+            request['mask_metrics'] = file_record(root/'fit-only.json')
+            receipt = aggregation.run(request, root/'fit-only', {})
+            frozen = read_json(receipt['evidence']['path'])
+            self.assertEqual(frozen['finalists']['S']['status'], 'blocked')
+            self.assertIsNone(frozen['finalists']['S']['selected'])
+
+    def test_raw_metric_counts_must_bind_the_same_frozen_truth_and_inputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            request = self.checkpoint_fixture(root)
+            masks = read_json(request['mask_metrics']['path'])
+            raw = read_json(masks['raw_counts']['path'])
+            raw['source_request']['annotations'] = dict(request['annotations'], sha256='different truth')
+            write_json(root/'unbound-counts.json', raw)
+            masks['raw_counts'] = file_record(root/'unbound-counts.json')
+            write_json(root/'unbound-masks.json', masks)
+            request['mask_metrics'] = file_record(root/'unbound-masks.json')
+            with self.assertRaisesRegex(ValueError, 'raw.*binding'):
+                aggregation.run(request, root/'output', {})
+
+    def test_proxy_comparison_cannot_be_relabelled_as_independent(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            request = self.checkpoint_fixture(root)
+            masks = read_json(request['mask_metrics']['path'])
+            for comparison in masks['comparisons'].values():
+                if comparison.get('status') == 'complete':
+                    comparison['evidence_kinds'] = ['model-assisted-proxy']
+            write_json(root/'relabeled.json', masks)
+            request['mask_metrics'] = file_record(root/'relabeled.json')
+            with self.assertRaisesRegex(ValueError, 'proxy'):
+                aggregation.run(request, root/'output', {})
+            self.assertFalse((root/'output/finalists.json').exists())
+
+    def test_independent_worker_refuses_proxy_checkpoint_and_records_failure(self):
+        from vipe_benchmark.files import object_hash
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_json(root/'masks.json', dict(status='complete', comparisons={},
+                evidence_kind='model-assisted-proxy', human_ground_truth=False))
+            request = dict(stage='finalists', scoring_mode='independent', mask_metrics=file_record(root/'masks.json'))
+            with self.assertRaisesRegex(ValueError, 'independent'):
+                aggregation.run(request, root/'output', {})
+            receipt = read_json(root/'output/result.json')
+            self.assertEqual(receipt['status'], 'failed')
+            self.assertEqual(receipt['request_sha256'], object_hash(request))
+            self.assertFalse((root/'output/finalists.json').exists())
+
+
 if __name__ == '__main__':
     unittest.main()
