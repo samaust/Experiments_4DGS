@@ -25,6 +25,7 @@ import uuid
 THREADS = ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'NUMEXPR_NUM_THREADS')
 MAX_FRAME = 65536
 IO_SLICE = 16384
+RESOURCE_SAMPLE_SECONDS = 2.
 OWNERS = []
 
 JOB_LEDGER_SCHEMA = 'registered-process-tree-job/v1'
@@ -2584,7 +2585,7 @@ class Session:
         if name not in allowed or (name=='constant' and os.environ.get('VIPE_CPU_VALIDATION')!='1'): raise ValueError('helper operation not permitted')
         if self.sequences[role]>=UINT64_MAX: raise ValueError('request sequence exhausted')
         self.sequences[role]+=1; sequence=self.sequences[role]; self.dispatch_counts[role].add()
-        request=dict(id=sequence,operation=name,dispatch=now,deadline=min(deadline,now+1.) if role=='sample' else deadline,
+        request=dict(id=sequence,operation=name,dispatch=now,deadline=min(deadline,now+RESOURCE_SAMPLE_SECONDS) if role=='sample' else deadline,
                      state='queued',operation_payload=operation)
         self.requests[role]=request
         if role=='sample': self.request_census(request,'pre')
@@ -2645,5 +2646,5 @@ def validate_acquisition(payload, dispatch, received, deadline):
     start, end = payload.get('acquisition_start'), payload.get('acquisition_end')
     if any(type(v) not in (int,float) or not math.isfinite(v) or v < 0 for v in (start,end,dispatch,received,deadline)):
         raise ValueError('invalid sample acquisition type/value')
-    if not dispatch <= start <= end <= received or not received < min(dispatch+1., deadline):
+    if not dispatch <= start <= end <= received or not received < min(dispatch+RESOURCE_SAMPLE_SECONDS, deadline):
         raise ValueError('invalid/stale/late sample acquisition interval')

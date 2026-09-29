@@ -496,7 +496,7 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
             ledger.note('started', job_id=job_id, pid=process.pid, pgid=process.pid)
             exit_observed = False
             while True:
-                # Each reading still expires after one second. A delayed
+                # Each reading expires after two seconds. A delayed
                 # reading is discarded; allow the retained helper a bounded
                 # interval to return a subsequent fresh reading.
                 reading = (monitored_call(sampler, min(run_deadline, time.monotonic()+S1_MONITOR_GAP_SECONDS), sampler,

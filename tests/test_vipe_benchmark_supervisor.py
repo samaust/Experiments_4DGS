@@ -1165,6 +1165,40 @@ class HelperSessionTests(unittest.TestCase):
         self.sampler = dict(operation='constant', args=dict(value=self.reading))
         self.operation = dict(operation='constant', args=dict(value=37))
 
+    def test_prelaunch_accepts_sample_between_one_and_two_seconds(self):
+        from test_vipe_benchmark_s1_helper_fixtures import session as fixture_session
+        from vipe_benchmark.supervisor import HelperLifecycle, monitored_call
+        session = fixture_session('sample_slow')
+        try:
+            session.await_ready()
+            lifecycle = HelperLifecycle(retain=True)
+            lifecycle.helpers.append(session)
+            started = self.time.monotonic()
+            value = monitored_call(self.sampler, started + 3., self.sampler,
+                                   load(), {}, lifecycle=lifecycle, phase='prelaunch')
+            self.assertEqual(value, self.reading)
+            self.assertGreaterEqual(self.time.monotonic() - started, 1.)
+            self.assertEqual(session.sample_expiry_count, 0)
+        finally:
+            self.assertTrue(session.close(self.time.monotonic() + 3.))
+
+    def test_prelaunch_rejects_sample_over_two_seconds(self):
+        from test_vipe_benchmark_s1_helper_fixtures import session as fixture_session
+        from vipe_benchmark.supervisor import HelperLifecycle, monitored_call
+        session = fixture_session('sample_late')
+        try:
+            session.await_ready()
+            lifecycle = HelperLifecycle(retain=True)
+            lifecycle.helpers.append(session)
+            started = self.time.monotonic()
+            with self.assertRaisesRegex(TimeoutError, 'resource sample timeout'):
+                monitored_call(self.sampler, started + 3., self.sampler,
+                               load(), {}, lifecycle=lifecycle, phase='prelaunch')
+            self.assertGreaterEqual(self.time.monotonic() - started, 2.)
+            self.assertIsNone(session.last_sample)
+        finally:
+            self.assertTrue(session.close(self.time.monotonic() + 3.))
+
     def test_worker_sample_discards_one_late_reply_then_accepts_fresh_reply(self):
         from test_vipe_benchmark_s1_helper_fixtures import session as fixture_session
         from vipe_benchmark.supervisor import HelperLifecycle, monitored_call
@@ -1202,7 +1236,7 @@ class HelperSessionTests(unittest.TestCase):
             lifecycle = HelperLifecycle(retain=True)
             lifecycle.helpers.append(session)
             with self.assertRaisesRegex(TimeoutError, 'deadline'):
-                monitored_call(self.sampler, self.time.monotonic()+1.3, self.sampler,
+                monitored_call(self.sampler, self.time.monotonic()+2.3, self.sampler,
                                load(), {}, lifecycle=lifecycle, phase='worker_sample')
             self.assertIsNone(session.last_sample)
             self.assertGreaterEqual(session.sample_expiry_count, 1)
@@ -4532,7 +4566,9 @@ class HelperSessionTests(unittest.TestCase):
                 bad=dict(good); bad[key]=value
                 with self.assertRaises(ValueError): validate_acquisition(bad,10.,10.2,11.)
         with self.assertRaises(ValueError): validate_acquisition({},10.,10.2,11.)
-        with self.assertRaises(ValueError): validate_acquisition(good,10.,11.,12.)
+        validate_acquisition(dict(acquisition_start=10.,acquisition_end=11.4),10.,11.5,13.)
+        with self.assertRaises(ValueError): validate_acquisition(good,10.,12.,13.)
+        with self.assertRaises(ValueError): validate_acquisition(good,10.,11.,11.)
         with self.assertRaises(ValueError): validate_acquisition(good,10.,10.2,10.2)
         with self.assertRaises(ValueError): validate_acquisition(dict(acquisition_start=10.1,acquisition_end=10.),10.,10.2,11.)
 
