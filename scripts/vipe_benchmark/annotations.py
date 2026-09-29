@@ -27,6 +27,10 @@ def template(inputs, config):
 
 
 def validate(bundle, inputs, config):
+    if (bundle.get('schema') != 'vipe-benchmark-annotations/v1'
+            or bundle.get('human_ground_truth', True) is not True
+            or bundle.get('evidence_kind', 'reviewed-human') != 'reviewed-human'):
+        raise ValueError('independent human annotation evidence required; proxy substitution prohibited')
     expected = template(inputs, config)
     contributors = bundle.get('contributors', {})
     for role_name in ('primary', 'independent_review'):

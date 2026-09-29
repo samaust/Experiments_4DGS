@@ -62,6 +62,9 @@ def cpu_stage(args, config):
     request = dict(configuration=file_record(CONFIG), exposure=file_record(docs / 'exposure-history.json'))
     if operation == 'annotations':
         request.update(inputs=file_record(local / 'prepare/inputs.json'), annotations=file_record(args.bundle))
+        # Reject incomplete/external evidence before creating a request or reserving CPU.
+        from vipe_benchmark.annotations import validate as validate_annotations
+        validate_annotations(read_json(request['annotations']['path']), read_json(request['inputs']['path']), config)
     request_path = local / f'{operation}-request.json'
     write_json(request_path, request)
     command = [str(Path(sys.executable)), str(ROOT / 'scripts/basketball_vipe_worker.py'),
