@@ -8,7 +8,8 @@ import io
 import numpy as np
 
 from .s1_progress import checked_write_json as write_json, checked_mkdir
-from .s1_recovery import JOB, AMENDMENT
+from .s1_recovery import AMENDMENT
+from .s1_progress import S1_RECOVERY_JOBS, read_request_record
 from .s1_progress import operation, with_deadline, DeadlineSink, before
 from .s1_progress import (checked_file_record as file_record,
     checked_verify_record as verify_record, checked_read_json as read_json)
@@ -146,7 +147,7 @@ def verify_failure(value, request, clock):
     clock_match(clock,value.get('reservation_clock'))
     clock.recorded(value.get('elapsed_seconds_from_reservation'), value.get('status'))
     auth = request['recovery_authorization']
-    if (value.get('schema') != 'plan032-s1-first-result/v1' or value.get('job_id') != JOB
+    if (value.get('schema') != 'plan032-s1-first-result/v1' or value.get('job_id') != request['job_id']
             or value.get('status') not in ('failed', 'not_reached')
             or value.get('clock_status') != 'verified'
             or value.get('authorization') != auth
@@ -262,7 +263,7 @@ def preserve_failure(request, output, identity, error, *, adapter=None, predicti
         known=first_result_handoff.known(clock,request)
         if known is not None:error.s1_first_result=known
     # Raw preservation stops at W. Only bounded diagnostic metadata may then use C.
-    if request.get('job_id')==JOB and clock is not None:
+    if request.get('job_id') in S1_RECOVERY_JOBS and clock is not None:
         now=time.monotonic()
         if now>=clock.total_deadline:
             error.s1_progress_unavailable='original total deadline reached; diagnostic publication unavailable'
@@ -279,14 +280,14 @@ def _preserve_failure(request, output, identity, error, *, adapter=None, predict
                      stage='adapter', parent=None, runtime=None, clock=None):
     """Best effort publication; caller always re-raises the original exception."""
     output = Path(output)
-    if request.get('job_id') == JOB and clock is not None and time.monotonic() >= clock.work_deadline:
+    if request.get('job_id') in S1_RECOVERY_JOBS and clock is not None and time.monotonic() >= clock.work_deadline:
         from .s1_progress import read_bytes, record
         from .s1_clock import diagnostic
         error.s1_progress_unavailable='work deadline reached; raw bytes retained without new qualification'
         first=output/'first-result-qualification.json'
         if not operation(first.exists):
             # A bounded unverified diagnostic is not new first-result authority.
-            write_json(first,dict(schema='plan032-s1-first-result/v1',job_id=JOB,status='failed',
+            write_json(first,dict(schema='plan032-s1-first-result/v1',job_id=request['job_id'],status='failed',
                 identity=None,count=0,rows=[],runtime={},semantic_amendment=None,
                 authorization=request.get('recovery_authorization'),request=clock.mapping()['request'],
                 checks=[],raw_evidence=[],error=str(error),failure_stage=stage,
@@ -295,7 +296,7 @@ def _preserve_failure(request, output, identity, error, *, adapter=None, predict
         except FileNotFoundError:error.s1_first_result=None
         stem=identity.key() if identity is not None else 'unavailable-input'
         path=output/(stem+'-failure-evidence.json')
-        write_json(path,dict(schema='plan032-s1-failure-evidence/v1',job_id=JOB,error_type=type(error).__name__,
+        write_json(path,dict(schema='plan032-s1-failure-evidence/v1',job_id=request['job_id'],error_type=type(error).__name__,
             error=str(error),failure_stage=stage,array_records={},available_fields=[],unavailable_fields={'arrays':'work deadline reached'},
             **diagnostic(clock,TimeoutError('work deadline reached'))))
         error.s1_failure_record=file_record(path)
@@ -336,7 +337,7 @@ def _preserve_failure(request, output, identity, error, *, adapter=None, predict
     except Exception:
         amendment = None
     clock_fields = {}
-    if request['job_id'] == JOB:
+    if request['job_id'] in S1_RECOVERY_JOBS:
         from .s1_clock import diagnostic
         from .s1_progress import checked_require_clock as require_clock
         try:
@@ -357,7 +358,7 @@ def _preserve_failure(request, output, identity, error, *, adapter=None, predict
     write_json(path, value)
     record = file_record(path)
     error.s1_failure_record = record
-    if request['job_id'] == JOB:
+    if request['job_id'] in S1_RECOVERY_JOBS:
         error.s1_first_result = first_record(request, output,
             'failed' if evidence.get('forward_count', 0) else 'not_reached',
             clock=clock, runtime=runtime, error=f'{type(error).__name__}: {error}', stage=value['failure_stage'], raw=[record])
@@ -576,7 +577,7 @@ def qualify_row(row, request, *, first=False, loader=None, memo=None, progress_c
             for source in context['sources'].values():
                 try:operation(verified_bytes,source)
                 except ValueError as error:raise ValueError('progress source changed') from error
-            if operation(read_record,context['clock']['request'],256*1024)!=request:raise ValueError('progress worker request')
+            operation(read_request_record,context['clock']['request'],request)
         return _qualify_row(row,request,first=first,loader=loader,memo=memo)
     except BaseException:
         if memo is not None:memo.clear()
@@ -588,7 +589,7 @@ def _qualify_row(row, request, *, first=False, loader=None, memo=None):
     from .contracts import instances, validate_static
     from .backends import s1_class_assignments
     from .access import Identity, RGBLoader
-    if request.get('job_id')!=JOB:raise ValueError('S1 row request binding changed')
+    if request.get('job_id') not in S1_RECOVERY_JOBS:raise ValueError('S1 row request binding changed')
     validate_row_numerics(row)
     identity = Identity(**row['identity'])
     if first and identity.record() != dict(branch='calibration', camera=0, frame=50, pair_start=None):
@@ -697,7 +698,7 @@ def _validate_result(result, request, config, *, clock, memo):
     from .s1_progress import checked_require_clock as require_clock
     clock_match(require_clock(clock),result.get('reservation_clock'))
     from .access import output_identities, validate_membership
-    if (result.get('status') != 'complete' or result.get('job_id') != JOB
+    if (result.get('status') != 'complete' or result.get('job_id') != request['job_id']
             or result.get('component') != 'S1' or result.get('branch') != 'calibration'):
         raise ValueError('wrong S1 recovered result')
     validate_membership(result['rows'], output_identities(config, 'calibration'))
@@ -748,7 +749,7 @@ def verify_first(value, request, *, clock, loader=None):
     amendment = operation(read_json,operation(verify_record,auth)['path'])['semantic_amendment']
     seconds = value.get('elapsed_seconds_from_reservation')
     if (value.get('schema') != 'plan032-s1-first-result/v1' or value.get('status') != 'passed'
-            or value.get('job_id') != JOB or value.get('count') != 1
+            or value.get('job_id') != request['job_id'] or value.get('count') != 1
             or len(value.get('rows', [])) != 1 or value.get('authorization') != auth
             or value.get('semantic_amendment') != amendment
             or value.get('identity') != value['rows'][0]['identity']

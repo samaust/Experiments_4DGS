@@ -1,4 +1,5 @@
 """Locked, append-only, hash-chained attempt and resource ledger."""
+from .s1_progress import S1_RECOVERY_JOBS
 from contextlib import contextmanager
 import fcntl
 import json
@@ -120,7 +121,7 @@ class Ledger:
                 raise ValueError('job already consumed or accounted for; no automatic retry')
             if any(r['event'] == 'reserve' for r in states.values()):
                 raise ValueError('unreconciled active attempt; refusing concurrent dispatch')
-            if job_id == 'S1-calibration-recovery-001':
+            if job_id in S1_RECOVERY_JOBS:
                 from .s1_recovery import reservation_binding
                 reservation_binding(self.path.parent, self.config, events, evidence, command=command)
             spec = allocated[job_id]
@@ -230,16 +231,16 @@ class Ledger:
 
     def authorize_component_recovery(self, authorization):
         """One explicit recovery, retaining original failures and all charges."""
-        from .s1_recovery import SCHEMA, validate_binding
+        from .s1_recovery import SCHEMA, SCHEMA_2, validate_binding
         document = read_json(verify_record(authorization)['path'])
         original_id = document.get('original_job_id', '')
-        amended = document.get('schema') == SCHEMA
+        amended = document.get('schema') in (SCHEMA, SCHEMA_2)
         if not amended and original_id.startswith('S1-'):
             raise ValueError('S1 requires calibration-only semantic amendment authorization; reconstruction blocked')
         if not re.fullmatch(r'S[0-4]-(calibration|reconstruction)', original_id):
             raise ValueError('component recovery requires an original segmentation matrix arm')
         spec = jobs(self.config)[original_id]
-        required = dict(schema=SCHEMA if amended else 'vipe-benchmark-component-recovery/v1', attempts_limit=1,
+        required = dict(schema=document.get('schema') if amended else 'vipe-benchmark-component-recovery/v1', attempts_limit=1,
             seconds_limit=spec['seconds'], reset_previous_consumption=False,
             gpu_total_seconds_limit=self.config['gpu_total_seconds_limit'],
             changes_to_prescribed_configuration=amended, unrelated_attempts_reopened=False)

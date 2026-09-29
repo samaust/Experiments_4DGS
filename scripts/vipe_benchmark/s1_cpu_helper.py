@@ -3,6 +3,14 @@ from .s1_progress import checked_clock_reservation
 import os
 
 
+def helper_job(args):
+    from .s1_progress import S1_RECOVERY_JOBS
+    job = args.get('reservation', {}).get('job_id', args.get('job_id', 'S1-calibration-recovery-001'))
+    if job not in S1_RECOVERY_JOBS:
+        raise ValueError('S1 helper job identity')
+    return job
+
+
 def run(operation):
     from .s1_progress import operation as guarded,reservation_deadline
     name=operation['operation'];args=operation.get('args',{})
@@ -93,7 +101,7 @@ def _session_operation(operation, session, request_id):
         finally:
             if publisher is not None:publisher.close()
         binding = summary_binding(session, request_id, args['reservation'])
-        path = Path(args['local'])/'jobs'/'S1-calibration-recovery-001'/('helper-summary-'+session+'-'+str(request_id)+'.json')
+        path = Path(args['local'])/'jobs'/helper_job(args)/('helper-summary-'+session+'-'+str(request_id)+'.json')
         write_json(path, dict(binding, summary=summary))
         return dict(binding, record=file_record(path))
     if name == 'publish':
@@ -107,7 +115,7 @@ def _session_operation(operation, session, request_id):
             expected = summary_binding(session, reference['request_id'], args['reservation'])
             if set(reference) != set(expected) | {'record'} or any(reference[k] != v for k,v in expected.items()):
                 raise ValueError('helper summary reference correlation')
-            path = Path(args['local'])/'jobs'/'S1-calibration-recovery-001'/('helper-summary-'+session+'-'+str(reference['request_id'])+'.json')
+            path = Path(args['local'])/'jobs'/helper_job(args)/('helper-summary-'+session+'-'+str(reference['request_id'])+'.json')
             if Path(reference['record']['path']) != path:
                 raise ValueError('helper summary reference path')
             from .s1_progress import read_record
@@ -168,7 +176,7 @@ def main(role, session, fd, *, operation_runner=session_operation, before_ready=
                     args = operation.get('args', {})
                     if 'local' in args:
                         from .files import write_json, file_record
-                        path = Path(args['local'])/'jobs'/'S1-calibration-recovery-001'/('helper-error-'+session+'-'+str(last)+'.json')
+                        path = Path(args['local'])/'jobs'/helper_job(args)/('helper-error-'+session+'-'+str(last)+'.json')
                         write_json(path, dict(error=raw, session=session, request_id=last))
                         value['record'] = file_record(path)
                     ok = False

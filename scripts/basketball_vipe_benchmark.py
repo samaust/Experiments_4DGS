@@ -161,8 +161,9 @@ def execute(args, config):
         dispatch(local, docs, config, recovery_request(local, authorization), operation='setup')
     elif args.command == 'component-recovery':
         from vipe_benchmark.execution import common_admission, component_recovery_request
-        from vipe_benchmark.s1_recovery import JOB, terminal_receipt
-        if getattr(args, 'job', None) == JOB:
+        from vipe_benchmark.s1_recovery import terminal_receipt
+        from vipe_benchmark.s1_progress import S1_RECOVERY_JOBS
+        if getattr(args, 'job', None) in S1_RECOVERY_JOBS:
             from vipe_benchmark.execution import execute_s1_recovery
             return execute_s1_recovery(local, docs, config, args.authorization)
         try:
@@ -261,7 +262,7 @@ def main():
     p = sub.add_parser('setup-recovery')
     p.add_argument('--authorization', type=Path, required=True)
     p = sub.add_parser('component-recovery')
-    p.add_argument('--job', choices=['S1-calibration-recovery-001'])
+    p.add_argument('--job', choices=['S1-calibration-recovery-001', 'S1-calibration-recovery-002'])
     p.add_argument('--authorization', type=Path, required=True)
     p = sub.add_parser('reconstruction-recovery')
     p.add_argument('--authorization', type=Path, required=True)

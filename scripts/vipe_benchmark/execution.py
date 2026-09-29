@@ -1,4 +1,5 @@
 """Admission and dependency-aware dispatch of immutable matrix requests."""
+from .s1_progress import S1_RECOVERY_JOBS
 from pathlib import Path
 import platform
 import shutil
@@ -24,8 +25,8 @@ def result_record(local, job):
     if state.get('event') != 'finish' or state.get('status') != 'complete' or not state.get('result'):
         recoveries = [e for e in ledger.events() if e['event'] == 'component_recovery_authorized'
                       and e['original_job_id'] == job]
-        if job == 'S1-calibration' and len(recoveries) > 1:
-            raise ValueError('S1 recovery must have one authorization')
+        if job == 'S1-calibration' and len(recoveries) > 2:
+            raise ValueError('S1 recovery exceeds the two reviewed identities')
         if recoveries:
             record = result_record(local, recoveries[-1]['job_id'])
             if record:
@@ -45,7 +46,7 @@ def result_record(local, job):
                         raise ValueError('recovery result differs from S3 reconstruction contract')
                     return record
         return None
-    if job == 'S1-calibration-recovery-001':
+    if job in S1_RECOVERY_JOBS:
         from .s1_recovery import resolved_result
         resolved_result(local, load(), ledger.events(), state)
     record = state['result']
@@ -477,8 +478,11 @@ def reconstruction_request(local, config, job):
     return request
 
 
-def s1_sampling_operation(local):
-    return dict(operation='resources', args=dict(local=str(local)))
+def s1_sampling_operation(local, job='S1-calibration-recovery-001'):
+    args = dict(local=str(local))
+    if job != 'S1-calibration-recovery-001':
+        args['job_id'] = job
+    return dict(operation='resources', args=args)
 
 
 def dispatch(local, docs, config, request, *, operation='component', checkpoint=False, resume_checkpoint=False):
@@ -508,7 +512,7 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
             raise ValueError('saved unstarted request differs from the explicit dispatch')
     else:
         write_json(request_path, request)
-    if job == 'S1-calibration-recovery-001':
+    if job in S1_RECOVERY_JOBS:
         from .s1_progress import read_request_record
         read_request_record(file_record(request_path), request)
     python = request.get('runtime', {}).get('python', str(ROOT / '.local/envs/stg-colmap/bin/python'))
@@ -519,7 +523,7 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
         result = read_json(output / 'result.json')
         if result.get('status') != 'complete':
             raise ValueError('worker did not complete its explicit result contract')
-        if job == 'S1-calibration-recovery-001':
+        if job in S1_RECOVERY_JOBS:
             from .s1_recovery import accept_result
             return accept_result(local, config, request, result, output)
         if operation == 'component' and request['component'].startswith(('S', 'D')):
@@ -532,13 +536,13 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
                     if field in row:
                         verify_record(row[field])
     evidence = dict(request=file_record(request_path), worker=file_record(ROOT / 'scripts/basketball_vipe_worker.py'))
-    if job == 'S1-calibration-recovery-001':
+    if job in S1_RECOVERY_JOBS:
         from .s1_recovery import event_ref
         event = next(e for e in ledger.events() if e['event'] == 'component_recovery_authorized' and e['job_id'] == job)
         evidence.update({k: event[k] for k in ('authorization', 'admission', 'semantic_amendment', 'repair_validation', 'configuration', 'baseline_correction')})
         evidence['authorization_event'] = event_ref(event)
         from .s1_recovery import source_requalification_event
-        requalification = source_requalification_event(ledger.events())
+        requalification = source_requalification_event(ledger.events()) if job == 'S1-calibration-recovery-001' else None
         if requalification:
             evidence['source_requalification'] = event_ref(requalification)
     def publish(reservation, outcome):
@@ -547,10 +551,10 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
                                 reservation=reservation, outcome=outcome)
     result = supervise(ledger, job, command, local / 'jobs' / suffix,
         evidence=evidence,
-        sample_resources=s1_sampling_operation(local) if job == 'S1-calibration-recovery-001' else lambda: resources(local, gpu=device_monitored),
-        validate_result=validate, poll_seconds=.1 if job == 'S1-calibration-recovery-001' else 2., checkpoint=checkpoint, resume_checkpoint=resume_checkpoint,
-        terminal_publisher=publish if job == 'S1-calibration-recovery-001' else None, terminal_docs=docs)
-    if job != 'S1-calibration-recovery-001':
+        sample_resources=s1_sampling_operation(local, job) if job in S1_RECOVERY_JOBS else lambda: resources(local, gpu=device_monitored),
+        validate_result=validate, poll_seconds=.1 if job in S1_RECOVERY_JOBS else 2., checkpoint=checkpoint, resume_checkpoint=resume_checkpoint,
+        terminal_publisher=publish if job in S1_RECOVERY_JOBS else None, terminal_docs=docs)
+    if job not in S1_RECOVERY_JOBS:
         write_json(docs / (suffix + '.json'), dict(status='complete', result=file_record(local / 'jobs' / suffix / 'result.json')))
     return result
 
@@ -650,7 +654,7 @@ def execute_matrix(local, docs, config, validation):
 
 def execute_s1_recovery(local, docs, config, authorization):
     """One controller lifecycle; no matrix/report follow-up and no replay."""
-    from .s1_recovery import JOB, validate_binding, terminal_receipt
+    from .s1_recovery import validate_binding, terminal_receipt
     ledger = Ledger(local / 'ledger.jsonl', config)
     # Replay is rejected before publishing another admission/receipt.
     error = None
@@ -660,7 +664,8 @@ def execute_s1_recovery(local, docs, config, authorization):
         if not isinstance(authorization, dict):
             authorization = file_record(authorization)
         document, _ = validate_binding(local, config, authorization)
-        registered = [e for e in ledger.events() if e['event'] == 'component_recovery_authorized' and e['job_id'] == JOB]
+        job = document['job_id']
+        registered = [e for e in ledger.events() if e['event'] == 'component_recovery_authorized' and e['job_id'] == job]
         if not registered:
             admission = common_admission(local, docs, config,
                 Path(document['repair_validation']['path']), recovery_authorization=authorization)
@@ -669,7 +674,7 @@ def execute_s1_recovery(local, docs, config, authorization):
             ledger.authorize_component_recovery(authorization)
         elif len(registered) != 1 or registered[0]['authorization'] != authorization:
             raise ValueError('different S1 authorization already registered')
-        return dispatch(local, docs, config, component_recovery_request(local, config, JOB))
+        return dispatch(local, docs, config, component_recovery_request(local, config, job))
     except BaseException as exc:
         primary = exc
         error = f'{type(exc).__name__}: {exc}'
@@ -677,7 +682,8 @@ def execute_s1_recovery(local, docs, config, authorization):
     finally:
         try:
             # Consumed outcomes belong exclusively to the charged supervisor.
-            if not any(e.get('job_id') == JOB and e['event'] == 'reserve' for e in ledger.events()):
+            supplied_job = job if 'job' in locals() else None
+            if not any(e.get('job_id') == supplied_job and e['event'] == 'reserve' for e in ledger.events()):
                 terminal_receipt(local, docs, config, authorization if isinstance(authorization, dict) else supplied, error=error)
         except BaseException as publication_error:
             if primary is None:

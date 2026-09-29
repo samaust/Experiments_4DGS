@@ -14,6 +14,8 @@ from .s1_progress import (checked_file_record as file_record,
 
 SCHEMA = 'vipe-benchmark-s1-amendment-calibration-recovery/v1'
 JOB = 'S1-calibration-recovery-001'
+SCHEMA_2 = 'vipe-benchmark-s1-amendment-calibration-recovery/v2'
+JOB_2 = 'S1-calibration-recovery-002'
 AMENDMENT = 'plan031-s1-s0-token-sum-v1'
 LIMITS = dict(gpu_concurrency=1, gpu_peak_device_gib_limit=22,
     gpu_total_seconds_limit=93600, cpu_max_workers=8,
@@ -123,7 +125,10 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
     events = ledger.events() if events is None else events
     states = ledger.states(events)
     document = read_json(strict_record(authorization)['path'])
-    required = dict(schema=SCHEMA, job_id=JOB, original_job_id='S1-calibration',
+    job = document.get('job_id')
+    if job not in (JOB, JOB_2):
+        raise ValueError('unrecognized S1 recovery identity')
+    required = dict(schema=SCHEMA if job == JOB else SCHEMA_2, job_id=job, original_job_id='S1-calibration',
         attempts_limit=1, seconds_limit=3600, gpu_total_seconds_limit=93600,
         reset_previous_consumption=False, changes_to_prescribed_configuration=True,
         unrelated_attempts_reopened=False, reconstruction_authorized=False,
@@ -165,7 +170,7 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
     if (Path(document['original_failure']['path']) != (local / 'jobs/S1-calibration/failure.json').resolve()
             or failure.get('job_id') != 'S1-calibration' or failure.get('status') != 'failed'):
         raise ValueError('wrong original S1 failure artifact')
-    requalification = source_requalification_event(events)
+    requalification = source_requalification_event(events) if job == JOB else None
     validation_ref = (read_json(strict_record(requalification['amendment'])['path'])['validation']
                       if requalification else document['repair_validation'])
     validation = validation_record(validation_ref, document['semantic_amendment'], configuration)
@@ -173,9 +178,20 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
         raise ValueError('validation baseline/plan mismatch')
     prior = [e for e in events if e['event'] == 'component_recovery_authorized'
              and e['original_job_id'].startswith('S1-')]
-    if prior and (len(prior) != 1 or prior[0]['job_id'] != JOB or prior[0]['authorization'] != authorization):
-        raise ValueError('different or second S1 allocation')
-    if not consumed and (JOB in states or any(s['event'] == 'reserve' for s in states.values())):
+    if job == JOB:
+        if prior and (len(prior) != 1 or prior[0]['job_id'] != JOB or prior[0]['authorization'] != authorization):
+            raise ValueError('different or second S1 allocation')
+    else:
+        predecessor = strict_record(document['previous_recovery_authorization'])
+        finished = states.get(JOB, {})
+        if (len(prior) not in (1, 2) or prior[0]['job_id'] != JOB
+                or prior[0]['authorization'] != predecessor
+                or any(event['job_id'] != JOB_2 or event['authorization'] != authorization for event in prior[1:])
+                or finished.get('event') != 'finish' or finished.get('status') != 'failed'
+                or finished.get('cleanup_confirmed') is not True or finished.get('surviving_pids')
+                or finished.get('event_sha256') != document.get('previous_recovery_failure_event_sha256')):
+            raise ValueError('new S1 identity requires the exact consumed cleaned-up predecessor')
+    if not consumed and (job in states or any(s['event'] == 'reserve' for s in states.values())):
         raise ValueError('consumed S1 identity or active attempt')
     total = ledger.totals(events)['gpu']
     if not consumed and total['elapsed_seconds'] + total['reserved_seconds'] >= 93600:
@@ -299,13 +315,27 @@ def preservation(local, document, events, authorization):
             or actual != prefix or hashlib.sha256(prefix).hexdigest() != snap['sha256']
             or len(prefix) != snap['bytes'] or events[n-1]['event_sha256'] != snap['last_event_sha256']):
         raise ValueError('preserved ledger prefix required')
-    lifecycle(events[n:], authorization, document)
+    if document['job_id'] == JOB_2:
+        prior = strict_record(document['prior_ledger_snapshot'])
+        if prior['path'] != str((ROOT / 'docs/continuous-improvement/plan031-s1-recovery-20260919/requalification-066/post-dispatch-ledger.jsonl').resolve()):
+            raise ValueError('wrong consumed predecessor snapshot')
+        frozen_bytes = Path(prior['path']).read_bytes()
+        live_bytes = (Path(local) / 'ledger.jsonl').read_bytes()
+        if (len(frozen_bytes) != prior['bytes'] or not live_bytes.startswith(frozen_bytes)
+                or len(events) < 453 or events[452].get('event') != 'finish'
+                or events[452].get('job_id') != JOB
+                or events[452].get('event_sha256') != document.get('previous_recovery_failure_event_sha256')):
+            raise ValueError('consumed S1 prefix changed')
+        lifecycle(events[453:], authorization, document)
+    else:
+        lifecycle(events[n:], authorization, document)
     return [dict(record=r, matches=True) for r in frozen]
 
 
 def lifecycle(events, authorization, document):
     """Validate only a caller-owned snapshot; never acquire a ledger lock."""
     admission = registration = reservation = temporary = started = finish = requalification = None
+    job = document['job_id']
     for event in events:
         kind = event['event']
         if finish is not None:
@@ -320,7 +350,7 @@ def lifecycle(events, authorization, document):
                 admitted_event([event], authorization, document)
                 admission = event
             continue
-        if event.get('job_id') != JOB:
+        if event.get('job_id') != job:
             raise ValueError('S1 lifecycle unrelated allocation/event')
         if kind == 'component_recovery_authorized':
             if (not admission or registration or event.get('authorization') != authorization
@@ -331,7 +361,7 @@ def lifecycle(events, authorization, document):
                 raise ValueError('S1 lifecycle registration binding/order')
             registration = event
         elif kind == 's1_source_requalified':
-            if registration is None or reservation is not None or requalification is not None:
+            if job != JOB or registration is None or reservation is not None or requalification is not None:
                 raise ValueError('S1 source requalification order/duplicate')
             validate_source_requalification(event, registration, authorization, document)
             requalification = event
@@ -408,7 +438,8 @@ def canonical_dispatch(document, authorization, evidence, *, command=None, reser
     original = {k:v for k,v in historical.items() if k != 'configuration'}
     if object_hash(original) != document['original_request_sha256']:
         raise ValueError('canonical historical request changed')
-    expected = dict(original, job_id=JOB, recovery_authorization=authorization,
+    job = document['job_id']
+    expected = dict(original, job_id=job, recovery_authorization=authorization,
                     configuration=document['configuration'])
     request = read_json(strict_record(evidence['request'])['path'])
     worker = file_record(ROOT / 'scripts/basketball_vipe_worker.py')
@@ -416,10 +447,10 @@ def canonical_dispatch(document, authorization, evidence, *, command=None, reser
             or evidence.get('worker') != worker):
         raise ValueError('canonical dispatch request/worker changed')
     local = Path(local) if local is not None else Path(document['historical_request']['path']).parent.parent
-    request_path = str((local / 'requests' / (JOB + '.json')).resolve())
+    request_path = str((local / 'requests' / (job + '.json')).resolve())
     expected_command = [request['runtime']['python'], worker['path'], '--operation', 'component',
         '--config', document['configuration']['path'], '--request', request_path,
-        '--output', str((local / 'jobs' / JOB).resolve())]
+        '--output', str((local / 'jobs' / job).resolve())]
     if evidence['request']['path'] != request_path:
         raise ValueError('canonical request path changed')
     if command is not None and command != expected_command:
@@ -432,7 +463,9 @@ def canonical_dispatch(document, authorization, evidence, *, command=None, reser
 def active_binding(local, config, captured, command, *, with_reservation=False):
     from .ledger import Ledger
     events = Ledger(Path(local) / 'ledger.jsonl', config).events()
-    active = Ledger(Path(local) / 'ledger.jsonl', config).states(events).get(JOB)
+    states = Ledger(Path(local) / 'ledger.jsonl', config).states(events)
+    active = states.get(captured['job_id']) if captured is not None else next(
+        (states.get(job) for job in (JOB_2, JOB) if states.get(job, {}).get('event') == 'reserve'), None)
     if not active or active.get('event') != 'reserve':
         raise ValueError('missing active S1 reservation')
     from .s1_clock import typed_equal
@@ -466,7 +499,7 @@ def worker_clock(args, request, config):
     import sys
     from .s1_clock import ReservationClock
     path = args.request.resolve()
-    if path.name != JOB + '.json' or path.parent.name != 'requests':
+    if request.get('job_id') not in (JOB, JOB_2) or path.name != request['job_id'] + '.json' or path.parent.name != 'requests':
         raise ValueError('canonical worker request path required')
     local = path.parent.parent
     command = [request['runtime']['python'], str((ROOT / 'scripts/basketball_vipe_worker.py').resolve()),
@@ -492,10 +525,11 @@ def worker_clock(args, request, config):
 
 def reservation_binding(local, config, events, evidence, command=None):
     document, original = validate_binding(local, config, evidence['authorization'], events=events)
-    requalification = source_requalification_event(events)
+    job = document['job_id']
+    requalification = source_requalification_event(events) if job == JOB else None
     if evidence.get('source_requalification') != (event_ref(requalification) if requalification else None):
         raise ValueError('S1 reservation source requalification binding')
-    registered = [e for e in events if e['event'] == 'component_recovery_authorized' and e['job_id'] == JOB]
+    registered = [e for e in events if e['event'] == 'component_recovery_authorized' and e['job_id'] == job]
     if len(registered) != 1:
         raise ValueError('unique S1 registration required')
     event = registered[0]
@@ -511,7 +545,9 @@ def reservation_binding(local, config, events, evidence, command=None):
 
 
 def resolved_result(local, config, events, finish):
-    registered = [e for e in events if e['event'] == 'component_recovery_authorized' and e['job_id'] == JOB]
+    job = finish.get('job_id')
+    if job not in (JOB, JOB_2): raise ValueError('S1 result identity')
+    registered = [e for e in events if e['event'] == 'component_recovery_authorized' and e['job_id'] == job]
     if (len(registered) != 1 or finish.get('cleanup_confirmed') is not True
             or finish.get('surviving_pids') or finish.get('deadline_exceeded')
             or finish.get('stop_required') or finish.get('status') != 'complete'):
@@ -520,10 +556,10 @@ def resolved_result(local, config, events, finish):
     document, original = validate_binding(local, config, event['authorization'], events=events, consumed=True)
     if any(event.get(k) != document[k] for k in BINDINGS):
         raise ValueError('S1 registered terminal binding changed')
-    reserves = [e for e in events if e['event'] == 'reserve' and e['job_id'] == JOB]
+    reserves = [e for e in events if e['event'] == 'reserve' and e['job_id'] == job]
     if len(reserves) != 1 or reserves[0]['evidence']['authorization_event'] != event_ref(event):
         raise ValueError('S1 supervised reservation missing')
-    request = dict(original, job_id=JOB, recovery_authorization=event['authorization'], configuration=document['configuration'])
+    request = dict(original, job_id=job, recovery_authorization=event['authorization'], configuration=document['configuration'])
     if read_json(strict_record(reserves[0]['evidence']['request'])['path']) != request:
         raise ValueError('S1 reserved request changed')
     result = read_json(strict_record(finish['result'])['path'])
@@ -591,7 +627,7 @@ def _accept_result(local, config, request, result, output, *, reservation):
     validate_result(result, request, config, clock=clock,deadline=clock.work_deadline)
     clock.observe()
     result_record = file_record(output / 'result.json')
-    value = dict(schema='plan035-s1-acceptance/v1', status='passed', job_id=JOB,
+    value = dict(schema='plan035-s1-acceptance/v1', status='passed', job_id=request['job_id'],
         authorization=request['recovery_authorization'], baseline_correction=document['baseline_correction'],
         result=result_record, first_result=result['first_result'], reservation_clock=clock.mapping(),
         records=referenced_records([result, request]), count=510)
@@ -610,7 +646,7 @@ def _prepare_terminal_evidence(local, reservation, outcome, deadline, *, config,
     from .s1_evidence import reconcile_rows, evidence_counts, qualify_runtime, reconcile_first
     from .s1_progress import checked_read_json as read_json,checked_file_record as file_record
     import time
-    output = Path(local) / 'jobs' / JOB
+    output = Path(local) / 'jobs' / reservation['job_id']
     errors = []
     def optional(label, function):
         try:
@@ -687,8 +723,16 @@ def terminal_receipt(local, docs, config, authorization, *, error=None,
     from .ledger import Ledger
     from .files import write_json
     events = Ledger(local / 'ledger.jsonl', config).events()
+    supplied_document = None
+    try:
+        supplied_document = read_json(authorization['path'] if isinstance(authorization, dict) else authorization)
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    job = reservation['job_id'] if reservation is not None else (
+        supplied_document.get('job_id', JOB) if isinstance(supplied_document, dict) else JOB)
+    if job not in (JOB, JOB_2): raise ValueError('S1 terminal identity')
     if reservation is None:
-        if any(e.get('job_id') == JOB and e['event'] == 'reserve' for e in events):
+        if any(e.get('job_id') == job and e['event'] == 'reserve' for e in events):
             raise ValueError('consumed S1 publication belongs to active supervisor')
         errors = []
         supplied = authorization.get('path') if isinstance(authorization, dict) else str(authorization)
@@ -704,7 +748,7 @@ def terminal_receipt(local, docs, config, authorization, *, error=None,
         path = docs / ('S1-pre-dispatch-block-' + object_hash(value) + '.json')
     else:
         from .s1_evidence import qualify_row, qualify_runtime, reconcile_first
-        output = local / 'jobs' / JOB
+        output = local / 'jobs' / job
         outcome = dict(outcome or {})
         errors = []
         def optional(label, function):
@@ -724,7 +768,7 @@ def terminal_receipt(local, docs, config, authorization, *, error=None,
         counts = summary['counts']
         errors.extend(summary['verification_errors'])
         value = dict(schema='plan032-s1-calibration-recovery-receipt/v1',
-            status='complete' if complete else 'failed', job_id=JOB, original_job_id='S1-calibration',
+            status='complete' if complete else 'failed', job_id=job, original_job_id='S1-calibration',
             authorization=reservation['evidence']['authorization'],
             baseline_correction=reservation['evidence']['baseline_correction'],
             reservation=event_ref(reservation), authorization_event=reservation['evidence']['authorization_event'],
@@ -735,7 +779,7 @@ def terminal_receipt(local, docs, config, authorization, *, error=None,
             verification_errors=errors, attempt_consumed=True, reconstruction_authorized=False,
             elapsed_through_preparation=time.monotonic()-reservation['monotonic_start'],
             timing_scope='finish charges publication and cleanup; receipt alone is not completion')
-        path = docs / (JOB + '.json')
+        path = docs / (job + '.json')
     if path.exists():
         if read_json(path) != value:
             raise ValueError('conflicting immutable terminal receipt')

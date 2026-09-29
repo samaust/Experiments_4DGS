@@ -1,4 +1,5 @@
 """Explicit file-based Plan 031 CPU workers; no inference during preparation."""
+from vipe_benchmark.s1_progress import S1_RECOVERY_JOBS
 import argparse
 from pathlib import Path
 
@@ -16,25 +17,25 @@ def main():
     args = parser.parse_args()
     clock = None
     request = read_json(args.request)
-    if request.get('job_id') != 'S1-calibration-recovery-001':
+    if request.get('job_id') not in S1_RECOVERY_JOBS:
         config = load(args.config)
         verify_record(request['configuration'])
         if Path(request['configuration']['path']).resolve() != args.config.resolve():
             raise ValueError('worker configuration differs from its frozen request')
-    if args.operation == 'prepare' and request.get('job_id') != 'S1-calibration-recovery-001':
+    if args.operation == 'prepare' and request.get('job_id') not in S1_RECOVERY_JOBS:
         from vipe_benchmark.prepare import prepare
         verify_record(request['exposure'])
         prepare(args.output, config, exposure=request['exposure'])
-    elif args.operation == 'auto-annotations' and request.get('job_id') != 'S1-calibration-recovery-001':
+    elif args.operation == 'auto-annotations' and request.get('job_id') not in S1_RECOVERY_JOBS:
         from vipe_benchmark.auto_annotations import run
         run(request, args.output, config)
-    elif args.operation in ('setup', 'component', 'geometry', 'aggregate', 'report') or request.get('job_id') == 'S1-calibration-recovery-001':
+    elif args.operation in ('setup', 'component', 'geometry', 'aggregate', 'report') or request.get('job_id') in S1_RECOVERY_JOBS:
         try:
             config = load(args.config)
             verify_record(request['configuration'])
             if Path(request['configuration']['path']).resolve() != args.config.resolve():
                 raise ValueError('worker configuration differs from its frozen request')
-            if request.get('job_id') == 'S1-calibration-recovery-001':
+            if request.get('job_id') in S1_RECOVERY_JOBS:
                 from vipe_benchmark.s1_recovery import worker_clock
                 clock = worker_clock(args, request, config)
             if args.operation == 'setup':
@@ -56,7 +57,7 @@ def main():
             import traceback
             reason = f'{type(exc).__name__}: {exc}'
             extra = {}
-            if request.get('job_id') == 'S1-calibration-recovery-001':
+            if request.get('job_id') in S1_RECOVERY_JOBS:
                 from vipe_benchmark.s1_evidence import preserve_failure
                 if not hasattr(exc, 's1_failure_record'):
                     try:

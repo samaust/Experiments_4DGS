@@ -19,6 +19,7 @@ import threading
 import time
 
 SCHEMA = 's1-verified-progress/v2'
+S1_RECOVERY_JOBS = frozenset({'S1-calibration-recovery-001', 'S1-calibration-recovery-002'})
 CHECKPOINT_BYTES = 1024 * 1024
 REQUEST_BYTES = 512 * 1024
 SMALL_BYTES = 8192
@@ -1243,7 +1244,7 @@ def checked_clock_mapping(value):
             'boot_id', 'monotonic_start', 'effective_seconds', 'cleanup_reserve_seconds',
             'total_deadline', 'work_deadline'} or value.get('schema') != SCHEMA:
         raise ValueError('invalid reservation clock mapping/schema')
-    if value['job_id'] != 'S1-calibration-recovery-001' or type(value['job_id']) is not str:
+    if type(value['job_id']) is not str or value['job_id'] not in S1_RECOVERY_JOBS:
         raise ValueError('invalid reservation clock job_id')
     record = strict_record(value['request'])
     ref = value['reservation']

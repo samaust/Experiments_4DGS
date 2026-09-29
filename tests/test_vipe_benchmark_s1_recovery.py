@@ -41,6 +41,54 @@ class S1RequestCapacityTests(unittest.TestCase):
                 read_request_record(file_record(path), {'job_id': 'S1-calibration-recovery-002'})
 
 
+class S1NextIdentityTests(unittest.TestCase):
+    def test_clock_and_helper_paths_accept_only_two_reviewed_identities(self):
+        from vipe_benchmark.s1_clock import ReservationClock
+        from vipe_benchmark.s1_cpu_helper import helper_job
+        outcome = read_json(ROOT / 'docs/continuous-improvement/plan031-s1-recovery-20260919/requalification-066/dispatch-outcome.json')
+        reservation = dict(outcome['reservation'], job_id=s1.JOB_2)
+        clock = ReservationClock.from_reservation(reservation)
+        self.assertEqual(clock.job_id, s1.JOB_2)
+        self.assertEqual(helper_job({'reservation': reservation}), s1.JOB_2)
+        with self.assertRaises(ValueError):
+            ReservationClock.from_reservation(dict(reservation, job_id='S1-calibration-recovery-003'))
+
+    def test_consumed_prefix_allows_only_bound_next_identity_read_only(self):
+        local = ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z'
+        old_path = ROOT / 'docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-calibration-recovery-authorization-001.json'
+        outcome = read_json(ROOT / 'docs/continuous-improvement/plan031-s1-recovery-20260919/requalification-066/dispatch-outcome.json')
+        document = copy.deepcopy(read_json(old_path))
+        document.update(schema=s1.SCHEMA_2, job_id=s1.JOB_2,
+            authorization='Synthetic CPU review only',
+            previous_recovery_authorization=file_record(old_path),
+            previous_recovery_failure_event_sha256=outcome['finish']['event_sha256'],
+            prior_ledger_snapshot=file_record(ROOT / 'docs/continuous-improvement/plan031-s1-recovery-20260919/requalification-066/post-dispatch-ledger.jsonl'))
+        original = (local / 'ledger.jsonl').read_bytes()
+        with tempfile.TemporaryDirectory() as directory, patch.object(s1, 'validation_record', return_value=read_json(document['repair_validation']['path'])):
+            path = Path(directory) / 'authorization.json'
+            write_json(path, document)
+            authorization = file_record(path)
+            checked, original_request = s1.validate_binding(local, load(), authorization)
+            self.assertEqual(checked['job_id'], s1.JOB_2)
+            planned_local = Path(directory) / 'planned'
+            planned_request = dict(original_request, job_id=s1.JOB_2,
+                                   recovery_authorization=authorization,
+                                   configuration=document['configuration'])
+            planned_path = planned_local / 'requests' / (s1.JOB_2 + '.json')
+            write_json(planned_path, planned_request)
+            evidence = dict(request=file_record(planned_path),
+                            worker=file_record(ROOT / 'scripts/basketball_vipe_worker.py'))
+            command = s1.canonical_dispatch(document, authorization, evidence, local=planned_local)
+            self.assertEqual(command[-1], str((planned_local / 'jobs' / s1.JOB_2).resolve()))
+            with self.assertRaisesRegex(ValueError, 'canonical launch command'):
+                s1.canonical_dispatch(document, authorization, evidence, command=command[:-1] + [str(planned_local / 'jobs' / s1.JOB)], local=planned_local)
+            bad = dict(document, previous_recovery_failure_event_sha256='0' * 64)
+            write_json(Path(directory) / 'bad.json', bad)
+            with self.assertRaises(ValueError):
+                s1.validate_binding(local, load(), file_record(Path(directory) / 'bad.json'))
+        self.assertEqual((local / 'ledger.jsonl').read_bytes(), original)
+
+
 def synthetic_assets(root, put):
     from vipe_benchmark.backends import REQUIRED_ASSETS, SOURCE_PINS, CHECKPOINT_NAMES
     from vipe_benchmark.setup_recipes import CORE_IMPORTS
