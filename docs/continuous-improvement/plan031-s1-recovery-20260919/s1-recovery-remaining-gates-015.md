@@ -1,0 +1,10 @@
+# Remaining gates after partial Plan045
+
+- Review the discrepancy between Plan031's eight CPU workers, Plan036's whole owned workload, and Plan045's unchanged full ancestor census. Any later plan must explicitly fit original ceilings and preserve the failed59–62 measurements. Existing approved socket access is not authority to change resource accounting.
+- Review and finish cohesive Plan045 progress integration. P01–P06 have not reached their required boundaries. Three pure progress methods pass, but many requested schema/authority/fault cases, worker-versus-closed-fallback conflicts, runtime/first references and complete acceptance remain unverified. Run a full unchanged300-second aggregate only under a new fitting authorization/allocation; no historical slot transfer.
+- Preserve all221 old methods/426 callbacks and every actual old assertion. Resolve the documented840 versus independently observed838 test assertion-node discrepancy transparently.
+- Full R9-5/remaining R9-3: ordered primary/secondary failures, continuously monitored cleanup/publication/finalization, C/2+C/4+C/4, conservative charged cutoff, timely durable acknowledgment and complete first/native/receipt/finish/ack ordering, including actual helper-loss paths.
+- Remaining native/runtime/reference mutation matrices, real510-row worker traversal with340/170 split, first/later-failure progression, synchronized admission/registration/reservation and lifecycle matrices, and current production authorization binding.
+- Later calibration remains one reservation-consuming attempt at most3600 GPU seconds, effective min(3600,93600-gpu_elapsed-gpu_reserved)>0 and cleanup min(30,effective_seconds/4) inside it. Zero GPU/device/model/production operations occurred in this stage. Reconstruction requires separate later authorization after calibration review. Preserve22GiB device memory,8 CPU workers,150GiB artifacts,60GiB downloads and applicable57600-second ceilings.
+
+S1-1 and S1-4 remain met in their narrow preserved evidence scope; S1-2 and S1-3 remain not met. No live or device readiness is granted.

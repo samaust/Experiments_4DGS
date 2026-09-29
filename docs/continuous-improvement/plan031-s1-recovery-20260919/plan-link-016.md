@@ -1,0 +1,13 @@
+# Iteration 16 PLAN
+
+Saved [Plan046](../../../plans/plan_046.md) from [Review016](review-016.md) and [assessment038](assessment-038-review.json). [Assessment039](assessment-039-plan.json) and [planning observations016](s1-recovery-plan-observations-016.json) bind this complete handoff.
+
+Plan046 finalizes R16-1: prospective identity-bound ownership within eight, trusted acknowledged worker authority and closed result/inventory evidence, actual accept/complete publication, one bounded summary adapter, strict nested schemas and publication/recovery faults, fresh W checks, and actual supervisor outcomes for every existing P01-P06 scenario. Preserve Unix datagrams and the independent owner cache without new threads/processes or probes. Plan045's original 59-62 ancestor failures, immutable partial copies, consumed allocation and strict false status remain historical.
+
+Fresh IMPLEMENT limits: 5,400 wall seconds including inspection, 4,800 source/test cutoff and 600 evidence/handoff reserve; three focused 120-second and two full aggregate 300-second slots, one reserved for final acceptance. Preserve 42 serial scenarios at 2+1 seconds and six direct scripts at 10+2; no new child scenario. Exact CPU charge B + max(1,H) counts all actual owned threads once and preserves one orchestration slot inside eight. Future collected datagram commands request normal scoped escalation from the outset; the resolved old retry is not reopened.
+
+Preserve all 230 current methods/466 callbacks, including the older 221/426 baseline, actual substantive assertions and historical 840 versus measured 838/896 discrepancy. The old 213.69664305300103-second aggregate is historical only. Require current full aggregate, root/ordinary/maximum/direct-script lifetime evidence, prospective notes and actual first/all outer tool completion.
+
+Main compares this new plan against remaining applicable ceilings and records standing-approval basis, actual IMPLEMENT016 status and transition before dispatch. No routine permission question for a fitting comparison. Main owns status/git. Next vacant evidence: correction014/validation015/audit016/assessment040. Preserve correction013's 28-transition prefix plus actual REVIEW016/PLAN016/IMPLEMENT016 branch; no Plan045 commit/postcommit exists.
+
+S1-1/S1-4 remain narrowly met; S1-2/S1-3 remain not met. Every A46 criterion and current integration remain unverified. No live readiness or objective completion; full R9-5, native/runtime/510-row/lifecycle/admission and later calibration remain. PLAN ran no tests/probes, source/status/git writes, production APIs, GPU/device/model/setup work or delegation. Planning completes the full saved handoff and final response before main advances.

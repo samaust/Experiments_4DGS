@@ -1,0 +1,798 @@
+"""Bounded, source-bound S1 progress. Metadata recovery never reads raw arrays.
+
+The retained owner is the only consumer. Durable disk visibility does not confer
+trust: a generation becomes usable only through its credentialed notice and ack.
+"""
+from dataclasses import dataclass
+import hashlib
+import json
+import math
+import os
+from pathlib import Path
+import socket
+import stat
+import struct
+import threading
+import time
+
+SCHEMA = 's1-verified-progress/v1'
+CHECKPOINT_BYTES = 1024 * 1024
+SMALL_BYTES = 8192
+CONTROL_BYTES = 4096
+MAX_GENERATIONS = 1024
+MAX_CANDIDATES = 2048
+MAX_ENTRIES = 4096
+MAX_SOURCES = 2048
+MAX_METADATA = 32 * 1024 * 1024
+MAX_ERRORS = 32
+
+
+class ProgressIntegrityError(ValueError):
+    pass
+
+
+def keys(value, names):
+    if type(value) is not dict or set(value) != set(names.split()):
+        raise ValueError('progress exact schema keys')
+    return value
+
+
+def integer(value, low=0, high=2**64-1):
+    if type(value) is not int or not low <= value <= high:
+        raise ValueError('progress integer bound')
+    return value
+
+
+def number(value):
+    try: valid = type(value) in (int, float) and math.isfinite(value) and value >= 0
+    except OverflowError: valid = False
+    if not valid:
+        raise ValueError('progress finite time')
+    return value
+
+
+def digest(value):
+    if type(value) is not str or len(value) != 64 or any(c not in '0123456789abcdef' for c in value):
+        raise ValueError('progress hash')
+    return value
+
+
+def primitives(value, depth=0, count=None):
+    count = [0] if count is None else count
+    count[0] += 1
+    if count[0] > 65536 or depth > 12: raise ValueError('progress primitive capacity')
+    if type(value) is dict:
+        for key, item in value.items():
+            if type(key) is not str: raise ValueError('progress key')
+            primitives(key, depth+1, count); primitives(item, depth+1, count)
+    elif type(value) in (list, tuple):
+        for item in value: primitives(item, depth+1, count)
+    elif type(value) is str:
+        if len(value.encode()) > 2048: raise ValueError('progress string capacity')
+    elif type(value) in (int, float):
+        try:finite=math.isfinite(value)
+        except OverflowError:finite=False
+        if not finite:raise ValueError('progress nonfinite primitive')
+    elif value is not None and type(value) is not bool: raise ValueError('progress primitive type')
+
+
+def encode(value, limit=CHECKPOINT_BYTES):
+    primitives(value)
+    raw = (json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False)+'\n').encode()
+    if len(raw) > limit: raise ValueError('progress byte capacity')
+    return raw
+
+
+def decode(raw, limit=CHECKPOINT_BYTES):
+    if type(raw) is not bytes or len(raw) > limit: raise ValueError('progress byte capacity')
+    # Bound nesting and token count before json materializes containers.
+    depth = nodes = 0; quoted = escaped = False
+    for byte in raw:
+        if quoted:
+            if escaped: escaped = False
+            elif byte == 92: escaped = True
+            elif byte == 34: quoted = False
+        elif byte == 34: quoted = True; nodes += 1
+        elif byte in (91,123):
+            depth += 1; nodes += 1
+            if depth > 12: raise ValueError('progress nesting capacity')
+        elif byte in (93,125): depth -= 1
+        elif byte == 44: nodes += 1
+        if nodes > 65536: raise ValueError('progress token capacity')
+    def pairs(items):
+        result = {}
+        for key, val in items:
+            if key in result: raise ValueError('progress duplicate key')
+            result[key] = val
+        return result
+    value = json.loads(raw, object_pairs_hook=pairs, parse_constant=lambda _: (_ for _ in ()).throw(ValueError('progress nonfinite')))
+    primitives(value)
+    return value
+
+
+def canonical(path):
+    value = str(path)
+    if len(value.encode()) > 2048 or not value.startswith('/') or '\x00' in value:
+        raise ValueError('progress canonical absolute path')
+    if str(Path(value)) != value or any(p in ('.','..') for p in value.split('/')[1:]):
+        raise ValueError('progress path alias')
+    return Path(value)
+
+
+def open_parent(path):
+    path = canonical(path)
+    fd = os.open('/', os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for part in path.parts[1:-1]:
+            new = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd); fd = new
+        return fd, path.name
+    except BaseException:
+        os.close(fd); raise
+
+
+def read_bytes(path, limit):
+    parent, name = open_parent(path)
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+        try:
+            before = os.fstat(fd)
+            if not stat.S_ISREG(before.st_mode) or before.st_size > limit: raise ValueError('progress regular file capacity')
+            with os.fdopen(fd, 'rb', closefd=False) as stream: raw = stream.read(limit+1)
+            after = os.fstat(fd)
+            if (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns) != (after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns) or len(raw) != before.st_size: raise ValueError('progress read mutation')
+            return raw
+        finally: os.close(fd)
+    finally: os.close(parent)
+
+
+def record(path, raw):
+    return dict(path=str(canonical(path)), bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())
+
+
+def validate_record(value):
+    keys(value, 'path bytes sha256')
+    if type(value['path']) is not str:raise ValueError('progress path type')
+    canonical(value['path']); integer(value['bytes']); digest(value['sha256'])
+    return value
+
+
+def read_record(value, limit=CHECKPOINT_BYTES):
+    validate_record(value)
+    raw = read_bytes(value['path'], limit)
+    if record(value['path'], raw) != value: raise ValueError('progress accepted metadata changed')
+    return decode(raw, limit)
+
+
+def fsync_dir(path):
+    parent, name = open_parent(path)
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+        try: os.fsync(fd)
+        finally: os.close(fd)
+    finally: os.close(parent)
+
+
+def publication_boundary(stage):
+    """Fault seam at a concrete I/O boundary; production performs the real operation."""
+    return None
+
+
+def write_exclusive(path, raw):
+    parent, name = open_parent(path)
+    try:
+        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent)
+        with os.fdopen(fd, 'wb') as stream:
+            publication_boundary('write')
+            if stream.write(raw) != len(raw):raise OSError('progress short write')
+            publication_boundary('flush');stream.flush()
+            publication_boundary('file_fsync');os.fsync(stream.fileno())
+        publication_boundary('close_readback')
+    finally: os.close(parent)
+    if read_bytes(path, len(raw)) != raw: raise ValueError('progress durable readback')
+    return record(path, raw)
+
+
+def before(deadline):
+    now = time.monotonic()
+    if now >= deadline: raise TimeoutError('progress original work deadline')
+    return now
+
+
+def process_binding(value):
+    return {key: value[key] for key in ('pid','start_ticks','pgid')}
+
+
+def validate_process(value):
+    keys(value, 'pid start_ticks pgid')
+    for key in value: integer(value[key], 1, 2**31-1 if key in ('pid','pgid') else 2**64-1)
+    if value['pid'] != value['pgid']: raise ValueError('progress process group')
+
+
+def context_document(value):
+    keys(value, 'schema root session boot_id owner_pid uid clock authorization work worker_generation sources frames')
+    if value['schema'] != 's1-progress-context/v1': raise ValueError('progress context schema')
+    if type(value['root']) is not str:raise ValueError('progress root type')
+    canonical(value['root']); integer(value['owner_pid'],1,2**31-1); integer(value['uid'],0,2**32-1)
+    if type(value['session']) is not str or len(value['session']) != 32 or any(c not in '0123456789abcdef' for c in value['session']): raise ValueError('progress session')
+    from .s1_clock import ReservationClock
+    clock = ReservationClock.from_mapping(value['clock'])
+    validate_record(value['clock']['request'])
+    keys(value['clock']['reservation'],'sequence event_sha256')
+    integer(value['clock']['reservation']['sequence']);digest(value['clock']['reservation']['event_sha256'])
+    if type(value['boot_id']) is not str or len(value['boot_id']) != 36:raise ValueError('progress boot identity')
+    if value['boot_id'] != clock.boot_id or value['worker_generation'] != 1 or type(value['worker_generation']) is not int: raise ValueError('progress boot/generation')
+    validate_record(value['authorization']); validate_process(value['work'])
+    keys(value['sources'], 'guard progress')
+    for rec in value['sources'].values(): validate_record(rec)
+    frames=value['frames']
+    if type(frames) is not list or len(frames)!=15 or any(type(f) is not int for f in frames) or len(set(frames))!=15 or frames != sorted(frames) or sum(50<=f<150 for f in frames)!=10 or sum(150<=f<200 for f in frames)!=5: raise ValueError('progress admitted frames')
+    return value
+
+
+def prepare_context(local, clock, request, authorization, session, work, config, *, owner_pid=None):
+    """Called only by validated prelaunch work; no worker-owned path supplies it."""
+    from .s1_helper_session import identity
+    clock.observe()
+    root = canonical(Path(local)/'jobs'/('S1-progress-'+session))
+    root.mkdir(mode=0o700)
+    for producer in ('worker','reconcile'):
+        (root/producer).mkdir(mode=0o700); fsync_dir(root/producer)
+    value = dict(schema='s1-progress-context/v1', root=str(root), session=session, boot_id=clock.boot_id,
+        owner_pid=os.getppid() if owner_pid is None else owner_pid, uid=os.getuid(), clock=clock.mapping(), authorization=authorization,
+        work=process_binding(work or identity(os.getpid())), worker_generation=1,
+        sources={k:record(p,read_bytes(p,CHECKPOINT_BYTES)) for k,p in (
+            ('guard',Path(__file__).with_name('s1_evidence.py')),('progress',Path(__file__)))},
+        frames=config['fit_snapshots']+config['selection_snapshots'])
+    context_document(value)
+    if read_record(clock.mapping()['request'],256*1024) != request: raise ValueError('progress request binding')
+    reference=write_exclusive(root/'context.json',encode(value,SMALL_BYTES))
+    fsync_dir(root); fsync_dir(root.parent); read_record(reference,SMALL_BYTES); clock.observe()
+    return reference
+
+
+def identities(context):
+    return [dict(branch='calibration',camera=c,frame=f,pair_start=None) for c in range(34) for f in context['frames']]
+
+
+def identity_index(value, context):
+    keys(value,'branch camera frame pair_start')
+    integer(value['camera'],0,33); integer(value['frame'],50,199)
+    if value['branch']!='calibration' or value['pair_start'] is not None or value['frame'] not in context['frames']: raise ValueError('progress identity membership')
+    return value['camera']*15+context['frames'].index(value['frame'])
+
+
+def counts(rows, *, complete=False):
+    produced=[r['identity'] for r in rows]; qualified=[r['identity'] for r in rows if r['qualified']]
+    fit=lambda values:sum(i['frame']<150 for i in values)
+    return dict(expected=510, complete=510 if complete else 0, produced=510 if complete else 'unknown',
+        qualified_total=510 if complete else 'unknown', produced_lower_bound=len(produced), qualified=len(qualified),
+        fit_expected=340,selection_expected=170,fit_produced_lower_bound=fit(produced),
+        selection_produced_lower_bound=len(produced)-fit(produced),fit_qualified=fit(qualified),selection_qualified=len(qualified)-fit(qualified))
+
+
+def validate_checkpoint(value, context, reference):
+    keys(value,'schema context producer binding request_id sequence previous work_deadline verified_at rows sources coverage errors runtime first_result acceptance counts')
+    validate_record(value['context'])
+    number(value['work_deadline'])
+    if value['schema']!=SCHEMA or value['context']!=reference or value['producer'] not in ('worker','reconcile'): raise ValueError('progress checkpoint binding')
+    validate_process(value['binding']); integer(value['request_id'],1); integer(value['sequence'],1,MAX_GENERATIONS)
+    if value['producer']=='worker' and value['request_id']!=1: raise ValueError('progress worker generation')
+    if value['producer']=='reconcile' and value['binding']!=context['work']: raise ValueError('progress work identity')
+    if value['previous'] is not None: validate_record(value['previous'])
+    if (value['sequence']==1)!=(value['previous'] is None):raise ValueError('progress initial previous binding')
+    if value['work_deadline']!=context['clock']['work_deadline'] or number(value['verified_at'])>=value['work_deadline'] or value['verified_at']<context['clock']['monotonic_start']: raise ValueError('progress verification time')
+    if value['coverage'] not in ('sealed','closed','incomplete','conflict','overflow'): raise ValueError('progress coverage')
+    rows=value['rows']; sources=value['sources']
+    if type(rows) is not list or len(rows)>510 or type(sources) is not list or len(sources)>4096: raise ValueError('progress entries capacity')
+    seen=set()
+    for rec in sources:
+        validate_record(rec); key=tuple(rec[k] for k in ('path','bytes','sha256'))
+        if key in seen: raise ValueError('progress duplicate source')
+        seen.add(key)
+    order=[]
+    for row in rows:
+        keys(row,'identity version row source_indices qualified authority')
+        order.append(identity_index(row['identity'],context)); digest(row['version']); validate_record(row['row'])
+        if type(row['qualified']) is not bool: raise ValueError('progress qualified bool')
+        indices=row['source_indices']
+        if type(indices) is not list or len(indices)>4096 or any(type(i) is not int for i in indices) or len(set(indices))!=len(indices): raise ValueError('progress source indices')
+        for i in indices: integer(i,0,len(sources)-1)
+        authority=row['authority'];keys(authority,'producer context guard version worker_reference')
+        if authority['producer'] not in ('worker','reconcile') or authority['context']!=reference['sha256'] or authority['guard']!=context['sources']['guard']['sha256'] or authority['version']!=row['version']: raise ValueError('progress seal')
+        if authority['producer']=='worker' and value['producer']=='reconcile':validate_record(authority['worker_reference'])
+        elif authority['worker_reference'] is not None: raise ValueError('progress unexpected worker reference')
+        if authority['producer']=='reconcile' and value['coverage'] not in ('closed','conflict','overflow'):raise ValueError('progress unclosed authority')
+    if order!=sorted(set(order)):raise ValueError('progress identity order/duplicate')
+    if type(value['errors']) is not list or len(value['errors'])>MAX_ERRORS:raise ValueError('progress errors capacity')
+    for err in value['errors']:
+        if type(err) is not str or len(err.encode())>1024:raise ValueError('progress error size')
+    if type(value['runtime']) is not dict or set(value['runtime'])-{'initial-runtime.json','partial-runtime.json','final'}:raise ValueError('progress runtime capacity')
+    for rec in value['runtime'].values():validate_record(rec)
+    for name in ('first_result','acceptance'):
+        if value[name] is not None:validate_record(value[name])
+    complete=value['acceptance'] is not None
+    if complete and (len(rows)!=510 or not all(r['qualified'] for r in rows) or value['coverage']!='closed' or value['errors']):raise ValueError('progress invalid complete acceptance')
+    keys(value['counts'],' '.join(counts(rows,complete=complete)))
+    if value['counts']!=counts(rows,complete=complete) or any(type(value['counts'][k]) is not type(v) for k,v in counts(rows,complete=complete).items()):raise ValueError('progress counts')
+    return value
+
+
+
+def validate_head(value):
+    keys(value,'schema context producer sequence current previous')
+    if value['schema']!='s1-progress-head/v1' or value['producer'] not in ('worker','reconcile'):raise ValueError('progress head schema')
+    validate_record(value['context']);integer(value['sequence'],1,MAX_GENERATIONS);validate_record(value['current'])
+    if value['previous'] is not None:validate_record(value['previous'])
+    return value
+
+
+def validate_notice(value):
+    keys(value,'schema context producer binding request_id sequence current previous head completed')
+    if value['schema']!='s1-progress-notice/v1' or value['producer'] not in ('worker','reconcile'):raise ValueError('progress notice schema')
+    validate_record(value['context']);validate_process(value['binding']);integer(value['request_id'],1)
+    integer(value['sequence'],1,MAX_GENERATIONS);number(value['completed'])
+    for key in ('current','head'):validate_record(value[key])
+    if value['previous'] is not None:validate_record(value['previous'])
+    return value
+
+
+def validate_ack(value):
+    keys(value,'schema context producer sequence current')
+    if value['schema']!='s1-progress-ack/v1' or value['producer'] not in ('worker','reconcile'):raise ValueError('progress ack schema')
+    digest(value['context']);integer(value['sequence'],1,MAX_GENERATIONS);validate_record(value['current'])
+    return value
+
+def address(context, producer='owner'):
+    return '\0s1-progress-'+context['session']+'-'+producer
+
+
+def mailbox(context, producer):
+    channel=socket.socket(socket.AF_UNIX,socket.SOCK_DGRAM)
+    try:
+        channel.setblocking(False);channel.setsockopt(socket.SOL_SOCKET,socket.SO_PASSCRED,1)
+        for option in (socket.SO_RCVBUF,socket.SO_SNDBUF):
+            channel.setsockopt(socket.SOL_SOCKET,option,16384)
+            if channel.getsockopt(socket.SOL_SOCKET,option)>32768:raise ValueError('progress kernel socket capacity')
+        channel.bind(address(context,producer));return channel
+    except BaseException:channel.close();raise
+
+
+def receive(channel):
+    raw, anc, flags, sender=channel.recvmsg(CONTROL_BYTES,socket.CMSG_SPACE(struct.calcsize('3i')))
+    if flags & (socket.MSG_TRUNC|socket.MSG_CTRUNC):raise ValueError('progress truncated datagram')
+    credentials=[struct.unpack('3i',data) for level,kind,data in anc if level==socket.SOL_SOCKET and kind==socket.SCM_CREDENTIALS and len(data)==12]
+    if len(credentials)!=1:raise ValueError('progress sender credentials')
+    return decode(raw,CONTROL_BYTES),credentials[0],sender
+
+
+@dataclass(frozen=True)
+class Snapshot:
+    compact: bytes
+    checkpoints: tuple
+
+
+class RetainedProgress:
+    """No fallible I/O under this short lock; monitor freezes one pointer."""
+    def __init__(self):
+        self.snapshot=None;self.frozen=False;self.integrity=None;self.lock=threading.Lock()
+    def retain(self,snapshot):
+        with self.lock:
+            if self.frozen:return False
+            self.snapshot=snapshot;return True
+    def freeze(self,reason=None,*,integrity=False):
+        with self.lock:
+            self.frozen=True
+            if integrity:self.integrity=str(reason)[:1024]
+            return self.snapshot
+    def acknowledge(self,snapshot,send):
+        with self.lock:
+            if self.frozen:return False
+            previous=self.snapshot;self.snapshot=snapshot
+            try:send()
+            except BaseException:self.snapshot=previous;raise
+            return True
+    def reference(self):
+        # Compact bounded metadata only. The bulk snapshot stays immutable.
+        with self.lock:
+            snap=self.snapshot;frozen=self.frozen;integrity=self.integrity
+        if snap is None:return None
+        value=decode(snap.compact,SMALL_BYTES)
+        value.update(frozen=frozen,integrity_status='failed' if integrity else 'verified',
+            newest_status='unavailable' if frozen else 'acknowledged')
+        return value
+
+
+class Publisher:
+    def __init__(self,reference,producer,request_id,*,clock=None,request=None,trusted=None):
+        self.reference=reference;self.context=context_document(read_record(reference,SMALL_BYTES))
+        if canonical(reference['path'])!=Path(self.context['root'])/'context.json':raise ValueError('progress context path')
+        if clock is not None:clock.match(self.context['clock'])
+        if request is not None and read_record(self.context['clock']['request'],256*1024)!=request:raise ValueError('progress worker request')
+        from .s1_helper_session import identity
+        self.binding=process_binding(identity(os.getpid()));self.producer=producer;self.request_id=request_id
+        self.deadline=self.context['clock']['work_deadline'];before(self.deadline)
+        for rec in self.context['sources'].values():
+            if record(rec['path'],read_bytes(rec['path'],CHECKPOINT_BYTES))!=rec:raise ValueError('progress source changed')
+        self.channel=mailbox(self.context,producer);self.previous=None;self.sequence=0;self.rows={};self.sources=[]
+        self.coverage='sealed' if producer=='worker' else 'incomplete';self.errors=[];self.runtime={};self.first_result=None;self.acceptance=None;self.stopped=False
+        self.worker_authority=None
+        if trusted is not None:
+            recovered=recover(trusted)
+            if trusted['context']!=reference or recovered['integrity_status']!='verified':raise ValueError('progress trusted context uncertainty')
+            worker=trusted['checkpoints'].get('worker')
+            if worker is not None:self.worker_authority=(worker,validate_checkpoint(read_record(worker),self.context,reference))
+            prior=trusted['checkpoints'].get(producer)
+            if prior is not None:
+                doc=validate_checkpoint(read_record(prior),self.context,reference)
+                self.previous=prior;self.sequence=doc['sequence'];self.rows={identity_index(r['identity'],self.context):r for r in doc['rows']}
+                self.sources=doc['sources'];self.coverage=doc['coverage'];self.errors=doc['errors'];self.runtime=doc['runtime'];self.first_result=doc['first_result'];self.acceptance=doc['acceptance']
+    def close(self):self.channel.close()
+    def after_notice(self):
+        pass
+    def seal(self,row,row_record,*,qualified=False,worker_reference=None,publish=True):
+        before(self.deadline)
+        version=hashlib.sha256(encode(row,256*1024)).hexdigest()
+        index=identity_index(row['identity'],self.context)
+        old=self.rows.get(index)
+        if old and old['version']!=version:raise ValueError('progress conflicting authority')
+        refs=[]
+        def collect(value):
+            if type(value) is dict:
+                if set(value)=={'path','bytes','sha256'}:refs.append(validate_record(value));return
+                for item in value.values():collect(item)
+            elif type(value) is list:
+                for item in value:collect(item)
+        collect(row);indices=[]
+        for ref in refs:
+            if ref not in self.sources:
+                if len(self.sources)>=4096:raise ValueError('progress sources overflow')
+                self.sources.append(ref)
+            indices.append(self.sources.index(ref))
+        self.rows[index]=dict(identity=row['identity'],version=version,row=row_record,source_indices=sorted(set(indices)),
+            qualified=qualified or bool(old and old['qualified']),authority=dict(producer='worker' if worker_reference else self.producer,
+                context=self.reference['sha256'],guard=self.context['sources']['guard']['sha256'],version=version,worker_reference=worker_reference))
+        return self.publish() if publish else None
+    def publish(self):
+        if self.stopped:raise ValueError('progress publisher stopped')
+        try:return self._publish()
+        except BaseException:self.stopped=True;raise
+    def _publish(self):
+        observed=before(self.deadline);sequence=self.sequence+1;integer(sequence,1,MAX_GENERATIONS)
+        rows=[self.rows[k] for k in sorted(self.rows)]
+        document=dict(schema=SCHEMA,context=self.reference,producer=self.producer,binding=self.binding,request_id=self.request_id,
+            sequence=sequence,previous=self.previous,work_deadline=self.deadline,verified_at=observed,rows=rows,sources=self.sources,
+            coverage=self.coverage,errors=self.errors,runtime=self.runtime,first_result=self.first_result,acceptance=self.acceptance,
+            counts=counts(rows,complete=self.acceptance is not None))
+        validate_checkpoint(document,self.context,self.reference);before(self.deadline);raw=encode(document)
+        directory=Path(self.context['root'])/self.producer;target=directory/(str(sequence).zfill(4)+'.json');temp=directory/'checkpoint.tmp'
+        before(self.deadline);write_exclusive(temp,raw);before(self.deadline)
+        # link is an atomic no-replace install; all directory descriptors reject links.
+        fd,name=open_parent(target)
+        try:
+            publication_boundary('generation_install');before(self.deadline)
+            try:os.link('checkpoint.tmp',name,src_dir_fd=fd,dst_dir_fd=fd,follow_symlinks=False)
+            except FileExistsError:
+                if read_bytes(target,CHECKPOINT_BYTES)!=raw:raise ValueError('progress generation collision')
+            os.unlink('checkpoint.tmp',dir_fd=fd)
+        finally:os.close(fd)
+        publication_boundary('generation_directory_fsync');before(self.deadline);fsync_dir(directory)
+        before(self.deadline);current=record(target,raw);read_record(current);before(self.deadline)
+        head=dict(schema='s1-progress-head/v1',context=self.reference,producer=self.producer,sequence=sequence,current=current,previous=self.previous)
+        before(self.deadline);hraw=encode(head,SMALL_BYTES);hpath=directory/'head.json';htemp=directory/'head.tmp'
+        write_exclusive(htemp,hraw);before(self.deadline)
+        fd,name=open_parent(hpath)
+        try:
+            publication_boundary('head_install');before(self.deadline)
+            os.replace('head.tmp',name,src_dir_fd=fd,dst_dir_fd=fd)
+        finally:os.close(fd)
+        publication_boundary('head_directory_fsync');before(self.deadline);fsync_dir(directory)
+        hrec=record(hpath,hraw);publication_boundary('final_readback');before(self.deadline)
+        read_record(hrec,SMALL_BYTES);before(self.deadline);read_record(current)
+        completed=before(self.deadline)
+        notice=dict(schema='s1-progress-notice/v1',context=self.reference,producer=self.producer,binding=self.binding,request_id=self.request_id,
+            sequence=sequence,current=current,previous=self.previous,head=hrec,completed=completed)
+        encoded=encode(notice,CONTROL_BYTES)
+        publication_boundary('notice_send');before(self.deadline)
+        if self.channel.sendto(encoded,address(self.context))!=len(encoded):raise OSError('progress notice short write')
+        self.after_notice()
+        end=min(self.deadline,completed+.5)
+        while True:
+            before(end)
+            try:
+                publication_boundary('ack_receipt');ack,credentials,sender=receive(self.channel)
+            except BlockingIOError:time.sleep(min(.001,max(0,end-time.monotonic())));continue
+            expected=dict(schema='s1-progress-ack/v1',context=self.reference['sha256'],producer=self.producer,sequence=sequence,current=current)
+            validate_ack(ack)
+            if ack!=expected or credentials[:2]!=(self.context['owner_pid'],self.context['uid']) or sender not in (address(self.context),address(self.context).encode()):raise ValueError('progress ack correlation')
+            before(end);self.previous=current;self.sequence=sequence;return current
+
+
+class Consumer:
+    def __init__(self,reference,cache,cancelled,bindings):
+        self.reference=reference;self.context=context_document(read_record(reference,SMALL_BYTES));self.cache=cache
+        self.cancelled=cancelled;self.bindings=bindings;self.current={};self.previous={};self.channel=mailbox(self.context,'owner')
+        self.buffers={name:self.channel.getsockopt(socket.SOL_SOCKET,option) for name,option in [('receive',socket.SO_RCVBUF),('send',socket.SO_SNDBUF)]}
+    def close(self):self.channel.close()
+    def check(self):
+        if self.cancelled() or self.cache.frozen:raise InterruptedError('progress owner cancelled')
+    def read(self,rec,limit=CHECKPOINT_BYTES):
+        self.check();value=read_record(rec,limit);self.check();return value
+    def tick(self):
+        if self.cancelled() or self.cache.frozen:return
+        try:
+            try:
+                self.check();publication_boundary('notice_receive');notice,credentials,sender=receive(self.channel)
+            except BlockingIOError:return
+            self.check();validate_notice(notice)
+            producer=notice['producer']
+            if producer not in ('worker','reconcile'):raise ValueError('progress producer')
+            expected=self.bindings(producer)
+            if (notice['schema']!='s1-progress-notice/v1' or notice['context']!=self.reference or expected is None or
+                (notice['binding'],notice['request_id'])!=expected or credentials[:2]!=(expected[0]['pid'],self.context['uid']) or
+                sender not in (address(self.context,producer),address(self.context,producer).encode())):raise ValueError('progress notice credential/correlation')
+            completed=number(notice['completed']);now=time.monotonic()
+            if not self.context['clock']['monotonic_start']<=completed<self.context['clock']['work_deadline'] or now>=min(self.context['clock']['work_deadline'],completed+.5) or completed>now:raise TimeoutError('progress notice deadline')
+            old=self.current.get(producer);sequence=integer(notice['sequence'],1,MAX_GENERATIONS)
+            duplicate=old is not None and sequence==old[1]['sequence']
+            if duplicate:
+                if notice['current']!=old[0] or notice['previous']!=old[1]['previous']:raise ValueError('progress conflicting duplicate')
+            elif sequence!=(1 if old is None else old[1]['sequence']+1) or notice['previous']!=(None if old is None else old[0]):raise ValueError('progress chain replay/regression')
+            root=Path(self.context['root'])/producer
+            if notice['current']['path']!=str(root/(str(sequence).zfill(4)+'.json')) or notice['head']['path']!=str(root/'head.json'):raise ValueError('progress foreign checkpoint path')
+            if self.read(self.reference,SMALL_BYTES)!=self.context:raise ValueError('progress context mutation')
+            if old:self.read(old[0])
+            head=validate_head(self.read(notice['head'],SMALL_BYTES))
+            if head!=dict(schema='s1-progress-head/v1',context=self.reference,producer=producer,sequence=sequence,current=notice['current'],previous=notice['previous']):raise ValueError('progress head correlation')
+            value=validate_checkpoint(self.read(notice['current']),self.context,self.reference)
+            if any(value[k]!=notice[k] for k in ('producer','binding','request_id','sequence','previous')) or value['verified_at']>completed:raise ValueError('progress notice/document correlation')
+            if old:
+                if any(error not in value['errors'] for error in old[1]['errors']) or old[1]['coverage']=='conflict' and value['coverage']!='conflict':raise ValueError('progress conflict/error regression')
+                if old[1]['acceptance'] is not None and old[1]['acceptance']!=value['acceptance']:raise ValueError('progress acceptance regression')
+                old_rows={identity_index(r['identity'],self.context):r for r in old[1]['rows']}
+                new_rows={identity_index(r['identity'],self.context):r for r in value['rows']}
+                if any(k not in new_rows or new_rows[k]['version']!=r['version'] or r['qualified'] and not new_rows[k]['qualified'] for k,r in old_rows.items()):raise ValueError('progress row regression')
+                if old[1]['first_result'] is not None and value['first_result']!=old[1]['first_result'] or any(value['runtime'].get(k)!=v for k,v in old[1]['runtime'].items()):raise ValueError('progress state regression')
+            if producer=='reconcile':
+                worker=self.current.get('worker')
+                for row in value['rows']:
+                    if row['authority']['producer']!='worker':continue
+                    if worker is None or row['authority']['worker_reference']!=worker[0]:raise ValueError('progress unacknowledged worker authority')
+                    sealed=next((r for r in worker[1]['rows'] if r['identity']==row['identity']),None)
+                    if sealed is None or any(row[k]!=sealed[k] for k in ('version','row','qualified')):
+                        raise ValueError('progress worker authority mismatch')
+                    if [value['sources'][i] for i in row['source_indices']] != [worker[1]['sources'][i] for i in sealed['source_indices']]:
+                        raise ValueError('progress worker authority sources')
+            proposed=dict(self.current);proposed[producer]=(notice['current'],value)
+            merged={};runtime={};first=None
+            for _,doc in proposed.values():
+                for row in doc['rows']:
+                    idx=identity_index(row['identity'],self.context);prior=merged.get(idx)
+                    if prior and prior['version']!=row['version']:raise ValueError('progress conflicting producer authority')
+                    if prior is None or row['qualified']:merged[idx]=row
+                for key,ref in doc['runtime'].items():
+                    if key in runtime and runtime[key]!=ref:raise ValueError('progress runtime conflict')
+                    runtime[key]=ref
+                if doc['first_result'] is not None:
+                    if first is not None and first!=doc['first_result']:raise ValueError('progress first result conflict')
+                    first=doc['first_result']
+            compact=dict(schema='s1-progress-reference/v1',context=self.reference,session=self.context['session'],reservation=self.context['clock']['reservation'],
+                checkpoints={p:r for p,(r,_) in proposed.items()},counts=counts([merged[k] for k in sorted(merged)],complete=any(d['acceptance'] is not None for _,d in proposed.values())),
+                observed=time.monotonic(),frozen=False,integrity_status='verified',newest_status='acknowledged')
+            snap=Snapshot(encode(compact,SMALL_BYTES),tuple((p,encode(doc)) for p,(_,doc) in sorted(proposed.items())))
+            self.check();before(min(self.context['clock']['work_deadline'],completed+.5))
+            ack=encode(dict(schema='s1-progress-ack/v1',context=self.reference['sha256'],producer=producer,sequence=sequence,current=notice['current']),CONTROL_BYTES)
+            def send():
+                if self.cancelled():raise InterruptedError('progress cancelled before ack')
+                publication_boundary('ack_send');before(min(self.context['clock']['work_deadline'],completed+.5))
+                if self.channel.sendto(ack,sender)!=len(ack):raise OSError('progress ack short write')
+                before(min(self.context['clock']['work_deadline'],completed+.5))
+            publication_boundary('owner_retention');self.check()
+            if not self.cache.acknowledge(snap,send):return
+            if not duplicate:self.previous[producer]=old
+            self.current=proposed
+        except InterruptedError:return
+        except BaseException as exc:
+            self.cache.freeze(exc,integrity=not isinstance(exc,(TimeoutError,BlockingIOError)))
+            raise
+
+
+def recover(reference):
+    """Only an externally retained reference authorizes bounded cold readback."""
+    keys(reference,'schema context session reservation checkpoints counts observed frozen integrity_status newest_status')
+    validate_record(reference['context']);number(reference['observed'])
+    keys(reference['reservation'],'sequence event_sha256');integer(reference['reservation']['sequence']);digest(reference['reservation']['event_sha256'])
+    if type(reference['frozen']) is not bool or reference['newest_status'] not in ('acknowledged','unavailable'):raise ValueError('progress reference state')
+    if type(reference['session']) is not str or len(reference['session'])!=32:raise ValueError('progress reference session')
+    if reference['schema']!='s1-progress-reference/v1' or reference['integrity_status']!='verified':raise ValueError('progress recovery unverified')
+    context=context_document(read_record(reference['context'],SMALL_BYTES))
+    if context['session']!=reference['session'] or context['clock']['reservation']!=reference['reservation']:raise ValueError('progress recovery correlation')
+    refs=reference['checkpoints']
+    if type(refs) is not dict or not refs or set(refs)-{'worker','reconcile'}:raise ValueError('progress recovery producers')
+    rows={};runtime={};first=None;errors=[];acceptance=None;uncertain=False
+    for producer,rec in refs.items():
+        doc=validate_checkpoint(read_record(rec),context,reference['context'])
+        if doc['producer']!=producer or rec['path']!=str(Path(context['root'])/producer/(str(doc['sequence']).zfill(4)+'.json')):raise ValueError('progress recovery path')
+        try:
+            head=decode(read_bytes(Path(context['root'])/producer/'head.json',SMALL_BYTES),SMALL_BYTES)
+        except (FileNotFoundError,ValueError,json.JSONDecodeError):head=None;uncertain=True
+        if head is not None:
+            validate_head(head)
+            if head['context']!=reference['context'] or head['producer']!=producer or integer(head['sequence'],1,MAX_GENERATIONS)<doc['sequence']:
+                raise ValueError('progress cold head integrity/regression')
+            if head['sequence']==doc['sequence'] and (head['current']!=rec or head['previous']!=doc['previous']):raise ValueError('progress cold accepted head changed')
+            if head['sequence']>doc['sequence'] and (head['sequence']!=doc['sequence']+1 or head['previous']!=rec):raise ValueError('progress cold head successor conflict')
+            if head['current']['path']!=str(Path(context['root'])/producer/(str(head['sequence']).zfill(4)+'.json')):raise ValueError('progress cold head foreign path')
+        for row in doc['rows']:
+            idx=identity_index(row['identity'],context)
+            if idx in rows and rows[idx]['version']!=row['version']:raise ValueError('progress recovery authority conflict')
+            if idx not in rows or row['qualified']:rows[idx]=row
+        for key,rec in doc['runtime'].items():
+            if key in runtime and runtime[key]!=rec:raise ValueError('progress cold runtime conflict')
+            runtime[key]=rec
+        if first is not None and doc['first_result'] is not None and first!=doc['first_result']:raise ValueError('progress cold first conflict')
+        first=first or doc['first_result'];errors.extend(doc['errors'])
+        if acceptance is not None and doc['acceptance'] is not None and acceptance!=doc['acceptance']:raise ValueError('progress cold acceptance conflict')
+        acceptance=acceptance or doc['acceptance']
+    ordered=[rows[k] for k in sorted(rows)]
+    from .s1_clock import typed_equal
+    if not typed_equal(reference['counts'],counts(ordered,complete=acceptance is not None)):raise ValueError('progress recovery counts')
+    return dict(counts=counts(ordered,complete=acceptance is not None),acceptance=acceptance,integrity_status='uncertain' if uncertain else 'verified',stop_required=uncertain,produced_identities=[r['identity'] for r in ordered],qualified_identities=[r['identity'] for r in ordered if r['qualified']],
+        runtime=runtime,first_result=first,verification_errors=errors[:32],scan_complete=acceptance is not None and not uncertain,verified_progress_reference=reference)
+
+
+
+class ClosedInventory(list):
+    def __init__(self):super().__init__();self.directories=[]
+    def recheck(self,deadline=None):
+        for path,dev,ino,names in self.directories:
+            if deadline is not None:before(deadline)
+            parent,name=open_parent(path)
+            try:fd=os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=parent)
+            finally:os.close(parent)
+            try:
+                st=os.fstat(fd);observed=[]
+                with os.scandir(fd) as entries:
+                    for entry in entries:
+                        if len(observed)>=MAX_ENTRIES:raise ValueError('progress closure overflow')
+                        observed.append(entry.name)
+                if (st.st_dev,st.st_ino,tuple(sorted(observed)))!=(dev,ino,names):raise ValueError('progress inventory membership mutation')
+            finally:os.close(fd)
+        for rec in self:
+            if deadline is not None:before(deadline)
+            raw=read_bytes(rec['path'],MAX_METADATA if rec['path'].endswith('/result.json') else 256*1024)
+            if record(rec['path'],raw)!=rec:raise ValueError('progress inventory content mutation')
+        if deadline is not None:before(deadline)
+
+def candidate_inventory(output, result, deadline):
+    """Freeze a bounded no-follow inventory before crediting any unsealed row."""
+    root=canonical(output);candidates=[];sources=ClosedInventory();errors=[];visited=total=0
+    def append(source,row,rec):
+        nonlocal total
+        if len(candidates)>=MAX_CANDIDATES:raise ValueError('progress candidate overflow')
+        raw=encode(row,256*1024);total+=len(raw)
+        if total>MAX_METADATA:raise ValueError('progress candidate metadata overflow')
+        candidates.append((source,row,rec,hashlib.sha256(raw).hexdigest()))
+    if result is None:
+        try:result=json.loads(read_bytes(root/'result.json',MAX_METADATA))
+        except FileNotFoundError:pass
+    if result is not None:
+        if type(result) is not dict or type(result.get('rows')) is not list:raise ValueError('progress result rows')
+        if len(result['rows'])>MAX_CANDIDATES:raise ValueError('progress result candidate overflow')
+        raw=read_bytes(root/'result.json',MAX_METADATA)
+        parsed=json.loads(raw)
+        from .s1_clock import typed_equal
+        if not typed_equal(parsed,result):raise ValueError('progress result snapshot mismatch')
+        if len(sources)>=MAX_SOURCES:raise ValueError('progress inventory source overflow')
+        total+=len(raw)
+        if total>MAX_METADATA:raise ValueError('progress candidate metadata overflow')
+        rec=record(root/'result.json',raw);sources.append(rec)
+        for row in result['rows']:
+            if deadline is not None:before(deadline)
+            append('result',row,rec)
+    parent,name=open_parent(root)
+    try:fd=os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=parent)
+    finally:os.close(parent)
+    def walk(directory,path,depth):
+        nonlocal visited
+        observed=[];directory_identity=os.fstat(directory)
+        with os.scandir(directory) as entries:
+            for entry in entries:
+                if deadline is not None:before(deadline)
+                observed.append(entry.name)
+                visited+=1
+                if visited>MAX_ENTRIES:raise ValueError('progress directory entry overflow')
+                location=canonical(path/entry.name)
+                if entry.is_symlink():raise ValueError('progress inventory symlink')
+                if entry.is_dir(follow_symlinks=False):
+                    if depth>=4:raise ValueError('progress inventory depth overflow')
+                    child=os.open(entry.name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=directory)
+                    try:walk(child,location,depth+1)
+                    finally:os.close(child)
+                elif entry.name.endswith(('-produced-row.json','-qualified-row.json')):
+                    if len(sources)>=MAX_SOURCES:raise ValueError('progress inventory source overflow')
+                    raw=read_bytes(location,256*1024);rec=record(location,raw);sources.append(rec)
+                    append(str(location),decode(raw,256*1024),rec)
+        sources.directories.append((str(path),directory_identity.st_dev,directory_identity.st_ino,tuple(sorted(observed))))
+    try:walk(fd,root,0)
+    finally:os.close(fd)
+    # Rehash the closed row inventory once, before any structural/semantic guard.
+    sources.recheck(deadline)
+    if deadline is not None:before(deadline)
+    return candidates,sources
+
+
+def publish_segment_row(row,request,loader,clock,publisher,produced_path,qualified_path,*,first=False):
+    """The actual segment boundary: structural commit/ack precedes semantics."""
+    from .s1_evidence import produced_row, qualify_row
+    from .files import write_json
+    clock.observe();write_json(produced_path,row);clock.observe()
+    row_record=record(produced_path,read_bytes(produced_path,256*1024))
+    produced_row(row,request,loader=loader);clock.observe()
+    publisher.seal(row,row_record)
+    clock.observe();checks=qualify_row(row,request,first=first,loader=loader);clock.observe()
+    write_json(qualified_path,row);clock.observe()
+    publisher.seal(row,row_record,qualified=True)
+    return checks
+
+
+def accepted_progress(publisher,result,result_record,acceptance):
+    """Call only after actual acceptance guards; bind their immutable readback."""
+    before(publisher.deadline)
+    accepted=read_record(acceptance)
+    if accepted.get('result')!=result_record or accepted.get('status')!='passed' or accepted.get('count')!=510:
+        raise ValueError('progress acceptance result binding')
+    raw=read_bytes(result_record['path'],MAX_METADATA)
+    from .s1_clock import typed_equal
+    if record(result_record['path'],raw)!=result_record or not typed_equal(json.loads(raw),result):raise ValueError('progress accepted result bytes')
+    if len(result['rows'])!=510:raise ValueError('progress accepted row count')
+    publisher.coverage='closed'
+    for row in result['rows']:
+        before(publisher.deadline)
+        publisher.seal(row,result_record,qualified=True,publish=False)
+    publisher.acceptance=acceptance
+    publisher.first_result=accepted.get('first_result')
+    # The exact result record is the bounded immutable runtime projection source.
+    publisher.runtime['final']=result_record
+    before(publisher.deadline);publisher.publish()
+
+
+def summary_adapter(trusted, ordinary=None):
+    """Independent acknowledged authority wins; verified conflicts fail closed."""
+    if trusted is None:return ordinary
+    if trusted.get('integrity_status')!='verified':raise ValueError('progress summary uncertainty')
+    result=dict(trusted)
+    result['runtime']={k:dict(status='verified',value=validate_record(v)) for k,v in trusted['runtime'].items()}
+    first=trusted['first_result']
+    result['first_result']=dict(status='unverified' if first is None else 'verified',value=first)
+    raw_errors=trusted.get('verification_errors',[])
+    if type(raw_errors) is not list or len(raw_errors)>MAX_ERRORS:raise ValueError('progress summary error capacity')
+    errors=list(raw_errors)
+    if ordinary is not None:
+        if type(ordinary) is not dict:raise ValueError('ordinary summary type')
+        old_runtime=ordinary.get('runtime',{})
+        if type(old_runtime) is not dict or len(old_runtime)>3:raise ValueError('ordinary runtime capacity')
+        ordinary_errors=ordinary.get('verification_errors',[])
+        if type(ordinary_errors) is not list or len(ordinary_errors)>MAX_ERRORS:raise ValueError('ordinary error capacity')
+        for name,old in old_runtime.items():
+            keys(old,'status value')
+            if old['status'] not in ('verified','unverified'):raise ValueError('ordinary runtime status')
+            if name not in ('initial-runtime.json','partial-runtime.json','final'):raise ValueError('ordinary runtime name')
+            if old.get('status')=='verified':
+                validate_record(old['value'])
+                current=result['runtime'].get(name)
+                if current is not None and current!=old:raise ValueError('progress summary runtime conflict')
+                # Ordinary fields cannot establish independent durable authority.
+        old=ordinary.get('first_result')
+        if old is not None:
+            keys(old,'status value')
+            if old['status'] not in ('verified','unverified'):raise ValueError('ordinary first status')
+            if old['status']=='verified':validate_record(old['value'])
+            elif old['value'] is not None:raise ValueError('ordinary unverified first value')
+        if old and old.get('status')=='verified' and first is not None and old['value']!=first:
+            raise ValueError('progress summary first conflict')
+        for error in ordinary.get('verification_errors',[]):
+            if len(errors)>=MAX_ERRORS:break
+            if error not in errors:errors.append(error)
+    result['verification_errors']=errors
+    return result

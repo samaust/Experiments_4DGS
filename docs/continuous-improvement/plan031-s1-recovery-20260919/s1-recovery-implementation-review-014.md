@@ -1,0 +1,13 @@
+# Implementation016 — Plan046 incomplete
+
+The final source-bound aggregate ran **237 methods / 526 callbacks in 220.763 seconds**. It has one failed method (six unchanged legacy first-result load-count subtests), zero errors, skips or discovery errors. All 42 existing scenarios, six direct scripts, full 510-row controller tests and added progress tests pass. Technical and strict Plan046 acceptance remain false.
+
+Implemented prospective invocation-root CPU accounting and pre-dispatch capacity checks; exact acknowledged worker-seal reuse, result snapshot binding and inventory closure; complete acceptance/reconciliation progress; independent summary precedence; additional nested protocol validation and cold head correlation; actual publication fault seams; fresh launch/native/serialization/first-result deadline checks; all six P scenarios through actual supervisor failures. A nonblocking owner/monitor turn guard resolves the full-controller same-send-turn errors observed in aggregate001 without changing Wire's existing assertions.
+
+Three diagnostics and two aggregates are permanently consumed. Diagnostic001 failed L35 ancestry registration; diagnostic002 failed a mutation fixture using an immutable writer; diagnostic003 passed 60 methods. Aggregate001 failed six legacy barrier subtests and four errors. Aggregate002 removes the four errors and preserves the six conflicting legacy expectations. No source changed after aggregate002. The ten current partial source copies are immutable; no commit was created.
+
+Independent audit002 passes 445 byte/AST/accounting checks; audit001's three historical mutable-status snapshot mismatches remain preserved. All 38 frozen records, the447-event original ledger, ten prior source copies, every original method/assertion and466 callback declarations are preserved. Correction014 has the original28-transition prefix plus three actual iteration016 transitions, total31.
+
+Observed charges are at most eight; all210 scenario records across five invocations confirm allocated safety cleanup. Bounded final readback finds none of188 recorded owned process identities still present. P06's earlier production cleanup uncertainty remains distinct from safety retirement.
+
+The load-count conflict and narrower evidence gaps are detailed in [known limitations](s1-recovery-known-limitations-016.md). Review should resolve the old expectation of late raw qualification transparently under a new plan and close the remaining Plan046 matrices. [Remaining gates](s1-recovery-remaining-gates-016.md) preserve R9-5, admission and calibration requirements. S1-1/S1-4 remain narrowly met; S1-2/S1-3 remain not met. No live readiness follows.

@@ -1,0 +1,7 @@
+# Iteration017 known limitations
+
+Plan047 is incomplete and not accepted. Final aggregate002 timed out at300seconds (outer137) entering deadline_steps; no receipt. Existing test_identical_reuse_and_conflicts errors with AttributeError because segment accesses clock.work_deadline before require_clock(None); move deadline derivation after the required-clock guard under a fresh reviewed allocation. All six migrated real publication barrier cases and the full510 final-sampler pair passed in final stderr. Three focused and two aggregate slots are exhausted. No new invocation is authorized by unused wall time. Sources are preserved as partial-source017; main owns review and git.
+
+The final aggregate and earlier failures remain raw evidence. A partial stream of successful methods is not a completed receipt. Exact case declarations and old assertion expressions are preserved, but collection does not establish relevance. Some deadline cases test entry guards rather than distinct internal operations; some ownership negatives stop at note validation; some alias cases lack provisional-ack correlation. These require a fresh reviewed plan.
+
+The pure full510 success/final-sampler pair actually executes acceptance and progress acknowledgment, but does not establish real native worker traversal. P04 remains a two-row fixture. Prior diagnostics/aggregate001 use earlier source hashes. Historical strict Plans041/043/044/045/046 remain false. S1-2/S1-3 remain unmet; no live admission, GPU operation or production ledger mutation occurred.
