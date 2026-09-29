@@ -1,0 +1,981 @@
+{
+  "source_map": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/implement-049-correction002-after-ast-001.json",
+    "bytes": 4038459,
+    "sha256": "cbc86a2029a9513d533012d8a9197164e46a488a0f791125102a0840db7476c2"
+  },
+  "functions": [
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 543,
+      "end_line": 672,
+      "name": "named_creation_controls",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+        "bytes": 79868,
+        "sha256": "b76d262a07e65970dc6656e600d47812beafa7e341e1564790f7c25f32a87942"
+      },
+      "ast_sha256": "4872ac45dfdcd6814e2ffb30705898bcb78214a4d885aeecdf0ef1887b948239",
+      "assertions": [
+        {
+          "line": 597,
+          "expression": "test.assertTrue(owner.done)"
+        },
+        {
+          "line": 598,
+          "expression": "test.assertTrue(all((r['state'] in ('pending', 'reaped') for r in owner.records.values())))"
+        },
+        {
+          "line": 611,
+          "expression": "test.assertIs(error, primary)"
+        },
+        {
+          "line": 613,
+          "expression": "test.assertIsNotNone(process)"
+        },
+        {
+          "line": 614,
+          "expression": "test.assertTrue(any((row['pid'] in created and row['state'] == 'unresolved' for row in h.INVOCATION.records.values())))"
+        },
+        {
+          "line": 615,
+          "expression": "test.assertTrue(any(('cleanup after registration' in note for note in error.__notes__)))"
+        },
+        {
+          "line": 663,
+          "expression": "test.assertIs(error.primary_exception, primary)"
+        },
+        {
+          "line": 664,
+          "expression": "test.assertTrue(any((row['phase'] == 'cleanup' and row['message'] == str(cleanup_error) for row in error.secondary_failures)))"
+        },
+        {
+          "line": 665,
+          "expression": "test.assertTrue(any((row['pid'] in created and row['state'] == 'unresolved' for row in h.INVOCATION.records.values())))"
+        },
+        {
+          "line": 667,
+          "expression": "test.assertEqual(set(created), set(waited))"
+        },
+        {
+          "line": 668,
+          "expression": "test.assertEqual(created, [])"
+        },
+        {
+          "line": 669,
+          "expression": "test.assertFalse(any((r.get('pid') in created and r.get('state') != 'retired' for r in h.INVOCATION.records.values())))"
+        }
+      ]
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 813,
+      "end_line": 907,
+      "name": "enclosing_creation_controls",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+        "bytes": 79868,
+        "sha256": "b76d262a07e65970dc6656e600d47812beafa7e341e1564790f7c25f32a87942"
+      },
+      "ast_sha256": "b96830c01c983860e8c3eee7a4ae33fda3e0b58602948e447535ddeadf6928d8",
+      "assertions": [
+        {
+          "line": 843,
+          "expression": "test.assertEqual(events[-1][0], 'fresh_authority')"
+        },
+        {
+          "line": 877,
+          "expression": "test.assertIs(caught, primary)"
+        },
+        {
+          "line": 877,
+          "expression": "test.assertEqual(handles, [])"
+        },
+        {
+          "line": 879,
+          "expression": "test.assertIs(caught, primary)"
+        },
+        {
+          "line": 879,
+          "expression": "test.assertIs(primary.s1_owned_process, handles[0])"
+        },
+        {
+          "line": 881,
+          "expression": "test.assertEqual(primary.s1_owned_processes, (handles[0],))"
+        },
+        {
+          "line": 882,
+          "expression": "test.assertEqual(primary.s1_cleanup_errors, (secondary,))"
+        },
+        {
+          "line": 883,
+          "expression": "test.assertTrue(any((row['pid'] == handles[0].pid and row['state'] == 'unresolved' for row in h.INVOCATION.records.values())))"
+        },
+        {
+          "line": 885,
+          "expression": "test.assertIs(caught, secondary)"
+        },
+        {
+          "line": 886,
+          "expression": "test.assertTrue(all((handle.pid in cleanup_calls for handle in handles)))"
+        },
+        {
+          "line": 887,
+          "expression": "test.assertIsNone(caught)"
+        },
+        {
+          "line": 892,
+          "expression": "test.assertTrue(all((handle.returncode is not None for handle in handles)))"
+        },
+        {
+          "line": 893,
+          "expression": "test.assertFalse(any((row['pid'] in [h.pid for h in handles] and row['state'] != 'retired' for row in h.INVOCATION.records.values())))"
+        },
+        {
+          "line": 906,
+          "expression": "test.assertEqual(calls, [1, 2])"
+        },
+        {
+          "line": 906,
+          "expression": "test.assertIs(primary.s1_cleanup_errors[0], cleanup)"
+        }
+      ]
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 910,
+      "end_line": 962,
+      "name": "scenario_secondary_controls",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+        "bytes": 79868,
+        "sha256": "b76d262a07e65970dc6656e600d47812beafa7e341e1564790f7c25f32a87942"
+      },
+      "ast_sha256": "86cc0fc83111b6f83f8f922a8a5fb207c274cd23246f6016a6c255e1ada2848d",
+      "assertions": [
+        {
+          "line": 955,
+          "expression": "test.assertIs(caught, primary)"
+        },
+        {
+          "line": 956,
+          "expression": "test.assertIsInstance(caught, AssertionError)"
+        },
+        {
+          "line": 958,
+          "expression": "test.assertTrue(any((row['operation'] == ('scenario_destination' if fault == 'destination' else 'scenario_secondary_write') for row in secondary)))"
+        },
+        {
+          "line": 959,
+          "expression": "test.assertEqual(sum((value == 'open' for value in calls)), 1)"
+        },
+        {
+          "line": 960,
+          "expression": "test.assertTrue(secondary)"
+        }
+      ]
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 675,
+      "end_line": 765,
+      "name": "backend_gate_controls",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+        "bytes": 79868,
+        "sha256": "b76d262a07e65970dc6656e600d47812beafa7e341e1564790f7c25f32a87942"
+      },
+      "ast_sha256": "1438a04322707a41918c38a027b0c7d3ac89c066dc5ec5af6be33dfc1359e9bc",
+      "assertions": [
+        {
+          "line": 725,
+          "expression": "test.assertIsInstance(backend, b.LegacyStandaloneBackend)"
+        },
+        {
+          "line": 726,
+          "expression": "test.assertEqual(backend.detector.text_threshold, 0.5)"
+        },
+        {
+          "line": 726,
+          "expression": "test.assertTrue(backend.detector.s1_assignment)"
+        },
+        {
+          "line": 727,
+          "expression": "test.assertEqual(len(native_calls), 1)"
+        },
+        {
+          "line": 727,
+          "expression": "test.assertEqual(len(created), 1)"
+        },
+        {
+          "line": 728,
+          "expression": "test.assertEqual(backend.tracker.metadata['engine_argument_bridge']['removed'], {'max_len_long_term': 9999})"
+        },
+        {
+          "line": 729,
+          "expression": "test.assertTrue(all((item['state'] == 'returned' for item in seen)))"
+        },
+        {
+          "line": 730,
+          "expression": "test.assertEqual(backend.provenance, legacy.provenance)"
+        },
+        {
+          "line": 731,
+          "expression": "test.assertEqual({key: value for key, value in backend.tracker.metadata.items() if key != 'config_working_directory'}, {key: value for key, value in legacy.tracker.metadata.items() if key != 'config_working_directory'})"
+        },
+        {
+          "line": 732,
+          "expression": "test.assertEqual(len(legacy_calls), 1)"
+        },
+        {
+          "line": 741,
+          "expression": "test.assertEqual(p.operation(b._s1_call, p.backend_operation, operation, deadline=2.0), 'native return')"
+        },
+        {
+          "line": 743,
+          "expression": "test.assertRaises(TimeoutError)"
+        },
+        {
+          "line": 744,
+          "expression": "test.assertEqual(entered, ['opaque constructor'])"
+        },
+        {
+          "line": 757,
+          "expression": "test.assertRaises(TimeoutError if fault == 'late_return' else RuntimeError)"
+        },
+        {
+          "line": 759,
+          "expression": "test.assertEqual(Path.cwd(), cwd)"
+        },
+        {
+          "line": 759,
+          "expression": "test.assertEqual(len(calls), 1)"
+        },
+        {
+          "line": 760,
+          "expression": "test.assertFalse(p.TEMPORARY_OWNERS)"
+        },
+        {
+          "line": 760,
+          "expression": "test.assertFalse(p.PROCESS_STATE_OWNERS)"
+        },
+        {
+          "line": 761,
+          "expression": "test.assertTrue(caught.exception.s1_temporary_retirement[-1]['resolved'])"
+        }
+      ]
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 965,
+      "end_line": 1071,
+      "name": "backend_retirement_controls",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+        "bytes": 79868,
+        "sha256": "b76d262a07e65970dc6656e600d47812beafa7e341e1564790f7c25f32a87942"
+      },
+      "ast_sha256": "c51d19a978090e220db0d3194ebeb99a32b9f4f944b54fce9b931d8536f85a52",
+      "assertions": [
+        {
+          "line": 983,
+          "expression": "test.assertTrue(flags & os.O_DIRECTORY)"
+        },
+        {
+          "line": 983,
+          "expression": "test.assertTrue(flags & os.O_NOFOLLOW)"
+        },
+        {
+          "line": 984,
+          "expression": "test.assertIn('dir_fd', kwargs)"
+        },
+        {
+          "line": 984,
+          "expression": "test.assertNotIn('..', Path(path).parts)"
+        },
+        {
+          "line": 989,
+          "expression": "test.assertIs(kwargs.get('follow_symlinks'), False)"
+        },
+        {
+          "line": 989,
+          "expression": "test.assertIn('dir_fd', kwargs)"
+        },
+        {
+          "line": 994,
+          "expression": "test.assertIn('dir_fd', kwargs)"
+        },
+        {
+          "line": 994,
+          "expression": "test.assertNotIn('..', Path(path).parts)"
+        },
+        {
+          "line": 1000,
+          "expression": "test.assertIn('dir_fd', kwargs)"
+        },
+        {
+          "line": 1000,
+          "expression": "test.assertNotIn('..', Path(path).parts)"
+        },
+        {
+          "line": 1020,
+          "expression": "test.assertIsNone(caught)"
+        },
+        {
+          "line": 1020,
+          "expression": "test.assertFalse(owned.unresolved)"
+        },
+        {
+          "line": 1020,
+          "expression": "test.assertEqual(owned.events[-1]['operation'], 'temporary_cleanup')"
+        },
+        {
+          "line": 1022,
+          "expression": "test.assertIsInstance(caught, TimeoutError)"
+        },
+        {
+          "line": 1022,
+          "expression": "test.assertEqual(str(caught), 'progress original work deadline')"
+        },
+        {
+          "line": 1024,
+          "expression": "test.assertEqual(len(caught.s1_temporary_owners), 1)"
+        },
+        {
+          "line": 1025,
+          "expression": "test.assertTrue(owned.unresolved)"
+        },
+        {
+          "line": 1025,
+          "expression": "test.assertIn(owned, p.TEMPORARY_OWNERS)"
+        },
+        {
+          "line": 1026,
+          "expression": "test.assertEqual(owned.events[-1]['error_class'], 'OSError')"
+        },
+        {
+          "line": 1027,
+          "expression": "test.assertFalse(any((owner.name == objects[0].name for owner in p.TEMPORARY_OWNERS)))"
+        },
+        {
+          "line": 1028,
+          "expression": "test.assertTrue(operations)"
+        },
+        {
+          "line": 1029,
+          "expression": "test.assertEqual(outside.read_bytes(), b'outside must remain exact')"
+        },
+        {
+          "line": 1030,
+          "expression": "test.assertFalse(Path(objects[0].name).exists())"
+        },
+        {
+          "line": 1048,
+          "expression": "test.assertEqual(value, fd)"
+        },
+        {
+          "line": 1052,
+          "expression": "test.assertEqual(value, fd)"
+        },
+        {
+          "line": 1059,
+          "expression": "test.assertIs(pending, primary)"
+        },
+        {
+          "line": 1060,
+          "expression": "test.assertEqual(calls, [('fchdir', fd), ('close', fd)])"
+        },
+        {
+          "line": 1061,
+          "expression": "test.assertEqual(Path.cwd(), original_cwd)"
+        },
+        {
+          "line": 1063,
+          "expression": "test.assertEqual(owner.unresolved, fault != 'none')"
+        },
+        {
+          "line": 1064,
+          "expression": "test.assertIn(owner, primary.s1_cwd_owners)"
+        },
+        {
+          "line": 1067,
+          "expression": "test.assertRaises(OSError)"
+        },
+        {
+          "line": 1070,
+          "expression": "test.assertEqual(Path.cwd(), original_cwd)"
+        }
+      ]
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 1074,
+      "end_line": 1110,
+      "name": "backend_interior_controls",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+        "bytes": 79868,
+        "sha256": "b76d262a07e65970dc6656e600d47812beafa7e341e1564790f7c25f32a87942"
+      },
+      "ast_sha256": "68cafcf8b7e993302736fdca740111bc18000813f521ab153b644d3407fec81c",
+      "assertions": [
+        {
+          "line": 1085,
+          "expression": "test.assertEqual(p.backend_operation(function, *args), expected)"
+        },
+        {
+          "line": 1094,
+          "expression": "test.assertRaises(OSError)"
+        },
+        {
+          "line": 1095,
+          "expression": "test.assertIs(caught.exception, failure)"
+        },
+        {
+          "line": 1095,
+          "expression": "test.assertIn(target, events)"
+        },
+        {
+          "line": 1096,
+          "expression": "test.assertEqual(events[-1], target)"
+        },
+        {
+          "line": 1102,
+          "expression": "test.assertRaises(OSError)"
+        },
+        {
+          "line": 1103,
+          "expression": "test.assertIs(caught.exception, failure)"
+        },
+        {
+          "line": 1103,
+          "expression": "test.assertEqual(len(opened), 1)"
+        },
+        {
+          "line": 1107,
+          "expression": "test.assertIs(backends._s1_call(None, unchanged, 1, expected=2), record)"
+        },
+        {
+          "line": 1108,
+          "expression": "test.assertEqual(calls, [((1,), {'expected': 2})])"
+        },
+        {
+          "line": 1109,
+          "expression": "test.assertRaisesRegex(ValueError, 'restricted to S1')"
+        }
+      ]
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 768,
+      "end_line": 787,
+      "name": "retire_fixture_processes",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+        "bytes": 79868,
+        "sha256": "b76d262a07e65970dc6656e600d47812beafa7e341e1564790f7c25f32a87942"
+      },
+      "ast_sha256": "e7ea9dd1ed10a09ea2d7318f018baf5417872a749591ce862d5cd95c89090ea8",
+      "assertions": []
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 790,
+      "end_line": 800,
+      "name": "fixture_process_launch",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+        "bytes": 79868,
+        "sha256": "b76d262a07e65970dc6656e600d47812beafa7e341e1564790f7c25f32a87942"
+      },
+      "ast_sha256": "a4d6cb4800d1e3de2b6b1daf56d848a8c9544ff8206712217afb21889dac4a01",
+      "assertions": []
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 803,
+      "end_line": 810,
+      "name": "nested_worker_code",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+        "bytes": 79868,
+        "sha256": "b76d262a07e65970dc6656e600d47812beafa7e341e1564790f7c25f32a87942"
+      },
+      "ast_sha256": "31d44ae95f2998c01e34fd0cc9f869fb40bcec78c173ae572c53ec48d3c1181e",
+      "assertions": []
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py",
+      "line": 1673,
+      "end_line": 1914,
+      "name": "progress_scenario",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py",
+        "bytes": 310401,
+        "sha256": "aaad7da14251313432f290477271b58d4e51f856581740eeb5cecae62e29f57f"
+      },
+      "ast_sha256": "d66ee0447582090afb27f924cd571193d3d8f87955f9d64541228ab300a0fe5e",
+      "assertions": [
+        {
+          "line": 1686,
+          "expression": "self.assertLessEqual(self.record_census(session)[0], 8)"
+        },
+        {
+          "line": 1728,
+          "expression": "self.assertLessEqual(self.record_census(session, [kwargs['worker'].pid])[0], 8)"
+        },
+        {
+          "line": 1741,
+          "expression": "self.assertIsNotNone(caught)"
+        },
+        {
+          "line": 1742,
+          "expression": "self.assertEqual(outcome['status'], 'failed')"
+        },
+        {
+          "line": 1743,
+          "expression": "self.assertEqual(outcome['terminal_publication_status'], 'unavailable')"
+        },
+        {
+          "line": 1744,
+          "expression": "self.assertIsNone(outcome['terminal_receipt'])"
+        },
+        {
+          "line": 1746,
+          "expression": "self.assertEqual(reference, outcome['verified_progress_reference'])"
+        },
+        {
+          "line": 1767,
+          "expression": "self.assertIsNotNone(caught)"
+        },
+        {
+          "line": 1769,
+          "expression": "self.assertEqual(reference, life.progress.reference())"
+        },
+        {
+          "line": 1771,
+          "expression": "self.assertEqual(caught.primary_failure, outcome['primary_failure'])"
+        },
+        {
+          "line": 1772,
+          "expression": "self.assertEqual(caught.kind, caught.primary_failure['kind'])"
+        },
+        {
+          "line": 1773,
+          "expression": "self.assertEqual(type(caught.primary_exception).__name__, caught.primary_failure['error_class'])"
+        },
+        {
+          "line": 1774,
+          "expression": "self.assertEqual(str(caught.primary_exception), caught.primary_failure['message'])"
+        },
+        {
+          "line": 1775,
+          "expression": "self.assertEqual(caught.secondary_failures, outcome['secondary_failures'])"
+        },
+        {
+          "line": 1776,
+          "expression": "self.assertEqual(caught.kind, 'job_deadline')"
+        },
+        {
+          "line": 1777,
+          "expression": "self.assertEqual(caught.primary_failure['phase'], 'acceptance')"
+        },
+        {
+          "line": 1778,
+          "expression": "self.assertIsNotNone(reference, dict(outcome=outcome, errors=list(session.owner.errors), progress_error=session.owner.progress_error))"
+        },
+        {
+          "line": 1779,
+          "expression": "self.assertEqual(reference['counts']['produced'], 'unknown')"
+        },
+        {
+          "line": 1780,
+          "expression": "self.assertEqual(reference['counts']['qualified_total'], 'unknown')"
+        },
+        {
+          "line": 1781,
+          "expression": "self.assertTrue(reference['frozen'])"
+        },
+        {
+          "line": 1782,
+          "expression": "self.assertEqual(reference['counts']['produced_lower_bound'], 2 if label in ('P01', 'P04') else 1)"
+        },
+        {
+          "line": 1783,
+          "expression": "self.assertEqual(reference['counts']['qualified'], 2 if label in ('P01', 'P04') else 1 if label == 'P02' else 0)"
+        },
+        {
+          "line": 1784,
+          "expression": "self.assertEqual(reference['counts']['fit_produced_lower_bound'], 1)"
+        },
+        {
+          "line": 1785,
+          "expression": "self.assertEqual(reference['counts']['selection_produced_lower_bound'], 1 if label in ('P01', 'P04') else 0)"
+        },
+        {
+          "line": 1789,
+          "expression": "self.assertEqual(recovered['counts'], reference['counts'])"
+        },
+        {
+          "line": 1791,
+          "expression": "self.assertIsNotNone(recovered['first_result'])"
+        },
+        {
+          "line": 1792,
+          "expression": "self.assertIn('partial-runtime.json', recovered['runtime'])"
+        },
+        {
+          "line": 1793,
+          "expression": "self.assertEqual({k: p.process_binding(v) for k, v in session.owner.records.items()}, pair)"
+        },
+        {
+          "line": 1794,
+          "expression": "self.assertTrue(life.poisoned)"
+        },
+        {
+          "line": 1800,
+          "expression": "self.assertTrue(events)"
+        },
+        {
+          "line": 1800,
+          "expression": "self.assertLessEqual(len(events), 4097)"
+        },
+        {
+          "line": 1801,
+          "expression": "self.assertTrue(all((event['session'] == reference['session'] for event in events)))"
+        },
+        {
+          "line": 1802,
+          "expression": "self.assertTrue(all((event['overflow'] == 0 and event['valid'] for event in events)))"
+        },
+        {
+          "line": 1803,
+          "expression": "self.assertTrue(events[-1]['terminal'], dict(label=label, last=events[-1]))"
+        },
+        {
+          "line": 1805,
+          "expression": "self.assertTrue(all((event['reservation'] == reference['reservation'] and event['request'] == fixture['request_record'] for event in events)))"
+        },
+        {
+          "line": 1806,
+          "expression": "self.assertTrue(all((event['work_deadline'] == context['clock']['work_deadline'] and event['total_deadline'] == context['clock']['total_deadline'] and (event['observed'] < event['total_deadline']) for event in events)))"
+        },
+        {
+          "line": 1808,
+          "expression": "self.assertTrue(published)"
+        },
+        {
+          "line": 1810,
+          "expression": "self.assertGreaterEqual(event['request_id'], 1)"
+        },
+        {
+          "line": 1810,
+          "expression": "self.assertGreaterEqual(event['sequence'], 1)"
+        },
+        {
+          "line": 1814,
+          "expression": "self.assertEqual(event['request_id'], doc['request_id'])"
+        },
+        {
+          "line": 1815,
+          "expression": "self.assertEqual(event['versions'], [row['version'] for row in doc['rows']])"
+        },
+        {
+          "line": 1816,
+          "expression": "self.assertEqual(event['binding'], doc['binding'])"
+        },
+        {
+          "line": 1817,
+          "expression": "self.assertEqual(event['boot_id'], context['boot_id'])"
+        },
+        {
+          "line": 1819,
+          "expression": "self.assertFalse(event['installed'], dict(label=label, event=event, missing_body=str(body)))"
+        },
+        {
+          "line": 1820,
+          "expression": "self.assertFalse(event['head_installed'])"
+        },
+        {
+          "line": 1820,
+          "expression": "self.assertFalse(event['acknowledged'])"
+        },
+        {
+          "line": 1822,
+          "expression": "self.assertTrue(any((v['terminal'] for v in same_generation)), dict(label=label, missing_generation=event['sequence']))"
+        },
+        {
+          "line": 1823,
+          "expression": "self.assertFalse(any((v['installed'] or v['acknowledged'] for v in same_generation)))"
+        },
+        {
+          "line": 1835,
+          "expression": "self.assertEqual(cursor, len(required), dict(label=label, producer=producer, sequence=sequence, boundaries=boundary))"
+        },
+        {
+          "line": 1836,
+          "expression": "self.assertTrue(any((v['terminal'] for v in events_for_generation)), dict(label=label, incomplete_generation=sequence))"
+        },
+        {
+          "line": 1840,
+          "expression": "self.assertTrue(any((v['head_installed'] for v in events_for_generation)))"
+        },
+        {
+          "line": 1841,
+          "expression": "self.assertEqual(file_record(record['path']), record)"
+        },
+        {
+          "line": 1848,
+          "expression": "self.assertTrue(child_boundaries, label)"
+        },
+        {
+          "line": 1849,
+          "expression": "self.assertTrue(any((event['phase'] == 'P05_pre_head_replace' for trace in child_boundaries for event in trace['events'])))"
+        },
+        {
+          "line": 1850,
+          "expression": "self.assertTrue(owner_trace['valid'])"
+        },
+        {
+          "line": 1858,
+          "expression": "self.assertEqual(cursor, len(required_owner), dict(label=label, producer=producer, owner_trace=bound))"
+        },
+        {
+          "line": 1859,
+          "expression": "self.assertTrue(all((event['correlation']['reservation'] == reference['reservation'] and event['correlation']['session'] == reference['session'] for event in bound)))"
+        },
+        {
+          "line": 1862,
+          "expression": "self.assertEqual(len(suffixes), 1)"
+        },
+        {
+          "line": 1864,
+          "expression": "self.assertTrue(event['terminal'])"
+        },
+        {
+          "line": 1864,
+          "expression": "self.assertEqual(event['overflow'], 0)"
+        },
+        {
+          "line": 1865,
+          "expression": "self.assertEqual(suffix['entered'], [])"
+        },
+        {
+          "line": 1865,
+          "expression": "self.assertEqual(late_parent_entries, [])"
+        },
+        {
+          "line": 1866,
+          "expression": "self.assertEqual([row['operation'] for row in suffix['attempts']], ['raw', 'reconcile', 'first', 'runtime', 'accept'])"
+        },
+        {
+          "line": 1867,
+          "expression": "self.assertTrue(all((row['error_class'] == 'TimeoutError' and row['start'] >= event['work_deadline'] and (row['end'] < event['total_deadline']) for row in suffix['attempts'])))"
+        },
+        {
+          "line": 1868,
+          "expression": "self.assertEqual(suffix['cutoff'], event['work_deadline'])"
+        },
+        {
+          "line": 1868,
+          "expression": "self.assertEqual(suffix['sequence'], event['sequence'])"
+        },
+        {
+          "line": 1869,
+          "expression": "self.assertEqual(suffix['versions'], event['versions'])"
+        },
+        {
+          "line": 1869,
+          "expression": "self.assertEqual(suffix['binding'], event['binding'])"
+        },
+        {
+          "line": 1870,
+          "expression": "self.assertEqual(suffix['request'], event['request'])"
+        },
+        {
+          "line": 1870,
+          "expression": "self.assertEqual(suffix['session'], event['session'])"
+        },
+        {
+          "line": 1871,
+          "expression": "self.assertEqual(len(cutoff_observations), 1)"
+        },
+        {
+          "line": 1871,
+          "expression": "self.assertTrue(cutoff_observations[0]['terminal_witness'])"
+        },
+        {
+          "line": 1872,
+          "expression": "self.assertEqual(cutoff_observations[0]['worker_pid'], event['binding']['pid'])"
+        },
+        {
+          "line": 1873,
+          "expression": "self.assertGreaterEqual(cutoff_observations[0]['observed'], event['observed'])"
+        },
+        {
+          "line": 1874,
+          "expression": "self.assertLess(cutoff_observations[0]['observed'], event['total_deadline'])"
+        },
+        {
+          "line": 1875,
+          "expression": "self.assertEqual(caught.primary_failure['kind'], 'job_deadline')"
+        },
+        {
+          "line": 1878,
+          "expression": "self.assertTrue(all((event['installed'] and (not event['head_installed']) and (not event['acknowledged']) for event in faults)))"
+        },
+        {
+          "line": 1881,
+          "expression": "self.assertTrue(temporary.is_file())"
+        },
+        {
+          "line": 1881,
+          "expression": "self.assertTrue(temporary.read_bytes())"
+        },
+        {
+          "line": 1883,
+          "expression": "self.assertLess(head['sequence'], event['sequence'])"
+        },
+        {
+          "line": 1908,
+          "expression": "self.assertIs(life.progress.snapshot, frozen)"
+        },
+        {
+          "line": 1914,
+          "expression": "self.assertLessEqual(self.time.monotonic(), session.fixture_safety_end)"
+        }
+      ]
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 190,
+      "end_line": 261,
+      "name": "child_progress_trace",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+        "bytes": 79868,
+        "sha256": "b76d262a07e65970dc6656e600d47812beafa7e341e1564790f7c25f32a87942"
+      },
+      "ast_sha256": "713b07d9c678b5910bb7e76cc6251b5a368729e3ce7626b19bd42d90368ee5cf",
+      "assertions": []
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 345,
+      "end_line": 392,
+      "name": "progress_worker",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+        "bytes": 79868,
+        "sha256": "b76d262a07e65970dc6656e600d47812beafa7e341e1564790f7c25f32a87942"
+      },
+      "ast_sha256": "a455a8ee09f5c4f0531d596090131a9aa442760d12d368d7f604fd971d5d3a7e",
+      "assertions": []
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 337,
+      "end_line": 355,
+      "name": "identity_record",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_contract.py",
+        "bytes": 31568,
+        "sha256": "5b994524dfb56e04f4c40624df9cab3d68aaa41b60f6be84898388213a0522fe"
+      },
+      "ast_sha256": "1a426299bfd5652512d1cb202574a77529a566ad77975487132c1c630184433d",
+      "assertions": []
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 364,
+      "end_line": 385,
+      "name": "validate_creation",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_contract.py",
+        "bytes": 31568,
+        "sha256": "5b994524dfb56e04f4c40624df9cab3d68aaa41b60f6be84898388213a0522fe"
+      },
+      "ast_sha256": "caf4ffaafe1098ddbde96d820b7f316abb17226c833a9fc2f7f1ca37fefa5345",
+      "assertions": []
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 388,
+      "end_line": 453,
+      "name": "no_timeout_launch",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_contract.py",
+        "bytes": 31568,
+        "sha256": "5b994524dfb56e04f4c40624df9cab3d68aaa41b60f6be84898388213a0522fe"
+      },
+      "ast_sha256": "f1eec11faa3f4e78a7b6f6df7557be68eb31c4ca529f8d386d027fc3dccf423f",
+      "assertions": []
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py",
+      "line": 517,
+      "end_line": 536,
+      "name": "creation_identity_snapshot",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py",
+        "bytes": 67566,
+        "sha256": "cbced4e7f2376bd84f5dc57da765676dc68f9d93185318b57bb7dce0c243cc19"
+      },
+      "ast_sha256": "19fb7723daa755d2b24d0f99410bfd5163d047d9c0a4c4c2b748b85d20e4308c",
+      "assertions": []
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py",
+      "line": 501,
+      "end_line": 514,
+      "name": "stable_process_identity",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py",
+        "bytes": 67566,
+        "sha256": "cbced4e7f2376bd84f5dc57da765676dc68f9d93185318b57bb7dce0c243cc19"
+      },
+      "ast_sha256": "580e5906ed1a24d290f0bbc7c525a329f0ed63ce63e494fe25f33c988aa8e5c0",
+      "assertions": []
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_progress.py",
+      "line": 1597,
+      "end_line": 1616,
+      "name": "numeric_archive",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_progress.py",
+        "bytes": 92387,
+        "sha256": "97398476bacdb4383edac2d14457e895a077b933deec5e80ce8d51a7f40e7b23"
+      },
+      "ast_sha256": "286787fe2dbad794d3ba81cd1f9f53dedcf3f1d2d118364c0e651b51e02f94b7",
+      "assertions": []
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_progress.py",
+      "line": 1509,
+      "end_line": 1533,
+      "name": "owned_temporary_directory",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_progress.py",
+        "bytes": 92387,
+        "sha256": "97398476bacdb4383edac2d14457e895a077b933deec5e80ce8d51a7f40e7b23"
+      },
+      "ast_sha256": "b8ce1ff98c650b1256ee013ce57013b60fa39d01c6059f5358eb4bd00d162613",
+      "assertions": []
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_progress.py",
+      "line": 1577,
+      "end_line": 1594,
+      "name": "backend_resource_scope",
+      "source": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_progress.py",
+        "bytes": 92387,
+        "sha256": "97398476bacdb4383edac2d14457e895a077b933deec5e80ce8d51a7f40e7b23"
+      },
+      "ast_sha256": "69488dc79e2e1e370e1bfa332fe73b6a566dd0b9b536bc3ae5e7cfdd8873fb58",
+      "assertions": []
+    }
+  ],
+  "no_runtime_execution": true
+}

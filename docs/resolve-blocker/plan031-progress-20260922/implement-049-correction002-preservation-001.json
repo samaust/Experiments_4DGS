@@ -1,0 +1,331 @@
+{
+  "before": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/implement-049-before-ast-001.json",
+    "bytes": 4449570,
+    "sha256": "45307bf2faab737c2b24656dcce6a1e1c35fc2bba86cb9c330d04139147ceae7"
+  },
+  "after": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/implement-049-correction002-after-ast-001.json",
+    "bytes": 4038459,
+    "sha256": "cbc86a2029a9513d533012d8a9197164e46a488a0f791125102a0840db7476c2"
+  },
+  "source_members": 78,
+  "collected_methods": 249,
+  "typed_callbacks": 1028,
+  "old_methods_preserved": 622,
+  "removed_methods": [],
+  "ordered_old_assertion_differences": [
+    {
+      "method": "test_vipe_benchmark_s1_recovery.ReservationClockTests.test_identical_reuse_and_conflicts",
+      "assertion": "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Call(func=Name(id='read_json', ctx=Load()), args=[Subscript(value=Name(id='raw', ctx=Load()), slice=Constant(value='path'), ctx=Load())], keywords=[]), slice=Constant(value='clock_status'), ctx=Load()), Constant(value='unverified')], keywords=[])"
+    }
+  ],
+  "authorized_difference": "D49-1 only; prior correction001 already absent from baseline",
+  "added_assertions": {
+    "test_vipe_benchmark_backends.S1NativeBridgeTests.test_pair_bridge_rejects_extra_frames_reference_and_propagation": {
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='fail', ctx=Load()), args=[Constant(value='invalid pair admitted')], keywords=[])": 1
+    },
+    "test_vipe_benchmark_s1_recovery.FailureEvidenceTests.test_alignment_layout_pre_forward_and_no_stale_capture": {
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='fail', ctx=Load()), args=[Constant(value='expected original exception')], keywords=[])": 1
+    },
+    "test_vipe_benchmark_s1_recovery.ReceiptContractTests.test_execution_mutations": {
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Call(func=Attribute(value=Name(id='graph', ctx=Load()), attr='validate', ctx=Load()), args=[], keywords=[]), slice=Constant(value='provenance'), ctx=Load()), Attribute(value=Name(id='graph', ctx=Load()), attr='provenance', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertRaises', ctx=Load()), args=[Name(id='ValueError', ctx=Load())], keywords=[])": 5
+    },
+    "test_vipe_benchmark_s1_recovery.ReservationClockTests.test_identical_reuse_and_conflicts": {
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertIsNone', ctx=Load()), args=[Name(id='raw', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertIsNone', ctx=Load()), args=[Attribute(value=Name(id='primary', ctx=Load()), attr='s1_failure_record', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertIn', ctx=Load()), args=[Constant(value='total deadline'), Attribute(value=Name(id='primary', ctx=Load()), attr='s1_progress_unavailable', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertIs', ctx=Load()), args=[Name(id='primary', ctx=Load()), Name(id='original_primary', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertIs', ctx=Load()), args=[Call(func=Name(id='type', ctx=Load()), args=[Name(id='primary', ctx=Load())], keywords=[]), Name(id='RuntimeError', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Call(func=Name(id='str', ctx=Load()), args=[Name(id='primary', ctx=Load())], keywords=[]), Constant(value='later original error')], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Name(id='forbidden', ctx=Load()), List(elts=[], ctx=Load())], keywords=[])": 1
+    },
+    "test_vipe_benchmark_supervisor.SupervisorTests.test_gpu_sample_of_exited_unreaped_worker_keeps_true_group_ownership": {
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='fail', ctx=Load()), args=[Constant(value='fixture worker did not reach zombie state')], keywords=[])": 1
+    },
+    "test_vipe_benchmark_supervisor.HelperSessionTests.test_l18_descendant_and_foreign_sentinel": {
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='fail', ctx=Load()), args=[Constant(value='sentinel reap deadline')], keywords=[])": 1
+    },
+    "test_vipe_benchmark_supervisor.HelperSessionTests.progress_scenario": {
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Attribute(value=Name(id='caught', ctx=Load()), attr='primary_failure', ctx=Load()), Subscript(value=Name(id='outcome', ctx=Load()), slice=Constant(value='primary_failure'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Attribute(value=Name(id='caught', ctx=Load()), attr='kind', ctx=Load()), Subscript(value=Attribute(value=Name(id='caught', ctx=Load()), attr='primary_failure', ctx=Load()), slice=Constant(value='kind'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Attribute(value=Call(func=Name(id='type', ctx=Load()), args=[Attribute(value=Name(id='caught', ctx=Load()), attr='primary_exception', ctx=Load())], keywords=[]), attr='__name__', ctx=Load()), Subscript(value=Attribute(value=Name(id='caught', ctx=Load()), attr='primary_failure', ctx=Load()), slice=Constant(value='error_class'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Call(func=Name(id='str', ctx=Load()), args=[Attribute(value=Name(id='caught', ctx=Load()), attr='primary_exception', ctx=Load())], keywords=[]), Subscript(value=Attribute(value=Name(id='caught', ctx=Load()), attr='primary_failure', ctx=Load()), slice=Constant(value='message'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Attribute(value=Name(id='caught', ctx=Load()), attr='secondary_failures', ctx=Load()), Subscript(value=Name(id='outcome', ctx=Load()), slice=Constant(value='secondary_failures'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Attribute(value=Name(id='caught', ctx=Load()), attr='kind', ctx=Load()), Constant(value='job_deadline')], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Attribute(value=Name(id='caught', ctx=Load()), attr='primary_failure', ctx=Load()), slice=Constant(value='phase'), ctx=Load()), Constant(value='acceptance')], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='binding'), ctx=Load()), Subscript(value=Name(id='doc', ctx=Load()), slice=Constant(value='binding'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='boot_id'), ctx=Load()), Subscript(value=Name(id='context', ctx=Load()), slice=Constant(value='boot_id'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertFalse', ctx=Load()), args=[Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='installed'), ctx=Load()), Call(func=Name(id='dict', ctx=Load()), args=[], keywords=[keyword(arg='label', value=Name(id='label', ctx=Load())), keyword(arg='event', value=Name(id='event', ctx=Load())), keyword(arg='missing_body', value=Call(func=Name(id='str', ctx=Load()), args=[Name(id='body', ctx=Load())], keywords=[]))])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertFalse', ctx=Load()), args=[Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='head_installed'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertFalse', ctx=Load()), args=[Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='acknowledged'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Call(func=Name(id='any', ctx=Load()), args=[GeneratorExp(elt=Subscript(value=Name(id='v', ctx=Load()), slice=Constant(value='terminal'), ctx=Load()), generators=[comprehension(target=Name(id='v', ctx=Store()), iter=Name(id='same_generation', ctx=Load()), ifs=[], is_async=0)])], keywords=[]), Call(func=Name(id='dict', ctx=Load()), args=[], keywords=[keyword(arg='label', value=Name(id='label', ctx=Load())), keyword(arg='missing_generation', value=Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='sequence'), ctx=Load()))])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertFalse', ctx=Load()), args=[Call(func=Name(id='any', ctx=Load()), args=[GeneratorExp(elt=BoolOp(op=Or(), values=[Subscript(value=Name(id='v', ctx=Load()), slice=Constant(value='installed'), ctx=Load()), Subscript(value=Name(id='v', ctx=Load()), slice=Constant(value='acknowledged'), ctx=Load())]), generators=[comprehension(target=Name(id='v', ctx=Store()), iter=Name(id='same_generation', ctx=Load()), ifs=[], is_async=0)])], keywords=[])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Name(id='cursor', ctx=Load()), Call(func=Name(id='len', ctx=Load()), args=[Name(id='required', ctx=Load())], keywords=[]), Call(func=Name(id='dict', ctx=Load()), args=[], keywords=[keyword(arg='label', value=Name(id='label', ctx=Load())), keyword(arg='producer', value=Name(id='producer', ctx=Load())), keyword(arg='sequence', value=Name(id='sequence', ctx=Load())), keyword(arg='boundaries', value=Name(id='boundary', ctx=Load()))])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Call(func=Name(id='any', ctx=Load()), args=[GeneratorExp(elt=Subscript(value=Name(id='v', ctx=Load()), slice=Constant(value='terminal'), ctx=Load()), generators=[comprehension(target=Name(id='v', ctx=Store()), iter=Name(id='events_for_generation', ctx=Load()), ifs=[], is_async=0)])], keywords=[]), Call(func=Name(id='dict', ctx=Load()), args=[], keywords=[keyword(arg='label', value=Name(id='label', ctx=Load())), keyword(arg='incomplete_generation', value=Name(id='sequence', ctx=Load()))])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Call(func=Name(id='any', ctx=Load()), args=[GeneratorExp(elt=Subscript(value=Name(id='v', ctx=Load()), slice=Constant(value='head_installed'), ctx=Load()), generators=[comprehension(target=Name(id='v', ctx=Store()), iter=Name(id='events_for_generation', ctx=Load()), ifs=[], is_async=0)])], keywords=[])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Call(func=Name(id='file_record', ctx=Load()), args=[Subscript(value=Name(id='record', ctx=Load()), slice=Constant(value='path'), ctx=Load())], keywords=[]), Name(id='record', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Subscript(value=Name(id='owner_trace', ctx=Load()), slice=Constant(value='valid'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Name(id='cursor', ctx=Load()), Call(func=Name(id='len', ctx=Load()), args=[Name(id='required_owner', ctx=Load())], keywords=[]), Call(func=Name(id='dict', ctx=Load()), args=[], keywords=[keyword(arg='label', value=Name(id='label', ctx=Load())), keyword(arg='producer', value=Name(id='producer', ctx=Load())), keyword(arg='owner_trace', value=Name(id='bound', ctx=Load()))])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Call(func=Name(id='all', ctx=Load()), args=[GeneratorExp(elt=BoolOp(op=And(), values=[Compare(left=Subscript(value=Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='correlation'), ctx=Load()), slice=Constant(value='reservation'), ctx=Load()), ops=[Eq()], comparators=[Subscript(value=Name(id='reference', ctx=Load()), slice=Constant(value='reservation'), ctx=Load())]), Compare(left=Subscript(value=Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='correlation'), ctx=Load()), slice=Constant(value='session'), ctx=Load()), ops=[Eq()], comparators=[Subscript(value=Name(id='reference', ctx=Load()), slice=Constant(value='session'), ctx=Load())])]), generators=[comprehension(target=Name(id='event', ctx=Store()), iter=Name(id='bound', ctx=Load()), ifs=[], is_async=0)])], keywords=[])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Call(func=Name(id='len', ctx=Load()), args=[Name(id='suffixes', ctx=Load())], keywords=[]), Constant(value=1)], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='terminal'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='overflow'), ctx=Load()), Constant(value=0)], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Name(id='suffix', ctx=Load()), slice=Constant(value='entered'), ctx=Load()), List(elts=[], ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Name(id='late_parent_entries', ctx=Load()), List(elts=[], ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[ListComp(elt=Subscript(value=Name(id='row', ctx=Load()), slice=Constant(value='operation'), ctx=Load()), generators=[comprehension(target=Name(id='row', ctx=Store()), iter=Subscript(value=Name(id='suffix', ctx=Load()), slice=Constant(value='attempts'), ctx=Load()), ifs=[], is_async=0)]), List(elts=[Constant(value='raw'), Constant(value='reconcile'), Constant(value='first'), Constant(value='runtime'), Constant(value='accept')], ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Call(func=Name(id='all', ctx=Load()), args=[GeneratorExp(elt=BoolOp(op=And(), values=[Compare(left=Subscript(value=Name(id='row', ctx=Load()), slice=Constant(value='error_class'), ctx=Load()), ops=[Eq()], comparators=[Constant(value='TimeoutError')]), Compare(left=Subscript(value=Name(id='row', ctx=Load()), slice=Constant(value='start'), ctx=Load()), ops=[GtE()], comparators=[Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='work_deadline'), ctx=Load())]), Compare(left=Subscript(value=Name(id='row', ctx=Load()), slice=Constant(value='end'), ctx=Load()), ops=[Lt()], comparators=[Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='total_deadline'), ctx=Load())])]), generators=[comprehension(target=Name(id='row', ctx=Store()), iter=Subscript(value=Name(id='suffix', ctx=Load()), slice=Constant(value='attempts'), ctx=Load()), ifs=[], is_async=0)])], keywords=[])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Name(id='suffix', ctx=Load()), slice=Constant(value='cutoff'), ctx=Load()), Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='work_deadline'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Name(id='suffix', ctx=Load()), slice=Constant(value='sequence'), ctx=Load()), Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='sequence'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Name(id='suffix', ctx=Load()), slice=Constant(value='versions'), ctx=Load()), Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='versions'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Name(id='suffix', ctx=Load()), slice=Constant(value='binding'), ctx=Load()), Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='binding'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Name(id='suffix', ctx=Load()), slice=Constant(value='request'), ctx=Load()), Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='request'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Name(id='suffix', ctx=Load()), slice=Constant(value='session'), ctx=Load()), Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='session'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Call(func=Name(id='len', ctx=Load()), args=[Name(id='cutoff_observations', ctx=Load())], keywords=[]), Constant(value=1)], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Subscript(value=Subscript(value=Name(id='cutoff_observations', ctx=Load()), slice=Constant(value=0), ctx=Load()), slice=Constant(value='terminal_witness'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Subscript(value=Name(id='cutoff_observations', ctx=Load()), slice=Constant(value=0), ctx=Load()), slice=Constant(value='worker_pid'), ctx=Load()), Subscript(value=Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='binding'), ctx=Load()), slice=Constant(value='pid'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertGreaterEqual', ctx=Load()), args=[Subscript(value=Subscript(value=Name(id='cutoff_observations', ctx=Load()), slice=Constant(value=0), ctx=Load()), slice=Constant(value='observed'), ctx=Load()), Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='observed'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertLess', ctx=Load()), args=[Subscript(value=Subscript(value=Name(id='cutoff_observations', ctx=Load()), slice=Constant(value=0), ctx=Load()), slice=Constant(value='observed'), ctx=Load()), Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='total_deadline'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Attribute(value=Name(id='caught', ctx=Load()), attr='primary_failure', ctx=Load()), slice=Constant(value='kind'), ctx=Load()), Constant(value='job_deadline')], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Call(func=Name(id='all', ctx=Load()), args=[GeneratorExp(elt=BoolOp(op=And(), values=[Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='installed'), ctx=Load()), UnaryOp(op=Not(), operand=Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='head_installed'), ctx=Load())), UnaryOp(op=Not(), operand=Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='acknowledged'), ctx=Load()))]), generators=[comprehension(target=Name(id='event', ctx=Store()), iter=Name(id='faults', ctx=Load()), ifs=[], is_async=0)])], keywords=[])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Call(func=Attribute(value=Name(id='temporary', ctx=Load()), attr='is_file', ctx=Load()), args=[], keywords=[])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Call(func=Attribute(value=Name(id='temporary', ctx=Load()), attr='read_bytes', ctx=Load()), args=[], keywords=[])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertLess', ctx=Load()), args=[Subscript(value=Name(id='head', ctx=Load()), slice=Constant(value='sequence'), ctx=Load()), Subscript(value=Name(id='event', ctx=Load()), slice=Constant(value='sequence'), ctx=Load())], keywords=[])": 1
+    },
+    "test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_plan047_state_authority": {
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Call(func=Attribute(value=Attribute(value=Name(id='state', ctx=Load()), attr='cache', ctx=Load()), attr='reference', ctx=Load()), args=[], keywords=[]), slice=Constant(value='counts'), ctx=Load()), Subscript(value=Name(id='before', ctx=Load()), slice=Constant(value='counts'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertNotEqual', ctx=Load()), args=[Subscript(value=Name(id='attached_ack', ctx=Load()), slice=Constant(value='checkpoints'), ctx=Load()), Subscript(value=Name(id='detached_ack', ctx=Load()), slice=Constant(value='checkpoints'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Subscript(value=Subscript(value=Attribute(value=Attribute(value=Name(id='state', ctx=Load()), attr='consumer', ctx=Load()), attr='current', ctx=Load()), slice=Constant(value='worker'), ctx=Load()), slice=Constant(value=1), ctx=Load()), slice=Constant(value='binding'), ctx=Load()), Attribute(value=Name(id='pub', ctx=Load()), attr='binding', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Call(func=Name(id='any', ctx=Load()), args=[GeneratorExp(elt=Compare(left=Subscript(value=Subscript(value=Subscript(value=Name(id='item', ctx=Load()), slice=Constant(value='rows'), ctx=Load()), slice=Name(id='pid', ctx=Load()), ctx=Load()), slice=Constant(value='ppid'), ctx=Load()), ops=[Eq()], comparators=[Constant(value=1)]), generators=[comprehension(target=Name(id='item', ctx=Store()), iter=Name(id='binding_reads', ctx=Load()), ifs=[], is_async=0)])], keywords=[])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Subscript(value=Name(id='frozen', ctx=Load()), slice=Constant(value='frozen'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Call(func=Attribute(value=Name(id='p', ctx=Load()), attr='recover', ctx=Load()), args=[Name(id='frozen', ctx=Load())], keywords=[]), slice=Constant(value='counts'), ctx=Load()), Subscript(value=Name(id='before', ctx=Load()), slice=Constant(value='counts'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertIsNone', ctx=Load()), args=[Subscript(value=Call(func=Attribute(value=Name(id='p', ctx=Load()), attr='recover', ctx=Load()), args=[Name(id='frozen', ctx=Load())], keywords=[]), slice=Constant(value='acceptance'), ctx=Load())], keywords=[])": 1
+    },
+    "test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_plan047_deadline_steps": {
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertLess', ctx=Load()), args=[Subscript(value=Name(id='now', ctx=Load()), slice=Constant(value=0), ctx=Load()), Name(id='deadline', ctx=Load())], keywords=[])": 3,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertIsNotNone', ctx=Load()), args=[Subscript(value=Name(id='first_recovered', ctx=Load()), slice=Constant(value='first_result'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Subscript(value=Name(id='first_reference', ctx=Load()), slice=Constant(value='counts'), ctx=Load()), slice=Constant(value='produced_lower_bound'), ctx=Load()), Constant(value=1)], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Subscript(value=Name(id='first_reference', ctx=Load()), slice=Constant(value='counts'), ctx=Load()), slice=Constant(value='qualified'), ctx=Load()), Constant(value=1)], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Call(func=Attribute(value=Name(id='e', ctx=Load()), attr='verify_first', ctx=Load()), args=[Name(id='first_value', ctx=Load()), Name(id='segment_request', ctx=Load())], keywords=[keyword(arg='clock', value=Name(id='segment_clock', ctx=Load()))])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Name(id='second_entries', ctx=Load()), List(elts=[BinOp(left=Name(id='deadline', ctx=Load()), op=Add(), right=Name(id='offset', ctx=Load()))], ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Call(func=Name(id='len', ctx=Load()), args=[Name(id='native_entries', ctx=Load())], keywords=[]), Constant(value=1)], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Call(func=Name(id='len', ctx=Load()), args=[Name(id='second_entries', ctx=Load())], keywords=[]), IfExp(test=Name(id='expected_late', ctx=Load()), body=Constant(value=0), orelse=Constant(value=1))], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Attribute(value=Name(id='witness', ctx=Load()), attr='successor', ctx=Load()), List(elts=[], ctx=Load()), Name(id='case', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertIsInstance', ctx=Load()), args=[Attribute(value=Attribute(value=Name(id='worker_failure', ctx=Load()), attr='exception', ctx=Load()), attr='primary_exception', ctx=Load()), IfExp(test=Name(id='expected_late', ctx=Load()), body=Name(id='TimeoutError', ctx=Load()), orelse=Name(id='RuntimeError', ctx=Load()))], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertRaises', ctx=Load()), args=[Name(id='TimeoutError', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Name(id='entries', ctx=Load()), IfExp(test=Name(id='expected_late', ctx=Load()), body=List(elts=[], ctx=Load()), orelse=List(elts=[Constant(value='target')], ctx=Load()))], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertRaises', ctx=Load()), args=[Name(id='RuntimeError', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertIs', ctx=Load()), args=[Attribute(value=Name(id='trace_error', ctx=Load()), attr='exception', ctx=Load()), Name(id='trace_primary', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertNotIn', ctx=Load()), args=[Constant(value='forbidden'), Name(id='entries', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertRaises', ctx=Load()), args=[Name(id='OSError', ctx=Load())], keywords=[])": 2,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertIs', ctx=Load()), args=[Attribute(value=Name(id='close_error', ctx=Load()), attr='exception', ctx=Load()), Name(id='close_primary', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Call(func=Name(id='len', ctx=Load()), args=[Name(id='acquired', ctx=Load())], keywords=[]), Constant(value=2)], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Name(id='closed', ctx=Load()), Name(id='acquired', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Attribute(value=Name(id='close_primary', ctx=Load()), attr='s1_uncertain_descriptors', ctx=Load()), Tuple(elts=[Subscript(value=Name(id='acquired', ctx=Load()), slice=Constant(value=0), ctx=Load())], ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Call(func=Name(id='len', ctx=Load()), args=[Name(id='injection_observations', ctx=Load())], keywords=[]), Constant(value=1), Name(id='name', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Subscript(value=Name(id='injection_observations', ctx=Load()), slice=Constant(value=0), ctx=Load()), slice=Constant(value='returned_at'), ctx=Load()), BinOp(left=Name(id='deadline', ctx=Load()), op=Add(), right=Name(id='offset', ctx=Load()))], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertLess', ctx=Load()), args=[Subscript(value=Subscript(value=Name(id='injection_observations', ctx=Load()), slice=Constant(value=0), ctx=Load()), slice=Constant(value='entered_before'), ctx=Load()), Name(id='deadline', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Name(id='forbidden', ctx=Load()), List(elts=[], ctx=Load()), Name(id='name', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Subscript(value=Attribute(value=Name(id='witness', ctx=Load()), attr='spec', ctx=Load()), slice=Constant(value='target'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Subscript(value=Attribute(value=Name(id='witness', ctx=Load()), attr='spec', ctx=Load()), slice=Constant(value='successor'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertIn', ctx=Load()), args=[Name(id='name', ctx=Load()), Name(id='before_controls', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Attribute(value=Name(id='witness', ctx=Load()), attr='target', ctx=Load()), List(elts=[], ctx=Load()), Call(func=Name(id='dict', ctx=Load()), args=[], keywords=[keyword(arg='case', value=Name(id='case', ctx=Load())), keyword(arg='target', value=Subscript(value=Attribute(value=Name(id='witness', ctx=Load()), attr='spec', ctx=Load()), slice=Constant(value='target'), ctx=Load()))])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Attribute(value=Name(id='witness', ctx=Load()), attr='successor', ctx=Load()), List(elts=[], ctx=Load()), Call(func=Name(id='dict', ctx=Load()), args=[], keywords=[keyword(arg='case', value=Name(id='case', ctx=Load())), keyword(arg='successor', value=Subscript(value=Attribute(value=Name(id='witness', ctx=Load()), attr='spec', ctx=Load()), slice=Constant(value='successor'), ctx=Load()))])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Attribute(value=Name(id='witness', ctx=Load()), attr='spec', ctx=Load()), Subscript(value=Subscript(value=Name(id='before_controls', ctx=Load()), slice=Name(id='name', ctx=Load()), ctx=Load()), slice=Constant(value='spec'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Call(func=Name(id='snapshot_files', ctx=Load()), args=[], keywords=[]), Subscript(value=Name(id='injection_files', ctx=Load()), slice=Constant(value=0), ctx=Load()), Call(func=Name(id='dict', ctx=Load()), args=[], keywords=[keyword(arg='case', value=Name(id='case', ctx=Load())), keyword(arg='reason', value=Constant(value='exact partial bytes unchanged after predecessor'))])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Subscript(value=Name(id='primary_observation', ctx=Load()), slice=Constant(value='error_class'), ctx=Load()), Constant(value='TimeoutError')], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Attribute(value=Name(id='witness', ctx=Load()), attr='target', ctx=Load()), Call(func=Name(id='dict', ctx=Load()), args=[], keywords=[keyword(arg='case', value=Name(id='case', ctx=Load())), keyword(arg='spec', value=Attribute(value=Name(id='witness', ctx=Load()), attr='spec', ctx=Load())), keyword(arg='events', value=Name(id='seen', ctx=Load()))])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Call(func=Name(id='all', ctx=Load()), args=[GeneratorExp(elt=BoolOp(op=And(), values=[Compare(left=Subscript(value=Name(id='row', ctx=Load()), slice=Constant(value='entered'), ctx=Load()), ops=[Lt()], comparators=[Name(id='deadline', ctx=Load())]), Compare(left=Call(func=Attribute(value=Name(id='row', ctx=Load()), attr='get', ctx=Load()), args=[Constant(value='exited'), Name(id='deadline', ctx=Load())], keywords=[]), ops=[Lt()], comparators=[Name(id='deadline', ctx=Load())])]), generators=[comprehension(target=Name(id='row', ctx=Store()), iter=Attribute(value=Name(id='witness', ctx=Load()), attr='target', ctx=Load()), ifs=[], is_async=0)])], keywords=[])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Call(func=Name(id='all', ctx=Load()), args=[GeneratorExp(elt=Subscript(value=Name(id='row', ctx=Load()), slice=Constant(value='completed'), ctx=Load()), generators=[comprehension(target=Name(id='row', ctx=Store()), iter=Attribute(value=Name(id='witness', ctx=Load()), attr='target', ctx=Load()), ifs=[], is_async=0)])], keywords=[])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertTrue', ctx=Load()), args=[Attribute(value=Name(id='witness', ctx=Load()), attr='successor', ctx=Load()), Call(func=Name(id='dict', ctx=Load()), args=[], keywords=[keyword(arg='case', value=Name(id='case', ctx=Load())), keyword(arg='spec', value=Attribute(value=Name(id='witness', ctx=Load()), attr='spec', ctx=Load()))])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[ListComp(elt=Subscript(value=Name(id='row', ctx=Load()), slice=Constant(value='operation'), ctx=Load()), generators=[comprehension(target=Name(id='row', ctx=Store()), iter=Attribute(value=Name(id='witness', ctx=Load()), attr='successor', ctx=Load()), ifs=[], is_async=0)]), List(elts=[Constant(value='frame62_valid_array')], ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertNotIn', ctx=Load()), args=[Subscript(value=Name(id='item', ctx=Load()), slice=Constant(value='fd'), ctx=Load()), Name(id='owned_descriptors', ctx=Load()), Call(func=Name(id='dict', ctx=Load()), args=[], keywords=[keyword(arg='case', value=Name(id='case', ctx=Load())), keyword(arg='descriptor', value=Name(id='item', ctx=Load()))])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Name(id='owned_descriptors', ctx=Load()), Dict(keys=[], values=[]), Call(func=Name(id='dict', ctx=Load()), args=[], keywords=[keyword(arg='case', value=Name(id='case', ctx=Load())), keyword(arg='reason', value=Constant(value='all acquired FDs/streams retired'))])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertFalse', ctx=Load()), args=[Call(func=Name(id='any', ctx=Load()), args=[GeneratorExp(elt=Call(func=Attribute(value=Name(id='item', ctx=Load()), attr='get', ctx=Load()), args=[Constant(value='error_class')], keywords=[]), generators=[comprehension(target=Name(id='item', ctx=Store()), iter=Name(id='descriptor_observations', ctx=Load()), ifs=[], is_async=0)])], keywords=[]), Name(id='case', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Call(func=Name(id='len', ctx=Load()), args=[Name(id='chunk', ctx=Load())], keywords=[]), Subscript(value=Name(id='write', ctx=Load()), slice=Constant(value='bytes'), ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Name(id='content', ctx=Load()), Call(func=Name(id='bytes', ctx=Load()), args=[Name(id='expected', ctx=Load())], keywords=[]), Call(func=Name(id='dict', ctx=Load()), args=[], keywords=[keyword(arg='case', value=Name(id='case', ctx=Load())), keyword(arg='path', value=Name(id='path', ctx=Load())), keyword(arg='reason', value=Constant(value='exact accepted write bytes'))])], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Call(func=Attribute(value=Call(func=Attribute(value=Call(func=Name(id='__import__', ctx=Load()), args=[Constant(value='hashlib')], keywords=[]), attr='sha256', ctx=Load()), args=[Name(id='content', ctx=Load())], keywords=[]), attr='hexdigest', ctx=Load()), args=[], keywords=[]), Call(func=Attribute(value=Call(func=Attribute(value=Call(func=Name(id='__import__', ctx=Load()), args=[Constant(value='hashlib')], keywords=[]), attr='sha256', ctx=Load()), args=[Name(id='expected', ctx=Load())], keywords=[]), attr='hexdigest', ctx=Load()), args=[], keywords=[])], keywords=[])": 1
+    },
+    "test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_plan048_pure_memo": {
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertIsNone', ctx=Load()), args=[Attribute(value=Name(id='memo', ctx=Load()), attr='entry', ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Attribute(value=Name(id='memo', ctx=Load()), attr='retained_bytes', ctx=Load()), Constant(value=0)], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertRaisesRegex', ctx=Load()), args=[Name(id='ValueError', ctx=Load()), Constant(value='metadata changed|source changed')], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Name(id='lookup_calls', ctx=Load()), List(elts=[], ctx=Load())], keywords=[])": 1,
+      "Call(func=Attribute(value=Name(id='self', ctx=Load()), attr='assertEqual', ctx=Load()), args=[Name(id='counts', ctx=Load()), Name(id='before_counts', ctx=Load())], keywords=[])": 1
+    }
+  },
+  "declarations_exact": true,
+  "six_migrations_unchanged": true,
+  "changed_sources": [
+    {
+      "path": "scripts/vipe_benchmark/backends.py",
+      "before": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/backends.py",
+        "bytes": 79630,
+        "sha256": "9ae1e840d7fb8df3dec9b2a17485af16b5596ce3694aacbfc987a83376d5675d"
+      },
+      "after": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/backends.py",
+        "bytes": 81480,
+        "sha256": "f87bff85926d97ca6cee0868b83237090c3015e5e24752c19ba87a1bc2b40419"
+      }
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "before": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_evidence.py",
+        "bytes": 46349,
+        "sha256": "d4b8cdb2e73357d2d11dba5eda2fc08e1f3d3dc200afc1d6f7bf1a9b1e3720c4"
+      },
+      "after": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_evidence.py",
+        "bytes": 48414,
+        "sha256": "14ea47c7cc56418ae7a8e0e7aa442fb7664774d8a8f15b27c558ddcf69c679db"
+      }
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_helper_session.py",
+      "before": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py",
+        "bytes": 64368,
+        "sha256": "76b788988e0c624603fb77cb2df67787773021a6aed3adf3019acdc7d8f5f6b2"
+      },
+      "after": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py",
+        "bytes": 67566,
+        "sha256": "cbced4e7f2376bd84f5dc57da765676dc68f9d93185318b57bb7dce0c243cc19"
+      }
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "before": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_progress.py",
+        "bytes": 74865,
+        "sha256": "e85035f94c9feb0f88cb7e6860df7f87a0d4a2f55170d1310f6d926f24f04156"
+      },
+      "after": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_progress.py",
+        "bytes": 92387,
+        "sha256": "97398476bacdb4383edac2d14457e895a077b933deec5e80ce8d51a7f40e7b23"
+      }
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_validation_capture.py",
+      "before": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_capture.py",
+        "bytes": 3462,
+        "sha256": "f97774a99d8a77c48d821446f006a357322fe8b5c6444d67cec185f8ab6d516a"
+      },
+      "after": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_capture.py",
+        "bytes": 6502,
+        "sha256": "fedfaaa850c6e6c74928a6cf59b29344e13964517145d486d5cc1ee0289469eb"
+      }
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "before": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_contract.py",
+        "bytes": 18812,
+        "sha256": "0839627615446ab9ec6afb574c12ecbf0e964ee7badca8851c0ab2ca007be0f3"
+      },
+      "after": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_contract.py",
+        "bytes": 31568,
+        "sha256": "5b994524dfb56e04f4c40624df9cab3d68aaa41b60f6be84898388213a0522fe"
+      }
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "before": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/stages.py",
+        "bytes": 23952,
+        "sha256": "f1916656fc54245ec6e2a0a81b968c345808a7a07e2fd5ee6ed990c6010613ca"
+      },
+      "after": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/stages.py",
+        "bytes": 27427,
+        "sha256": "dde6e2500cf09f8a2c4d508101a8a6b463069af181ed7f748ce0e99024148a67"
+      }
+    },
+    {
+      "path": "scripts/vipe_benchmark/supervisor.py",
+      "before": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py",
+        "bytes": 29274,
+        "sha256": "eb31eac8ec6c7afa746388175f83672107008385952d5d8a8296edbd1755c8ac"
+      },
+      "after": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py",
+        "bytes": 29239,
+        "sha256": "2319d5beb1731b88eb84cd60c885bf5709a9f63a846adf8f1bd57a80abb08343"
+      }
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "before": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+        "bytes": 25916,
+        "sha256": "bce9574855e3fa5f04ef6137688986b293d42027d110ff26495088979b3639af"
+      },
+      "after": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+        "bytes": 79868,
+        "sha256": "b76d262a07e65970dc6656e600d47812beafa7e341e1564790f7c25f32a87942"
+      }
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "before": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_recovery.py",
+        "bytes": 155540,
+        "sha256": "8e54fe95529ed08dd59be58b34c51f3526cb490e3d19be2f2ed110cb12d04231"
+      },
+      "after": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_recovery.py",
+        "bytes": 167327,
+        "sha256": "1dabc50b6a5659f7494f2b2c95608656e930a1c47bdca89e898217feb8664d0d"
+      }
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "before": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py",
+        "bytes": 270975,
+        "sha256": "05b002722876d0278841f39385d3a161b3cebf0492fac83dd457f654b00b2fec"
+      },
+      "after": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py",
+        "bytes": 310401,
+        "sha256": "aaad7da14251313432f290477271b58d4e51f856581740eeb5cecae62e29f57f"
+      }
+    }
+  ],
+  "frozen_sources_unchanged": true,
+  "diff_check": {
+    "command": [
+      "git",
+      "diff",
+      "--check",
+      "--",
+      "scripts/basketball_vipe_worker.py",
+      "scripts/vipe_benchmark/backends.py",
+      "scripts/vipe_benchmark/s1_cpu_helper.py",
+      "scripts/vipe_benchmark/s1_evidence.py",
+      "scripts/vipe_benchmark/s1_helper_session.py",
+      "scripts/vipe_benchmark/s1_progress.py",
+      "scripts/vipe_benchmark/s1_recovery.py",
+      "scripts/vipe_benchmark/s1_validation_capture.py",
+      "scripts/vipe_benchmark/s1_validation_contract.py",
+      "scripts/vipe_benchmark/stages.py",
+      "scripts/vipe_benchmark/supervisor.py",
+      "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "tests/test_vipe_benchmark_s1_recovery.py",
+      "tests/test_vipe_benchmark_supervisor.py"
+    ],
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "schema": "plan049-correction012-identity-static-preservation/v1",
+  "driver_before": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/implement-049-correction012-before-source-001/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+    "bytes": 13117,
+    "sha256": "b858d3a3787537ed3f58c6167066740c5f5de885379e3591162edc5572d298b0"
+  },
+  "driver_after": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+    "bytes": 18105,
+    "sha256": "ab319bc745be1fbaaa071e9f6228e52928f81ba8a2289e0f4a14f581788d57dc"
+  },
+  "checks": {
+    "row_tasks_AST_exact": true,
+    "all_existing_OS_file_and_process_call_multiset_exact": true,
+    "process_assignment_sequence_exact": true,
+    "process_predicates_exact_and_same_order": true,
+    "contract_and_fixture_exact_single_literal_append": true,
+    "final_if_then_exec_structure_preserved": true,
+    "local_identity_sites": 4
+  },
+  "census_branch_accounting": [
+    {
+      "scope": "process",
+      "before": "row(); tasks(); tasks(); row(); first!=last or threads!=again or not threads",
+      "after": "identical samples followed by same three ordered short-circuit reject branches; no extra samples",
+      "failures": "same ValueError unstable driver identity; note only on failure"
+    },
+    {
+      "scope": "local_identity",
+      "before": "root census; ancestry while census; reject cycle/missing; root recheck OR ancestry list recheck",
+      "after": "same census and loop; same cycle/missing; retained root census rejects before ancestor list is evaluated; retained ancestry list then same inequality",
+      "failures": "same ValueError unstable full driver ancestry; root rejection not_sampled preexisting_ancestors"
+    },
+    {
+      "scope": "outer",
+      "before": "initial, before_note, before_exec_record, immediate_pre_exec each calls local_identity once",
+      "after": "same four points; three outer tuples retained via named expression inside existing if; original !=(root,ancestors) unchanged",
+      "failures": "inner failure propagates without outer fabrication; same three outer ValueError primary messages"
+    }
+  ],
+  "stage_transport": "process.stage metadata set by local_identity; no observations or output; single synchronous driver",
+  "diagnostic_fallback": "BaseException during note construction/attachment cannot replace original ValueError; best-effort diagnostic-unavailable note",
+  "predicate_semantics": "type-aware recursion only after original predicate rejects; never authorizes or rejects independently",
+  "synthetic_fixture_compatibility": "existing AST-extracted local_identity still calls fake process with only pid; final two main nodes remain if then exec; absent helper on synthetic mismatch is caught and original ValueError retained; static inspection only",
+  "examples_status": "documented design examples only; no function executed"
+}

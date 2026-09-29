@@ -1,0 +1,38 @@
+# Plan049 Correction015 source-scope addendum007 — independent plan review 001
+
+**Verdict: NEEDS_REVISION. NO SOURCE OR LAUNCH CLEARANCE.** Addendum007's individual pidfd signals remove the specific numeric PID/PGID reuse exposure identified in source review004 for targets that were successfully identity-pinned. The proposal does not yet define a safe and complete ledger transition and cleanup protocol for the races below. This is a plan-only static review; I did not edit source, import project code, run tests or fixtures, open pidfds, inspect live processes, or launch diagnostics or an aggregate. I did not read `prompts`.
+
+## Exact reviewed inputs
+
+All paths are repository-relative; SHA-256 binds the exact bytes reviewed.
+
+| Input | SHA-256 |
+| --- | --- |
+| `plans/plan_049.md` | `89d1f634ad2407b02558ff9c030d4a4f12f8f4ab010c93e2cf532876564afe7e` |
+| `docs/resolve-blocker/plan031-progress-20260922/plan049-correction-014.md` | `f874eb395b61a5c05f83418ab26c938d65884fed71e18c978f748ec47a13d557` |
+| `docs/resolve-blocker/plan031-progress-20260922/plan049-correction-015.md` | `a3242ed06131aa9ca00bc05180805c8d5bf5ea8d965919b92054154f10a00bab` |
+| `docs/resolve-blocker/plan031-progress-20260922/plan049-correction-015-source-scope-addendum-001.md` | `f08fad270dcea9596d1a4c45a41d13f2f5675f7d51fe464699a1ec4046f0b45e` |
+| `docs/resolve-blocker/plan031-progress-20260922/plan049-correction-015-source-scope-addendum-002.md` | `9a175afcdce5b31c6fa17543f1fe7be6183095cb2f5c6beec0621ce7ad33511e` |
+| `docs/resolve-blocker/plan031-progress-20260922/plan049-correction-015-source-scope-addendum-003.md` | `92e69b78659baa45da6e74c439a0bc18d14450c3d88592aa46ba8d8495d3dd8a` |
+| `docs/resolve-blocker/plan031-progress-20260922/plan049-correction-015-source-scope-addendum-006.md` | `d165e8412005fcbabdf610ad62840c569d7688e01a6f65e08722d8bff370351f` |
+| **`docs/resolve-blocker/plan031-progress-20260922/plan049-correction-015-source-scope-addendum-007.md`** | **`48f32823d66bdf9d822c62289029015feb1dbeb1a55cc08156cf02f63577d492`** |
+| `docs/resolve-blocker/plan031-progress-20260922/validate-049-correction015-nine-path-source-review-004.md` | `d6fea1285f042978a0629fe80f5e795e0b8efc98d5b4b7522227b5996f413229` |
+| `docs/resolve-blocker/plan031-session-proof-wrapper-20260923/correction-014.md` | `3eba8a015cdd31e8c386e44cb8bb44f9e3bd6840f86898da38e475d687fcc36f` |
+| `scripts/vipe_benchmark/supervisor.py` (context only) | `2d04eea77a507392feda918c4003bd9ec599fe8d9325cb1e9feafdba143257ad` |
+| `scripts/vipe_benchmark/s1_helper_session.py` (context only) | `c3326fe0c738e0180b42289f03c52ff8586e9eef86fd242dc3ea3a013a72e106` |
+
+## Blocking findings
+
+1. **A reserved descendant can cross the stop transition without yet being pinnable.** Addendum007 says a reservation serialized before `root-stopping` is “durably bound before the transition and included in cleanup.” In the existing helper-session state machine, `descendant-reserved`, `descendant-bound`, and `descendant-creator-ack` are separate events. A creator can reserve under the lock, release it, and only then call the operating-system create operation. `root-stopping` can be appended in that gap. At that point there is no child PID, handle, identity, or pidfd to include in the signal set; afterward the already authorized creator may still create the child. The proposal does not say whether this outstanding reservation blocks all signals, how the creator is stopped before its OS call, or how a later bind/ack is reconciled with the frozen set. A pre-signal census can be exact while this reserved child is still absent. Specify an atomic creation/stop handshake or an explicit fail-closed rule for every unresolved reservation, with a fresh locked ledger snapshot before signaling and before tree retirement. Preserve the already authorized creation entrypoints and their no-orphan cleanup.
+
+2. **The proposed `root-stopping` state conflicts with the live/waited transition contract.** The current `_job_state` accepts `root-wait` only from `live`; addendum007 asks for `root-stopping` before pinning and also permits a previously `waited` root to clean up descendants. It does not define whether `root-stopping` may follow `waited`, whether the exact root's wait may move `stopping` to `waited`, or how a concurrent matching wait is reconciled without reaping twice. The root can exit during pin acquisition, and the retained handle can then be waited by another existing caller. Without explicit transition order, the proposed waited-root branch is unreachable or fails replay, and pin failure can leave a tree permanently charged even when exact terminal evidence is later available. Define the durable state graph and replay/idempotency rules for live, stopping, waited, and retired, including the exact same-handle repeat path from addendum006. Root retirement must still follow descendant retirement.
+
+3. **A one-time group census is not a closure barrier.** Pidfd signaling is identity-safe for each pinned member, but the proposed census immediately before signaling cannot prove that no new member appears afterward. A root or acknowledged descendant can fork directly or create a process that changes group after the census; the stop transition gates ledger reservations, not the operating-system ability of an already running process to fork or move a child. A final group-empty census detects only members still in that PGID. Thus the plan must explicitly constrain the claim to the registered creation protocol and specify how every existing child-creation entrypoint is quiesced or made to fail closed through terminal proof, including outstanding reservations; otherwise it cannot claim complete tree retirement from the stated evidence. Any untracked or escaped descendant uncertainty must stay charged, consistent with Correction014's logical-tree accounting. This does not require a cgroup or kernel-task bound claim.
+
+4. **Pre-signal work is not explicitly bounded by the original cleanup deadline.** Durable stop append/readback, pidfd acquisitions, identity rechecks, and census may consume the entire existing deadline. Addendum007 preserves the grace duration and absolute deadline but does not require a fresh deadline check immediately before each TERM/KILL pidfd send or prohibit a late TERM after the deadline. State those checks, retain the original cleanup-error precedence, and specify partial-signal/retry state so a failed or expired cleanup does not send later signals from a stale pin set. Do not extend the original deadline.
+
+## Scope and retained gates
+
+The nine-path ceiling is intact on the face of addendum007: it names only `supervisor.py`, `s1_helper_session.py`, and existing supervisor tests, all within addenda001–003/006's nine paths. It preserves the intended legacy no-ledger branch, the original behavioral deadlines/assertions, CPU-only scope, `B+max(1,H)≤8`, artifact and memo caps, and the ordered authority proposal: Corrections001–015, addenda001–003/006 as records16–19, then prospective addendum007 as record20. Those are plan statements, not exact-source findings. The already-retired same-handle path must remain signal-free in ledger mode; the legacy group-signal path must retain its original behavior and caller coverage.
+
+Revise this proposal and obtain a new independent plan review before seeking user authorization or Main adoption. A plan PASS would still grant no source edit, fixture, test, pidfd operation, diagnostic, aggregate, admission, or launch clearance. After any authorized implementation, a separate exact-source review and fresh source, capacity, ownership, artifact, path, and high-water preflight remain required.

@@ -1,0 +1,58 @@
+--- before/scripts/vipe_benchmark/s1_validation_contract.py
++++ after/scripts/vipe_benchmark/s1_validation_contract.py
+@@ -582,7 +582,7 @@
+     request=session_json(identity_request['path'])
+     typed_binding(request)
+     require(request==dict(schema='plan049-prospective-identity/v1',kind=note['kind'],index=note['attempt_index'],driver=driver,**{key:note[key] for key in ('ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths')}),'exact pre-admission identity request')
+-    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md')]
++    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md')]
+     require(command_bindings.get('addenda')==addenda and all(row in bindings for row in addenda),'current correction authority')
+     proof_record=strict_record(command_bindings.get('session_proof'))
+     proof=session_proof(proof_record,note['kind'],note['attempt_index'],driver,identity_request,admission_record['path'],admission['reason'])
+--- before/tests/test_vipe_benchmark_s1_recovery.py
++++ after/tests/test_vipe_benchmark_s1_recovery.py
+@@ -807,7 +807,7 @@
+                     identity_path=graph.root/'synthetic-prospective-identity.json'
+                     identity_path.write_text(json.dumps(dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**identity_fields)))
+                     identity_request=file_record(identity_path)
+-                    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md')]
++                    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md')]
+                     settings={key:'1' for key in (*c.THREADS,'OPENCV_FOR_THREADS_NUM','VIPE_CPU_VALIDATION')};settings['PYTHONPATH']=str(ROOT/'scripts')
+                     # Synthetic file-routing seam: fixed logical R paths backed by
+                     # this disposable fixture only. No Main evidence is published.
+--- before/tests/test_vipe_benchmark_supervisor.py
++++ after/tests/test_vipe_benchmark_supervisor.py
+@@ -2062,8 +2062,20 @@
+                 with self.subTest(**case):
+                     kind=case['kind']
+                     if kind=='deadline':
+-                        result=e.reconcile_rows(output,fixture['request'],deadline=0)
+-                        self.assertFalse(result['scan_complete']);self.assertEqual(result['counts']['produced_lower_bound'],0)
++                        # D49-2: exact expired public entry, not a returned scan.
++                        from contextlib import ExitStack
++                        suffix=[];spies=[]
++                        def forbidden(name,*args,**kwargs):
++                            suffix.append(name)
++                            raise AssertionError('expired reconciliation entered forbidden suffix: '+name)
++                        with ExitStack() as stack:
++                            for module,name in ((e,'_reconcile_rows'),(e,'input_loader'),(p,'candidate_inventory'),(e,'produced_row'),(e,'qualify_row')):
++                                spy=stack.enter_context(patch.object(module,name,side_effect=lambda *args,_name=name,**kwargs:forbidden(_name,*args,**kwargs)))
++                                spies.append((name,spy))
++                            with self.assertRaisesRegex(TimeoutError,'^progress original work deadline$'):
++                                e.reconcile_rows(output,fixture['request'],deadline=0)
++                            for name,spy in spies:self.assertEqual(spy.call_count,0,name)
++                            self.assertEqual(suffix,[])
+                     elif kind=='symlink':
+                         link=output/'alias-produced-row.json';link.symlink_to(output/'one-produced-row.json')
+                         try:
+--- before/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py
++++ after/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py
+@@ -121,7 +121,7 @@
+     if type(B) is not int or type(H) is not int or min(B,H)<0 or B+max(1,H)>8 or type(capacity.get('charge')) is not int or capacity['charge']!=B+max(1,H):raise ValueError('main resource capacity proof')
+     if type(capacity.get('artifact_bytes')) is not int or not 0<=capacity['artifact_bytes']<=150*1024**3:raise ValueError('artifact cap proof')
+     if [r['path'] for r in sources]!=admission['source_paths'] or sources!=admission['sources']:raise ValueError('main source snapshot changed')
+-    addenda=[record(RUN/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md')]
++    addenda=[record(RUN/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md')]
+     proof_record=record(RUN/('main-session-proof-049-'+suffix+'.json'))
+     proof=session_proof(proof_record,kind,index,record(Path(__file__)),identity_request,str(admission_path),reason)
+     expected=dict(session_proof=proof_record,plan=plan,dispatch=record(dispatch_path),status=status,authorization=authorization,driver=record(Path(__file__)),command=command,environment=settings,stdin=dict(bytes=len(stdin),sha256=hashlib.sha256(stdin).hexdigest()),run_directory=str(directory),identity_request=identity_request,addenda=addenda,**identity_binding)

@@ -1,0 +1,43 @@
+# Independent Correction015 plan review
+
+**Clear for implementation of its exact stated scope. No blocking plan finding. Launch-ready=false; acceptance-ready=false.** This is approval of the repair/investigation decisions and their stop conditions, not a claim that F1/F7/F8/F10 have established passing fixes. Source work, distinct exact-source review and Main-owned fresh runtime evidence remain pending.
+
+Reviewer `/root/blocker_review` inspected the plan, planning record, Plan049 authorization, controlling diagnostic005 report/audit and relevant current source. No plan/source edits, project imports, tests, profiling, launches, session actions, production access or git operations occurred. Only this report and its audit were written; no prompts were read.
+
+**Verified bindings.** The [audit](validate-049-correction015-plan-review-audit-001.json) is43692 bytes, SHA256 `4767da2c7ced9c2e54836da344974b76b1ec2a8f9d452d3de163d68a5ef78ea1`. It independently rehashes167 distinct records, including all78 diagnostic005 source members and the76 principal diagnostic evidence records, with zero mismatches. Principal inputs:
+
+| Input | SHA256 |
+| --- | --- |
+| [Correction015](plan049-correction-015.md) | `a3242ed06131aa9ca00bc05180805c8d5bf5ea8d965919b92054154f10a00bab` |
+| [Planning record](planning-049-correction015.json) | `1364eac660ac686e48617347ea025e6cedd229407cb39d2506be534ff6bc34ba` |
+| [Diagnostic005 report](validate-049-diagnostic005-report-001.md) | `049a6ff8fc633d8055c8b41a364f2e207df0fd09808380624b915f384b3e7f89` |
+| [Diagnostic005 audit](validate-049-diagnostic005-audit-001.json) | `a6797c137d9f2851945f3507e1ac4579bf0b8cba873d5637c52d671859d24883` |
+| [Timestamp annotation](main-diagnostic-timestamp-correction-049-diagnostic-005.json) | `a5756ec08de344b0274f401385cc310450a9bbe50b17d75694d398676ca692c0` |
+| [Plan049](../../../plans/plan_049.md) | `a27329ee5c9d9439515093e6797ad72f61bd6faf1e43c5f45f2b2cf4c013cc1f` |
+
+**Each finding has a faithful disposition.**
+
+| Finding | Independent assessment |
+| --- | --- |
+| F1 | Correctly treats initial readiness as masking actual reserve. Permits only proven pure-fixture repair/observations under unchanged0.15/0.3/0.5 and2/1 bounds. Missing startup-cost explanation is explicitly unresolved, not permission to relax the error/clock. |
+| F2 | Source supports the chosen no-op removal: supervisor currently resumes then unconditionally calls await_ready; Session.await_ready performs no tick or health gate once both roles are ready. Exact fixed-role readiness, resume and subsequent submit/deadline/poison checks must remain. Original timing observer stays unchanged. |
+| F3 | Extends the existing exact-spelling interpreter adapter within fixture scope, with pinned target/bytes/manifest, independent child verification and fresh guarded checks. It preserves the original invocation and no-follow behavior for all other paths. Helper propagation is explicit; inability to achieve this within scope is a stop for a new plan. |
+| F4 | Correctly satisfies both W and completed+0.5 by moving fixture time before real predecessor publication, so completed is freshly captured. W/C, reservation3600, equality offsets, freshness and original assertion expressions remain fixed. |
+| F5 | Explicit iterator-protocol forwarding repairs the actual wrapper deficiency while retaining stream errors, descriptor ownership and observation. No production ledger change. |
+| F6 | Requires actual valid acceptance before completion controls rather than inheriting an earlier callback's success. No fabricated acceptance or smaller full fixture. |
+| F7 | Makes the unresolved observation testable: acquisition-generation identities, comprehensive all-resource events and one explicitly selected-resource fault. The literal count-one assertion is retained with defined resource scope. Same-resource duplicate retirement cannot be relabeled or deduplicated; it requires a new production-source plan. |
+| F8 | Requires semantic operation/path context, preserving all load calls and separately gating failure-preservation reads. It does not assume the second005 label is harmless. Two actual successors or late diagnostic I/O require a new production-source plan. |
+| F9 | Source supports the explicit transient-fixture decision: Consumer records credentialed intended successor before its first read, TimeoutError is already exempt from integrity freezing, and recover still rejects unverified references. The existing OSError assertion accepts that subtype; all111 nested cases stay intact. An independent ordinary-OSError negative control prevents loss of the integrity-failure case. |
+| F10 | Correctly leaves the timing repair unproved. It permits call-graph inspection and measured pure-work removal only; no boundary shift, tolerance, earlier synthetic cutoff, shortened fault or cleanup subtraction. Altering action/safety semantics requires explicit authorization. |
+
+Relevant inspected source: [supervisor.py](../../../scripts/vipe_benchmark/supervisor.py) lines169–179; [s1_helper_session.py](../../../scripts/vipe_benchmark/s1_helper_session.py) lines915–921/1126–1137; [s1_progress.py](../../../scripts/vipe_benchmark/s1_progress.py) lines835–862/917–941; [helper fixtures](../../../tests/test_vipe_benchmark_s1_helper_fixtures.py) progress_operation, plan047_full_fixture and backend_retirement_transition_controls; [supervisor tests](../../../tests/test_vipe_benchmark_supervisor.py) admission_rejected, nested controls and deadline witnesses. Exact hashes are in the audit.
+
+**Authorization, scope and ordering are consistent.** Plan049 removes operational duration/attempt ceilings, not behavioral deadlines. Correction015 introduces no assertion exception and retains the earlier individually authorized exceptions. Its six permitted files have distinct purposes: two fixture/test files, supervisor's F2 branch only, and three mechanical authority-list updates through001–015. Other production sources remain read-only pending a reviewed narrow addendum. Scope extensions within the existing CPU task require reviewed planning; changed deadlines/assertions/authority or scientific scope require explicit user authorization. This matches the existing authorization and does not create a new permission mode.
+
+Plan review precedes implementation, which precedes distinct source review, which precedes any Main-owned fresh diagnostic006 or later vacant index. Conditional diagnostic readiness may investigate explicitly identified remaining hypotheses with reviewed changed instrumentation; it cannot imply acceptance. No blind unchanged rerun or speculative aggregate is allowed. The driver/contract/positive fixture must agree on the exact ordered addenda and hashes; no identity, tool-session, sampler, permission, transport or comparison change is opened by015. Correction014's sole non-root-ancestor thread-list exception remains bounded; root/task/full ancestor-process identity controls remain strict.
+
+**B1–B4 remain unmet/unaccepted pending evidence.** The plan retains all114 boundary witnesses, full recovery/numerical/ownership coverage, all42 real scenarios and six P outcomes. Final B3 requires one current-source whole aggregate with249 methods/1028 typed callbacks, six scripts, full510/340/170 guards, zero failures/errors/skips/discovery errors, actual outer exit0/completed wait and resolved ownership. There is no operational duration criterion. B4 still requires exact scope preservation, CPU/concurrency/storage/memo bounds and complete ownership evidence; this CPU task gives no scientific or production authorization.
+
+Diagnostic005 counts, unreached111 callbacks, sampled-versus-continuous resource distinction and unknown cumulative CPU accounting are faithfully preserved. The timestamp annotation is correctly applied: ADMIT input delivery is causally bounded, exact call timestamps remain unknown, and poll003 alone supplies the actual terminal tool event. Future timestamps must be observed contemporaneously or labeled uncertain without fabricated values or silent schema relaxation.
+
+**Exact blockers: none at plan stage.** Conditional implementation stops remain F1/F10 unsupported timing fixes, F7 actual same-resource duplication, F8 actual duplicate/late production work, F3 required production semantics, F9 any demonstrated source/intent contradiction, or any incompatible preserved requirement. These are explicitly governed by015 rather than left as implementer discretion to weaken criteria. They must be reported in handoff and cannot be marked resolved merely because implementation is authorized.

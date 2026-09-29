@@ -1,0 +1,25 @@
+{
+  "issue": "Initial final-check assertion incorrectly required unittest-style assertions inside named_deadline_witness; that helper uses explicit raise AssertionError tripwires. Collected method owns unittest assertions.",
+  "initial_result": "AssertionError before final inspection/duration/manifest writes",
+  "resolution": "Static check now binds actual helper raise tripwire AST and collected method assertion AST separately.",
+  "tripwires": [
+    {
+      "line": 1128,
+      "expression": "raise AssertionError('named ' + role + ' entered at deadline: ' + name + '/' + attribute)"
+    },
+    {
+      "line": 1168,
+      "expression": "raise AssertionError('named stream operation entered late: ' + name)"
+    },
+    {
+      "line": 1181,
+      "expression": "raise AssertionError('named socket successor entered late')"
+    },
+    {
+      "line": 1224,
+      "expression": "raise AssertionError('missing named deadline witness ' + name)"
+    }
+  ],
+  "source_edits": false,
+  "runtime_execution": false
+}

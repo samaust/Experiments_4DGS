@@ -1,0 +1,14 @@
+--- correction006-before/launch-049-exec.py
++++ correction006-after/launch-049-exec.py
+@@ -95,9 +95,9 @@
+     if type(B) is not int or type(H) is not int or min(B,H)<0 or B+max(1,H)>8 or capacity.get('charge')!=B+max(1,H):raise ValueError('main resource capacity proof')
+     if type(capacity.get('artifact_bytes')) is not int or not 0<=capacity['artifact_bytes']<=150*1024**3:raise ValueError('artifact cap proof')
+     if [r['path'] for r in sources]!=admission['source_paths'] or sources!=admission['sources']:raise ValueError('main source snapshot changed')
+-    addenda=[record(RUN/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md')]
++    addenda=[record(RUN/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md')]
+     expected=dict(plan=plan,dispatch=record(dispatch_path),status=status,authorization=authorization,driver=record(Path(__file__)),command=command,environment=settings,stdin=dict(bytes=len(stdin),sha256=hashlib.sha256(stdin).hexdigest()),run_directory=str(directory),identity_request=identity_request,addenda=addenda,**identity_binding)
+-    if admission.get('bindings')!=expected:raise ValueError('main immutable command/authority/identity binding')
++    if json.dumps(admission.get('bindings'),sort_keys=True,allow_nan=False)!=json.dumps(expected,sort_keys=True,allow_nan=False):raise ValueError('main immutable typed command/authority/identity binding')
+     if process(os.getpid())!=root or [process(row['pid']) for row in ancestors]!=ancestors:raise ValueError('Main prospective identity changed')
+     if capacity['B']!=len(root['threads']) or capacity['H']!=0:raise ValueError('Main live driver capacity mismatch')
+     bindings=[plan,record(dispatch_path),status,authorization,record(admission_path),identity_request]+addenda

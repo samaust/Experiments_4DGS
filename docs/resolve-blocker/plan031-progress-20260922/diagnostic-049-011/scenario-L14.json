@@ -1,0 +1,199 @@
+{
+  "scenario": "L14",
+  "mode": "wrong_role",
+  "constructor_entry": 7800.955826717,
+  "action_cutoff": 7802.955826717,
+  "safety_cutoff": 7803.955826717,
+  "constructor_end": 7800.969342213,
+  "t0": 7800.955849711,
+  "ready_deadline": 7801.035849711,
+  "setup_deadline": 7801.135849711,
+  "setup_cleanup_deadline": 7801.255849711,
+  "action_end": 7801.01317496,
+  "end": 7801.020070829,
+  "execution_seconds": 0.05734824299997854,
+  "cleanup_seconds": 0.006895869000800303,
+  "cleanup_confirmed": false,
+  "records": {
+    "work": {
+      "role": "work",
+      "state": "spawning",
+      "pid": null
+    },
+    "sample": {
+      "role": "sample",
+      "state": "pending",
+      "pid": null
+    }
+  },
+  "errors": [
+    {
+      "error_class": "ValueError",
+      "message": "owned dispatch/plan/status binding",
+      "phase": "startup"
+    }
+  ],
+  "signals": [],
+  "ticks": [
+    7800.955849711,
+    7800.969352411,
+    7800.980662266,
+    7800.985755133
+  ],
+  "events": [
+    {
+      "event": "fixture_spawn_entry",
+      "role": "work",
+      "observed": 7800.961187256,
+      "ready_deadline": 7801.035849711
+    }
+  ],
+  "trace_facts": {
+    "capacity": 256,
+    "total": 1,
+    "dropped": 0,
+    "saturated": false,
+    "first": 7800.961187815,
+    "last": 7800.961187815
+  },
+  "tick_facts": {
+    "capacity": 128,
+    "total": 4,
+    "dropped": 0,
+    "saturated": false,
+    "first": 7800.955854068,
+    "last": 7800.985755658
+  },
+  "owner_error_facts": {
+    "capacity": 32,
+    "total": 1,
+    "dropped": 0,
+    "saturated": false,
+    "first": 7800.984097277,
+    "last": 7800.984097277
+  },
+  "owner_signal_facts": {
+    "capacity": 128,
+    "total": 0,
+    "dropped": 0,
+    "saturated": false,
+    "first": null,
+    "last": null
+  },
+  "request_counts": {
+    "work": {
+      "dispatch": 0,
+      "response": 0
+    },
+    "sample": {
+      "dispatch": 0,
+      "response": 0
+    }
+  },
+  "census_request_count": 0,
+  "max_gap": 0.013502699999662582,
+  "max_turn": 2.1085000298626255e-05,
+  "call_observations": [
+    {
+      "operation": "tick",
+      "entered": 7800.969351937,
+      "deadline": 7801.035849711,
+      "returned": 7800.969370953,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "tick",
+      "entered": 7800.980659715,
+      "deadline": 7801.035849711,
+      "returned": 7800.980684209,
+      "confirmed": null,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "tick",
+      "entered": 7800.985753304,
+      "deadline": 7801.035849711,
+      "returned": 7800.985764628,
+      "confirmed": null,
+      "error": "RuntimeError: S1 helper session poisoned: [{'error_class': 'ValueError', 'message': 'owned dispatch/plan/status binding', 'phase': 'startup'}]",
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "await_ready",
+      "entered": 7800.969350126,
+      "deadline": 7801.035849711,
+      "returned": 7800.985768072,
+      "confirmed": null,
+      "error": "RuntimeError: S1 helper session poisoned: [{'error_class': 'ValueError', 'message': 'owned dispatch/plan/status binding', 'phase': 'startup'}]",
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "close",
+      "entered": 7800.985775045,
+      "deadline": 7801.255849711,
+      "returned": 7801.013166151,
+      "confirmed": false,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    },
+    {
+      "operation": "close",
+      "entered": 7801.013176859,
+      "deadline": 7803.955826717,
+      "returned": 7801.020067372,
+      "confirmed": false,
+      "error": null,
+      "ready_before": [],
+      "ready_after": []
+    }
+  ],
+  "call_observation_facts": {
+    "capacity": 128,
+    "total": 6,
+    "dropped": 0,
+    "saturated": false,
+    "first": 7800.969372038,
+    "last": 7801.020068842
+  },
+  "timing_failures": [],
+  "last_sample": null,
+  "requests": {
+    "work": null,
+    "sample": null
+  },
+  "ownership": [
+    {
+      "role": "work",
+      "state": "spawning",
+      "pid": null,
+      "ownership_unknown": true
+    }
+  ],
+  "wire": {
+    "work": {
+      "sent": 0,
+      "received": 0,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 0,
+      "last_frame": null
+    },
+    "sample": {
+      "sent": 0,
+      "received": 0,
+      "blocked_writes": 0,
+      "peek": 0,
+      "combined": 0,
+      "last_frame": null
+    }
+  },
+  "secondary": []
+}

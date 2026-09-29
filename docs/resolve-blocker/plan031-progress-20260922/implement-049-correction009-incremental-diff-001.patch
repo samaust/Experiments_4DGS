@@ -1,0 +1,131 @@
+--- before/scripts/vipe_benchmark/s1_validation_contract.py
++++ after/scripts/vipe_benchmark/s1_validation_contract.py
+@@ -487,9 +487,16 @@
+         require(not result.get('truncated') and not result.get('output_truncated') and 'truncated' not in result['output'].lower(),'untruncated tool output')
+         if ordinal==0:
+             require(event['tool']=='exec_command' and type(args.get('cmd')) is str,'session start command')
+-            require(shlex.split(args['cmd'])==['exec',str(ROOT/ARGV[0]),'-B',driver['path'],kind,str(index),reason],'exact sole driver exec command')
+-            require(args.get('workdir')==str(ROOT) and args.get('tty') is True and args.get('sandbox_permissions') in ('use_default','require_escalated'),'explicit start cwd/tty/permission')
+-            require('env' not in args and 'environment' not in args,'environment supplied by fixed driver')
++            expected_command=shlex.join(['exec',str(ROOT/ARGV[0]),'-B',driver['path'],kind,str(index),reason])
++            require(args['cmd']==expected_command,'exact sole driver exec command')
++            # Token equivalence cannot prove shell structure (exec followed by
++            # a newline is two commands). Bind exact quoting and shell options.
++            fixed_start=dict(shell='/bin/bash',login=False,workdir=str(ROOT),tty=True,
++                             sandbox_permissions='use_default',yield_time_ms=1000)
++            require(set(args)==set(fixed_start)|{'cmd','max_output_tokens'},'exact start argument fields')
++            for key,expected_value in fixed_start.items():
++                require(type(args[key]) is type(expected_value) and args[key]==expected_value,'exact start argument: '+key)
++            require(type(args['max_output_tokens']) is int and args['max_output_tokens']>0,'exact positive start output budget')
+         else:
+             require(event['tool']=='write_stdin' and type(args.get('session_id')) is int and args['session_id']==handle and args.get('chars')=='' and type(args.get('chars')) is str,'same-session empty live poll')
+         require(type(args.get('yield_time_ms')) is int and 0<args['yield_time_ms']<=60000,'responsive poll yield')
+--- before/tests/test_vipe_benchmark_s1_recovery.py
++++ after/tests/test_vipe_benchmark_s1_recovery.py
+@@ -836,7 +836,7 @@
+                     readiness=json.dumps(dict(awaiting_main_admission=logical_admission,identity_request=identity_request))
+                     session_events=[];event_paths=[]
+                     for ordinal,role in enumerate(('start','pre_admission','at_admission')):
+-                        args=dict(cmd=shlex.join(['exec',str(ROOT/c.ARGV[0]),'-B',driver['path'],'aggregate','1000','synthetic contract fixture; no execution performed']),workdir=str(ROOT),tty=True,sandbox_permissions='use_default',yield_time_ms=1000) if ordinal==0 else dict(session_id=12345,chars='',yield_time_ms=1000)
++                        args=dict(cmd=shlex.join(['exec',str(ROOT/c.ARGV[0]),'-B',driver['path'],'aggregate','1000','synthetic contract fixture; no execution performed']),shell='/bin/bash',login=False,workdir=str(ROOT),tty=True,sandbox_permissions='use_default',yield_time_ms=1000,max_output_tokens=10000) if ordinal==0 else dict(session_id=12345,chars='',yield_time_ms=1000)
+                         output=readiness+'\n' if ordinal==0 else ''
+                         session_events.append(dict(schema='plan049-session-tool-event/v1',kind='aggregate',index=1000,ordinal=ordinal,role=role,tool='exec_command' if ordinal==0 else 'write_stdin',arguments=args,
+                             result=dict(session_id=12345,output=output,wall_time_seconds=1.),started=dict(utc=f'2026-01-01T00:00:0{ordinal*2}+00:00',monotonic=ordinal*2),returned=dict(utc=f'2026-01-01T00:00:0{ordinal*2+1}+00:00',monotonic=ordinal*2+1),output_sha256=hashlib.sha256(output.encode()).hexdigest()))
+@@ -941,6 +941,52 @@
+                     for event,(logical,physical) in zip(session_events,event_paths):physical.write_text(json.dumps(event))
+                     proof_path.write_text(json.dumps(proof));admission_path.write_text(json.dumps(admission));note_path.write_text(json.dumps(note))
+                     self.assertEqual(c.session_proof(proof_reference,'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])['proof_mode'],'session-bound/v1')
++                    # Canonical start acceptance is established above. Preserve
++                    # raw command bytes: shell structure is not argv equivalence.
++                    for fault in ('newline','chain','prefix','command','cwd','tty','permission','yield','yield_bool','shell','shell_options','login','login_int','missing_shell','extra_option','output_bool','output_zero'):
++                        changed_events=copy.deepcopy(session_events);args=changed_events[0]['arguments']
++                        if fault=='newline':args['cmd']=args['cmd'].replace('exec ','exec\n',1)
++                        elif fault=='chain':args['cmd']+='; true'
++                        elif fault=='prefix':args['cmd']=' '+args['cmd']
++                        elif fault=='command':args['cmd']=args['cmd'].replace(' -B ',' -I ',1)
++                        elif fault=='cwd':args['workdir']=str(graph.root)
++                        elif fault=='tty':args['tty']=False
++                        elif fault=='permission':args['sandbox_permissions']='require_escalated'
++                        elif fault=='yield':args['yield_time_ms']=1001
++                        elif fault=='yield_bool':args['yield_time_ms']=True
++                        elif fault=='shell':args['shell']='/bin/sh'
++                        elif fault=='shell_options':args['shell']='/bin/bash -c'
++                        elif fault=='login':args['login']=True
++                        elif fault=='login_int':args['login']=0
++                        elif fault=='missing_shell':args.pop('shell')
++                        elif fault=='extra_option':args['environment']={}
++                        elif fault=='output_bool':args['max_output_tokens']=True
++                        else:args['max_output_tokens']=0
++                        expected_error='exact sole driver exec command' if fault in ('newline','chain','prefix','command') else 'exact start argument fields' if fault in ('missing_shell','extra_option') else 'exact positive start output budget' if fault in ('output_bool','output_zero') else 'exact start argument: '+{'cwd':'workdir','tty':'tty','permission':'sandbox_permissions','yield':'yield_time_ms','yield_bool':'yield_time_ms','shell':'shell','shell_options':'shell','login':'login','login_int':'login'}[fault]
++                        changed_proof=copy.deepcopy(proof);refs=[]
++                        for event,(logical,physical) in zip(changed_events,event_paths):physical.write_text(json.dumps(event));refs.append(routed_record(logical))
++                        changed_proof['tool_events']=refs;proof_path.write_text(json.dumps(changed_proof))
++                        with self.assertRaises(ValueError) as rejected:c.session_proof(routed_record(logical_proof),'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])
++                        self.assertEqual(str(rejected.exception),expected_error)
++                    # A readiness line may span tool results; only its complete
++                    # line event precedes both mandatory live polls.
++                    split_events=[copy.deepcopy(session_events[0]),copy.deepcopy(session_events[1]),copy.deepcopy(session_events[1]),copy.deepcopy(session_events[2])]
++                    split_paths=list(event_paths)+[(str(run/'main-session-049-aggregate-1000-event-003.json'),graph.root/'synthetic-session-event-3.json')]
++                    logical_files[split_paths[-1][0]]=split_paths[-1][1]
++                    for ordinal,event in enumerate(split_events):
++                        event['ordinal']=ordinal;event['role']=('start','readiness','pre_admission','at_admission')[ordinal]
++                        event['started']=dict(utc=f'2026-01-01T00:00:0{ordinal*2}+00:00',monotonic=ordinal*2)
++                        event['returned']=dict(utc=f'2026-01-01T00:00:0{ordinal*2+1}+00:00',monotonic=ordinal*2+1)
++                        event['result']['output']=readiness[:17] if ordinal==0 else readiness[17:]+'\n' if ordinal==1 else ''
++                        event['output_sha256']=hashlib.sha256(event['result']['output'].encode()).hexdigest()
++                        split_paths[ordinal][1].write_text(json.dumps(event))
++                    split_proof=copy.deepcopy(proof);split_proof['readiness_event']=1;split_proof['tool_events']=[routed_record(logical) for logical,physical in split_paths]
++                    proof_path.write_text(json.dumps(split_proof))
++                    self.assertEqual(c.session_proof(routed_record(logical_proof),'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])['readiness_event'],1)
++                    split_proof['readiness_event']=0;proof_path.write_text(json.dumps(split_proof))
++                    with self.assertRaisesRegex(ValueError,'readiness event correlation'):c.session_proof(routed_record(logical_proof),'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])
++                    for event,(logical,physical) in zip(session_events,event_paths):physical.write_text(json.dumps(event))
++                    proof_path.write_text(json.dumps(proof))
+                     # Compile the actual driver branches; all process/input/exec
+                     # seams are pure, with no subprocess or observer creation.
+                     import ast,io,types
+@@ -1028,6 +1074,8 @@
+                     identity_faults=('process_ppid_bool','process_extra','process_missing','threads_before_bool','threads_after_missing','thread_extra','thread_identity_substitution','terminal_ppid_bool')
+                     for location in ('note','main_binding','identity_request'):
+                         for fault in identity_faults:
++                            # Same routed graph must pass before this one-field fault.
++                            self.assertEqual(c.no_timeout_launch(file_record(note_path),str(graph.root)),note)
+                             changed_note=copy.deepcopy(note);changed_admission=copy.deepcopy(admission)
+                             request_doc=json.loads(identity_path.read_text())
+                             selected=changed_note if location=='note' else changed_admission['bindings'] if location=='main_binding' else request_doc
+@@ -1040,14 +1088,31 @@
+                             elif fault=='thread_extra':ancestor['threads_before'][0]['extra']=0
+                             elif fault=='thread_identity_substitution':ancestor['threads_after'][0]['start_ticks']=2
+                             else:selected['ancestry_terminal']['ppid']=False
+-                            identity_path.write_text(json.dumps(request_doc));request_ref=file_record(identity_path)
++                            identity_path.write_text(json.dumps(request_doc));request_ref=routed_record(logical_identity)
++                            changed_proof=copy.deepcopy(proof);changed_events=copy.deepcopy(session_events)
++                            changed_proof['identity_request']=request_ref
++                            changed_proof['readiness_line']=json.dumps(dict(awaiting_main_admission=logical_admission,identity_request=request_ref))
++                            changed_proof['readiness_line_sha256']=hashlib.sha256(changed_proof['readiness_line'].encode()).hexdigest()
++                            changed_events[0]['result']['output']=changed_proof['readiness_line']+'\n'
++                            refs=[]
++                            for event,(logical,physical) in zip(changed_events,event_paths):
++                                event['output_sha256']=hashlib.sha256(event['result']['output'].encode()).hexdigest()
++                                physical.write_text(json.dumps(event));refs.append(routed_record(logical))
++                            changed_proof['tool_events']=refs;proof_path.write_text(json.dumps(changed_proof));changed_proof_ref=routed_record(logical_proof)
+                             changed_admission['bindings']['identity_request']=request_ref
+-                            admission_path.write_text(json.dumps(changed_admission));admission_ref=file_record(admission_path)
++                            changed_admission['bindings']['session_proof']=changed_proof_ref
++                            admission_path.write_text(json.dumps(changed_admission));admission_ref=routed_record(logical_admission)
+                             changed_note['admission']=admission_ref
+-                            changed_note['bindings']=[admission_ref if row==admitted else request_ref if row==identity_request else row for row in changed_note['bindings']]
++                            changed_note['bindings']=[admission_ref if row==admitted else request_ref if row==identity_request else changed_proof_ref if row==proof_reference else row for row in changed_note['bindings']]
+                             note_path.write_text(json.dumps(changed_note))
+-                            with self.assertRaises(ValueError):c.no_timeout_launch(file_record(note_path),str(graph.root))
++                            expected_error={'process_ppid_bool':'parent identity required','process_extra':'exact nested process fields','process_missing':'exact nested process fields',
++                                'threads_before_bool':'exact positive thread identity: pid','threads_after_missing':'exact thread identity fields','thread_extra':'exact thread identity fields',
++                                'thread_identity_substitution':'stable thread identities around enumeration','terminal_ppid_bool':'typed ancestry terminal'}[fault]
++                            with self.assertRaises(ValueError) as rejected:c.no_timeout_launch(file_record(note_path),str(graph.root))
++                            self.assertEqual(str(rejected.exception),expected_error)
+                             identity_path.write_text(json.dumps(dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**identity_fields)))
++                            for event,(logical,physical) in zip(session_events,event_paths):physical.write_text(json.dumps(event))
++                            proof_path.write_text(json.dumps(proof));admission_path.write_text(json.dumps(admission));note_path.write_text(json.dumps(note))
+                     admission_path.write_text(json.dumps(admission));note_path.write_text(json.dumps(note))
+                     for fault in ('returncode_bool','completed_int','absent_int','missing','extra','identity_nested_bool','before_process_bool','after_thread_bool','retired_snapshot_bool','retirement_process_float','retirement_thread_float'):
+                         candidate=copy.deepcopy(valid);retirement=candidate['creation']['retirement']

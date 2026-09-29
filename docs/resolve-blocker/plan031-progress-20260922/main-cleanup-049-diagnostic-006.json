@@ -1,0 +1,37 @@
+{
+  "schema": "plan049-main-cleanup-reconciliation/v1",
+  "observed_utc": "2026-09-23T20:59:17Z",
+  "attempt": {
+    "kind": "diagnostic",
+    "index": 6,
+    "prior_state_record": "main-launch-state-049-diagnostic-006.json",
+    "prior_state_sha256": "269571a3222d2ed060f47568e03aad1df36bb7cec02446100d2a40d115daad1e"
+  },
+  "checks": [
+    {
+      "command": "pgrep -af '[l]aunch-049-exec.py diagnostic 6' || true",
+      "result": "exit 0; no matching process output"
+    },
+    {
+      "command": "ps -p 140549 -o pid,ppid,pgid,sid,lstart,stat,comm,args",
+      "result": "exit 0; header only, no process row"
+    },
+    {
+      "command": "ps -eo pid,ppid,pgid,sid,stat,comm | awk '$6 ~ /python/ {print}' | head -n 30",
+      "result": "exit 0; no Python process rows in the current process view"
+    }
+  ],
+  "conclusion": {
+    "driver_visible_as_live_process": false,
+    "diagnostic_tests_started": false,
+    "admission_created": false,
+    "exec_tool_session_terminal_state": "unknown; original session handle was not retained and no session enumeration or recovery tool is available",
+    "cleanup": "driver absence is supported by current process scans; exec-session termination is not independently confirmed",
+    "identity_request_reused": false,
+    "identity_request_admitted": false,
+    "signal_sent": false,
+    "next_attempt_index": 7,
+    "launch_authorized_by_this_record": false,
+    "stop_reason": "The unresolved exec-session state prevents trusted ownership/capacity reconciliation for a new launch."
+  }
+}

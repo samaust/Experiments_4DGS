@@ -1,0 +1,75 @@
+{
+  "source_map": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/implement-049-correction006-after-ast-001.json",
+    "bytes": 4054586,
+    "sha256": "0cc07febaecf2ef0a603dd120a530bee1fb2c1f527dbb5df1dcf86c8fcde5811"
+  },
+  "gates": [
+    {
+      "gate": "F1",
+      "implementation": "implemented; collected controls present",
+      "static_self_audit": "source inspected and standard-library checks pass; independent review pending",
+      "runtime": "not run",
+      "detail": "Explicit identity=None availability; no dict(None); root open/fstat/named-stat/containment failure keeps original exception, forbids traversal, retires every known FD once and records uncertain close ownership. Root fault controls include secondary close failures."
+    },
+    {
+      "gate": "F2",
+      "implementation": "implemented; collected controls present",
+      "static_self_audit": "source inspected and standard-library checks pass; independent review pending",
+      "runtime": "not run",
+      "detail": "Every returned root/child FD and scandir iterator is owned before the post-call clock callback. Controls assert retained handles at that exact callback and reconstruct matching close events across legitimate FD-number reuse."
+    },
+    {
+      "gate": "F3",
+      "implementation": "implemented; collected controls present",
+      "static_self_audit": "source inspected and standard-library checks pass; independent review pending",
+      "runtime": "not run",
+      "detail": "RetirementGate changes only exact owned cleanup to safety at >=C and records completed versus uncertain effects. Completed syscalls are not repeated; normal crossing finishes retained state before deferred timeout propagation. CWD keeps original FD on failed fchdir. Direct-C, root/child/iterator/removal/CWD crossings and pending-primary/secondary failure controls are collected."
+    },
+    {
+      "gate": "F4",
+      "implementation": "implemented; collected controls present",
+      "static_self_audit": "source inspected and standard-library checks pass; independent review pending",
+      "runtime": "not run",
+      "detail": "Parent mount ID captured before native constructor under min(W,C); prepared openat2 resolver requires NO_XDEV/NO_SYMLINKS/BENEATH for root and every child, inheriting only kernel-proven same-mount identity. No post-C proc access, no weaker fallback. Actual flag seam and equal-device/distinct-mount EXDEV, missing metadata, ENOSYS/unsupported-ABI controls."
+    },
+    {
+      "gate": "F5",
+      "implementation": "implemented; collected controls present",
+      "static_self_audit": "source inspected and standard-library checks pass; independent review pending",
+      "runtime": "not run",
+      "detail": "supervisor.check_total restored >=C. Actual supervisor publication-return control checks C-.001/C/C+.001, publication_deadline TimeoutError and identical pending primary/kind."
+    },
+    {
+      "gate": "F6",
+      "implementation": "implemented; collected controls present",
+      "static_self_audit": "source inspected and standard-library checks pass; independent review pending",
+      "runtime": "not run",
+      "detail": "Exact primitive types and field sets for every nested process/thread snapshot, retirement and Main/request binding before equality. Rehashed bool/int/missing/extra/substitution/float controls reject semantically; driver typed canonical comparison and all authorities include006."
+    },
+    {
+      "gate": "owned iterator/acquisition interiors",
+      "implementation": "implemented; collected controls present",
+      "static_self_audit": "source inspected and standard-library checks pass; independent review pending",
+      "runtime": "not run",
+      "detail": "Root open/fstat/named-stat, scandir acquisition, each next and normal close are separate observed operations. Iterator next plus close failure preserves primary; events retain FD/iterator and completed/uncertain outcome."
+    },
+    {
+      "gate": "preservation",
+      "implementation": "implemented; collected controls present",
+      "static_self_audit": "source inspected and standard-library checks pass; independent review pending",
+      "runtime": "not run",
+      "detail": "78 sources,249 methods,1028 typedcallbacks,622 original methods and ordered assertions except D49-1; exact declarations,114/16 relevance updated; all42 scenarios/sixscripts/full510/340/170 guards unchanged."
+    }
+  ],
+  "remaining": [
+    "independent static readiness review",
+    "all focused/runtime outcomes including kernel availability and target relevance",
+    "full current-source unchanged aggregate249/1028 and42/six/full numerical/P traces",
+    "Main actual <=8 identities/charges, artifact cap, retirement, outer completion and independent B1\u2013B4 acceptance"
+  ],
+  "known_deliberately_unimplemented_source_items": [],
+  "no_launch_readiness_claim": true,
+  "runtime_tests": 0,
+  "launches": 0
+}

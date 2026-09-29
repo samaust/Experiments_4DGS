@@ -1,0 +1,985 @@
+--- correction006-before/scripts/vipe_benchmark/s1_progress.py
++++ correction006-after/scripts/vipe_benchmark/s1_progress.py
+@@ -1421,14 +1421,122 @@
+ _temporary_scope=contextvars.ContextVar('s1_temporary_scope',default=None)
+ 
+ 
++def mount_safe_opener():
++    """Prepare the Linux no-mount-crossing syscall before entering native work.
++
++    Linux openat2 RESOLVE_NO_XDEV also rejects same-device bind mounts. No
++    weaker openat fallback is permitted. The closure does no procfs lookup.
++    """
++    import ctypes,sys
++    if sys.platform!='linux' or os.uname().machine not in ('x86_64','aarch64'):
++        raise OSError('S1 exact-root retirement requires supported Linux openat2 ABI')
++    class OpenHow(ctypes.Structure):
++        _fields_=[('flags',ctypes.c_uint64),('mode',ctypes.c_uint64),('resolve',ctypes.c_uint64)]
++    library=ctypes.CDLL(None,use_errno=True);syscall=library.syscall;syscall.restype=ctypes.c_long
++    def open_directory(parent_fd,name,mount_id):
++        if type(mount_id) is not int or mount_id<=0:raise ValueError('retained mount identity unavailable')
++        if type(name) is not str or not name or name in ('.','..') or '/' in name or '\0' in name:
++            raise ValueError('exact owned directory basename required')
++        how=OpenHow(os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC,0,0x01|0x04|0x08)
++        result=syscall(ctypes.c_long(437),ctypes.c_int(parent_fd),ctypes.c_char_p(os.fsencode(name)),ctypes.byref(how),ctypes.c_size_t(ctypes.sizeof(how)))
++        if result<0:
++            code=ctypes.get_errno();raise OSError(code,os.strerror(code),name)
++        # Successful resolution proves this FD belongs to the retained parent's
++        # mount. Inherit that captured identity; never read /proc after C.
++        return int(result)
++    return open_directory
++
++
++def captured_mount_identity(fd):
++    """Fresh bounded fdinfo metadata, only under ordinary pre-constructor W."""
++    import sys
++    def release_stream(value):
++        primary=sys.exception()
++        try:value.close()
++        except BaseException as error:
++            (primary if primary is not None else error).s1_mount_readers=(value,)
++            raise
++    stream=acquire(Path('/proc/self/fdinfo',str(fd)).open,release_stream,'r')
++    close_attempted=False
++    def close_once():
++        nonlocal close_attempted
++        close_attempted=True
++        return stream.close()
++    try:
++        raw=operation(stream.read,16385)
++        operation(close_once)
++    finally:
++        pending=sys.exception()
++        if not close_attempted:
++            try:close_once()
++            except BaseException as error:
++                failure=pending if pending is not None else error
++                failure.s1_mount_readers=(stream,)
++                if pending is None:raise
++                pending.add_note('mount metadata descriptor retirement: '+repr(error))
++        elif not stream.closed and pending is not None:
++            pending.s1_mount_readers=(stream,)
++    if len(raw)>16384:raise ValueError('fdinfo metadata exceeded bound')
++    fields=[line.split(':',1)[1].strip() for line in raw.splitlines() if line.startswith('mnt_id:')]
++    if len(fields)!=1 or not fields[0].isascii() or not fields[0].isdigit() or int(fields[0])<=0:
++        raise ValueError('retained mount identity unavailable')
++    return int(fields[0])
++
++
++class RetirementGate:
++    """Transfer only already-owned retirement to safety at equality or later."""
++    def __init__(self,deadline,event):
++        self.deadline=deadline;self.event=event;self.safety=False;self.crossing=None
++    def boundary(self,label,point):
++        now=time.monotonic()
++        if self.deadline is not None and now>=self.deadline and not self.safety:
++            self.safety=True
++            self.event.setdefault('transitions',[]).append(dict(operation=label,point=point,observed=now,deadline=self.deadline,state='safety_retirement'))
++            self.crossing=TimeoutError('progress original work deadline')
++        return now
++    def call(self,label,function,*args,retain=None,**kwargs):
++        entered=self.boundary(label,'before')
++        item=dict(operation=label,start=entered,classification='safety_retirement' if self.safety else 'normal_cleanup',completed=False)
++        if label in ('root_open','openat_directory_nofollow'):
++            item.update(parent_fd=args[0],name=args[1],mount_id=args[2])
++        elif label in ('root_fstat','fstat','scandir_owned_fd') or label.startswith('close_') or label=='fchdir_original':item['fd']=args[0]
++        elif label in ('scandir_next','scandir_close'):
++            item['iterator_id']=id(args[0]) if label=='scandir_next' else id(getattr(function,'__self__',None))
++        self.event['operations'].append(item)
++        try:
++            result=function(*args,**kwargs)
++            # Handle/effect ownership must be saved BEFORE the post-call clock.
++            if retain is not None:retain(result)
++            if label in ('root_open','openat_directory_nofollow'):item['acquired_fd']=result
++            elif label=='scandir_owned_fd':item['iterator_id']=id(result)
++            item['completed']=True
++        except BaseException as error:
++            item.update(error_class=type(error).__name__,message=str(error),effect='uncertain')
++            raise
++        item['end']=self.boundary(label,'after')
++        return result
++
++
+ class OwnedTemporaryDirectory:
+-    """Exact generated root ownership; only descriptor-relative retirement."""
++    """Exact generated root ownership; only mount-bound FD-relative retirement."""
+     def __init__(self,directory,parent,name,parent_fd,root_fd,identity,cleanup_deadline):
+         self.directory=directory;self.name=directory.name;self.parent=parent;self.basename=name
+         self.parent_fd=parent_fd;self.root_fd=root_fd;self.identity=identity
+         self.cleanup_deadline=cleanup_deadline;self.events=[];self.unresolved=True
+-        self.uncertain_descriptors=[]
+-        self.attempted=False;self.children=[]
++        self.uncertain_descriptors=[];self.attempted=False;self.children=[];self.iterators=[]
++        self.close_attempts=set();self.mount_id=None;self.open_directory=None;self.state='acquired'
++    def close_fd(self,holder,key,gate,label):
++        fd=holder[key] if isinstance(holder,dict) else getattr(holder,key)
++        if fd is None:return
++        token=(id(holder),key)
++        if token in self.close_attempts:raise RuntimeError('uncertain descriptor close; blind retry prohibited')
++        self.close_attempts.add(token)
++        def closed(_):
++            if isinstance(holder,dict):holder[key]=None;holder['closed']=True
++            else:setattr(holder,key,None)
++        try:gate.call(label,os.close,fd,retain=closed)
++        except BaseException:
++            self.uncertain_descriptors.append(fd);raise
+     def cleanup(self):
+         import sys
+         primary=sys.exception()
+@@ -1437,108 +1545,162 @@
+             error=RuntimeError('temporary retirement uncertainty; blind retry prohibited')
+             if primary is not None:primary.add_note(str(error));return
+             raise error
+-        self.attempted=True
+-        started=time.monotonic();late=self.cleanup_deadline is not None and started>=self.cleanup_deadline
++        self.attempted=True;self.state='retiring';started=time.monotonic()
++        late=self.cleanup_deadline is not None and started>=self.cleanup_deadline
+         event=dict(operation='temporary_safety_retirement' if late else 'temporary_cleanup',root=self.name,
+-            identity=dict(self.identity),cleanup_deadline=self.cleanup_deadline,start=started,operations=[],resolved=False)
+-        self.events.append(event)
+-        def call(label,function,*args,**kwargs):
+-            # After C the correction003/004 exception permits only this exact
+-            # root's descriptor-relative metadata/removal; no production gate.
+-            if not late:before(self.cleanup_deadline)
+-            item=dict(operation=label,arguments=[str(v) for v in args],start=time.monotonic());event['operations'].append(item)
+-            result=function(*args,**kwargs);item['end']=time.monotonic();item['completed']=True
+-            if not late:before(self.cleanup_deadline)
+-            return result
+-        def close_descriptor(fd):
+-            pending=sys.exception()
+-            item=dict(operation='close_owned_descriptor',fd=fd,start=time.monotonic());event['operations'].append(item)
+-            try:os.close(fd);item['completed']=True;item['end']=time.monotonic()
+-            except BaseException as error:
+-                self.uncertain_descriptors.append(fd)
+-                if pending is not None:
+-                    pending.add_note('temporary descriptor close: '+repr(error));raise pending
+-                raise
++            identity=None if self.identity is None else dict(self.identity),identity_available=self.identity is not None,
++            cleanup_deadline=self.cleanup_deadline,start=started,operations=[],resolved=False,secondary=[])
++        self.events.append(event);gate=RetirementGate(self.cleanup_deadline,event)
++        if late:gate.safety=True  # Already late is an authorized retirement, not a new primary.
++        failure=None
+         def same(info,identity):return info.st_dev==identity['device'] and info.st_ino==identity['inode'] and stat.S_ISDIR(info.st_mode)
++        def close_iterator(owned):
++            if owned['closed'] or owned['close_attempted']:return
++            owned['close_attempted']=True
++            gate.call('scandir_close',owned['iterator'].close,retain=lambda _:owned.update(closed=True))
+         def clear(fd,identity):
+-            if not same(call('fstat',os.fstat,fd),identity):raise ValueError('temporary directory identity changed')
+-            with call('scandir_owned_fd',os.scandir,fd) as entries:
+-                names=[entry.name for entry in entries]
++            if identity['mount_id']!=self.mount_id:raise ValueError('temporary mount identity changed')
++            if not same(gate.call('fstat',os.fstat,fd),identity):raise ValueError('temporary directory identity changed')
++            iterator=dict(iterator=None,closed=False,close_attempted=False)
++            def retained(value):iterator['iterator']=value;self.iterators.append(iterator)
++            gate.call('scandir_owned_fd',os.scandir,fd,retain=retained)
++            sentinel=object();names=[]
++            try:
++                while True:
++                    entry=gate.call('scandir_next',next,iterator['iterator'],sentinel)
++                    if entry is sentinel:break
++                    names.append(entry.name)
++            finally:
++                pending=sys.exception()
++                try:close_iterator(iterator)
++                except BaseException as secondary:
++                    if pending is None:raise
++                    event['secondary'].append(dict(operation='scandir_close',error_class=type(secondary).__name__,message=str(secondary)))
++                    pending.add_note('temporary iterator close: '+repr(secondary))
+             for name in names:
+-                if type(name) is not str or name in ('.','..') or '/' in name:raise ValueError('temporary entry containment')
+-                item=call('statat_nofollow',os.stat,name,dir_fd=fd,follow_symlinks=False)
++                if type(name) is not str or not name or name in ('.','..') or '/' in name:raise ValueError('temporary entry containment')
++                item=gate.call('statat_nofollow',os.stat,name,dir_fd=fd,follow_symlinks=False)
+                 if item.st_dev!=self.identity['device']:raise ValueError('temporary mount/device escape')
+                 if stat.S_ISDIR(item.st_mode):
+-                    child=call('openat_directory_nofollow',os.open,name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=fd)
+-                    owned=dict(fd=child,device=item.st_dev,inode=item.st_ino,closed=False);self.children.append(owned)
++                    owned=dict(fd=None,device=item.st_dev,inode=item.st_ino,mount_id=self.mount_id,closed=False)
++                    def retained_child(value):owned['fd']=value;self.children.append(owned)
++                    gate.call('openat_directory_nofollow',self.open_directory,fd,name,self.mount_id,retain=retained_child)
+                     try:
+-                        clear(child,owned)
+-                        current=call('statat_nofollow',os.stat,name,dir_fd=fd,follow_symlinks=False)
++                        clear(owned['fd'],owned)
++                        current=gate.call('statat_nofollow',os.stat,name,dir_fd=fd,follow_symlinks=False)
+                         if not same(current,owned):raise ValueError('temporary child name reused')
+-                        call('rmdirat',os.rmdir,name,dir_fd=fd)
++                        gate.call('rmdirat',os.rmdir,name,dir_fd=fd)
+                     finally:
+-                        # Descriptor retirement is permitted regardless of C.
+-                        close_descriptor(child);owned['closed']=True
++                        pending=sys.exception()
++                        try:self.close_fd(owned,'fd',gate,'close_child_descriptor')
++                        except BaseException as secondary:
++                            if pending is None:raise
++                            event['secondary'].append(dict(operation='close_child_descriptor',error_class=type(secondary).__name__,message=str(secondary)))
++                            pending.add_note('temporary child close: '+repr(secondary))
+                 else:
+-                    # A symlink is removed as an entry and is never followed.
+-                    current=call('statat_nofollow',os.stat,name,dir_fd=fd,follow_symlinks=False)
++                    current=gate.call('statat_nofollow',os.stat,name,dir_fd=fd,follow_symlinks=False)
+                     if (current.st_dev,current.st_ino)!=(item.st_dev,item.st_ino):raise ValueError('temporary file name reused')
+-                    call('unlinkat',os.unlink,name,dir_fd=fd)
++                    gate.call('unlinkat',os.unlink,name,dir_fd=fd)
+         try:
+-            if self.root_fd is None or self.identity is None:raise RuntimeError('temporary root identity unavailable; no traversal')
++            if self.root_fd is None or self.identity is None or self.mount_id is None or self.open_directory is None:
++                raise RuntimeError('temporary root identity unavailable; no traversal')
+             clear(self.root_fd,self.identity)
+-            current=call('statat_root_nofollow',os.stat,self.basename,dir_fd=self.parent_fd,follow_symlinks=False)
++            current=gate.call('statat_root_nofollow',os.stat,self.basename,dir_fd=self.parent_fd,follow_symlinks=False)
+             if not same(current,self.identity):raise ValueError('temporary root name reused')
+-            call('rmdirat_root',os.rmdir,self.basename,dir_fd=self.parent_fd)
+-            close_descriptor(self.root_fd);self.root_fd=None
+-            close_descriptor(self.parent_fd);self.parent_fd=None
+-            self.unresolved=False;event['resolved']=True
+-            TEMPORARY_OWNERS.remove(self)
++            gate.call('rmdirat_root',os.rmdir,self.basename,dir_fd=self.parent_fd)
++            event['root_removed']=True
++        except BaseException as error:failure=error
++        finally:
++            # Close each acquired handle at most once even if traversal failed.
++            for iterator in self.iterators:
++                try:close_iterator(iterator)
++                except BaseException as error:
++                    event['secondary'].append(dict(operation='scandir_close',error_class=type(error).__name__,message=str(error)))
++                    if failure is None:failure=error
++            for holder,key,label in [(child,'fd','close_child_descriptor') for child in self.children]+[(self,'root_fd','close_root_descriptor'),(self,'parent_fd','close_parent_descriptor')]:
++                fd=holder[key] if isinstance(holder,dict) else getattr(holder,key)
++                if fd is None or (id(holder),key) in self.close_attempts:continue
++                try:self.close_fd(holder,key,gate,label)
++                except BaseException as error:
++                    event['secondary'].append(dict(operation=label,error_class=type(error).__name__,message=str(error)))
++                    if failure is None:failure=error
++            if failure is None:
++                self.unresolved=False;self.state='retired';event['resolved']=True;TEMPORARY_OWNERS.remove(self)
++            else:
++                self.state='uncertain';event.update(error_class=type(failure).__name__,message=str(failure))
++            event['end']=time.monotonic()
++        error=primary if primary is not None else gate.crossing or failure
++        if error is not None:
++            error.s1_temporary_retirement=tuple(self.events)
++            if self.unresolved:error.s1_temporary_owners=tuple(value for value in TEMPORARY_OWNERS if value.unresolved)
++            if failure is not None and error is not failure:error.add_note('temporary safety retirement: '+repr(failure))
++            if primary is None:raise error
++
++
++def owned_temporary_directory(constructor,args,kwargs,cleanup_deadline):
++    inherited=_deadline.get()
++    effective=cleanup_deadline if inherited is None else inherited if cleanup_deadline is None else min(inherited,cleanup_deadline)
++    token=_deadline.set(effective)
++    try:return _owned_temporary_directory(constructor,args,kwargs,cleanup_deadline)
++    finally:_deadline.reset(token)
++
++
++def _owned_temporary_directory(constructor,args,kwargs,cleanup_deadline):
++    before()
++    parent=operation(Path(kwargs['dir']).resolve)
++    opener=operation(mount_safe_opener)
++    def release_parent(fd):
++        import sys
++        primary=sys.exception()
++        try:os.close(fd)
+         except BaseException as error:
+-            event.update(error_class=type(error).__name__,message=str(error))
+-            failure=primary if primary is not None else error
+-            failure.s1_temporary_owners=tuple(value for value in TEMPORARY_OWNERS if value.unresolved)
+-            failure.s1_temporary_retirement=tuple(self.events)
+-            if primary is None:raise
+-            primary.add_note('temporary safety retirement: '+type(error).__name__+': '+str(error))
+-        finally:
+-            event['end']=time.monotonic()
+-            if primary is not None:primary.s1_temporary_retirement=tuple(self.events)
+-
+-
+-def owned_temporary_directory(constructor,args,kwargs,cleanup_deadline):
+-    before()
+-    parent=operation(Path(kwargs['dir']).resolve)
+-    parent_fd=acquire(os.open,os.close,parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+-    directory=None;owned=None
++            pending=primary if primary is not None else error
++            pending.s1_uncertain_descriptors=tuple(getattr(pending,'s1_uncertain_descriptors',()))+(fd,)
++            raise
++    parent_fd=acquire(os.open,release_parent,parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
++    directory=None;owned=None;gate=None
+     try:
++        mount_id=operation(captured_mount_identity,parent_fd)
++        if type(mount_id) is not int or mount_id<=0:raise ValueError('retained mount identity unavailable')
+         before();directory=constructor(*args,**kwargs)
+-        # Disable path-based automatic rmtree before any fallible return check.
+-        directory._finalizer.detach()
+         name=Path(directory.name).name
+         owned=OwnedTemporaryDirectory(directory,parent,name,parent_fd,None,None,cleanup_deadline)
+         TEMPORARY_OWNERS.append(owned)
+         if _temporary_scope.get() is not None:_temporary_scope.get().append(owned)
++        owned.mount_id=mount_id;owned.open_directory=opener
++        directory._finalizer.detach()
+         if Path(directory.name).parent!=parent or name in ('.','..'):raise ValueError('temporary constructor root containment')
+-        # This exact acquired root is the sole permitted post-C metadata scope.
+-        fd=os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=parent_fd);owned.root_fd=fd
+-        info=os.fstat(fd);named=os.stat(name,dir_fd=parent_fd,follow_symlinks=False)
++        event=dict(operation='temporary_root_acquisition',root=owned.name,parent_fd=parent_fd,operations=[],mount_id=mount_id,identity=None,work_deadline=_deadline.get(),cleanup_deadline=cleanup_deadline)
++        owned.events.append(event);gate=RetirementGate(_deadline.get(),event)
++        gate.call('root_open',opener,parent_fd,name,mount_id,retain=lambda fd:setattr(owned,'root_fd',fd))
++        info=gate.call('root_fstat',os.fstat,owned.root_fd)
++        named=gate.call('root_named_stat',os.stat,name,dir_fd=parent_fd,follow_symlinks=False)
+         if not stat.S_ISDIR(info.st_mode) or (info.st_dev,info.st_ino)!=(named.st_dev,named.st_ino):raise ValueError('temporary acquisition identity changed')
+-        owned.identity=dict(device=info.st_dev,inode=info.st_ino)
++        owned.identity=dict(device=info.st_dev,inode=info.st_ino,mount_id=mount_id)
++        event['identity']=dict(owned.identity)
++        if gate.crossing is not None:raise gate.crossing
+         before()
+         return owned
+     except BaseException as primary:
+-        if owned is not None:owned.cleanup()
+-        else:retire(os.close,parent_fd)
+-        raise
++        # A deadline observed earlier in the owned acquisition remains the
++        # primary if a later safety-metadata operation also fails.
++        first=gate.crossing if gate is not None and gate.crossing is not None else primary
++        if first is not primary:first.add_note('temporary acquisition secondary: '+repr(primary))
++        try:raise first
++        except BaseException:
++            if owned is not None:owned.cleanup()
++            else:retire(release_parent,parent_fd)
++            raise
+ 
+ 
+ class OwnedWorkingDirectory:
+     def __init__(self):
+-        self.fd=acquire(os.open,os.close,'.',os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+-        self.identity=None;self.events=[];self.unresolved=True;self.attempted=False
++        self.fd=None;self.identity=None;self.events=[];self.unresolved=True;self.attempted=False
++        before();trace_event('cwd_open','start');before()
++        self.fd=os.open('.',os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+         PROCESS_STATE_OWNERS.append(self)
+         try:
++            before();trace_event('cwd_open','completed');before()
+             info=operation(os.fstat,self.fd)
+             self.identity=dict(device=info.st_dev,inode=info.st_ino)
+         except BaseException as primary:
+@@ -1550,29 +1712,30 @@
+         import sys
+         primary=sys.exception()
+         if self.attempted:raise RuntimeError('working directory restoration cannot retry')
+-        self.attempted=True;started=time.monotonic();late=cleanup_deadline is not None and started>=cleanup_deadline
++        self.attempted=True;started=time.monotonic()
++        late=cleanup_deadline is not None and started>=cleanup_deadline
+         event=dict(operation='cwd_safety_restoration' if late else 'cwd_restoration',fd=self.fd,identity=self.identity,
+-            cleanup_deadline=cleanup_deadline,start=started,restored=False,closed=False)
+-        self.events.append(event)
++            cleanup_deadline=cleanup_deadline,start=started,restored=False,closed=False,operations=[])
++        self.events.append(event);gate=RetirementGate(cleanup_deadline,event)
++        if late:gate.safety=True
+         failure=None
+         try:
+-            if not late:before(cleanup_deadline)
+-            os.fchdir(self.fd);event['restored']=True
+-            if not late:before(cleanup_deadline)
++            gate.call('fchdir_original',os.fchdir,self.fd,retain=lambda _:event.update(restored=True))
+         except BaseException as error:failure=error;event.update(error_class=type(error).__name__,message=str(error))
+-        try:os.close(self.fd);event['closed']=True
+-        except BaseException as error:
+-            event['close_error']=dict(error_class=type(error).__name__,message=str(error))
+-            if failure is None:failure=error
+-            else:failure.add_note('cwd descriptor close: '+repr(error))
++        # A failed fchdir retains the only restoration handle. Never close it.
++        if event['restored']:
++            try:gate.call('close_original_cwd',os.close,self.fd,retain=lambda _:event.update(closed=True))
++            except BaseException as error:
++                event['close_error']=dict(error_class=type(error).__name__,message=str(error));failure=error
+         event['end']=time.monotonic()
+-        if failure is not None:
+-            error=primary if primary is not None else failure
+-            error.s1_cwd_owners=tuple(PROCESS_STATE_OWNERS);error.s1_cwd_restoration=tuple(self.events)
+-            if primary is not None:primary.add_note('cwd safety restoration: '+repr(failure));return
+-            raise failure
+-        self.unresolved=False;PROCESS_STATE_OWNERS.remove(self)
+-
++        if failure is None:
++            self.unresolved=False;PROCESS_STATE_OWNERS.remove(self)
++        error=primary if primary is not None else gate.crossing or failure
++        if error is not None:
++            error.s1_cwd_restoration=tuple(self.events)
++            if self.unresolved:error.s1_cwd_owners=tuple(PROCESS_STATE_OWNERS)
++            if failure is not None and error is not failure:error.add_note('cwd safety restoration: '+repr(failure))
++            if primary is None:raise error
+ 
+ def backend_resource_scope():
+     import contextlib,sys
+--- correction006-before/scripts/vipe_benchmark/s1_validation_contract.py
++++ correction006-after/scripts/vipe_benchmark/s1_validation_contract.py
+@@ -338,20 +338,26 @@
+     require(type(value) is dict,'complete process identity required')
+     base=('boot_id','pid','ppid','pgid','start_ticks')
+     require(set(value)==set(base)|{'threads','threads_before','threads_after','process_before','process_after'},'exact process identity fields')
+-    require(type(value['boot_id']) is str and re.fullmatch('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',value['boot_id']),'boot identity required')
+-    for key in ('pid','pgid','start_ticks'):require(type(value[key]) is int and value[key]>0,'positive process identity: '+key)
+-    require(type(value['ppid']) is int and value['ppid']>=0,'parent identity required')
+-    expected={key:value[key] for key in base}
++    def process(item):
++        require(type(item) is dict and set(item)==set(base),'exact nested process fields')
++        require(type(item['boot_id']) is str and re.fullmatch('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',item['boot_id']),'boot identity required')
++        for key in ('pid','pgid','start_ticks'):require(type(item[key]) is int and item[key]>0,'positive process identity: '+key)
++        require(type(item['ppid']) is int and item['ppid']>=0,'parent identity required')
++    expected={key:value[key] for key in base};process(expected)
++    for key in ('process_before','process_after'):process(value[key])
+     require(value['process_before']==value['process_after']==expected,'stable process identity required')
+-    tasks=value['threads'];require(type(tasks) is list and tasks,'complete thread identities required')
+-    require(tasks==value['threads_before']==value['threads_after'],'stable thread identities around enumeration')
+-    tids=[]
+-    for task in tasks:
+-        require(type(task) is dict and set(task)=={'boot_id','pid','process_start_ticks','tid','start_ticks'},'exact thread identity fields')
+-        require(task['boot_id']==value['boot_id'] and type(task['pid']) is int and task['pid']==value['pid'] and type(task['process_start_ticks']) is int and task['process_start_ticks']==value['start_ticks'],'thread process binding')
+-        require(type(task['tid']) is int and task['tid']>0 and type(task['start_ticks']) is int and task['start_ticks']>=value['start_ticks'],'thread birth identity')
+-        tids.append(task['tid'])
+-    require(tids==sorted(set(tids)) and value['pid'] in tids,'unique sorted complete task census')
++    for key in ('threads','threads_before','threads_after'):
++        tasks=value[key];require(type(tasks) is list and tasks,'complete thread identities required')
++        tids=[]
++        for task in tasks:
++            require(type(task) is dict and set(task)=={'boot_id','pid','process_start_ticks','tid','start_ticks'},'exact thread identity fields')
++            require(type(task['boot_id']) is str and task['boot_id']==value['boot_id'],'thread boot identity')
++            for field in ('pid','process_start_ticks','tid','start_ticks'):require(type(task[field]) is int and task[field]>0,'exact positive thread identity: '+field)
++            require(task['pid']==value['pid'] and task['process_start_ticks']==value['start_ticks'],'thread process binding')
++            require(task['start_ticks']>=value['start_ticks'],'thread birth identity')
++            tids.append(task['tid'])
++        require(tids==sorted(set(tids)) and value['pid'] in tids,'unique sorted complete task census')
++    require(value['threads']==value['threads_before']==value['threads_after'],'stable thread identities around enumeration')
+     return value
+ 
+ 
+@@ -382,6 +388,10 @@
+     before=snapshot(value['before']);after=snapshot(value['after']);retired=snapshot(value['retired'])
+     require(before==[root] and after==sorted([root,child],key=lambda row:row['pid']) and retired==before,'exact before/after/retired creation identity set')
+     require(value['before']['B']+2<=8,'new child plus reserve before creation')
++    retirement=value['retirement']
++    require(type(retirement) is dict and set(retirement)=={'identity','method','returncode','completed','absent_after'},'exact retirement fields')
++    identity_record(retirement['identity'])
++    require(type(retirement['method']) is str and type(retirement['returncode']) is int and type(retirement['completed']) is bool and type(retirement['absent_after']) is bool,'exact retirement primitive types')
+     require(value['retirement']==dict(identity=child,method='matching Popen.wait',returncode=0,completed=True,absent_after=True),'exact matching child retirement')
+ 
+ 
+@@ -427,6 +437,17 @@
+     require(note.get('cwd')==str(ROOT) and note.get('unset_environment')==['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],'exact launch cwd/unset environment')
+     require(note.get('stdin_identity')==dict(bytes=len(STDIN.encode()),sha256=hashlib.sha256(STDIN.encode()).hexdigest(),content=STDIN),'exact launch stdin identity')
+     require(set(command_bindings)=={'plan','dispatch','status','authorization','driver','command','environment','stdin','run_directory','identity_request','addenda','ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths'},'exact admission binding fields')
++    def typed_binding(value):
++        require(type(value) is dict,'identity binding dictionary')
++        identity_record(value.get('ownership_root'))
++        ancestors=value.get('preexisting_ancestors')
++        require(type(ancestors) is list and ancestors,'typed ancestry list')
++        for row in ancestors:identity_record(row)
++        terminal=value.get('ancestry_terminal')
++        require(type(terminal) is dict and set(terminal)=={'pid','ppid'} and type(terminal['pid']) is int and terminal['pid']>0 and type(terminal['ppid']) is int and terminal['ppid']==0,'typed ancestry terminal')
++        require(type(value.get('retained_wrappers')) is list and value['retained_wrappers']==[],'typed retained wrapper list')
++        require(type(value.get('output_paths')) is list and all(type(path) is str for path in value['output_paths']),'typed output paths')
++    typed_binding(note);typed_binding(command_bindings)
+     root=identity_record(note.get('ownership_root'))
+     ancestors=note.get('preexisting_ancestors');require(type(ancestors) is list and ancestors,'terminated ancestry required')
+     cursor=root['ppid'];seen={root['pid']}
+@@ -443,8 +464,9 @@
+     identity_request=strict_record(command_bindings.get('identity_request'))
+     require(identity_request in bindings,'Main prospective identity request binding')
+     request=read_json(identity_request['path'])
++    typed_binding(request)
+     require(request==dict(schema='plan049-prospective-identity/v1',kind=note['kind'],index=note['attempt_index'],driver=driver,**{key:note[key] for key in ('ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths')}),'exact pre-admission identity request')
+-    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md')]
++    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md')]
+     require(command_bindings.get('addenda')==addenda and all(row in bindings for row in addenda),'current correction authority')
+     capacity=admission.get('resource_capacity',{});B=capacity.get('B');H=capacity.get('H')
+     require(type(B) is int and type(H) is int and min(B,H)>=0 and B+max(1,H)<=8 and capacity.get('charge')==B+max(1,H),'admission exact CPU capacity')
+--- correction006-before/scripts/vipe_benchmark/supervisor.py
++++ correction006-after/scripts/vipe_benchmark/supervisor.py
+@@ -447,7 +447,7 @@
+         final_step('cleanup',check_stopped)
+         elapsed=time.monotonic()-start
+         def check_total():
+-            if time.monotonic()-start>reservation['seconds']:raise TimeoutError('total deadline exceeded')
++            if time.monotonic()-start>=reservation['seconds']:raise TimeoutError('total deadline exceeded')
+         final_step('cleanup_deadline',check_total)
+         evidence=dict(error=error,result=result_record,peak=peak,surviving_pids=stopped,
+             cleanup_confirmed=not stopped and not cleanup_uncertain,cleanup_uncertain=cleanup_uncertain,
+--- correction006-before/tests/test_vipe_benchmark_s1_helper_fixtures.py
++++ correction006-after/tests/test_vipe_benchmark_s1_helper_fixtures.py
+@@ -1057,17 +1057,408 @@
+                 try:raise primary
+                 except RuntimeError as pending:
+                     owner.restore(3.);test.assertIs(pending,primary)
+-            test.assertEqual(calls,[('fchdir',fd),('close',fd)])
++            if fault=='restore':test.assertEqual(calls,[('fchdir',fd)]);test.assertEqual(owner.fd,fd);os.fstat(fd)
++            else:test.assertEqual(calls,[('fchdir',fd),('close',fd)])
+             if fault!='restore':test.assertEqual(Path.cwd(),original_cwd)
+             os.chdir(original_cwd)
+             test.assertEqual(owner.unresolved,fault!='none')
+             if fault!='none':test.assertIn(owner,primary.s1_cwd_owners)
+-            if fault=='close':real_close(fd)
++            if fault in ('restore','close'):real_close(fd)
+             else:
+                 with test.assertRaises(OSError):os.fstat(fd)
+             evidence.append(dict(mode='cwd',late=late,fault=fault,calls=calls,events=list(owner.events),same_primary=True))
+             if owner in p.PROCESS_STATE_OWNERS:p.PROCESS_STATE_OWNERS.remove(owner)
+     test.assertEqual(Path.cwd(),original_cwd)
++    return evidence
++
++
++def backend_retirement_transition_controls(test,root):
++    """F1–F4: exact syscall seams, no new process, mount, model or observer."""
++    import contextlib,ctypes,errno,hashlib,shutil,tempfile
++    from types import SimpleNamespace
++    from unittest.mock import patch
++    from vipe_benchmark import s1_progress as p
++    root=Path(root);evidence=[]
++    # Exercise the actual prepared opener ABI, including the bind-mount flag.
++    syscall_events=[];cross_mount=[False];kernel_error=[errno.EXDEV]
++    class Syscall:
++        def __call__(self,number,parent,name,how_pointer,size):
++            how=how_pointer._obj
++            syscall_events.append(dict(number=number.value,parent=parent.value,name=name.value.decode(),flags=how.flags,resolve=how.resolve,size=size.value))
++            if cross_mount[0]:ctypes.set_errno(kernel_error[0]);return -1
++            return 31415
++    with patch.object(ctypes,'CDLL',return_value=SimpleNamespace(syscall=Syscall())),patch.object(p.os,'uname',return_value=SimpleNamespace(machine='x86_64')):
++        opener=p.mount_safe_opener()
++        test.assertEqual(opener(9,'owned',7),31415)
++        cross_mount[0]=True
++        with test.assertRaises(OSError) as caught:opener(9,'same-device-bind',7)
++        test.assertEqual(caught.exception.errno,errno.EXDEV)
++        kernel_error[0]=errno.ENOSYS
++        with test.assertRaises(OSError) as unavailable:opener(9,'owned',7)
++        test.assertEqual(unavailable.exception.errno,errno.ENOSYS);test.assertEqual(len(syscall_events),3)
++    with patch.object(p.os,'uname',return_value=SimpleNamespace(machine='unsupported')):
++        with test.assertRaisesRegex(OSError,'supported Linux'):p.mount_safe_opener()
++    test.assertTrue(all(row['number']==437 and row['resolve']==13 and row['flags']&os.O_NOFOLLOW and row['flags']&os.O_DIRECTORY for row in syscall_events))
++    evidence.append(dict(kind='kernel_no_mount_crossing',calls=syscall_events,same_device=True,distinct_mount_ids=[7,8],real_mounts=0))
++    def no_late_work(stack,now,C):
++        def guarded(function,label):
++            def call(*args,**kwargs):
++                if now[0]>=C:raise AssertionError('post-C production/proc operation: '+label)
++                return function(*args,**kwargs)
++            return call
++        for module,name in ((p,'captured_mount_identity'),(p,'mount_safe_opener'),(Path,'open'),(Path,'read_bytes'),(Path,'resolve'),(json,'dumps'),(hashlib,'sha256')):
++            stack.enter_context(patch.object(module,name,guarded(getattr(module,name),name)))
++    def fixture_cleanup(owners,objects):
++        # Retrospective cleanup after leaving production clock and tripwires.
++        # No second production attempt against a failed or uncertain syscall.
++        for owner in owners:
++            for iterator in owner.iterators:
++                if not iterator['closed']:iterator['iterator'].close()
++            for fd in ([child['fd'] for child in owner.children]+[owner.root_fd,owner.parent_fd]):
++                if fd is not None:
++                    try:os.close(fd)
++                    except OSError:pass
++            if owner in p.TEMPORARY_OWNERS:p.TEMPORARY_OWNERS.remove(owner)
++        for obj in objects:
++            if Path(obj.name).exists():shutil.rmtree(obj.name)
++    # Individual root failures, each also with a secondary FD close failure.
++    for fault in ('root_open','root_fstat','root_named_stat','containment','mount_unavailable','same_device_mount'):
++        for close_failure in (False,True):
++            now=[1.];objects=[];events=[];primary=OSError('root primary '+fault);secondary=OSError('root secondary close')
++            actual_ctor=tempfile.TemporaryDirectory;actual_call=p.RetirementGate.call;actual_close=os.close
++            old_owners=list(p.TEMPORARY_OWNERS);held=[]
++            def constructor(*args,**kwargs):
++                obj=actual_ctor(*args,**kwargs);objects.append(obj)
++                (Path(obj.name)/'nested').mkdir();(Path(obj.name)/'nested'/'content').write_bytes(b'owned bytes')
++                if fault=='containment':obj.name=str(Path(obj.name)/'..'/'foreign-owned')
++                return obj
++            def call(gate,label,function,*args,**kwargs):
++                events.append(label)
++                if label==fault:
++                    def failing(*args,**kwargs):raise primary
++                    function=failing
++                if label==('close_parent_descriptor' if fault in ('root_open','containment') else 'close_root_descriptor') and close_failure:
++                    held.append(args[0])
++                    def failing(*args,**kwargs):raise secondary
++                    function=failing
++                return actual_call(gate,label,function,*args,**kwargs)
++            actual_opener=p.mount_safe_opener
++            def opener_factory():
++                opener=actual_opener()
++                def opened(parent,name,mount_id):
++                    if fault=='same_device_mount' and name=='nested':
++                        # Both actual directory stats have the same device;
++                        # kernel RESOLVE_NO_XDEV would reject mount7→mount8.
++                        test.assertEqual(os.fstat(parent).st_dev,os.stat(name,dir_fd=parent,follow_symlinks=False).st_dev)
++                        raise OSError(errno.EXDEV,'synthetic distinct mount ID with same st_dev')
++                    return opener(parent,name,mount_id)
++                return opened
++            caught=None;owner=None
++            with contextlib.ExitStack() as stack:
++                stack.enter_context(patch.object(p.time,'monotonic',side_effect=lambda:now[0]))
++                stack.enter_context(patch.object(p.RetirementGate,'call',call))
++                stack.enter_context(patch.object(p,'mount_safe_opener',side_effect=opener_factory))
++                if fault=='mount_unavailable':stack.enter_context(patch.object(p,'captured_mount_identity',return_value=None))
++                try:
++                    owner=p.operation(p.owned_temporary_directory,constructor,(),dict(prefix='root-fault-',dir=str(root)),3.,deadline=2.)
++                    owner.cleanup()
++                except BaseException as error:caught=error
++            owners=[value for value in p.TEMPORARY_OWNERS if value not in old_owners]
++            test.assertIsNotNone(caught)
++            if fault.startswith('root_'):test.assertIs(caught,primary)
++            if fault=='mount_unavailable':
++                test.assertEqual(objects,[]);test.assertEqual(owners,[])
++                evidence.append(dict(kind='mount_unavailable',secondary_close=close_failure,constructor_calls=0,owners=0,error_class=type(caught).__name__))
++            else:
++                test.assertEqual(len(owners),1);owner=owners[0];test.assertTrue(owner.unresolved)
++                test.assertIn(owner,caught.s1_temporary_owners)
++                if fault!='same_device_mount':
++                    test.assertNotIn('scandir_owned_fd',events);test.assertIsNone(owner.identity)
++                    test.assertFalse(owner.events[-1]['identity_available'])
++                else:test.assertEqual(events.count('scandir_owned_fd'),1)
++                if not close_failure:
++                    test.assertIsNone(owner.root_fd);test.assertIsNone(owner.parent_fd)
++                if fault in ('root_open','root_fstat','root_named_stat','containment') and close_failure:
++                    test.assertEqual(len(held),1);test.assertIn(held[0],owner.uncertain_descriptors)
++                    test.assertTrue(any(row['message']==str(secondary) for row in owner.events[-1]['secondary']))
++                if fault=='same_device_mount':
++                    test.assertEqual(caught.errno,errno.EXDEV)
++                    test.assertTrue((Path(owner.name)/'nested'/'content').exists())
++                evidence.append(dict(kind='root_failure',fault=fault,secondary_close=close_failure,events=events,
++                    primary_class=type(caught).__name__,same_primary=caught is primary,retirement=list(owner.events),uncertain=list(owner.uncertain_descriptors)))
++            if fault=='containment' and objects:
++                # Restore the actual generated name solely for fixture disposal.
++                obj=objects[0];obj.name=str(Path(obj.name).parent.parent)
++            fixture_cleanup(owners,objects)
++    # Direct callers cannot omit inherited W and accidentally read mount
++    # metadata after the supplied original C.
++    for offset in (-.001,0.,.001):
++        now=[3.+offset];calls=[];owner=None;token=p._deadline.set(None)
++        actual_ctor=tempfile.TemporaryDirectory;actual_mount=p.captured_mount_identity
++        def constructor(*args,**kwargs):calls.append('constructor');return actual_ctor(*args,**kwargs)
++        def mount(fd):
++            test.assertLess(now[0],3.);calls.append('mount_metadata');return actual_mount(fd)
++        try:
++            with patch.object(p.time,'monotonic',side_effect=lambda:now[0]),patch.object(p,'captured_mount_identity',side_effect=mount):
++                if offset<0:
++                    owner=p.owned_temporary_directory(constructor,(),dict(prefix='direct-C-',dir=str(root)),3.)
++                    owner.cleanup()
++                else:
++                    with patch.object(Path,'resolve',side_effect=AssertionError('late root lookup')):
++                        with test.assertRaises(TimeoutError):p.owned_temporary_directory(constructor,(),dict(dir=str(root)),3.)
++            test.assertEqual(calls,['mount_metadata','constructor'] if offset<0 else [])
++            if owner is not None:test.assertFalse(owner.unresolved)
++            evidence.append(dict(kind='direct_C_entry',offset=offset,calls=calls,retired=owner is None or not owner.unresolved))
++        finally:p._deadline.reset(token)
++    # Exact metadata schema; malformed/missing mount IDs never become a
++    # same-device-only fallback. This is an in-memory read syscall seam.
++    import io
++    for raw,accepted in [('mnt_id:\t7\n',True),('flags:\t1\n',False),('mnt_id:\t7\nmnt_id:\t8\n',False),('mnt_id:\t0\n',False),('mnt_id:\tTrue\n',False),('x'*16385,False)]:
++        stream=io.StringIO(raw)
++        with patch.object(Path,'open',return_value=stream):
++            if accepted:test.assertEqual(p.captured_mount_identity(123),7)
++            else:
++                with test.assertRaises(ValueError):p.captured_mount_identity(123)
++        test.assertTrue(stream.closed)
++        evidence.append(dict(kind='mount_metadata_schema',bytes=len(raw),accepted=accepted))
++    # Original-CWD acquisition retains a returned FD before a late W check;
++    # no fchdir is needed before the working directory has ever changed.
++    for offset in (-.001,0.,.001):
++        for secondary_failure in (False,True):
++            now=[1.];fds=[];closed=[];old=list(p.PROCESS_STATE_OWNERS)
++            actual_open=os.open;actual_close=os.close;owner=None;caught=None
++            def opened(*args,**kwargs):
++                fd=actual_open(*args,**kwargs);fds.append(fd);now[0]=3.+offset;return fd
++            def closed_fd(fd):
++                closed.append(fd)
++                if secondary_failure:raise OSError('cwd acquisition close uncertainty')
++                return actual_close(fd)
++            with patch.object(p.time,'monotonic',side_effect=lambda:now[0]),patch.object(os,'open',side_effect=opened),patch.object(os,'close',side_effect=closed_fd),patch.object(os,'fchdir',side_effect=AssertionError('unchanged cwd restoration')):
++                try:owner=p.operation(p.OwnedWorkingDirectory,deadline=3.)
++                except BaseException as error:caught=error
++            test.assertEqual(len(fds),1)
++            if offset<0:
++                test.assertIsNone(caught);test.assertEqual(closed,[]);owner.restore(None)
++            else:
++                test.assertIsInstance(caught,TimeoutError);test.assertEqual(closed,fds)
++                if secondary_failure:
++                    owner=caught.s1_cwd_owners[0];test.assertEqual(owner.fd,fds[0]);test.assertTrue(owner.unresolved)
++                    actual_close(fds[0]);p.PROCESS_STATE_OWNERS.remove(owner)
++                else:test.assertEqual(p.PROCESS_STATE_OWNERS,old)
++            evidence.append(dict(kind='cwd_acquisition_return',offset=offset,secondary_failure=secondary_failure,acquired=fds,close_attempts=closed,primary_class=None if caught is None else type(caught).__name__))
++    # Iterator acquisition/advance/close and removal failures retain their
++    # first exception; iterator-close failure cannot overwrite next() failure.
++    for target in ('scandir_owned_fd','scandir_next','scandir_close','openat_directory_nofollow','unlinkat','rmdirat','rmdirat_root'):
++        for primary_present in (False,True):
++            now=[1.];objects=[];old_owners=list(p.TEMPORARY_OWNERS);attempts=[]
++            pending_error=RuntimeError('pending interior primary');failure=OSError('interior '+target);secondary=OSError('iterator close secondary')
++            actual_call=p.RetirementGate.call;actual_ctor=tempfile.TemporaryDirectory
++            def constructor(*args,**kwargs):
++                obj=actual_ctor(*args,**kwargs);objects.append(obj)
++                (Path(obj.name)/'nested').mkdir();(Path(obj.name)/'nested'/'item').write_bytes(b'owned')
++                return obj
++            def call(gate,label,function,*args,**kwargs):
++                attempts.append(label)
++                if label==target:
++                    def function(*args,**kwargs):raise failure
++                elif target=='scandir_next' and label=='scandir_close':
++                    def function(*args,**kwargs):raise secondary
++                return actual_call(gate,label,function,*args,**kwargs)
++            caught=None
++            with patch.object(p.time,'monotonic',side_effect=lambda:now[0]):
++                owner=p.operation(p.owned_temporary_directory,constructor,(),dict(prefix='interior-fault-',dir=str(root)),3.,deadline=2.)
++                with patch.object(p.RetirementGate,'call',call):
++                    try:
++                        if primary_present:
++                            try:raise pending_error
++                            except RuntimeError as current:owner.cleanup();test.assertIs(current,pending_error)
++                        else:owner.cleanup()
++                    except BaseException as error:caught=error
++            test.assertEqual(attempts.count(target),1)
++            if primary_present:test.assertIsNone(caught);test.assertIn(owner,pending_error.s1_temporary_owners)
++            else:test.assertIs(caught,failure);test.assertIn(owner,caught.s1_temporary_owners)
++            test.assertTrue(owner.unresolved);test.assertEqual(owner.state,'uncertain')
++            if target=='scandir_next':
++                test.assertEqual(attempts.count('scandir_close'),1)
++                test.assertTrue(any(item['message']==str(secondary) for item in owner.events[-1]['secondary']))
++            evidence.append(dict(kind='interior_failure',target=target,primary_present=primary_present,attempts=attempts,retirement=list(owner.events),primary_preserved=True))
++            fixture_cleanup([value for value in p.TEMPORARY_OWNERS if value not in old_owners],objects)
++    # A root-open return crossing C followed by fstat failure must keep the
++    # already-observed deadline as primary, with the safety error secondary.
++    objects=[];old_owners=list(p.TEMPORARY_OWNERS);now=[1.];secondary=OSError('post-cross root fstat')
++    actual_ctor=tempfile.TemporaryDirectory;actual_boundary=p.RetirementGate.boundary;actual_call=p.RetirementGate.call
++    def constructor(*args,**kwargs):
++        obj=actual_ctor(*args,**kwargs);objects.append(obj);return obj
++    def boundary(gate,label,point):
++        if label=='root_open' and point=='after':now[0]=3.
++        return actual_boundary(gate,label,point)
++    def call(gate,label,function,*args,**kwargs):
++        if label=='root_fstat':
++            def function(*args,**kwargs):raise secondary
++        return actual_call(gate,label,function,*args,**kwargs)
++    with patch.object(p.time,'monotonic',side_effect=lambda:now[0]),patch.object(p.RetirementGate,'boundary',boundary),patch.object(p.RetirementGate,'call',call):
++        with test.assertRaises(TimeoutError) as caught:
++            p.operation(p.owned_temporary_directory,constructor,(),dict(prefix='root-cross-fault-',dir=str(root)),3.,deadline=3.)
++    owner=caught.exception.s1_temporary_owners[0]
++    test.assertTrue(owner.unresolved);test.assertIsNone(owner.root_fd);test.assertIsNone(owner.parent_fd)
++    test.assertTrue(any(str(secondary) in note for note in caught.exception.__notes__))
++    test.assertFalse(any(row['operation']=='scandir_owned_fd' for event in owner.events for row in event['operations']))
++    evidence.append(dict(kind='root_crossing_secondary',primary_class=type(caught.exception).__name__,notes=caught.exception.__notes__,retirement=list(owner.events)))
++    fixture_cleanup([value for value in p.TEMPORARY_OWNERS if value not in old_owners],objects)
++    # Return-time crossings retain the result before every post-operation gate.
++    targets=('root_open','root_fstat','root_named_stat','openat_directory_nofollow','scandir_owned_fd','scandir_next','scandir_close','unlinkat','rmdirat','rmdirat_root','close_child_descriptor','close_root_descriptor','close_parent_descriptor')
++    for target in targets:
++        for offset in (-.001,0.,.001):
++            for pending_primary in (False,True):
++                now=[1.];C=3.;objects=[];old_owners=list(p.TEMPORARY_OWNERS);hit=[];owners=[]
++                actual_ctor=tempfile.TemporaryDirectory;actual_boundary=p.RetirementGate.boundary
++                primary=RuntimeError('original crossing primary');caught=None
++                def constructor(*args,**kwargs):
++                    obj=actual_ctor(*args,**kwargs);objects.append(obj)
++                    for name in ('a','b'):
++                        (Path(obj.name)/name).mkdir();(Path(obj.name)/name/'item').write_bytes(b'owned')
++                    return obj
++                def boundary(gate,label,point):
++                    if label==target and point=='after' and not hit:
++                        current=p.TEMPORARY_OWNERS[-1];owners.append(current)
++                        if label=='root_open':test.assertIsNotNone(current.root_fd)
++                        if label=='openat_directory_nofollow':test.assertIsNotNone(current.children[-1]['fd'])
++                        if label=='scandir_owned_fd':test.assertIsNotNone(current.iterators[-1]['iterator'])
++                        hit.append(dict(operation=label,returned_at=C+offset));now[0]=C+offset
++                    return actual_boundary(gate,label,point)
++                with contextlib.ExitStack() as stack,patch.object(p.time,'monotonic',side_effect=lambda:now[0]),patch.object(p.RetirementGate,'boundary',boundary):
++                    no_late_work(stack,now,C)
++                    try:
++                        # Acquiring at C is also beyond W: finish only safety
++                        # metadata, retire, then propagate the original timeout.
++                        owner=p.operation(p.owned_temporary_directory,constructor,(),dict(prefix='cross-retire-',dir=str(root)),C,deadline=C)
++                        if pending_primary:
++                            try:raise primary
++                            except RuntimeError:owner.cleanup()
++                        else:owner.cleanup()
++                    except BaseException as error:caught=error
++                test.assertEqual(len(hit),1,(target,offset,pending_primary))
++                owner=owners[0];test.assertFalse(owner.unresolved);test.assertNotIn(owner,p.TEMPORARY_OWNERS)
++                test.assertTrue(owner.events[-1]['resolved']);test.assertFalse(Path(objects[0].name).exists())
++                all_events=[event for group in owner.events for event in group['operations']]
++                test.assertTrue(all(event['completed'] for event in all_events))
++                held_fds={owner.events[0]['parent_fd']};held_iterators=set()
++                for operation_event in all_events:
++                    if 'acquired_fd' in operation_event:
++                        test.assertNotIn(operation_event['acquired_fd'],held_fds);held_fds.add(operation_event['acquired_fd'])
++                    if operation_event['operation'].startswith('close_'):
++                        test.assertIn(operation_event['fd'],held_fds);held_fds.remove(operation_event['fd'])
++                    if operation_event['operation']=='scandir_owned_fd':held_iterators.add(operation_event['iterator_id'])
++                    if operation_event['operation']=='scandir_close':
++                        test.assertIn(operation_event['iterator_id'],held_iterators);held_iterators.remove(operation_event['iterator_id'])
++                test.assertEqual(held_fds,set());test.assertEqual(held_iterators,set())
++                if offset>=0:
++                    test.assertTrue(any(group.get('transitions') for group in owner.events))
++                    if pending_primary and not target.startswith('root_'):test.assertIsNone(caught);test.assertTrue(hasattr(primary,'s1_temporary_retirement'))
++                    else:test.assertIsInstance(caught,TimeoutError)
++                else:test.assertIsNone(caught)
++                test.assertTrue(all(child['fd'] is None and child['closed'] for child in owner.children))
++                test.assertTrue(all(iterator['closed'] for iterator in owner.iterators))
++                count=len(all_events);owner.cleanup();test.assertEqual(sum(len(group['operations']) for group in owner.events),count)
++                evidence.append(dict(kind='return_crossing',target=target,offset=offset,primary_present=pending_primary,hit=hit,retirement=list(owner.events),all_handles_retired=True))
++                fixture_cleanup([value for value in p.TEMPORARY_OWNERS if value not in old_owners],objects)
++    # Crossing plus a secondary uncertain close: keep the pending primary and
++    # the exact returned child handle, attempt no second close.
++    objects=[];old_owners=list(p.TEMPORARY_OWNERS);now=[1.];primary=RuntimeError('pending child acquisition primary');secondary=OSError('child close uncertainty')
++    actual_boundary=p.RetirementGate.boundary;actual_call=p.RetirementGate.call;hit=[];failed=[]
++    def boundary(gate,label,point):
++        if label=='openat_directory_nofollow' and point=='after':now[0]=3.;hit.append(p.TEMPORARY_OWNERS[-1].children[-1]['fd'])
++        return actual_boundary(gate,label,point)
++    def call(gate,label,function,*args,**kwargs):
++        if label=='close_child_descriptor':
++            failed.append(args[0])
++            def function(*args,**kwargs):raise secondary
++        return actual_call(gate,label,function,*args,**kwargs)
++    obj=tempfile.TemporaryDirectory(prefix='cross-secondary-',dir=root);obj._finalizer.detach();objects.append(obj)
++    (Path(obj.name)/'nested').mkdir()
++    with patch.object(p.time,'monotonic',side_effect=lambda:now[0]):
++        owner=p.operation(p.owned_temporary_directory,lambda **kwargs:obj,(),dict(dir=str(root)),3.,deadline=2.)
++        with patch.object(p.RetirementGate,'boundary',boundary),patch.object(p.RetirementGate,'call',call):
++            try:raise primary
++            except RuntimeError as pending:owner.cleanup();test.assertIs(pending,primary)
++    test.assertEqual(failed,hit);test.assertEqual(len(hit),1);test.assertIn(hit[0],owner.uncertain_descriptors)
++    test.assertIn(owner,primary.s1_temporary_owners);test.assertTrue(owner.unresolved)
++    evidence.append(dict(kind='crossing_secondary',retirement=list(owner.events),returned=hit,close_attempts=failed,same_primary=True))
++    fixture_cleanup([value for value in p.TEMPORARY_OWNERS if value not in old_owners],objects)
++    # CWD entry/pre-return/post-return crossings must never discard the only
++    # restoration FD before a successful fchdir, including a pending primary.
++    original_cwd=Path.cwd()
++    for target in ('fchdir_original','close_original_cwd'):
++        for point in ('before','after'):
++            for offset in (-.001,0.,.001):
++                for fault in ('none','restore','close'):
++                    owner=p.OwnedWorkingDirectory();fd=owner.fd;now=[1.];primary=RuntimeError('cwd crossing primary');hits=[]
++                    os.chdir(root);actual_boundary=p.RetirementGate.boundary;actual_call=p.RetirementGate.call
++                    def boundary(gate,label,phase):
++                        if label==target and phase==point and not hits:now[0]=3.+offset;hits.append(label)
++                        return actual_boundary(gate,label,phase)
++                    def call(gate,label,function,*args,**kwargs):
++                        if (fault=='restore' and label=='fchdir_original') or (fault=='close' and label=='close_original_cwd'):
++                            def function(*args,**kwargs):raise OSError('cwd '+fault)
++                        return actual_call(gate,label,function,*args,**kwargs)
++                    with contextlib.ExitStack() as stack,patch.object(p.time,'monotonic',side_effect=lambda:now[0]),patch.object(p.RetirementGate,'boundary',boundary),patch.object(p.RetirementGate,'call',call):
++                        no_late_work(stack,now,3.)
++                        try:raise primary
++                        except RuntimeError as pending:owner.restore(3.);test.assertIs(pending,primary)
++                    event=owner.events[-1]
++                    if fault=='none':test.assertEqual(hits,[target],(target,point,offset))
++                    if fault=='restore':
++                        test.assertFalse(event['restored']);test.assertFalse(event['closed']);test.assertEqual(owner.fd,fd);os.fstat(fd)
++                        test.assertNotIn('close_original_cwd',[row['operation'] for row in event['operations']])
++                    else:test.assertEqual(Path.cwd(),original_cwd);test.assertTrue(event['restored'])
++                    test.assertEqual(owner.unresolved,fault!='none')
++                    if fault!='none':test.assertIn(owner,primary.s1_cwd_owners)
++                    os.chdir(original_cwd)
++                    if not event['closed']:os.close(fd)
++                    if owner in p.PROCESS_STATE_OWNERS:p.PROCESS_STATE_OWNERS.remove(owner)
++                    evidence.append(dict(kind='cwd_crossing',target=target,point=point,offset=offset,fault=fault,hits=hits,events=list(owner.events),same_primary=True))
++    test.assertEqual(Path.cwd(),original_cwd)
++    return evidence
++
++
++def publication_equality_controls(test,fixture,root):
++    """Actual supervisor final publication return at before/equal/after C."""
++    from unittest.mock import patch
++    from vipe_benchmark import supervisor as sup
++    from vipe_benchmark.config import load
++    evidence=[]
++    for offset in (-.001,0.,.001):
++        now=[102.];primary=RuntimeError('original pre-worker primary');outcome={};calls=[]
++        directory=Path(root)/('publication-C-'+str(offset));directory.mkdir()
++        reservation=progress_reservation(fixture,4);reservation['monotonic_start']=100.
++        class Session:
++            def admission_guard(self):pass
++            def install_progress(self,*args):raise primary
++            def retire_worker(self):pass
++            def close(self,deadline):return True
++            def ownership(self):return []
++        life=sup.HelperLifecycle(retain=True);life.helpers=[Session()]
++        class Ledger:
++            path=directory/'ledger.jsonl';config=load();jobs={'S1-calibration-recovery-001':dict(resource='gpu')}
++            def reserve(self,*args,**kwargs):return reservation
++            def note(self,*args,**kwargs):pass
++            def finish(self,*args,**kwargs):outcome.update(kwargs)
++        def monitored(*args,**kwargs):
++            phase=kwargs['phase'];calls.append(phase)
++            if phase=='initial_sample':return test.reading
++            if phase=='prelaunch':return {'bounded':'context'}
++            if phase=='reconciliation':return None
++            if phase=='publication':now[0]=104.+offset;return {'bounded':'terminal'}
++            raise AssertionError(phase)
++        with patch.object(sup,'HelperLifecycle',return_value=life),patch.object(sup,'monitored_call',side_effect=monitored),patch.object(sup.time,'monotonic',side_effect=lambda:now[0]),patch.object(sup,'stop_group',return_value=[]),patch.object(sup.subprocess,'Popen',side_effect=AssertionError('no worker creation')):
++            with test.assertRaises(sup.SupervisionFailure) as caught:
++                sup.supervise(Ledger(),'S1-calibration-recovery-001',['unused'],directory/'output',evidence={},sample_resources=test.sampler,terminal_publisher=True)
++        test.assertIs(caught.exception.primary_exception,primary);test.assertEqual(caught.exception.kind,'supervisor')
++        test.assertIn('publication',calls)
++        late=[item for item in caught.exception.secondary_failures if item['phase']=='publication_deadline']
++        test.assertEqual(len(late),0 if offset<0 else 1)
++        if late:test.assertEqual(late[0]['error_class'],'TimeoutError');test.assertEqual(late[0]['observed'],104.+offset)
++        evidence.append(dict(offset=offset,calls=calls,primary_preserved=True,publication_deadline=late,outcome=outcome))
+     return evidence
+ 
+ 
+--- correction006-before/tests/test_vipe_benchmark_s1_recovery.py
++++ correction006-after/tests/test_vipe_benchmark_s1_recovery.py
+@@ -807,7 +807,7 @@
+                     identity_path=graph.root/'synthetic-prospective-identity.json'
+                     identity_path.write_text(json.dumps(dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**identity_fields)))
+                     identity_request=file_record(identity_path)
+-                    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md')]
++                    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md')]
+                     settings={key:'1' for key in (*c.THREADS,'OPENCV_FOR_THREADS_NUM','VIPE_CPU_VALIDATION')};settings['PYTHONPATH']=str(ROOT/'scripts')
+                     admission=dict(approved=True,cleanup_resolved=True,execution_mode='no-timeout',timeout_seconds=None,
+                         kind='aggregate',index=1000,reason='synthetic contract fixture; no execution performed',counts_before={'diagnostic':0,'aggregate':999},
+@@ -882,6 +882,46 @@
+                         elif fault=='unretired':candidate['creation']['retired']=copy.deepcopy(candidate['creation']['after'])
+                         elif fault=='capacity':candidate['creation']['before']['B']=False
+                         else:candidate['creation']['authority']=identity_request
++                        with self.assertRaises(ValueError):c.validate_execution(candidate,valid['receipt'],graph.inner)
++                    # Exact nested types must reject Python-equal bool/int
++                    # substitutions after every enclosing document is rehashed.
++                    identity_faults=('process_ppid_bool','process_extra','process_missing','threads_before_bool','threads_after_missing','thread_extra','thread_identity_substitution','terminal_ppid_bool')
++                    for location in ('note','main_binding','identity_request'):
++                        for fault in identity_faults:
++                            changed_note=copy.deepcopy(note);changed_admission=copy.deepcopy(admission)
++                            request_doc=json.loads(identity_path.read_text())
++                            selected=changed_note if location=='note' else changed_admission['bindings'] if location=='main_binding' else request_doc
++                            ancestor=selected['preexisting_ancestors'][0]
++                            if fault=='process_ppid_bool':ancestor['process_before']['ppid']=False
++                            elif fault=='process_extra':ancestor['process_after']['extra']=0
++                            elif fault=='process_missing':ancestor['process_before'].pop('ppid')
++                            elif fault=='threads_before_bool':ancestor['threads_before'][0]['pid']=True
++                            elif fault=='threads_after_missing':ancestor['threads_after'][0].pop('tid')
++                            elif fault=='thread_extra':ancestor['threads_before'][0]['extra']=0
++                            elif fault=='thread_identity_substitution':ancestor['threads_after'][0]['start_ticks']=2
++                            else:selected['ancestry_terminal']['ppid']=False
++                            identity_path.write_text(json.dumps(request_doc));request_ref=file_record(identity_path)
++                            changed_admission['bindings']['identity_request']=request_ref
++                            admission_path.write_text(json.dumps(changed_admission));admission_ref=file_record(admission_path)
++                            changed_note['admission']=admission_ref
++                            changed_note['bindings']=[admission_ref if row==admitted else request_ref if row==identity_request else row for row in changed_note['bindings']]
++                            note_path.write_text(json.dumps(changed_note))
++                            with self.assertRaises(ValueError):c.no_timeout_launch(file_record(note_path),str(graph.root))
++                            identity_path.write_text(json.dumps(dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**identity_fields)))
++                    admission_path.write_text(json.dumps(admission));note_path.write_text(json.dumps(note))
++                    for fault in ('returncode_bool','completed_int','absent_int','missing','extra','identity_nested_bool','before_process_bool','after_thread_bool','retired_snapshot_bool','retirement_process_float','retirement_thread_float'):
++                        candidate=copy.deepcopy(valid);retirement=candidate['creation']['retirement']
++                        if fault=='returncode_bool':retirement['returncode']=False
++                        elif fault=='completed_int':retirement['completed']=1
++                        elif fault=='absent_int':retirement['absent_after']=1
++                        elif fault=='missing':retirement.pop('completed')
++                        elif fault=='extra':retirement['extra']=None
++                        elif fault=='identity_nested_bool':retirement['identity']['process_before']['ppid']=True
++                        elif fault=='before_process_bool':candidate['creation']['before']['processes'][0]['process_after']['ppid']=True
++                        elif fault=='after_thread_bool':candidate['creation']['after']['processes'][0]['threads_before'][0]['pid']=True
++                        elif fault=='retired_snapshot_bool':candidate['creation']['retired']['complete']=1
++                        elif fault=='retirement_process_float':retirement['identity']['process_before']['ppid']=float(retirement['identity']['ppid'])
++                        else:retirement['identity']['threads_after'][0]['start_ticks']=float(retirement['identity']['threads_after'][0]['start_ticks'])
+                         with self.assertRaises(ValueError):c.validate_execution(candidate,valid['receipt'],graph.inner)
+                     from vipe_benchmark import s1_validation_capture as capture
+                     for arguments in ((None,False),(0,False),(float('inf'),False),(300,True)):
+--- correction006-before/tests/test_vipe_benchmark_supervisor.py
++++ correction006-after/tests/test_vipe_benchmark_supervisor.py
+@@ -3212,6 +3212,8 @@
+                     if name=='runtime_guard' and case['when']=='before':
+                         from test_vipe_benchmark_s1_helper_fixtures import backend_gate_controls,backend_retirement_controls,backend_interior_controls
+                         seen.append(dict(stage='real_backend_cpu_constructor_seams',evidence=backend_gate_controls(self,fixture,state.root),retirement=backend_retirement_controls(self,state.root),interior=backend_interior_controls(self,state.root)))
++                        from test_vipe_benchmark_s1_helper_fixtures import backend_retirement_transition_controls,publication_equality_controls
++                        seen.append(dict(stage='correction006_retirement_and_exact_C',retirement=backend_retirement_transition_controls(self,state.root),publication=publication_equality_controls(self,fixture,state.root)))
+                     if name in publication:
+                         target=publication[name]
+                         current_stage=[''];injected=[False]

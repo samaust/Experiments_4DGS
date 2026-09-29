@@ -1,0 +1,84 @@
+{
+  "utc": "2026-09-23T13:11:11.055067+00:00",
+  "source_map": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/implement-049-correction002-after-ast-001.json",
+    "bytes": 4038459,
+    "sha256": "cbc86a2029a9513d533012d8a9197164e46a488a0f791125102a0840db7476c2"
+  },
+  "source_snapshot_readback_count": 78,
+  "syntax": "all Python members and current driver parsed",
+  "incremental_patch_exact": true,
+  "changed_paths": [
+    "scripts/vipe_benchmark/backends.py",
+    "scripts/vipe_benchmark/s1_evidence.py",
+    "scripts/vipe_benchmark/s1_helper_session.py",
+    "scripts/vipe_benchmark/s1_progress.py",
+    "scripts/vipe_benchmark/s1_validation_capture.py",
+    "scripts/vipe_benchmark/s1_validation_contract.py",
+    "scripts/vipe_benchmark/stages.py",
+    "scripts/vipe_benchmark/supervisor.py",
+    "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+    "tests/test_vipe_benchmark_s1_recovery.py",
+    "tests/test_vipe_benchmark_supervisor.py"
+  ],
+  "scoped_diff_check": {
+    "command": [
+      "git",
+      "diff",
+      "--check",
+      "--",
+      "scripts/vipe_benchmark/backends.py",
+      "scripts/vipe_benchmark/s1_evidence.py",
+      "scripts/vipe_benchmark/s1_helper_session.py",
+      "scripts/vipe_benchmark/s1_progress.py",
+      "scripts/vipe_benchmark/s1_validation_capture.py",
+      "scripts/vipe_benchmark/s1_validation_contract.py",
+      "scripts/vipe_benchmark/stages.py",
+      "scripts/vipe_benchmark/supervisor.py",
+      "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "tests/test_vipe_benchmark_s1_recovery.py",
+      "tests/test_vipe_benchmark_supervisor.py"
+    ],
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "deadline_rows": 114,
+  "memo_rows": 16,
+  "source_assertion_anchors": [
+    "witness.target,[]",
+    "witness.successor,[]",
+    "snapshot_files(),injection_files[0]",
+    "owned_descriptors,{}",
+    "content,bytes(expected)"
+  ],
+  "named_helper_tripwires": [
+    {
+      "line": 1128,
+      "expression": "raise AssertionError('named ' + role + ' entered at deadline: ' + name + '/' + attribute)"
+    },
+    {
+      "line": 1168,
+      "expression": "raise AssertionError('named stream operation entered late: ' + name)"
+    },
+    {
+      "line": 1181,
+      "expression": "raise AssertionError('named socket successor entered late')"
+    },
+    {
+      "line": 1224,
+      "expression": "raise AssertionError('missing named deadline witness ' + name)"
+    }
+  ],
+  "reviewed_closures": [
+    "named per-case target/successor and actual predecessor",
+    "NPZ member/finalization and exact partial writes",
+    "frame62 first-result and distinct successors",
+    "supervisor/scenario/P primary and secondary cleanup",
+    "backend primitive gates and exact-root/CWD exceptions",
+    "fresh exact Main/root/thread/creation/retirement bindings",
+    "named helper/race/detached returned-handle retention"
+  ],
+  "runtime_execution": false,
+  "source_edits_after_stop": false
+}

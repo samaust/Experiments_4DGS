@@ -1,0 +1,19 @@
+{
+  "schema": "plan049-main-process-preflight/v1",
+  "observed_utc": "2026-09-23T23:50:38Z",
+  "command": "python3 - <<'PY'\nimport os,re\nfrom pathlib import Path\nnames=('launch-049-exec.py','s1_validation_capture.py','vipe_benchmark.s1_cpu_helper')\nitems=[]; errors=[]; count=0\nfor q in Path('/proc').iterdir():\n if not q.name.isdigit(): continue\n count+=1\n try:\n  argv=[x.decode('utf-8','replace') for x in (q/'cmdline').read_bytes().split(b'\\0') if x]\n  matched=[n for n in names if any(a==n or a.endswith('/'+n) for a in argv)]\n  if not matched and not any(re.fullmatch(r'test_vipe_benchmark_[A-Za-z0-9_]+\\.py',Path(a).name) for a in argv): continue\n  status=(q/'status').read_text().splitlines(); threads=next((int(x.split(':',1)[1].strip()) for x in status if x.startswith('Threads:')),None)\n  raw=(q/'stat').read_text(); tail=raw[raw.rfind(')')+2:].split(); ppid=int(tail[1]) if len(tail)>1 else None\n  items.append({'pid':int(q.name),'ppid':ppid,'threads':threads,'argv':argv[:8],'matches':matched})\n except FileNotFoundError: pass\n except PermissionError as e: errors.append(f'{q.name}:PermissionError')\n except OSError as e: errors.append(f'{q.name}:{type(e).__name__}')\nprint({'proc_entries':count,'matching_plan049_workloads':items,'scan_errors':errors})\nPY",
+  "execution": {
+    "sandbox_permissions": "require_escalated",
+    "justification": "Read-only host process census to verify Plan049 ownership and CPU capacity before the already authorized diagnostic007 launch; the sandbox process view is namespace-limited.",
+    "prefix_rule": ["python3"],
+    "exit_code": 0,
+    "wall_time_seconds": 4.9
+  },
+  "result": {
+    "proc_entries": 465,
+    "matching_plan049_workloads": [],
+    "scan_errors": []
+  },
+  "ownership_disposition": "No preexisting Plan049 driver, capture, helper, or benchmark test process is visible in the host process view. Diagnostic006 had no admission or tests and the user directed that it be treated as lost.",
+  "admission_capacity": "Measure the new Main driver from the exact returned exec session before admission; require the reviewed complete identity/ancestor checks, H=0, and B+max(1,H)<=8."
+}

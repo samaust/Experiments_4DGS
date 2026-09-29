@@ -1,0 +1,460 @@
+--- before/scripts/vipe_benchmark/s1_validation_contract.py
++++ after/scripts/vipe_benchmark/s1_validation_contract.py
+@@ -395,10 +395,115 @@
+     require(value['retirement']==dict(identity=child,method='matching Popen.wait',returncode=0,completed=True,absent_after=True),'exact matching child retirement')
+ 
+ 
++def session_json(path):
++    """Admission evidence rejects duplicate keys and nonfinite JSON at every depth."""
++    def pairs(items):
++        result={}
++        for key,value in items:
++            require(key not in result,'duplicate session evidence key')
++            result[key]=value
++        return result
++    def invalid(value):raise ValueError('nonfinite session evidence: '+value)
++    value=json.loads(Path(path).read_text(),object_pairs_hook=pairs,parse_constant=invalid)
++    def finite(item):
++        if type(item) is float:require(math.isfinite(item),'finite session JSON number')
++        elif type(item) is dict:
++            for child in item.values():finite(child)
++        elif type(item) is list:
++            for child in item:finite(child)
++    finite(value)
++    return value
++
++
++def session_proof(reference,kind,index,driver,identity_request,admission_path,reason):
++    """Trusted Main transcript correlation; never cross-namespace kernel attestation."""
++    import shlex
++    run=ROOT/'docs/resolve-blocker/plan031-progress-20260922'
++    require(kind in ('diagnostic','aggregate') and type(index) is int and index>0,'session kind/index')
++    suffix=kind+'-'+str(index).zfill(3)
++    proof_record=strict_record(reference)
++    require(proof_record['path']==str(run/('main-session-proof-049-'+suffix+'.json')),'fixed session proof path')
++    proof=session_json(proof_record['path'])
++    fields={'schema','proof_mode','kind','index','session_id','driver','identity_request','admission_path','tool_events','readiness_event','readiness_line','readiness_line_sha256','user_authorization','correction','cross_namespace_kernel_verified'}
++    require(type(proof) is dict and set(proof)==fields,'exact session proof fields')
++    require(proof['schema']=='plan049-session-proof/v1' and proof['proof_mode']=='session-bound/v1' and proof['cross_namespace_kernel_verified'] is False,'explicit session trust model')
++    require(proof['kind']==kind and type(proof['index']) is int and proof['index']==index,'proof kind/index correlation')
++    handle=proof['session_id'];require(type(handle) is int and handle>0,'opaque exact session handle')
++    require(strict_record(proof['driver'])==driver and strict_record(proof['identity_request'])==identity_request,'session driver/request binding')
++    require(identity_request['path']==str(run/('launch-identity-049-'+suffix+'.json')),'fixed session identity path')
++    require(proof['admission_path']==admission_path==str(run/('launch-admission-049-'+suffix+'.json')),'fixed session admission path')
++    authorization=strict_record(proof['user_authorization']);correction=strict_record(proof['correction'])
++    require(authorization['path']==str(run/'authorization-049-session-proof-001.md') and correction['path']==str(run/'plan049-correction-008.md'),'fixed session authorization/correction')
++    require(authorization['sha256']=='6ee2d0f899c6ee20de96415079d9aa07900b51f2321ef37d20af5e7e171bd755' and correction['sha256']=='e68129133349fbbecc25e725025c0cda833c7ab149aaacad0ff05ead4737cf91','authorized session trust amendment bytes')
++    request=session_json(identity_request['path'])
++    request_fields={'schema','kind','index','driver','ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths'}
++    require(type(request) is dict and set(request)==request_fields,'exact session identity request fields')
++    require(request['schema']=='plan049-prospective-identity/v1' and request['kind']==kind and type(request['index']) is int and request['index']==index and strict_record(request['driver'])==driver,'session identity correlation')
++    root=identity_record(request['ownership_root']);ancestors=request['preexisting_ancestors']
++    require(type(ancestors) is list and ancestors,'session full ancestry')
++    cursor=root['ppid'];seen={root['pid']}
++    for row in ancestors:
++        identity_record(row)
++        require(row['pid']==cursor and cursor not in seen and row['boot_id']==root['boot_id'] and row['start_ticks']<=root['start_ticks'],'session ancestry chain')
++        seen.add(cursor);cursor=row['ppid']
++    terminal=request['ancestry_terminal']
++    require(type(terminal) is dict and set(terminal)=={'pid','ppid'} and type(terminal['pid']) is int and type(terminal['ppid']) is int and terminal==dict(pid=ancestors[-1]['pid'],ppid=0) and cursor==0,'session ancestry terminal')
++    require(type(request['retained_wrappers']) is list and request['retained_wrappers']==[],'session wrappers')
++    require(type(request['output_paths']) is list and all(type(p) is str for p in request['output_paths']),'session output paths')
++    events=proof['tool_events'];require(type(events) is list and len(events)>=3,'two mandatory live polls')
++    require(type(proof['readiness_event']) is int and 0<=proof['readiness_event']<len(events)-2,'readiness precedes mandatory live polls')
++    line=proof['readiness_line'];require(type(line) is str and '\n' not in line and '\r' not in line,'complete readiness line')
++    require(type(proof['readiness_line_sha256']) is str and hashlib.sha256(line.encode()).hexdigest()==proof['readiness_line_sha256'],'readiness line hash')
++    # Parse through the same duplicate-key rejecting parser without normalizing output.
++    def unique(items):
++        result={}
++        for key,value in items:
++            require(key not in result,'duplicate readiness key');result[key]=value
++        return result
++    announcement=json.loads(line,object_pairs_hook=unique)
++    require(type(announcement) is dict and set(announcement)=={'awaiting_main_admission','identity_request'} and announcement['awaiting_main_admission']==admission_path and strict_record(announcement['identity_request'])==identity_request,'readiness identity correlation')
++    previous=None;output='';ends=[]
++    def stamp(value):
++        require(type(value) is dict and set(value)=={'utc','monotonic'},'exact event stamp')
++        require(type(value['utc']) is str,'event UTC text')
++        try:utc=datetime.datetime.fromisoformat(value['utc'])
++        except ValueError:raise ValueError('event UTC') from None
++        require(utc.tzinfo is not None and utc.utcoffset()==datetime.timedelta(0),'event UTC timezone')
++        mono=value['monotonic'];require(type(mono) in (int,float) and math.isfinite(mono) and mono>=0,'event finite monotonic')
++        return utc,mono
++    for ordinal,event_record in enumerate(events):
++        strict_record(event_record)
++        require(event_record['path']==str(run/('main-session-049-'+suffix+'-event-'+str(ordinal).zfill(3)+'.json')),'fixed contiguous event path')
++        event=session_json(event_record['path'])
++        require(type(event) is dict and set(event)=={'schema','kind','index','ordinal','role','tool','arguments','result','started','returned','output_sha256'},'exact tool event fields')
++        role='start' if ordinal==0 else 'pre_admission' if ordinal==len(events)-2 else 'at_admission' if ordinal==len(events)-1 else 'readiness'
++        require(event['schema']=='plan049-session-tool-event/v1' and event['kind']==kind and type(event['index']) is int and event['index']==index and type(event['ordinal']) is int and event['ordinal']==ordinal and event['role']==role,'ordered event correlation')
++        start=stamp(event['started']);end=stamp(event['returned'])
++        require(all(a<=b for a,b in zip(start,end)) and (previous is None or all(a<=b for a,b in zip(previous,start))),'ordered tool stamps');previous=end
++        args=event['arguments'];result=event['result']
++        require(type(args) is dict and type(result) is dict,'verbatim tool objects')
++        require(type(result.get('session_id')) is int and result['session_id']==handle and result.get('exit_code') is None and not result.get('isError') and not result.get('error'),'affirmative live tool session')
++        require(type(result.get('output')) is str and type(event['output_sha256']) is str and hashlib.sha256(result['output'].encode()).hexdigest()==event['output_sha256'],'exact tool output hash')
++        require(not result.get('truncated') and not result.get('output_truncated') and 'truncated' not in result['output'].lower(),'untruncated tool output')
++        if ordinal==0:
++            require(event['tool']=='exec_command' and type(args.get('cmd')) is str,'session start command')
++            require(shlex.split(args['cmd'])==['exec',str(ROOT/ARGV[0]),'-B',driver['path'],kind,str(index),reason],'exact sole driver exec command')
++            require(args.get('workdir')==str(ROOT) and args.get('tty') is True and args.get('sandbox_permissions') in ('use_default','require_escalated'),'explicit start cwd/tty/permission')
++            require('env' not in args and 'environment' not in args,'environment supplied by fixed driver')
++        else:
++            require(event['tool']=='write_stdin' and type(args.get('session_id')) is int and args['session_id']==handle and args.get('chars')=='' and type(args.get('chars')) is str,'same-session empty live poll')
++        require(type(args.get('yield_time_ms')) is int and 0<args['yield_time_ms']<=60000,'responsive poll yield')
++        output+=result['output'];ends.append(len(output))
++    require(output==line+'\n' or output==line+'\r\n','sole complete readiness announcement; unexplained output rejected')
++    complete=next((ordinal for ordinal,end in enumerate(ends) if end>=len(output)),None)
++    require(complete==proof['readiness_event'],'readiness event correlation')
++    return proof
++
++
+ def no_timeout_launch(reference,directory,*,diagnostic=False):
+     """Fresh fixed Plan049 authority; the environment cannot choose a plan."""
+     run=ROOT/'docs/resolve-blocker/plan031-progress-20260922'
+-    record=strict_record(reference);note=read_json(record['path'])
++    record=strict_record(reference);note=session_json(record['path'])
+     require(note.get('schema')=='plan049-prospective-launch/v1' and note.get('execution_mode')=='no-timeout'
+             and 'timeout_seconds' in note and note['timeout_seconds'] is None,'Plan049 no-timeout launch required')
+     require(note.get('run_directory')==directory and note.get('kind')==('diagnostic' if diagnostic else 'aggregate'),'no-timeout launch directory/kind')
+@@ -420,7 +525,8 @@
+     require(note.get('command')==expected,'exact no-timeout capture command')
+     admission_record=strict_record(note.get('admission'))
+     require(admission_record in bindings,'bound main admission required')
+-    admission=read_json(admission_record['path'])
++    admission=session_json(admission_record['path'])
++    require(type(admission) is dict,'Main admission dictionary')
+     require(admission.get('approved') is True and admission.get('cleanup_resolved') is True,'approved resolved main admission required')
+     require(admission.get('execution_mode')=='no-timeout' and 'timeout_seconds' in admission and admission['timeout_seconds'] is None,'admission no-timeout mode')
+     require(admission.get('sources')==note['sources'] and admission.get('source_paths')==[r['path'] for r in note['sources']],'admission complete source binding')
+@@ -428,6 +534,7 @@
+         require(admission.get(key)==note.get(note_key),'admission launch identity: '+key)
+     require(type(admission.get('index')) is int and admission['index']>0 and type(admission.get('reason')) is str and admission['reason'].strip(),'positive no-ceiling attempt/reason')
+     command_bindings=admission.get('bindings',{})
++    require(type(command_bindings) is dict,'Main admission binding dictionary')
+     require(command_bindings.get('driver')==driver and command_bindings.get('command')==expected and command_bindings.get('run_directory')==directory,'admission driver/command/output binding')
+     require(command_bindings.get('plan')==file_record(ROOT/'plans/plan_049.md') and command_bindings.get('dispatch')==dispatch_record and command_bindings.get('status')==status and command_bindings.get('authorization')==authorization,'admission fixed authority binding')
+     require(command_bindings.get('stdin')==dict(bytes=len(STDIN.encode()),sha256=hashlib.sha256(STDIN.encode()).hexdigest()),'admission exact stdin')
+@@ -436,7 +543,7 @@
+     require(command_bindings.get('environment')==note.get('environment')==settings,'exact admission/launch environment')
+     require(note.get('cwd')==str(ROOT) and note.get('unset_environment')==['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],'exact launch cwd/unset environment')
+     require(note.get('stdin_identity')==dict(bytes=len(STDIN.encode()),sha256=hashlib.sha256(STDIN.encode()).hexdigest(),content=STDIN),'exact launch stdin identity')
+-    require(set(command_bindings)=={'plan','dispatch','status','authorization','driver','command','environment','stdin','run_directory','identity_request','addenda','ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths'},'exact admission binding fields')
++    require(set(command_bindings)=={'plan','dispatch','status','authorization','driver','command','environment','stdin','run_directory','identity_request','addenda','session_proof','ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths'},'exact admission binding fields')
+     def typed_binding(value):
+         require(type(value) is dict,'identity binding dictionary')
+         identity_record(value.get('ownership_root'))
+@@ -463,13 +570,16 @@
+         require(command_bindings.get(key)==note.get(key),'Main prebound identity: '+key)
+     identity_request=strict_record(command_bindings.get('identity_request'))
+     require(identity_request in bindings,'Main prospective identity request binding')
+-    request=read_json(identity_request['path'])
++    request=session_json(identity_request['path'])
+     typed_binding(request)
+     require(request==dict(schema='plan049-prospective-identity/v1',kind=note['kind'],index=note['attempt_index'],driver=driver,**{key:note[key] for key in ('ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths')}),'exact pre-admission identity request')
+-    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md')]
++    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md')]
+     require(command_bindings.get('addenda')==addenda and all(row in bindings for row in addenda),'current correction authority')
++    proof_record=strict_record(command_bindings.get('session_proof'))
++    proof=session_proof(proof_record,note['kind'],note['attempt_index'],driver,identity_request,admission_record['path'],admission['reason'])
++    require(proof_record in bindings and proof['user_authorization'] in bindings,'note session proof/authorization binding')
+     capacity=admission.get('resource_capacity',{});B=capacity.get('B');H=capacity.get('H')
+-    require(type(B) is int and type(H) is int and min(B,H)>=0 and B+max(1,H)<=8 and capacity.get('charge')==B+max(1,H),'admission exact CPU capacity')
++    require(type(B) is int and type(H) is int and min(B,H)>=0 and B+max(1,H)<=8 and type(capacity.get('charge')) is int and capacity['charge']==B+max(1,H),'admission exact CPU capacity')
+     require(B==len(root['threads']) and H==0,'Main root thread capacity correlation')
+     require(type(capacity.get('artifact_bytes')) is int and 0<=capacity['artifact_bytes']<=150*1024**3,'admission artifact capacity')
+     return note
+--- before/tests/test_vipe_benchmark_s1_recovery.py
++++ after/tests/test_vipe_benchmark_s1_recovery.py
+@@ -807,20 +807,58 @@
+                     identity_path=graph.root/'synthetic-prospective-identity.json'
+                     identity_path.write_text(json.dumps(dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**identity_fields)))
+                     identity_request=file_record(identity_path)
+-                    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md')]
++                    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md')]
+                     settings={key:'1' for key in (*c.THREADS,'OPENCV_FOR_THREADS_NUM','VIPE_CPU_VALIDATION')};settings['PYTHONPATH']=str(ROOT/'scripts')
++                    # Synthetic file-routing seam: fixed logical R paths backed by
++                    # this disposable fixture only. No Main evidence is published.
++                    from contextlib import ExitStack
++                    import shlex
++                    session_stack=ExitStack();self.addCleanup(session_stack.close)
++                    logical_files={}
++                    original_record=c.file_record;original_strict=c.strict_record;original_json=c.session_json
++                    def routed_record(path):
++                        text=str(path);row=original_record(logical_files.get(text,path))
++                        if text in logical_files:row['path']=text
++                        return row
++                    def routed_strict(row):
++                        if type(row) is dict and row.get('path') in logical_files:
++                            translated=dict(row,path=str(logical_files[row['path']]))
++                            original_strict(translated)
++                            return row
++                        return original_strict(row)
++                    def routed_json(path):return original_json(logical_files.get(str(path),path))
++                    for name,implementation in [('file_record',routed_record),('strict_record',routed_strict),('session_json',routed_json)]:
++                        session_stack.enter_context(patch.object(c,name,side_effect=implementation))
++                    logical_identity=str(run/'launch-identity-049-aggregate-1000.json');logical_files[logical_identity]=identity_path
++                    identity_request=routed_record(logical_identity)
++                    logical_admission=str(run/'launch-admission-049-aggregate-1000.json')
++                    proof_path=graph.root/'synthetic-session-proof.json';logical_proof=str(run/'main-session-proof-049-aggregate-1000.json');logical_files[logical_proof]=proof_path
++                    readiness=json.dumps(dict(awaiting_main_admission=logical_admission,identity_request=identity_request))
++                    session_events=[];event_paths=[]
++                    for ordinal,role in enumerate(('start','pre_admission','at_admission')):
++                        args=dict(cmd=shlex.join(['exec',str(ROOT/c.ARGV[0]),'-B',driver['path'],'aggregate','1000','synthetic contract fixture; no execution performed']),workdir=str(ROOT),tty=True,sandbox_permissions='use_default',yield_time_ms=1000) if ordinal==0 else dict(session_id=12345,chars='',yield_time_ms=1000)
++                        output=readiness+'\n' if ordinal==0 else ''
++                        session_events.append(dict(schema='plan049-session-tool-event/v1',kind='aggregate',index=1000,ordinal=ordinal,role=role,tool='exec_command' if ordinal==0 else 'write_stdin',arguments=args,
++                            result=dict(session_id=12345,output=output,wall_time_seconds=1.),started=dict(utc=f'2026-01-01T00:00:0{ordinal*2}+00:00',monotonic=ordinal*2),returned=dict(utc=f'2026-01-01T00:00:0{ordinal*2+1}+00:00',monotonic=ordinal*2+1),output_sha256=hashlib.sha256(output.encode()).hexdigest()))
++                        logical=str(run/f'main-session-049-aggregate-1000-event-{ordinal:03}.json');physical=graph.root/f'synthetic-session-event-{ordinal}.json';logical_files[logical]=physical;event_paths.append((logical,physical))
++                        physical.write_text(json.dumps(session_events[-1]))
++                    session_authorization=file_record(run/'authorization-049-session-proof-001.md')
++                    proof=dict(schema='plan049-session-proof/v1',proof_mode='session-bound/v1',kind='aggregate',index=1000,session_id=12345,driver=driver,identity_request=identity_request,admission_path=logical_admission,
++                        tool_events=[routed_record(logical) for logical,physical in event_paths],readiness_event=0,readiness_line=readiness,readiness_line_sha256=hashlib.sha256(readiness.encode()).hexdigest(),user_authorization=session_authorization,correction=addenda[-1],cross_namespace_kernel_verified=False)
++                    proof_path.write_text(json.dumps(proof));proof_reference=routed_record(logical_proof)
+                     admission=dict(approved=True,cleanup_resolved=True,execution_mode='no-timeout',timeout_seconds=None,
+                         kind='aggregate',index=1000,reason='synthetic contract fixture; no execution performed',counts_before={'diagnostic':0,'aggregate':999},
+                         sources=outer['sources_before'],source_paths=[r['path'] for r in outer['sources_before']],
+                         resource_capacity=dict(B=1,H=0,charge=2,artifact_bytes=0),
+-                        bindings=dict(plan=plan,dispatch=dispatch_record,status=status,authorization=authorization,driver=driver,
++                        bindings=dict(session_proof=proof_reference,plan=plan,dispatch=dispatch_record,status=status,authorization=authorization,driver=driver,
+                             command=command,environment=settings,run_directory=str(graph.root),stdin=dict(bytes=len(c.STDIN.encode()),sha256=hashlib.sha256(c.STDIN.encode()).hexdigest()),identity_request=identity_request,addenda=addenda,**identity_fields))
+                     admission_path=graph.root/'synthetic-no-timeout-admission.json';admission_path.write_text(json.dumps(admission))
+-                    admitted=file_record(admission_path)
++                    logical_files[logical_admission]=admission_path
++                    admitted=routed_record(logical_admission)
+                     note=dict(schema='plan049-prospective-launch/v1',execution_mode='no-timeout',timeout_seconds=None,
+                         provenance='synthetic contract fixture; no execution performed',run_directory=str(graph.root),kind='aggregate',
+                         attempt_index=1000,reason=admission['reason'],counts_before=admission['counts_before'],
+-                        driver=driver,admission=admitted,bindings=[plan,dispatch_record,status,authorization,admitted,identity_request]+addenda,sources=outer['sources_before'],
++                        driver=driver,admission=admitted,bindings=[plan,dispatch_record,status,authorization,admitted,identity_request,proof_reference,session_authorization]+addenda,sources=outer['sources_before'],
+                         cpu_bound='B+max(1,H)≤8',command=command,environment=settings,cwd=str(ROOT),unset_environment=['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],stdin_identity=dict(bytes=len(c.STDIN.encode()),sha256=hashlib.sha256(c.STDIN.encode()).hexdigest(),content=c.STDIN),**identity_fields)
+                     note_path=graph.root/'synthetic-no-timeout-note.json';note_path.write_text(json.dumps(note))
+                     outer.update(schema='s1-cpu-execution/v2',execution_mode='no-timeout',timeout_seconds=None,
+@@ -832,6 +870,108 @@
+                     outer['end']['monotonic']=401.;outer['end']['utc']=(datetime.datetime(2026,1,1,tzinfo=datetime.timezone.utc)+datetime.timedelta(seconds=401)).isoformat();outer['elapsed_seconds']=401.
+                     graph.publish();self.assertEqual(graph.validate()['provenance'],graph.provenance)
+                     valid=copy.deepcopy(outer)
++                    # Every mutation is rehashed through proof/admission/note.
++                    # These are synthetic schema controls, never tool attestations.
++                    for fault in ('missing_proof','handle_false','handle_float','handle_string','start_handle','poll_argument','poll_return','terminal_poll','missing_handle','omit_poll','reorder_poll','duplicate_poll','readiness_altered','readiness_truncated','readiness_conflict','request_hash','request_path','request_kind','request_index','request_driver','stale_proof','stale_authorization','wrong_mode','kernel_claim','proof_extra','proof_missing','event_extra','event_missing','ordinal_bool','index_float','stamp_bool','stamp_nonfinite','stamp_reverse','readiness_event_bool','duplicate_json','root_float','ancestor_bool','thread_float','root_substitution','ancestor_substitution','thread_substitution','source_stale'):
++                        changed_proof=copy.deepcopy(proof);changed_events=copy.deepcopy(session_events);changed_admission=copy.deepcopy(admission);changed_note=copy.deepcopy(note)
++                        request_doc=dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**copy.deepcopy(identity_fields))
++                        if fault=='handle_false':changed_proof['session_id']=False
++                        elif fault=='handle_float':changed_proof['session_id']=12345.
++                        elif fault=='handle_string':changed_proof['session_id']='12345'
++                        elif fault=='start_handle':changed_events[0]['result']['session_id']=12346
++                        elif fault=='poll_argument':changed_events[1]['arguments']['session_id']=12346
++                        elif fault=='poll_return':changed_events[2]['result']['session_id']=12346
++                        elif fault=='terminal_poll':changed_events[2]['result']['exit_code']=0
++                        elif fault=='missing_handle':changed_events[2]['result'].pop('session_id')
++                        elif fault=='omit_poll':changed_events.pop()
++                        elif fault=='reorder_poll':changed_events[1],changed_events[2]=changed_events[2],changed_events[1]
++                        elif fault=='duplicate_poll':changed_events[2]=copy.deepcopy(changed_events[1])
++                        elif fault=='readiness_altered':changed_events[0]['result']['output']=readiness.replace('1000','1001')+'\n'
++                        elif fault=='readiness_truncated':changed_events[0]['result']['output']=readiness[:-1]
++                        elif fault=='readiness_conflict':changed_events[0]['result']['output']+=readiness+'\n'
++                        elif fault=='request_hash':changed_proof['identity_request']['sha256']='0'*64
++                        elif fault=='request_path':changed_proof['identity_request']['path']=driver['path']
++                        elif fault=='request_kind':request_doc['kind']='diagnostic'
++                        elif fault=='request_index':request_doc['index']=1001
++                        elif fault=='request_driver':request_doc['driver']=plan
++                        elif fault=='stale_authorization':changed_proof['user_authorization']['sha256']='0'*64
++                        elif fault=='wrong_mode':changed_proof['proof_mode']='kernel-attested'
++                        elif fault=='kernel_claim':changed_proof['cross_namespace_kernel_verified']=True
++                        elif fault=='proof_extra':changed_proof['extra']=None
++                        elif fault=='proof_missing':changed_proof.pop('driver')
++                        elif fault=='event_extra':changed_events[1]['extra']=None
++                        elif fault=='event_missing':changed_events[1].pop('role')
++                        elif fault=='ordinal_bool':changed_events[0]['ordinal']=False
++                        elif fault=='index_float':changed_events[1]['index']=1000.
++                        elif fault=='stamp_bool':changed_events[0]['started']['monotonic']=False
++                        elif fault=='stamp_nonfinite':changed_events[0]['started']['monotonic']=float('inf')
++                        elif fault=='stamp_reverse':changed_events[1]['started']['monotonic']=0
++                        elif fault=='readiness_event_bool':changed_proof['readiness_event']=False
++                        elif fault=='root_float':request_doc['ownership_root']['pid']=122.
++                        elif fault=='ancestor_bool':request_doc['preexisting_ancestors'][0]['ppid']=False
++                        elif fault=='thread_float':request_doc['ownership_root']['threads'][0]['tid']=122.
++                        elif fault=='root_substitution':request_doc['ownership_root']=process_identity(123,1,20)
++                        elif fault=='ancestor_substitution':request_doc['preexisting_ancestors'][0]=process_identity(2,0,1)
++                        elif fault=='thread_substitution':request_doc['ownership_root']['threads_after'][0]['start_ticks']+=1
++                        elif fault=='source_stale':changed_admission['sources'][0]['sha256']='0'*64
++                        identity_path.write_text(json.dumps(request_doc));request_ref=routed_record(logical_identity)
++                        if fault not in ('request_hash','request_path'):changed_proof['identity_request']=request_ref
++                        # Request mutations update readiness too, reaching nested validators.
++                        if fault.startswith('request_') and fault not in ('request_hash','request_path') or fault in ('root_float','ancestor_bool','thread_float','root_substitution','ancestor_substitution','thread_substitution'):
++                            changed_proof['readiness_line']=json.dumps(dict(awaiting_main_admission=logical_admission,identity_request=request_ref))
++                            changed_proof['readiness_line_sha256']=hashlib.sha256(changed_proof['readiness_line'].encode()).hexdigest()
++                            changed_events[0]['result']['output']=changed_proof['readiness_line']+'\n'
++                        refs=[]
++                        for ordinal,event in enumerate(changed_events):
++                            event['output_sha256']=hashlib.sha256(event['result']['output'].encode()).hexdigest()
++                            logical,physical=event_paths[ordinal];physical.write_text(json.dumps(event));refs.append(routed_record(logical))
++                        changed_proof['tool_events']=refs;proof_path.write_text(json.dumps(changed_proof))
++                        if fault=='duplicate_json':proof_path.write_text(proof_path.read_text().replace('"schema":','"schema":"duplicate", "schema":',1))
++                        changed_proof_ref=routed_record(logical_proof)
++                        if fault=='stale_proof':changed_proof_ref['sha256']='0'*64
++                        changed_admission['bindings']['session_proof']=changed_proof_ref
++                        changed_admission['bindings']['identity_request']=request_ref
++                        if fault=='missing_proof':changed_admission['bindings'].pop('session_proof')
++                        admission_path.write_text(json.dumps(changed_admission));admission_ref=routed_record(logical_admission)
++                        changed_note['admission']=admission_ref
++                        changed_note['bindings']=[admission_ref if row==admitted else request_ref if row==identity_request else changed_proof_ref if row==proof_reference else row for row in changed_note['bindings']]
++                        note_path.write_text(json.dumps(changed_note))
++                        with self.assertRaises(ValueError):c.no_timeout_launch(file_record(note_path),str(graph.root))
++                    identity_path.write_text(json.dumps(dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**identity_fields)))
++                    for event,(logical,physical) in zip(session_events,event_paths):physical.write_text(json.dumps(event))
++                    proof_path.write_text(json.dumps(proof));admission_path.write_text(json.dumps(admission));note_path.write_text(json.dumps(note))
++                    self.assertEqual(c.session_proof(proof_reference,'aggregate',1000,driver,identity_request,logical_admission,admission['reason'])['proof_mode'],'session-bound/v1')
++                    # Compile the actual driver branches; all process/input/exec
++                    # seams are pure, with no subprocess or observer creation.
++                    import ast,io,types
++                    tree=ast.parse(Path(driver['path']).read_text());main_node=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='main')
++                    entry=next(n for n in main_node.body if isinstance(n,ast.If) and 'preexisting admission forbidden' in ast.unparse(n))
++                    with self.assertRaisesRegex(ValueError,'preexisting admission'):exec(compile(ast.Module(body=[entry],type_ignores=[]),'<driver-entry>','exec'),dict(admission_path=admission_path))
++                    handoff=next(n for n in main_node.body if isinstance(n,ast.If) and 'explicit Main admission handoff required' in ast.unparse(n))
++                    for incoming in ('','ABORT\n','ADMIT','ADMIT\r\n'):
++                        with self.assertRaisesRegex(ValueError,'explicit Main admission'):exec(compile(ast.Module(body=[handoff],type_ignores=[]),'<driver-handoff>','exec'),dict(sys=types.SimpleNamespace(stdin=io.StringIO(incoming))))
++                    exec(compile(ast.Module(body=[handoff],type_ignores=[]),'<driver-handoff>','exec'),dict(sys=types.SimpleNamespace(stdin=io.StringIO('ADMIT\n'))))
++                    local_node=next(n for n in main_node.body if isinstance(n,ast.FunctionDef) and n.name=='local_identity')
++                    final_nodes=main_node.body[-2:]
++                    for fault in ('stable','root','thread','ancestor','unstable'):
++                        observed={122:copy.deepcopy(root_identity),1:copy.deepcopy(identity_fields['preexisting_ancestors'][0])};calls=[];executed=[]
++                        if fault=='root':observed[122]['start_ticks']+=1
++                        elif fault=='thread':observed[122]['threads'].append(dict(observed[122]['threads'][0],tid=123))
++                        elif fault=='ancestor':observed[1]['start_ticks']+=1
++                        def local_process(pid):
++                            calls.append(pid);value=copy.deepcopy(observed[pid])
++                            if fault=='unstable' and len(calls)>2:value['start_ticks']+=1
++                            return value
++                        scope=dict(process=local_process,os=types.SimpleNamespace(getpid=lambda:122,execve=lambda *args:executed.append(args)),root=root_identity,ancestors=identity_fields['preexisting_ancestors'],command=command,env=settings)
++                        exec(compile(ast.Module(body=[local_node],type_ignores=[]),'<driver-local-identity>','exec'),scope)
++                        if fault=='stable':
++                            exec(compile(ast.Module(body=final_nodes,type_ignores=[]),'<driver-exec>','exec'),scope);self.assertEqual(len(executed),1)
++                        else:
++                            with self.assertRaises(ValueError):exec(compile(ast.Module(body=final_nodes,type_ignores=[]),'<driver-exec>','exec'),scope)
++                            self.assertEqual(executed,[])
++                    # Failed/ambiguous Main sends cannot establish successful
++                    # handoff: only actual ADMIT consumption reaches exec. The
++                    # original tool send/terminal evidence remains Main's duty.
+                     for mutation in ('legacy_over_300','null_without_mode','mode_with_timeout','missing_wait','early_completion','missing_receipt','wait_timeout','wait_pid','unapproved'):
+                         graph.outer=copy.deepcopy(valid);candidate=graph.outer
+                         if mutation=='legacy_over_300':
+--- before/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py
++++ after/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py
+@@ -11,6 +11,8 @@
+ 
+ ROOT=Path(__file__).resolve().parents[3]
+ RUN=Path(__file__).resolve().parent
++sys.path.insert(0,str(ROOT/'scripts'))
++from vipe_benchmark.s1_validation_contract import session_json, session_proof, no_timeout_launch
+ 
+ def stamp():return dict(utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),monotonic=time.monotonic())
+ def record(path):
+@@ -27,16 +29,36 @@
+     kind,index,reason=sys.argv[1],int(sys.argv[2]),sys.argv[3]
+     if kind not in ('diagnostic','aggregate') or index<1 or not reason.strip():raise ValueError('launch kind/index/reason')
+     suffix=kind+'-'+str(index).zfill(3)
+-    indices=[int(p.stem.rsplit('-',1)[1]) for p in RUN.glob('launch-note-049-'+kind+'-*.json')]
++    # Include unadmitted/retired driver attempts, not only capture starts.
++    patterns=[r'launch-(?:identity|admission|note)-049-'+kind+r'-(\d+)\.json',
++              r'driver-049-'+kind+r'-(\d+)-exec-start\.json',
++              r'main-session-proof-049-'+kind+r'-(\d+)\.json',
++              r'main-session-049-'+kind+r'-(\d+)-event-\d+\.json',
++              r'main-(?:launch-)?(?:attempt-)?(?:start|terminal)-049-'+kind+r'-(\d+)\.json']
++    indices=[]
++    for path in RUN.iterdir():
++        for pattern in patterns:
++            match=re.fullmatch(pattern,path.name)
++            if match:indices.append(int(match[1]))
++        # Legacy Main records lacked kind in their names; their contents carry it.
++        if re.fullmatch(r'main-launch-(?:attempt-start|terminal)-\d+\.json',path.name):
++            prior=session_json(path)
++            prior_kind=prior.get('kind');prior_index=prior.get('index',prior.get('attempt_index'))
++            if prior_kind is None and type(prior.get('driver_command')) is list and len(prior['driver_command'])==7:
++                prior_kind=prior['driver_command'][4];prior_index=int(prior['driver_command'][5])
++            if prior_kind==kind:
++                if type(prior_index) is not int or prior_index<1:raise ValueError('unknown retired launch index')
++                indices.append(prior_index)
+     if index<=max(indices,default=0):raise ValueError('launch index not increasing')
+     counts={k:len(list(RUN.glob('driver-049-'+k+'-*-exec-start.json'))) for k in ('diagnostic','aggregate')}
+     admission_path=RUN/('launch-admission-049-'+suffix+'.json')
+-    # Main binds the actual existing exec root, never a predicted PID.
++    if admission_path.exists() or admission_path.is_symlink():raise ValueError('preexisting admission forbidden')
++    # Main binds the opaque tool session to local identity, never a predicted PID.
+     # The sole driver may wait on its existing stdin for Main's explicit ADMIT.
+     admission=None
+     directory=RUN/(kind+'-049-'+str(index).zfill(3))
+     if directory.exists():raise ValueError('output path occupied')
+-    dispatch_path=RUN/'implementation-dispatch-049.json';dispatch=json.loads(dispatch_path.read_bytes())
++    dispatch_path=RUN/'implementation-dispatch-049.json';dispatch=session_json(dispatch_path)
+     plan=record(ROOT/'plans/plan_049.md');status=dispatch['implementation_status_snapshot'];authorization=dispatch['authorization_note']
+     if dispatch['schema']!='plan049-implementation-dispatch/v1' or dispatch['plan']!={k:plan[k] for k in ('path','sha256')}:raise ValueError('fixed Plan049 dispatch')
+     if status['path']!=str(RUN/'implementation-status-049.md') or record(Path(status['path']))!=status:raise ValueError('fixed immutable status')
+@@ -73,36 +95,43 @@
+         first=row();threads=tasks();again=tasks();last=row()
+         if first!=last or threads!=again or not threads:raise ValueError('unstable driver identity')
+         return dict(first,threads=threads,threads_before=[dict(task) for task in threads],threads_after=again,process_before=first,process_after=last)
+-    root=process(os.getpid());ancestors=[];cursor=root['ppid'];seen=set()
+-    while cursor:
+-        if cursor in seen:raise ValueError('ancestry cycle')
+-        seen.add(cursor);row=process(cursor);ancestors.append(row);cursor=row['ppid']
+-    if not ancestors:raise ValueError('terminated ancestry required')
++    def local_identity():
++        root=process(os.getpid());ancestors=[];cursor=root['ppid'];seen={root['pid']}
++        while cursor:
++            if cursor in seen:raise ValueError('ancestry cycle')
++            seen.add(cursor);row=process(cursor);ancestors.append(row);cursor=row['ppid']
++        if not ancestors:raise ValueError('terminated ancestry required')
++        if process(os.getpid())!=root or [process(row['pid']) for row in ancestors]!=ancestors:raise ValueError('unstable full driver ancestry')
++        return root,ancestors
++    root,ancestors=local_identity()
+     prefix=RUN/('driver-049-'+suffix)
+     outputs=[str(directory/name) for name in ('receipt.json','execution.json','process-stdout.log','process-stderr.log','stdout.log','stderr.log','stdin.py','runner.py','capture.py')]+[str(prefix)+ending for ending in ('-exec-start.json','-stdout.log','-stderr.log')]
+     identity_request_path=RUN/('launch-identity-049-'+suffix+'.json')
+     identity_binding=dict(ownership_root=root,preexisting_ancestors=ancestors,ancestry_terminal=dict(pid=ancestors[-1]['pid'],ppid=0),retained_wrappers=[],output_paths=outputs)
+     identity_request=publish(identity_request_path,dict(schema='plan049-prospective-identity/v1',kind=kind,index=index,driver=record(Path(__file__)),**identity_binding))
+-    if not admission_path.exists():
+-        print(json.dumps(dict(awaiting_main_admission=str(admission_path),identity_request=identity_request)),flush=True)
+-        if sys.stdin.readline()!='ADMIT\n':raise ValueError('explicit Main admission handoff required')
+-    admission=json.loads(admission_path.read_bytes())
++    print(json.dumps(dict(awaiting_main_admission=str(admission_path),identity_request=identity_request)),flush=True)
++    if sys.stdin.readline()!='ADMIT\n':raise ValueError('explicit Main admission handoff required')
++    admission=session_json(admission_path)
++    if type(admission) is not dict:raise ValueError('Main admission dictionary')
+     if any(admission.get(k)!=v for k,v in dict(kind=kind,index=index,reason=reason,counts_before=counts,execution_mode='no-timeout',timeout_seconds=None,cpu_bound='B+max(1,H)≤8').items()):raise ValueError('main admission correlation')
+     if admission.get('approved') is not True or admission.get('cleanup_resolved') is not True:raise ValueError('main cleanup/approval prerequisite')
+     if 'timeout_seconds' not in admission:raise ValueError('explicit null timeout required')
+     capacity=admission.get('resource_capacity',{})
+     B=capacity.get('B');H=capacity.get('H')
+-    if type(B) is not int or type(H) is not int or min(B,H)<0 or B+max(1,H)>8 or capacity.get('charge')!=B+max(1,H):raise ValueError('main resource capacity proof')
++    if type(B) is not int or type(H) is not int or min(B,H)<0 or B+max(1,H)>8 or type(capacity.get('charge')) is not int or capacity['charge']!=B+max(1,H):raise ValueError('main resource capacity proof')
+     if type(capacity.get('artifact_bytes')) is not int or not 0<=capacity['artifact_bytes']<=150*1024**3:raise ValueError('artifact cap proof')
+     if [r['path'] for r in sources]!=admission['source_paths'] or sources!=admission['sources']:raise ValueError('main source snapshot changed')
+-    addenda=[record(RUN/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md')]
+-    expected=dict(plan=plan,dispatch=record(dispatch_path),status=status,authorization=authorization,driver=record(Path(__file__)),command=command,environment=settings,stdin=dict(bytes=len(stdin),sha256=hashlib.sha256(stdin).hexdigest()),run_directory=str(directory),identity_request=identity_request,addenda=addenda,**identity_binding)
++    addenda=[record(RUN/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md')]
++    proof_record=record(RUN/('main-session-proof-049-'+suffix+'.json'))
++    proof=session_proof(proof_record,kind,index,record(Path(__file__)),identity_request,str(admission_path),reason)
++    expected=dict(session_proof=proof_record,plan=plan,dispatch=record(dispatch_path),status=status,authorization=authorization,driver=record(Path(__file__)),command=command,environment=settings,stdin=dict(bytes=len(stdin),sha256=hashlib.sha256(stdin).hexdigest()),run_directory=str(directory),identity_request=identity_request,addenda=addenda,**identity_binding)
+     if json.dumps(admission.get('bindings'),sort_keys=True,allow_nan=False)!=json.dumps(expected,sort_keys=True,allow_nan=False):raise ValueError('main immutable typed command/authority/identity binding')
+-    if process(os.getpid())!=root or [process(row['pid']) for row in ancestors]!=ancestors:raise ValueError('Main prospective identity changed')
++    if local_identity()!=(root,ancestors):raise ValueError('Main prospective identity changed')
+     if capacity['B']!=len(root['threads']) or capacity['H']!=0:raise ValueError('Main live driver capacity mismatch')
+-    bindings=[plan,record(dispatch_path),status,authorization,record(admission_path),identity_request]+addenda
++    bindings=[plan,record(dispatch_path),status,authorization,record(admission_path),identity_request,proof_record,proof['user_authorization']]+proof['tool_events']+addenda
+     note=dict(schema='plan049-prospective-launch/v1',execution_mode='no-timeout',timeout_seconds=None,driver=record(Path(__file__)),admission=record(admission_path),bindings=bindings,sources=sources,status={k:status[k] for k in ('bytes','sha256')},kind=kind,attempt_index=index,counts_before=counts,counts_after=dict(counts,**{kind:counts[kind]+1}),reason=reason,command=command,cwd=str(ROOT),run_directory=str(directory),environment=settings,unset_environment=['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],stdin_identity=dict(bytes=len(stdin),sha256=hashlib.sha256(stdin).hexdigest(),content=stdin.decode()),ownership_root=root,preexisting_ancestors=ancestors,ancestry_terminal=dict(pid=ancestors[-1]['pid'],ppid=0),retained_wrappers=[],output_paths=outputs,observed=stamp(),cpu_bound='B+max(1,H)≤8',existing_scenarios=42,direct_scripts=6,scenario_execution_seconds=2,scenario_cleanup_seconds=1)
+     note_record=publish(RUN/('launch-note-049-'+suffix+'.json'),note)
++    no_timeout_launch(note_record,str(directory),diagnostic=kind=='diagnostic')
+     env['S1_OWNED_ROOT_NOTE']=note_record['path'];env['S1_OWNED_ROOT_SHA256']=note_record['sha256']
+     with Path(str(prefix)+'-stdout.log').open('xb') as out,Path(str(prefix)+'-stderr.log').open('xb') as err:
+         logs={}
+@@ -111,8 +140,9 @@
+         # Fresh bytes, not age, determine admission immediately before exec.
+         for item in bindings+sources+[note['driver'],note_record]:
+             if record(Path(item['path']))!=item:raise ValueError('authority/source changed before exec')
+-        if process(os.getpid())!=root:raise ValueError('driver identity changed')
++        if local_identity()!=(root,ancestors):raise ValueError('driver identity changed')
+         publish(Path(str(prefix)+'-exec-start.json'),dict(schema='plan049-exec-launch/v1',execution_mode='no-timeout',timeout_seconds=None,note=note_record,before_launch=stamp(),logs=logs,command=command,replacement='driver execve unchanged child capture'))
+         os.dup2(out.fileno(),1);os.dup2(err.fileno(),2)
++    if local_identity()!=(root,ancestors):raise ValueError('driver full identity changed immediately before exec')
+     os.execve(command[0],command,env)
+ if __name__=='__main__':main()

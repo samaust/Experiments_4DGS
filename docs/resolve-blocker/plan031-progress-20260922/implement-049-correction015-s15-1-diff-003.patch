@@ -1,0 +1,96 @@
+--- before-S15-1/tests/test_vipe_benchmark_s1_helper_fixtures.py
++++ after-S15-1/tests/test_vipe_benchmark_s1_helper_fixtures.py
+@@ -1331,6 +1331,7 @@
+             evidence.append(dict(kind='cwd_acquisition_return',offset=offset,secondary_failure=secondary_failure,acquired=fds,close_attempts=closed,primary_class=None if caught is None else type(caught).__name__))
+     # Iterator acquisition/advance/close and removal failures retain their
+     # first exception; iterator-close failure cannot overwrite next() failure.
++    test.s1_retirement_resource_handoffs=[]
+     for target in ('scandir_owned_fd','scandir_next','scandir_close','openat_directory_nofollow','unlinkat','rmdirat','rmdirat_root'):
+         for primary_present in (False,True):
+             now=[1.];objects=[];old_owners=list(p.TEMPORARY_OWNERS);attempts=[];all_attempts=[];resources=[];retained_objects=[];fd_tokens={};iterator_tokens={};selected=[None]
+@@ -1379,23 +1380,35 @@
+                     value=actual_call(gate,label,function,*args,retain=acquired,**kwargs);event['completed']=True;return value
+                 except BaseException as error:event.update(error_class=type(error).__name__,message=str(error));raise
+                 finally:event['exited']=now[0]
+-            caught=None
+-            with patch.object(p.time,'monotonic',side_effect=lambda:now[0]):
+-                owner=p.operation(p.owned_temporary_directory,constructor,(),dict(prefix='interior-fault-',dir=str(root)),3.,deadline=2.)
+-                for kind,fd in (('parent',owner.parent_fd),('root',owner.root_fd)):
+-                    generation=len(resources);fd_tokens[fd]=generation;retained_objects.append(owner)
+-                    resources.append(dict(generation=generation,kind='directory_fd',parent=None if kind=='parent' else 0,root=1,original_handle=fd,retained_before_retirement=now[0],operation='owned_temporary_directory/'+kind))
+-                with patch.object(p.RetirementGate,'call',call):
+-                    try:
+-                        if primary_present:
+-                            try:raise pending_error
+-                            except RuntimeError as current:owner.cleanup();test.assertIs(current,pending_error)
+-                        else:owner.cleanup()
+-                    except BaseException as error:caught=error
+-                    finally:
+-                        # Persist before any assertion can discard a failed resource witness.
+-                        test.control_record('plan049-retirement-resource-'+target+'-'+str(primary_present),dict(target=target,primary_present=primary_present,selected=selected[0],resources=resources,all_attempts=all_attempts,selected_attempts=attempts,retirement=list(owner.events)))
++            caught=None;owner=None
++            # This bounded enclosing handoff survives unavailable evidence storage.
++            # Keep original exception/resource objects, not only serialized labels.
++            handoff=dict(target=target,primary_present=primary_present,primary=None,secondary=[],
++                resources=resources,all_attempts=all_attempts,selected=selected,selected_attempts=attempts,
++                retained_objects=retained_objects,objects=objects,owner=None,phase='acquisition',cleanup_complete=False)
++            test.s1_retirement_resource_handoffs.append(handoff)
+             try:
++                with patch.object(p.time,'monotonic',side_effect=lambda:now[0]):
++                    owner=p.operation(p.owned_temporary_directory,constructor,(),dict(prefix='interior-fault-',dir=str(root)),3.,deadline=2.)
++                    handoff['owner']=owner
++                    for kind,fd in (('parent',owner.parent_fd),('root',owner.root_fd)):
++                        generation=len(resources);fd_tokens[fd]=generation;retained_objects.append(owner)
++                        resources.append(dict(generation=generation,kind='directory_fd',parent=None if kind=='parent' else 0,root=1,original_handle=fd,retained_before_retirement=now[0],operation='owned_temporary_directory/'+kind))
++                    with patch.object(p.RetirementGate,'call',call):
++                        try:
++                            if primary_present:
++                                handoff['primary']=pending_error
++                                try:raise pending_error
++                                except RuntimeError as current:owner.cleanup();test.assertIs(current,pending_error)
++                            else:owner.cleanup()
++                        except BaseException as error:
++                            caught=error
++                            if handoff['primary'] is None:handoff['primary']=error
++                        finally:
++                            # Persist before any assertion can discard a failed resource witness.
++                            handoff['phase']='persistence'
++                            test.control_record('plan049-retirement-resource-'+target+'-'+str(primary_present),dict(target=target,primary_present=primary_present,selected=selected[0],resources=resources,all_attempts=all_attempts,selected_attempts=attempts,retirement=list(owner.events)))
++                handoff['phase']='assertions'
+                 test.assertIsNotNone(selected[0])
+                 test.assertEqual(attempts.count(target),1)
+                 if primary_present:test.assertIsNone(caught);test.assertIn(owner,pending_error.s1_temporary_owners)
+@@ -1405,8 +1418,32 @@
+                     test.assertEqual(attempts.count('scandir_close'),1)
+                     test.assertTrue(any(item['message']==str(secondary) for item in owner.events[-1]['secondary']))
+                 evidence.append(dict(kind='interior_failure',target=target,primary_present=primary_present,attempts=attempts,selected=selected[0],resources=resources,all_attempts=all_attempts,retirement=list(owner.events),primary_preserved=True))
++            except BaseException as error:
++                primary=handoff['primary']
++                if primary is None:primary=error;handoff['primary']=primary
++                if error is not primary:
++                    handoff['secondary'].append(dict(operation=handoff['phase'],error=error,error_class=type(error).__name__,message=str(error)[:1024]))
++                    primary.add_note('fixture '+handoff['phase']+': '+repr(error))
++                primary.s1_retirement_resource_handoff=handoff
++                if error is primary:raise
++                raise primary from error
+             finally:
+-                fixture_cleanup([value for value in p.TEMPORARY_OWNERS if value not in old_owners],objects)
++                # Entered before acquisition; faults in observation, JSON/file
++                # persistence and assertions cannot bypass real fixture retirement.
++                pending=sys.exception()
++                try:
++                    handoff['cleanup_owners']=[value for value in p.TEMPORARY_OWNERS if value not in old_owners]
++                    fixture_cleanup(handoff['cleanup_owners'],objects)
++                    handoff['cleanup_complete']=True
++                except BaseException as cleanup:
++                    handoff['secondary'].append(dict(operation='fixture_cleanup',error=cleanup,error_class=type(cleanup).__name__,message=str(cleanup)[:1024]))
++                    primary=pending if pending is not None else handoff['primary']
++                    if primary is None:primary=cleanup;handoff['primary']=primary
++                    primary.s1_retirement_resource_handoff=handoff
++                    if cleanup is not primary:primary.add_note('fixture cleanup: '+repr(cleanup))
++                    if pending is None:
++                        if primary is cleanup:raise
++                        raise primary from cleanup
+     # A root-open return crossing C followed by fstat failure must keep the
+     # already-observed deadline as primary, with the safety error secondary.
+     objects=[];old_owners=list(p.TEMPORARY_OWNERS);now=[1.];secondary=OSError('post-cross root fstat')

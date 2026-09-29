@@ -1,0 +1,33 @@
+{
+  "authorization_seconds": 7200,
+  "charges": {
+    "implementation_preparation_before_agent_dispatch": 180.98581264400127,
+    "plan_reserved": 300,
+    "post_plan_handoff": 95.043
+  },
+  "clock_basis": {
+    "after_monotonic": 17926.606074607,
+    "after_utc": "2026-09-23T00:49:24.962980+00:00",
+    "before_monotonic": 17745.620261963,
+    "before_utc": "2026-09-23T00:46:23.977167+00:00",
+    "pre_dispatch_preparation_seconds": 180.98581264400127
+  },
+  "corrects": "implementation-dispatch-048.json remaining_at_dispatch_upper_bound_seconds",
+  "monotonic": 17926.606074607,
+  "reason": "The original dispatch estimate deducted the conservative 300-second Plan charge and 95.043-second post-plan readback interval, but omitted main pre-dispatch preparation performed after the captured 00:46:23.977 UTC clock. Preserve the original record; this append-only addendum charges that interval to the implementation preparation allocation.",
+  "recorded_utc": "2026-09-23T00:49:24.962980+00:00",
+  "remaining_at_actual_agent_dispatch_upper_bound_seconds": 6623.971187355999,
+  "remaining_plan_reservations": {
+    "corrections": 700,
+    "focused": 480,
+    "implementation_preparation_edits": 2819.0141873559987,
+    "independent_validation": 800,
+    "integration_handoff": 1224.957,
+    "optional_first_aggregate": 300,
+    "reserved_final_aggregate": 300
+  },
+  "schema": "plan048-dispatch-budget-correction/v1",
+  "source_test_cutoff_remaining_seconds": 5423.971187355999,
+  "status": "append-only budget reconciliation before dispatch; no implementation or test launched",
+  "unmeasured_pre_authorization_review_seconds": "unknown; pre-authorization and excluded from the fresh authorization"
+}

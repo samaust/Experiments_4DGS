@@ -1,0 +1,1995 @@
+--- /home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-partial-source-017/scripts/vipe_benchmark/s1_cpu_helper.py
++++ /home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_cpu_helper.py
+@@ -3,6 +3,14 @@
+ 
+ 
+ def run(operation):
++    from .s1_progress import operation as guarded,reservation_deadline
++    name=operation['operation'];args=operation.get('args',{})
++    if name in ('prelaunch','accept','reconcile'):
++        return guarded(_run,operation,deadline=reservation_deadline(args['reservation']))
++    return _run(operation)
++
++
++def _run(operation):
+     from pathlib import Path
+     name = operation['operation']
+     args = operation.get('args', {})
+@@ -19,7 +27,7 @@
+         return None
+     if name == 'accept':
+         from .s1_recovery import active_binding, accept_result
+-        from .files import read_json, file_record
++        from .s1_progress import checked_read_json as read_json,checked_file_record as file_record
+         local, output = Path(args['local']), Path(args['output'])
+         active_binding(local, args['config'], args['reservation'], args['command'])
+         request = read_json(args['reservation']['evidence']['request']['path'])
+@@ -42,9 +50,18 @@
+ 
+ 
+ def session_operation(operation, session, request_id):
++    from .s1_progress import operation as guarded,reservation_deadline
++    name=operation['operation'];args=operation.get('args',{})
++    if name in ('prelaunch','accept','reconcile'):
++        return guarded(_session_operation,operation,session,request_id,deadline=reservation_deadline(args['reservation']))
++    return _session_operation(operation,session,request_id)
++
++
++def _session_operation(operation, session, request_id):
+     """Bulk evidence stays in owned immutable files, verified by the work role."""
+     from pathlib import Path
+     from .files import write_json, file_record, read_json
++    from .s1_progress import checked_read_json as read_json,checked_file_record as file_record
+     from .s1_recovery import strict_record
+     name, args = operation['operation'], operation.get('args', {})
+     if name == 'prelaunch':
+@@ -57,7 +74,8 @@
+     if name == 'accept' and args.get('progress_context') is not None:
+         value=run(operation)
+         from .s1_progress import Publisher,accepted_progress
+-        publisher=Publisher(args['progress_context'],'reconcile',request_id,trusted=args.get('trusted_progress'))
++        from .s1_clock import ReservationClock
++        publisher=Publisher(args['progress_context'],'reconcile',request_id,clock=ReservationClock.from_reservation(args['reservation']),trusted=args.get('trusted_progress'))
+         try:accepted_progress(publisher,read_json(Path(args['output'])/'result.json'),value[0],value[1])
+         finally:publisher.close()
+         return list(value)
+@@ -66,7 +84,8 @@
+         try:
+             if args.get('progress_context') is not None:
+                 from .s1_progress import Publisher
+-                publisher=Publisher(args['progress_context'],'reconcile',request_id,trusted=args.get('trusted_progress'))
++                from .s1_clock import ReservationClock
++                publisher=Publisher(args['progress_context'],'reconcile',request_id,clock=ReservationClock.from_reservation(args['reservation']),trusted=args.get('trusted_progress'))
+                 from .s1_recovery import prepare_terminal_evidence
+                 summary=prepare_terminal_evidence(Path(args['local']),args['reservation'],args['outcome'],args['deadline'],config=args['config'],publisher=publisher)
+             else: summary = run(operation)
+--- /home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-partial-source-017/scripts/vipe_benchmark/s1_evidence.py
++++ /home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_evidence.py
+@@ -2,11 +2,15 @@
+ from pathlib import Path
+ import time
+ import traceback
++import contextlib
++import io
+ import numpy as np
+ 
+ from .files import file_record, load_array, read_json, verify_record, write_json
+ from .s1_recovery import JOB, AMENDMENT
+ from .s1_progress import operation, with_deadline, DeadlineSink, before
++from .s1_progress import (checked_file_record as file_record,
++    checked_verify_record as verify_record, checked_read_json as read_json)
+ 
+ REQUIRED = ('detector_raw_token_logits', 'detector_raw_boxes_cxcywh',
+     'detector_token_scores', 'detector_native_boxes_cxcywh', 'detector_selected_scores',
+@@ -17,8 +21,9 @@
+ @with_deadline
+ def load_array(record):
+     # Keep hash verification and the subsequent NPY load as separate W gates.
+-    operation(verify_record,record)
+-    return operation(np.load,record['path'],allow_pickle=False)
++    from .s1_progress import verified_bytes
++    raw=operation(verified_bytes,record)
++    return operation(np.load,io.BytesIO(raw),allow_pickle=False)
+ 
+ 
+ @with_deadline
+@@ -34,9 +39,92 @@
+ 
+ 
+ class BoundedArrays:
+-    def __init__(self, arrays):self.arrays=arrays;self.files=arrays.files
++    """One immutable materialization of each member per verified open snapshot."""
++    def __init__(self, arrays):
++        self.arrays=arrays;self.files=arrays.files;self.materialized={};self.bytes=0
+     def __contains__(self, key):return key in self.files
+-    def __getitem__(self, key):return operation(self.arrays.__getitem__,key)
++    def __enter__(self):return self
++    def __exit__(self,*exception):self.clear()
++    def __getitem__(self, key):
++        before()
++        if key not in self.materialized:
++            value=operation(self.arrays.__getitem__,key)
++            if value.dtype.hasobject:raise ValueError('native intermediates must be non-pickled numeric arrays')
++            value.flags.writeable=False
++            self.materialized[key]=value;self.bytes+=value.nbytes
++        before()
++        return self.materialized[key]
++    def clear(self):self.materialized.clear();self.bytes=0
++
++
++PURE_MEMO_BYTES = 64 * 1024 * 1024
++
++
++class PureMemo:
++    """One call-local pure input/archive pair; never stores a guard decision."""
++    def __init__(self):
++        self.entry=None;self.retained_bytes=0;self.hits=0;self.misses=0;self.evictions=0
++    def clear(self):
++        self.entry=None;self.retained_bytes=0
++    def lookup(self,key):
++        before()
++        if self.entry is not None and self.entry[0]==key:
++            self.hits+=1;before();return self.entry[1:]
++        self.misses+=1
++        if self.entry is not None:self.evictions+=1
++        self.clear();before();return None
++    def retain(self,key,arrays,processed):
++        before()
++        # Count every retained byte buffer exactly once, including key content.
++        seen=set()
++        def size(value):
++            if id(value) in seen:return 0
++            seen.add(id(value))
++            if isinstance(value,np.ndarray):return value.nbytes
++            if isinstance(value,bytes):return len(value)
++            if isinstance(value,str):return len(value.encode())
++            if isinstance(value,dict):return sum(size(k)+size(v) for k,v in value.items())
++            if isinstance(value,(tuple,list)):return sum(size(v) for v in value)
++            return 0
++        retained=size((key,arrays,processed))
++        self.clear()
++        if retained<=PURE_MEMO_BYTES:
++            self.entry=(key,dict(arrays),processed);self.retained_bytes=retained
++        before()
++        return self.entry is not None
++
++
++@contextlib.contextmanager
++def numerical_snapshot(archive,rgb_record,rgb,memo=None):
++    """Fresh bytes/descriptor binding precedes every lookup, including a hit."""
++    from .s1_progress import verified_bytes
++    arrays=None;opened=None
++    try:
++        archive_raw=operation(verified_bytes,archive)
++        rgb_raw=operation(verified_bytes,rgb_record)
++        key=(archive_raw,rgb_raw,rgb.dtype.str,tuple(rgb.shape),operation(rgb.tobytes),
++            'PIL-bilinear-800-1333/float32/255/imagenet-frozen-v1')
++        cached=None if memo is None else operation(memo.lookup,key)
++        if cached is None:
++            opened=operation(np.load,io.BytesIO(archive_raw),allow_pickle=False)
++            arrays=BoundedArrays(opened)
++            expected=operation(processed_rgb,rgb)
++            expected.flags.writeable=False
++        else:
++            values,expected=cached
++            class Members:
++                files=list(values)
++                def __getitem__(self,key):return values[key]
++            arrays=BoundedArrays(Members())
++        yield arrays,expected
++        if memo is not None and cached is None:
++            memo.retain(key,arrays.materialized,expected)
++    except BaseException:
++        if memo is not None:memo.clear()
++        raise
++    finally:
++        if arrays is not None:arrays.clear()
++        if opened is not None:opened.close()
+ 
+ 
+ def elapsed(clock, *, work=True):
+@@ -65,6 +153,16 @@
+ 
+ 
+ def first_record(request, output, status, *, clock, rows=(), runtime=None, error=None,
++                 stage=None, raw=(), checks=()):
++    from .s1_clock import require_clock
++    if clock is not None:before(clock.work_deadline if status=='passed' else clock.total_deadline)
++    verified=require_clock(clock) if status=='passed' else clock
++    deadline=verified.work_deadline if status=='passed' else None
++    return operation(_first_record,request,output,status,clock=clock,rows=rows,runtime=runtime,
++        error=error,stage=stage,raw=raw,checks=checks,deadline=deadline)
++
++
++def _first_record(request, output, status, *, clock, rows=(), runtime=None, error=None,
+                  stage=None, raw=(), checks=()):
+     from .s1_clock import require_clock, diagnostic
+     path = Path(output) / 'first-result-qualification.json'
+@@ -127,6 +225,13 @@
+ 
+ 
+ def reconcile_first(request, output, *, clock, error):
++    from .s1_clock import require_clock
++    if clock is not None:before(clock.work_deadline)
++    return operation(_reconcile_first,request,output,clock=clock,error=error,
++        deadline=require_clock(clock).work_deadline)
++
++
++def _reconcile_first(request, output, *, clock, error):
+     """Reuse verified worker evidence only for cleanup, never advancement."""
+     path = Path(output) / 'first-result-qualification.json'
+     if not path.exists():
+@@ -142,6 +247,21 @@
+ 
+ 
+ def preserve_failure(request, output, identity, error, *, adapter=None, prediction=None,
++                     stage='adapter', parent=None, runtime=None, clock=None):
++    # Raw preservation stops at W. Only bounded diagnostic metadata may then use C.
++    if request.get('job_id')==JOB and clock is not None:
++        now=time.monotonic()
++        if now>=clock.total_deadline:
++            error.s1_progress_unavailable='original total deadline reached; diagnostic publication unavailable'
++            error.s1_failure_record=None;error.s1_first_result=None
++            return None
++        deadline=clock.total_deadline if now>=clock.work_deadline else clock.work_deadline
++    else:deadline=None
++    return operation(_preserve_failure,request,output,identity,error,adapter=adapter,
++        prediction=prediction,stage=stage,parent=parent,runtime=runtime,clock=clock,deadline=deadline)
++
++
++def _preserve_failure(request, output, identity, error, *, adapter=None, prediction=None,
+                      stage='adapter', parent=None, runtime=None, clock=None):
+     """Best effort publication; caller always re-raises the original exception."""
+     output = Path(output)
+@@ -258,18 +378,26 @@
+     if (valid.dtype != np.bool_ or labels.shape != valid.shape or labels.dtype != np.int32
+             or static is None or static.shape != valid.shape or static.dtype != np.uint8):
+         raise ValueError('produced row artifact shape/type changed')
+-    with operation(np.load,row['diagnostics']['path'], allow_pickle=False) as raw_arrays:
+-        arrays = BoundedArrays(raw_arrays)
++    from .s1_progress import verified_bytes
++    with operation(np.load,io.BytesIO(operation(verified_bytes,row['diagnostics'])), allow_pickle=False) as raw_arrays, BoundedArrays(raw_arrays) as arrays:
+         if any(k not in arrays for k in REQUIRED) or any(arrays[k].dtype.hasobject for k in arrays.files):
+             raise ValueError('produced row numeric serialization missing')
+     return identity
+ 
+ 
+ def reconcile_rows(output, request, *, result=None, deadline=None, publisher=None):
++    memo=PureMemo()
++    try:return operation(_reconcile_rows,output,request,result=result,deadline_value=deadline,
++        publisher=publisher,memo=memo,deadline=deadline)
++    finally:memo.clear()
++
++
++def _reconcile_rows(output, request, *, result=None, deadline_value=None, publisher=None,memo=None):
+     """Closed candidate coverage precedes authoritative structural lower bounds."""
+     from .access import output_identities, Identity
+     from .config import load
+     from .s1_progress import candidate_inventory, before
++    deadline=deadline_value
+     expected=output_identities(load(),'calibration');loader=input_loader(request)
+     variants={};errors=[];sources=[];produced=[];qualified=[];closed=False
+     authority={}
+@@ -330,7 +458,7 @@
+                 check();produced_row(row,request,loader=loader,deadline=deadline);check()
+                 produced.append(identity.record())
+                 if publisher is not None:publisher.seal(row,record)
+-                check();qualify_row(row,request,first=identity==expected[0],loader=loader,deadline=deadline);check()
++                check();qualify_row(row,request,first=identity==expected[0],loader=loader,memo=memo,deadline=deadline);check()
+                 qualified.append(identity.record())
+                 if publisher is not None:publisher.seal(row,record,qualified=True)
+             except TimeoutError:raise
+@@ -422,11 +550,19 @@
+ 
+ 
+ @with_deadline
+-def qualify_row(row, request, *, first=False, loader=None):
++def qualify_row(row, request, *, first=False, loader=None, memo=None):
++    try:return _qualify_row(row,request,first=first,loader=loader,memo=memo)
++    except BaseException:
++        if memo is not None:memo.clear()
++        raise
++
++
++def _qualify_row(row, request, *, first=False, loader=None, memo=None):
+     """Recompute retained-query assignments from serialized numeric evidence."""
+     from .contracts import instances, validate_static
+     from .backends import s1_class_assignments
+     from .access import Identity, RGBLoader
++    if request.get('job_id')!=JOB:raise ValueError('S1 row request binding changed')
+     validate_row_numerics(row)
+     identity = Identity(**row['identity'])
+     if first and identity.record() != dict(branch='calibration', camera=0, frame=50, pair_start=None):
+@@ -452,13 +588,11 @@
+     expected_static = SegmentationResult(labels, row['semantics'], valid, {}).static(np.zeros_like(valid))
+     if not np.array_equal(static, expected_static):
+         raise ValueError('S1 semantic static mismatch')
+-    with operation(np.load,operation(verify_record,row['diagnostics'])['path'], allow_pickle=False) as raw_arrays:
+-        arrays = BoundedArrays(raw_arrays)
++    rgb = operation(loader.load,identity)
++    with numerical_snapshot(row['diagnostics'],parent['rgb'],rgb,memo) as (arrays,expected_rgb):
+         if any(k not in arrays for k in REQUIRED) or any(arrays[k].dtype.hasobject for k in arrays.files):
+             raise ValueError('missing/non-numeric S1 evidence')
+-        rgb = operation(loader.load,identity)
+         processed = arrays['detector_rgb']
+-        expected_rgb = operation(processed_rgb,rgb)
+         if (processed.shape != expected_rgb.shape or not np.isfinite(processed).all()
+                 or not np.allclose(processed, expected_rgb, atol=2e-6, rtol=1e-6)):
+             raise ValueError('S1 processed RGB differs from frozen native preprocessing')
+@@ -525,6 +659,12 @@
+ 
+ @with_deadline
+ def validate_result(result, request, config, *, clock):
++    memo=PureMemo()
++    try:return _validate_result(result,request,config,clock=clock,memo=memo)
++    finally:memo.clear()
++
++
++def _validate_result(result, request, config, *, clock, memo):
+     from .s1_clock import require_clock
+     require_clock(clock).match(result.get('reservation_clock'))
+     from .access import output_identities, validate_membership
+@@ -545,7 +685,7 @@
+     if operation(read_json,operation(verify_record,result['configuration'])['path']) != request:
+         raise ValueError('S1 result request changed')
+     for row in result['rows']:
+-        qualify_row(row, request, loader=loader)
++        qualify_row(row, request, loader=loader,memo=memo)
+     return True
+ 
+ 
+--- /home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-partial-source-017/scripts/vipe_benchmark/s1_helper_session.py
++++ /home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py
+@@ -375,13 +375,14 @@
+         self.records={};self.anchor=None;self.lock=_thread.RLock()
+     def register(self,pid,event='spawn'):
+         with self.lock:
++            # The returned PID is charged before the first fallible identity read.
++            value=dict(boot_id=None,pid=pid,creation_parent=os.getpid(),creation_event=event,
++                state='unresolved',threads=[pid])
++            self.records[(None,pid,None)]=value
+             boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+-            value=dict(boot_id=boot,pid=pid,creation_parent=os.getpid(),creation_event=event,
+-                state='unresolved',threads=[pid])
+-            self.records[(boot,pid,None)]=value
+             observed=identity(pid)
+-            value.update(observed,state='live')
+-            del self.records[(boot,pid,None)]
++            value.update(observed,boot_id=boot,state='live')
++            del self.records[(None,pid,None)]
+             self.records[(boot,pid,observed['start_ticks'])]=value
+             return value
+ 
+@@ -401,9 +402,24 @@
+     return observed
+ 
+ 
++def create_owned_process(event,create,*args,**kwargs):
++    """Common real creation gate; callers retain the returned handle immediately."""
++    if os.environ.get('S1_OWNED_ROOT_NOTE'):predispatch_owned(event)
++    return create(*args,**kwargs)
++
++
+ def register_owned(pid,event='spawn'):
+     if os.environ.get('S1_OWNED_ROOT_NOTE'):
+         return INVOCATION.register(pid,event)
++
++
++def retire_owned(pid):
++    """Called only after a matching child wait, including registration failure."""
++    with INVOCATION.lock:
++        for key,record in list(INVOCATION.records.items()):
++            if record['pid']==pid:
++                record.update(state='retired',retirement='matching child wait')
++                if key[2] is None:del INVOCATION.records[key]
+ 
+ 
+ def validation_sources(repository):
+@@ -428,9 +444,15 @@
+     return sorted(paths)
+ 
+ 
++def source_membership(records,repository):
++    expected=[str(path) for path in validation_sources(repository)]
++    if [record['path'] for record in records]!=expected:raise ValueError('owned source membership')
++    return expected
++
++
+ def _launch_anchor(rows,boot,repository):
+     import ast,hashlib,re
+-    run=repository/'docs/continuous-improvement/plan031-s1-recovery-20260919'
++    run=repository/'docs/resolve-blocker/plan031-progress-20260922'
+     def cmd(pid):return Path('/proc',str(pid),'cmdline').read_bytes().rstrip(b'\0').split(b'\0')
+     cursor=os.getpid();seen=set()
+     while cursor in rows and cursor not in seen:
+@@ -446,7 +468,7 @@
+     if Path('/proc',str(runner),'cwd').resolve()!=repository:raise ValueError('owned runner cwd')
+     descriptor=Path('/proc',str(runner),'fd/0');stdin=Path(os.readlink(descriptor))
+     directory=stdin.parent
+-    matched=re.fullmatch(r's1-recovery-(diagnostic|aggregate)-017-(\d{3})',directory.name)
++    matched=re.fullmatch(r'(diagnostic|aggregate)-048-(\d{3})',directory.name)
+     if stdin.name!='stdin.py' or directory.parent!=run or not matched:raise ValueError('owned stdin location')
+     kind,index=matched.groups();timeout=120 if kind=='diagnostic' else 300
+     command=[str(interpreter),'-B','-m','vipe_benchmark.s1_validation_capture',str(directory),'--timeout',str(timeout)]
+@@ -457,15 +479,20 @@
+     expected=ast.literal_eval(next(n.value for n in contract.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='STDIN' for t in n.targets))).encode()
+     named=stdin.stat();opened=descriptor.stat()
+     if (named.st_dev,named.st_ino,named.st_size)!=(opened.st_dev,opened.st_ino,opened.st_size) or stdin.read_bytes()!=expected:raise ValueError('owned stdin descriptor identity')
+-    prefix=run/('s1-recovery-driver-017-'+kind+'-'+index)
++    prefix=run/('driver-048-'+kind+'-'+index)
+     start=json.loads(Path(str(prefix)+'-exec-start.json').read_bytes())
+     for number,suffix in [(1,'-stdout.log'),(2,'-stderr.log')]:
+         live=Path('/proc',str(capture),'fd',str(number)).stat();named=Path(str(prefix)+suffix).stat()
+         if (live.st_dev,live.st_ino)!=(named.st_dev,named.st_ino) or start['logs'][str(number)]!={'device':live.st_dev,'inode':live.st_ino}:raise ValueError('owned driver log descriptor identity')
+-    note_path=run/('s1-recovery-launch-note-017-'+kind+'-'+index+'.json')
++    note_path=run/('launch-note-048-'+kind+'-'+index+'.json')
+     raw=note_path.read_bytes()
+     if start['note']!={'path':str(note_path),'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()}:raise ValueError('owned exec-start note correlation')
+     return dict(runner=runner,capture=capture,note_path=str(note_path),raw=raw,directory=str(directory),command=command,stdin=(opened.st_dev,opened.st_ino,opened.st_size))
++
++
++def thread_identity(pid,tid):
++    fields=Path('/proc',str(pid),'task',str(tid),'stat').read_text().rsplit(')',1)[1].split()
++    return dict(tid=tid,start_ticks=int(fields[19]))
+ 
+ 
+ def owned_workload(note_path, *, extra=(), retained=None):
+@@ -478,6 +505,8 @@
+         if INVOCATION.anchor is None:
+             INVOCATION.anchor=_launch_anchor(rows,boot,repository)
+         anchor=INVOCATION.anchor
++        fresh_anchor=_launch_anchor(rows,boot,repository)
++        if fresh_anchor!=anchor:raise ValueError('owned live launch anchor changed')
+         root_pid=anchor['capture']
+         owned={root_pid}
+         unresolved=[]
+@@ -501,11 +530,14 @@
+         records=[];threads={}
+         for pid in sorted(owned):
+             if pid not in rows:raise ValueError('owned process missing')
+-            row=rows[pid];tids=sorted(int(t.name) for t in Path('/proc',str(pid),'task').iterdir())
++            row=rows[pid];process_before=identity(pid)
++            tids=sorted(int(t.name) for t in Path('/proc',str(pid),'task').iterdir())
+             if not tids or len(tids)!=len(set(tids)):raise ValueError('owned CPU thread ceiling enumeration ambiguity')
+-            if identity(pid)!={k:row[k] for k in ('pid','pgid','start_ticks')}:raise ValueError('owned task identity changed')
++            task_identities=[dict(boot_id=boot,pid=pid,process_start_ticks=process_before['start_ticks'],**thread_identity(pid,tid)) for tid in tids]
++            process_after=identity(pid)
++            if process_before!=process_after or process_after!={k:row[k] for k in ('pid','pgid','start_ticks')}:raise ValueError('owned task identity changed')
+             key=(boot,pid,row['start_ticks']);rec=INVOCATION.records.get(key,{})
+-            rec.update(boot_id=boot,**{k:row[k] for k in ('pid','ppid','pgid','start_ticks')},threads=tids,state='live')
++            rec.update(boot_id=boot,**{k:row[k] for k in ('pid','ppid','pgid','start_ticks')},threads=tids,thread_identities=task_identities,process_before=process_before,process_after=process_after,state='live')
+             rec.setdefault('creation_parent',row['ppid']);rec.setdefault('creation_event','owned descendant census')
+             INVOCATION.records[key]=rec;records.append(dict(rec));threads[pid]=len(tids)
+         B=sum(threads.values())+sum(max(1,len(r['threads'])) for r in unresolved);H=0
+@@ -515,23 +547,22 @@
+         if hashlib.sha256(raw).hexdigest()!=os.environ.get('S1_OWNED_ROOT_SHA256'):raise ValueError('owned root note digest')
+         note=json.loads(raw)
+         if str(note_path)!=anchor['note_path'] or raw!=anchor['raw']:raise ValueError('owned note differs from kernel anchor')
+-        if note.get('schema')!='plan047-prospective-launch/v1':raise ValueError('owned root schema')
++        if note.get('schema')!='plan048-prospective-launch/v1':raise ValueError('owned root schema')
+         root=note['ownership_root']
+         expected=dict(boot_id=boot,**{k:rows[root_pid][k] for k in ('pid','ppid','pgid','start_ticks')})
+         if root!=expected or any(type(root[k]) is not int for k in ('pid','ppid','pgid','start_ticks')):raise ValueError('owned capture root binding')
+         if note['run_directory']!=anchor['directory'] or note['command']!=anchor['command']:raise ValueError('owned output/command binding')
+         if os.environ.get('S1_OWNED_ROOT_NOTE')!=anchor['note_path'] or os.environ.get('S1_VALIDATION_RUN_DIRECTORY',anchor['directory'])!=anchor['directory']:raise ValueError('owned environment locator')
+-        run=repository/'docs/continuous-improvement/plan031-s1-recovery-20260919'
+-        dispatch_path=run/'implementation-dispatch-017.json';dispatch=json.loads(dispatch_path.read_bytes())
+-        if dispatch['plan'] not in note['bindings'] or note['status']!={k:dispatch['status'][k] for k in ('bytes','sha256')}:raise ValueError('owned dispatch/plan/status binding')
+-        if note['cwd']!=str(repository) or dispatch['launch_authority']['driver_path']!=note['driver']['path']:raise ValueError('owned launch authority')
+-        expected_sources=[str(p) for p in validation_sources(repository)]
+-        if [r['path'] for r in note['sources']]!=expected_sources:raise ValueError('owned source membership')
+-        if not anchor.get('validated_bytes'):
+-            for rec in note['bindings']+note['sources']+[note['driver'],dispatch['status'],dispatch['status_snapshot']]:
+-                current=Path(rec['path']).read_bytes()
+-                if len(current)!=rec['bytes'] or hashlib.sha256(current).hexdigest()!=rec['sha256']:raise ValueError('owned source/dispatch bytes changed')
+-            anchor['validated_bytes']=True
++        run=repository/'docs/resolve-blocker/plan031-progress-20260922'
++        dispatch_path=run/'implementation-dispatch-048.json';dispatch_raw=dispatch_path.read_bytes();dispatch=json.loads(dispatch_raw)
++        dispatch_record=dict(path=str(dispatch_path),bytes=len(dispatch_raw),sha256=hashlib.sha256(dispatch_raw).hexdigest())
++        status=dispatch['implementation_status_snapshot'];plan=dispatch['resolver_plan']
++        if dispatch_record not in note['bindings'] or not any(rec['path']==plan['path'] and rec['sha256']==plan['sha256'] for rec in note['bindings']) or note['status']!={k:status[k] for k in ('bytes','sha256')}:raise ValueError('owned dispatch/plan/status binding')
++        if note['cwd']!=str(repository) or str(run/'launch-048-exec.py')!=note['driver']['path']:raise ValueError('owned launch authority')
++        source_membership(note['sources'],repository)
++        for rec in note['bindings']+note['sources']+[note['driver'],status]:
++            current=Path(rec['path']).read_bytes()
++            if len(current)!=rec['bytes'] or hashlib.sha256(current).hexdigest()!=rec['sha256']:raise ValueError('owned source/dispatch bytes changed')
+         ancestors=[];cursor=root['ppid'];seen=set()
+         for recorded in note['preexisting_ancestors']:
+             if cursor in seen or cursor!=recorded['pid'] or cursor not in rows:raise ValueError('owned truncated/cyclic ancestry')
+@@ -574,7 +605,7 @@
+         self.progress_request_id = None
+ 
+     def spawn(self, role, actions, env):
+-        return os.posix_spawn(sys.executable,
++        return create_owned_process('Owner.run '+role,os.posix_spawn,sys.executable,
+             [sys.executable, '-B', '-m', 'vipe_benchmark.s1_cpu_helper', role, self.session.token, '100'],
+             env, file_actions=actions, setsid=True)
+ 
+@@ -588,7 +619,9 @@
+         os.killpg(pid, sig)
+ 
+     def reap_child(self, pid):
+-        return os.waitpid(pid, os.WNOHANG)
++        result=os.waitpid(pid, os.WNOHANG)
++        if result[0]==pid:retire_owned(pid)
++        return result
+ 
+     def run(self):
+         try:
+--- /home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-partial-source-017/scripts/vipe_benchmark/s1_progress.py
++++ /home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_progress.py
+@@ -54,6 +54,16 @@
+     return value
+ 
+ 
++def reservation_deadline(reservation):
++    """Pure early gate; full captured-clock/authority validation still follows."""
++    if type(reservation) is not dict or reservation.get('event')!='reserve':raise ValueError('captured reserve event required')
++    start=number(reservation.get('monotonic_start'));seconds=number(reservation.get('seconds'))
++    if not 0<seconds<=3600:raise ValueError('captured reservation seconds')
++    total=start+seconds;work=total-min(30.,seconds/4)
++    if not start<work<total:raise ValueError('captured reservation window')
++    return work
++
++
+ def digest(value):
+     if type(value) is not str or len(value) != 64 or any(c not in '0123456789abcdef' for c in value):
+         raise ValueError('progress hash')
+@@ -80,13 +90,17 @@
+ 
+ 
+ def encode(value, limit=CHECKPOINT_BYTES):
++    before()
+     primitives(value)
++    before()
+     raw = (json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False)+'\n').encode()
++    before()
+     if len(raw) > limit: raise ValueError('progress byte capacity')
+     return raw
+ 
+ 
+ def decode(raw, limit=CHECKPOINT_BYTES, *, max_depth=12, max_nodes=65536):
++    before()
+     if type(raw) is not bytes or len(raw) > limit: raise ValueError('progress byte capacity')
+     # Bound nesting and token count before json materializes containers.
+     depth = nodes = 0; quoted = escaped = False
+@@ -108,8 +122,11 @@
+             if key in result: raise ValueError('progress duplicate key')
+             result[key] = val
+         return result
++    before()
+     value = json.loads(raw, object_pairs_hook=pairs, parse_constant=lambda _: (_ for _ in ()).throw(ValueError('progress nonfinite')))
++    before()
+     primitives(value, max_depth=max_depth, max_nodes=max_nodes)
++    before()
+     return value
+ 
+ 
+@@ -135,24 +152,31 @@
+ 
+ 
+ def read_bytes(path, limit):
++    before()
+     parent, name = open_parent(path)
+     try:
+         fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+         try:
+-            before = os.fstat(fd)
+-            if not stat.S_ISREG(before.st_mode) or before.st_size > limit: raise ValueError('progress regular file capacity')
++            opened = os.fstat(fd)
++            if not stat.S_ISREG(opened.st_mode) or opened.st_size > limit: raise ValueError('progress regular file capacity')
++            before()
+             with os.fdopen(fd, 'rb', closefd=False) as stream: raw = stream.read(limit+1)
++            before()
+             after = os.fstat(fd)
+             named = os.stat(name, dir_fd=parent, follow_symlinks=False)
+-            if (named.st_dev,named.st_ino)!=(before.st_dev,before.st_ino):raise ValueError('progress descriptor replacement')
+-            if (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns) != (after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns) or len(raw) != before.st_size: raise ValueError('progress read mutation')
++            if (named.st_dev,named.st_ino)!=(opened.st_dev,opened.st_ino):raise ValueError('progress descriptor replacement')
++            if (opened.st_dev,opened.st_ino,opened.st_size,opened.st_mtime_ns,opened.st_ctime_ns) != (after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns) or len(raw) != opened.st_size: raise ValueError('progress read mutation')
++            before()
+             return raw
+         finally: os.close(fd)
+     finally: os.close(parent)
+ 
+ 
+ def record(path, raw):
+-    return dict(path=str(canonical(path)), bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())
++    before()
++    result = dict(path=str(canonical(path)), bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest())
++    before()
++    return result
+ 
+ 
+ def validate_record(value):
+@@ -163,10 +187,42 @@
+ 
+ 
+ def read_record(value, limit=CHECKPOINT_BYTES):
++    before()
+     validate_record(value)
+     raw = read_bytes(value['path'], limit)
+     if record(value['path'], raw) != value: raise ValueError('progress accepted metadata changed')
+     return decode(raw, limit)
++
++
++def verified_bytes(value):
++    """Fresh anchored bytes; a previous check or identical pathname grants nothing."""
++    validate_record(value)
++    raw = read_bytes(value['path'], value['bytes'])
++    if record(value['path'], raw) != value:raise ValueError('progress source bytes changed')
++    return raw
++
++
++def checked_file_record(path):
++    before()
++    size = Path(path).stat().st_size
++    before()
++    return record(path, read_bytes(path, size))
++
++
++def checked_verify_record(value):
++    verified_bytes(value)
++    return value
++
++
++def checked_read_json(path):
++    before()
++    size = Path(path).stat().st_size
++    before()
++    raw = read_bytes(path, size)
++    before()
++    value = json.loads(raw)
++    before()
++    return value
+ 
+ 
+ def fsync_dir(path):
+@@ -218,13 +274,19 @@
+ 
+ def operation(function, *args, deadline=None, **kwargs):
+     """Gate both sides of one fallible operation; a late return grants no authority."""
+-    active = _deadline.get() if deadline is None else deadline
+-    if active is not None:before(active)
+-    if active is not None:trace_event(getattr(function,'__name__','operation'),'start')
+-    value = function(*args, **kwargs)
+-    if active is not None:trace_event(getattr(function,'__name__','operation'),'completed')
+-    if active is not None:before(active)
+-    return value
++    inherited = _deadline.get()
++    active = inherited if deadline is None else deadline
++    if inherited is not None and active is not None:active=min(inherited,active)
++    token = _deadline.set(active)
++    try:
++        if active is not None:before(active)
++        if active is not None:trace_event(getattr(function,'__name__','operation'),'start')
++        value = function(*args, **kwargs)
++        if active is not None:trace_event(getattr(function,'__name__','operation'),'completed')
++        if active is not None:before(active)
++        return value
++    finally:
++        _deadline.reset(token)
+ 
+ 
+ def with_deadline(function):
+@@ -233,7 +295,8 @@
+     def run(*args, deadline=None, **kwargs):
+         inherited = _deadline.get()
+         effective = inherited if deadline is None else deadline
+-        if effective is None and args and isinstance(args[0], Publisher):effective=args[0].deadline
++        if effective is None and kwargs.get('clock') is not None:effective=kwargs['clock'].work_deadline
++        if effective is None and args and isinstance(args[0], Publisher):effective=getattr(args[0],'deadline',None)
+         if inherited is not None and effective is not None:
+             effective = min(inherited, effective)
+         if effective is None:return function(*args, **kwargs)
+@@ -402,6 +465,10 @@
+                 raise ValueError('progress diagnostic string capacity')
+         number(item['observed'])
+     if (value['first'] is None)!=(value['last'] is None):raise ValueError('progress diagnostic observation pair')
++    if value['first'] is None:
++        if value['primary'] is not None or value['dropped'] != 0:raise ValueError('progress no-failure diagnostics')
++    elif value['primary'] != value['first']:
++        raise ValueError('progress original primary diagnostics')
+     if value['first'] is not None and value['last']['observed']<value['first']['observed']:
+         raise ValueError('progress diagnostic observation order')
+     return value
+@@ -463,6 +530,7 @@
+     if order!=sorted(set(order)):raise ValueError('progress identity order/duplicate')
+     validate_diagnostics(value['diagnostics'])
+     if type(value['errors']) is not list or len(value['errors'])>MAX_ERRORS:raise ValueError('progress errors capacity')
++    if bool(value['errors']) != (value['diagnostics']['first'] is not None):raise ValueError('progress failure diagnostics alternative')
+     for err in value['errors']:
+         if type(err) is not str or len(err.encode())>1024:raise ValueError('progress error size')
+     if type(value['runtime']) is not dict or set(value['runtime'])-{'initial-runtime.json','partial-runtime.json','final'}:raise ValueError('progress runtime capacity')
+@@ -559,7 +627,8 @@
+     def acknowledge(self,snapshot,send):
+         with self.lock:
+             if self.frozen:return False
+-            previous=self.snapshot;self.snapshot=snapshot
++            previous=self.snapshot
++            if not self.retain(snapshot):return False
+             try:send()
+             except BaseException:self.snapshot=previous;raise
+             return True
+@@ -589,7 +658,9 @@
+                 self.failure(ValueError('overflow retained alongside conflict'));return
+             coverage_transition(old,value)
+         self._coverage=value
++    @with_deadline
+     def __init__(self,reference,producer,request_id,*,clock=None,request=None,trusted=None):
++        if clock is None:raise ValueError('progress original clock required before context read')
+         self.reference=reference;self.context=context_document(read_record(reference,SMALL_BYTES))
+         if canonical(reference['path'])!=Path(self.context['root'])/'context.json':raise ValueError('progress context path')
+         if clock is not None:clock.match(self.context['clock'])
+@@ -724,9 +795,11 @@
+     def stage(self,name):
+         publication_boundary(name);self.check()
+     def read(self,rec,limit=CHECKPOINT_BYTES):
+-        self.check();value=read_record(rec,limit);self.check();return value
++        self.check();value=operation(read_record,rec,limit,deadline=self.context['clock']['work_deadline']);self.check();return value
+     def tick(self):
+         if self.cancelled() or self.cache.frozen:return
++        return operation(self._tick,deadline=self.context['clock']['work_deadline'])
++    def _tick(self):
+         try:
+             try:
+                 self.stage('dequeue:before');publication_boundary('notice_receive');notice,credentials,sender=receive(self.channel);self.stage('dequeue:after')
+@@ -842,6 +915,7 @@
+     provenance=reference['provenance']
+     if type(provenance) is not dict or set(provenance)!=set(refs):raise ValueError('progress provenance producers')
+     rows={};runtime={};first=None;errors=[];acceptance=None;uncertain=False;newest_unavailable=False
++    coverages={};diagnostics={};sticky=False
+     for producer,rec in refs.items():
+         doc=validate_checkpoint(read_record(rec),context,reference['context'])
+         if doc['producer']!=producer or rec['path']!=str(Path(context['root'])/producer/(str(doc['sequence']).zfill(4)+'.json')):raise ValueError('progress recovery path')
+@@ -856,11 +930,17 @@
+         if proof['previous_checkpoint']!=doc['previous']:raise ValueError('progress previous provenance chain')
+         if proof['previous_checkpoint'] is not None:
+             validate_record(proof['previous_checkpoint']);validate_record(proof['previous_head'])
++            previous=validate_checkpoint(read_record(proof['previous_checkpoint']),context,reference['context'])
++            if previous['producer']!=producer or previous['sequence']+1!=doc['sequence'] or previous['binding']!=doc['binding']:
++                raise ValueError('progress previous checkpoint provenance binding')
++            previous_head=dict(expected_head,sequence=previous['sequence'],current=proof['previous_checkpoint'],previous=previous['previous'])
++            if proof['previous_head']!=record(head_path,encode(previous_head,SMALL_BYTES)):
++                raise ValueError('progress previous head provenance binding')
+         intent=proof['intended_successor']
+         if intent is not None:
+             keys(intent,'binding request_id sequence current previous head completed')
+             validate_notice(dict(schema='s1-progress-notice/v1',context=reference['context'],producer=producer,**intent))
+-            if intent['binding']!=doc['binding'] or intent['sequence']!=doc['sequence']+1 or intent['previous']!=rec or not doc['verified_at']<=intent['completed']<doc['work_deadline']:
++            if intent['binding']!=doc['binding'] or intent['request_id']<doc['request_id'] or intent['sequence']!=doc['sequence']+1 or intent['previous']!=rec or not doc['verified_at']<=intent['completed']<doc['work_deadline']:
+                 raise ValueError('progress foreign successor provenance')
+             expected_next=dict(expected_head,sequence=intent['sequence'],current=intent['current'],previous=rec)
+             if intent['head']!=record(head_path,encode(expected_next,SMALL_BYTES)):
+@@ -886,19 +966,26 @@
+             runtime[key]=rec
+         if first is not None and doc['first_result'] is not None and first!=doc['first_result']:raise ValueError('progress cold first conflict')
+         first=first or doc['first_result'];errors.extend(doc['errors'])
++        coverages[producer]=doc['coverage'];diagnostics[producer]=doc['diagnostics']
++        sticky=sticky or doc['coverage'] in ('conflict','overflow') or bool(doc['diagnostics']['dropped'])
+         if acceptance is not None and doc['acceptance'] is not None and acceptance!=doc['acceptance']:raise ValueError('progress cold acceptance conflict')
+         acceptance=acceptance or doc['acceptance']
+     ordered=[rows[k] for k in sorted(rows)]
+     from .s1_clock import typed_equal
+     if not typed_equal(reference['counts'],counts(ordered,complete=acceptance is not None)):raise ValueError('progress recovery counts')
+-    return dict(counts=counts(ordered,complete=acceptance is not None),acceptance=acceptance,integrity_status='uncertain' if uncertain else 'verified',stop_required=uncertain,produced_identities=[r['identity'] for r in ordered],qualified_identities=[r['identity'] for r in ordered if r['qualified']],
+-        runtime=runtime,first_result=first,verification_errors=errors[:32],scan_complete=acceptance is not None and not uncertain and not newest_unavailable,verified_progress_reference=reference)
++    return dict(counts=counts(ordered,complete=acceptance is not None),acceptance=acceptance,integrity_status='uncertain' if uncertain else 'verified',stop_required=uncertain or sticky,produced_identities=[r['identity'] for r in ordered],qualified_identities=[r['identity'] for r in ordered if r['qualified']],
++        runtime=runtime,first_result=first,verification_errors=errors[:32],coverage=coverages,diagnostics=diagnostics,scan_complete=acceptance is not None and not uncertain and not sticky and not newest_unavailable,verified_progress_reference=reference)
+ 
+ 
+ 
+ class ClosedInventory(list):
+-    def __init__(self):super().__init__();self.directories=[]
++    def __init__(self,root=None):super().__init__();self.directories=[];self.root=None if root is None else canonical(root)
++    def append(self,reference):
++        if self.root is not None and not canonical(reference['path']).is_relative_to(self.root):raise ValueError('progress foreign candidate root')
++        super().append(reference)
+     def recheck(self,deadline=None):
++        return operation(self._recheck,deadline,deadline=deadline)
++    def _recheck(self,deadline=None):
+         visited=0
+         for path,dev,ino,names in self.directories:
+             if deadline is not None:before(deadline)
+@@ -920,14 +1007,27 @@
+             if record(rec['path'],raw)!=rec:raise ValueError('progress inventory content mutation')
+         if deadline is not None:before(deadline)
+ 
++
++def inventory_capacity(name,value,maximum):
++    """Production counter seam, including the exact value that was rejected."""
++    if type(value) is not int or value<0 or value>maximum:
++        error=ValueError('progress '+name+' overflow')
++        error.counter=dict(name=name,value=value,maximum=maximum)
++        raise error
++    return value
++
+ def candidate_inventory(output, result, deadline):
++    return operation(_candidate_inventory,output,result,deadline,deadline=deadline)
++
++
++def _candidate_inventory(output, result, deadline):
+     """Freeze a bounded no-follow inventory before crediting any unsealed row."""
+-    root=canonical(output);candidates=[];sources=ClosedInventory();errors=[];visited=total=0
++    root=canonical(output);candidates=[];sources=ClosedInventory(root);errors=[];visited=total=0
+     def append(source,row,rec):
+         nonlocal total
+-        if len(candidates)>=MAX_CANDIDATES:raise ValueError('progress candidate overflow')
++        inventory_capacity('candidates',len(candidates)+1,MAX_CANDIDATES)
+         raw=encode(row,256*1024);total+=len(raw)
+-        if total>MAX_METADATA:raise ValueError('progress candidate metadata overflow')
++        inventory_capacity('metadata_bytes',total,MAX_METADATA)
+         candidates.append((source,row,rec,hashlib.sha256(raw).hexdigest()))
+     try:
+         raw=operation(read_bytes, root/'result.json', MAX_METADATA, deadline=deadline)
+@@ -938,12 +1038,12 @@
+         parsed=decode(raw, MAX_METADATA, max_depth=64, max_nodes=1048576)
+         if result is None:result=parsed
+         if type(result) is not dict or type(result.get('rows')) is not list:raise ValueError('progress result rows')
+-        if len(result['rows'])>MAX_CANDIDATES:raise ValueError('progress result candidate overflow')
++        inventory_capacity('candidates',len(result['rows']),MAX_CANDIDATES)
+         from .s1_clock import typed_equal
+         if not typed_equal(parsed,result):raise ValueError('progress result snapshot mismatch')
+-        if len(sources)>=MAX_SOURCES:raise ValueError('progress inventory source overflow')
++        inventory_capacity('inventory_sources',len(sources)+1,MAX_SOURCES)
+         total+=len(raw)
+-        if total>MAX_METADATA:raise ValueError('progress candidate metadata overflow')
++        inventory_capacity('metadata_bytes',total,MAX_METADATA)
+         rec=record(root/'result.json',raw);sources.append(rec)
+         for row in result['rows']:
+             if deadline is not None:before(deadline)
+@@ -959,17 +1059,17 @@
+                 if deadline is not None:before(deadline)
+                 observed.append(entry.name)
+                 visited+=1
+-                if visited>MAX_ENTRIES:raise ValueError('progress directory entry overflow')
++                inventory_capacity('directory_entries',visited,MAX_ENTRIES)
+                 location=canonical(path/entry.name)
+                 if entry.is_symlink():raise ValueError('progress inventory symlink')
+                 if entry.is_dir(follow_symlinks=False):
+                     if entry.name.endswith(('-produced-row.json','-qualified-row.json')):raise ValueError('progress directory candidate')
+-                    if depth>=4:raise ValueError('progress inventory depth overflow')
++                    inventory_capacity('inventory_depth',depth+1,4)
+                     child=os.open(entry.name,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW,dir_fd=directory)
+                     try:walk(child,location,depth+1)
+                     finally:os.close(child)
+                 elif entry.name.endswith(('-produced-row.json','-qualified-row.json')):
+-                    if len(sources)>=MAX_SOURCES:raise ValueError('progress inventory source overflow')
++                    inventory_capacity('inventory_sources',len(sources)+1,MAX_SOURCES)
+                     st=entry.stat(follow_symlinks=False)
+                     if not stat.S_ISREG(st.st_mode) or st.st_nlink!=1:raise ValueError('progress candidate alias/nonregular')
+                     raw=operation(read_bytes,location,256*1024,deadline=deadline);rec=record(location,raw);sources.append(rec)
+@@ -984,15 +1084,18 @@
+ 
+ 
+ def publish_segment_row(row,request,loader,clock,publisher,produced_path,qualified_path,*,first=False):
++    return operation(_publish_segment_row,row,request,loader,clock,publisher,produced_path,qualified_path,first=first,deadline=clock.work_deadline)
++
++
++def _publish_segment_row(row,request,loader,clock,publisher,produced_path,qualified_path,*,first=False):
+     """The actual segment boundary: structural commit/ack precedes semantics."""
+     from .s1_evidence import produced_row, qualify_row
+-    from .files import write_json
+-    clock.observe();write_json(produced_path,row);clock.observe()
+-    row_record=record(produced_path,read_bytes(produced_path,256*1024))
++    clock.observe();row_record=write_exclusive(produced_path,encode(row,256*1024));clock.observe()
++    if read_record(row_record,256*1024)!=row:raise ValueError('progress produced row readback')
+     clock.observe();produced_row(row,request,loader=loader,deadline=clock.work_deadline);clock.observe()
+     publisher.seal(row,row_record)
+     clock.observe();checks=qualify_row(row,request,first=first,loader=loader,deadline=clock.work_deadline);clock.observe()
+-    write_json(qualified_path,row);clock.observe()
++    write_exclusive(qualified_path,encode(row,256*1024));clock.observe()
+     publisher.seal(row,row_record,qualified=True)
+     return checks
+ 
+@@ -1026,7 +1129,8 @@
+ def summary_adapter(trusted, ordinary=None):
+     """Independent acknowledged authority wins; verified conflicts fail closed."""
+     if trusted is None:return ordinary
+-    if trusted.get('integrity_status')!='verified':raise ValueError('progress summary uncertainty')
++    if trusted.get('integrity_status') not in ('verified','uncertain'):raise ValueError('progress summary uncertainty')
++    if trusted.get('integrity_status')=='uncertain' and trusted.get('stop_required') is not True:raise ValueError('progress summary uncertainty stop')
+     result=dict(trusted)
+     result['runtime']={k:dict(status='verified',value=validate_record(v)) for k,v in trusted['runtime'].items()}
+     first=trusted['first_result']
+--- /home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-partial-source-017/scripts/vipe_benchmark/s1_recovery.py
++++ /home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_recovery.py
+@@ -7,6 +7,8 @@
+ 
+ from .config import ROOT
+ from .files import file_record, object_hash, read_json, safe_path, verify_record
++from .s1_progress import (checked_file_record as file_record,
++    checked_verify_record as verify_record,checked_read_json as read_json)
+ 
+ SCHEMA = 'vipe-benchmark-s1-amendment-calibration-recovery/v1'
+ JOB = 'S1-calibration-recovery-001'
+@@ -24,6 +26,16 @@
+ # Compatibility exports keep admission and execution on one static contract.
+ from .s1_validation_contract import (SUITES, source_paths, strict_record,
+     required_cases, receipt_totals, validate_wrapper)
++
++
++def strict_record(record):
++    from .s1_progress import validate_record,checked_verify_record,before
++    before();validate_record(record)
++    path=Path(record['path'])
++    if 'prompts' in path.parts or str(path.resolve())!=record['path'] or not path.is_file():
++        raise ValueError('canonical existing file record required')
++    before()
++    return checked_verify_record(record)
+ 
+ 
+ def validation_record(record, amendment, configuration):
+@@ -357,6 +369,11 @@
+ 
+ 
+ def captured_clock(local, config, reservation, command):
++    from .s1_progress import operation,reservation_deadline
++    return operation(_captured_clock,local,config,reservation,command,deadline=reservation_deadline(reservation))
++
++
++def _captured_clock(local, config, reservation, command):
+     from .s1_clock import ReservationClock
+     if type(reservation) is not dict:
+         raise ValueError('captured reservation required for helper clock')
+@@ -475,8 +492,15 @@
+ 
+ 
+ def accept_result(local, config, request, result, output, *, reservation):
++    from .s1_progress import operation,reservation_deadline
++    return operation(_accept_result,local,config,request,result,output,reservation=reservation,
++        deadline=reservation_deadline(reservation))
++
++
++def _accept_result(local, config, request, result, output, *, reservation):
+     from .s1_evidence import validate_result
+     from .files import write_json
++    from .s1_progress import checked_read_json as read_json,checked_file_record as file_record,write_exclusive,encode
+     document = active_binding(local, config, reservation, reservation['command'])
+     clock = captured_clock(local, config, reservation, reservation['command'])
+     if read_json(strict_record(clock.mapping()['request'])['path']) != request:
+@@ -490,13 +514,19 @@
+         result=result_record, first_result=result['first_result'], reservation_clock=clock.mapping(),
+         records=referenced_records([result, request]), count=510)
+     path = output / 'acceptance.json'
+-    write_json(path, value)
+-    return file_record(path)
++    return write_exclusive(path,encode(value,32*1024*1024))
+ 
+ 
+ def prepare_terminal_evidence(local, reservation, outcome, deadline, *, config, publisher=None):
++    from .s1_progress import operation
++    return operation(_prepare_terminal_evidence,local,reservation,outcome,deadline,config=config,
++        publisher=publisher,deadline=deadline)
++
++
++def _prepare_terminal_evidence(local, reservation, outcome, deadline, *, config, publisher=None):
+     """All expensive optional evidence inspection belongs inside work time."""
+     from .s1_evidence import reconcile_rows, evidence_counts, qualify_runtime, reconcile_first
++    from .s1_progress import checked_read_json as read_json,checked_file_record as file_record
+     import time
+     output = Path(local) / 'jobs' / JOB
+     errors = []
+--- /home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-partial-source-017/scripts/vipe_benchmark/stages.py
++++ /home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/stages.py
+@@ -95,16 +95,17 @@
+ 
+ def segment(request, output, config, *, clock=None):
+     from .s1_progress import operation, DeadlineSink
+-    deadline = clock.work_deadline if request.get('job_id') == 'S1-calibration-recovery-001' else None
++    deadline = None
+     if request.get('job_id') == 'S1-calibration-recovery-001':
+         from .s1_clock import require_clock
+         require_clock(clock).observe()
++        deadline = clock.work_deadline
+         import json, os
+         from .s1_progress import Publisher
+         progress=Publisher(json.loads(os.environ['VIPE_S1_PROGRESS_CONTEXT']),'worker',1,clock=clock,request=request)
+     import torch
+     from .backends import build_backend
+-    inputs = read_json(verify_record(request['inputs'])['path'])
++    inputs = operation(read_json,operation(verify_record,request['inputs'],deadline=deadline)['path'],deadline=deadline)
+     loader = RGBLoader(inputs['rgb'], config)
+     component = request['component']
+     branch = request['branch']
+--- /home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-partial-source-017/scripts/vipe_benchmark/supervisor.py
++++ /home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py
+@@ -48,6 +48,8 @@
+     while group_processes(pgid) and time.monotonic() < deadline:
+         time.sleep(.01)
+     process.wait(timeout=max(.01, deadline - time.monotonic()))
++    from .s1_helper_session import retire_owned
++    retire_owned(process.pid)
+     return group_processes(pgid)
+ 
+ 
+@@ -209,6 +211,7 @@
+         exc.verified_progress_reference = lifecycle.progress.reference()
+         lifecycle.poisoned = True
+         primary = exc
++        exc.s1_phase=phase
+         if isinstance(exc, GPUOwnershipError):
+             primary = HelperFailure(dict(error_class='GPUOwnershipError', message=str(exc), phase=phase))
+             primary.verified_progress_reference = lifecycle.progress.reference()
+@@ -284,6 +287,7 @@
+     cleanup_reserve = min(30., reservation['seconds'] / 4)
+     run_deadline = deadline - cleanup_reserve
+     process, stopped, error = None, [], None
++    primary_failure=None;secondary_failures=[]
+     failure_kind, stop_required = 'supervisor', True
+     result_record = None
+     acceptance = None
+@@ -319,13 +323,16 @@
+                 if time.monotonic() >= run_deadline:
+                     raise TimeoutError('S1 prelaunch deadline exhausted')
+                 lifecycle.helpers[0].install_progress(progress_context,run_deadline)
++                if time.monotonic()>=run_deadline:raise TimeoutError('S1 original work deadline after progress installation')
+                 env['VIPE_S1_PROGRESS_CONTEXT'] = json.dumps(progress_context,allow_nan=False)
+             if is_s1 and os.environ.get('S1_OWNED_ROOT_NOTE'):
+                 from .s1_helper_session import predispatch_owned
++                if time.monotonic()>=run_deadline:raise TimeoutError('S1 original work deadline before ownership admission')
+                 owned=predispatch_owned('supervisor worker')
+             if is_s1 and time.monotonic() >= run_deadline:
+                 raise TimeoutError('S1 original work deadline immediately before worker launch')
+-            process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
++            from .s1_helper_session import create_owned_process
++            process = create_owned_process('supervisor worker',subprocess.Popen,command, stdout=log, stderr=subprocess.STDOUT,
+                                        start_new_session=True, env=env)
+             from .s1_helper_session import register_owned
+             register_owned(process.pid,'supervisor worker')
+@@ -395,6 +402,9 @@
+         elif isinstance(exc, HelperFailure):
+             failure_kind, stop_required = exc.kind, True
+         error = f'{type(exc).__name__}: {exc}'
++        primary_failure=dict(error_class=type(exc).__name__,message=str(exc),kind=failure_kind,
++            phase=getattr(exc,'failure',{}).get('phase',getattr(exc,'s1_phase','supervisor')),
++            observed=time.monotonic(),stop_required=stop_required)
+     finally:
+         evidence_summary = None
+         if is_s1 and not lifecycle.poisoned and time.monotonic() < run_deadline:
+@@ -405,6 +415,7 @@
+                     outcome=dict(error=error, result=result_record, acceptance=acceptance), deadline=run_deadline)),
+                     run_deadline, sampler, ledger.config, peak, worker=process, phase='reconciliation', lifecycle=lifecycle)
+             except Exception as exc:
++                secondary_failures.append(dict(error_class=type(exc).__name__,message=str(exc),phase='reconciliation',observed=time.monotonic()))
+                 error = (error or '') + f'; reconciliation failed: {type(exc).__name__}: {exc}'
+                 failure_kind, stop_required = 'evidence_reconciliation', True
+         # A second Ctrl-C must not interrupt process cleanup.
+@@ -420,6 +431,7 @@
+             finally:
+                 stopped = stop_group(process, deadline)
+         except BaseException as exc:
++            secondary_failures.append(dict(error_class=type(exc).__name__,message=str(exc),phase='cleanup',observed=time.monotonic()))
+             failure_kind, stop_required = 'cleanup', True
+             cleanup_uncertain = True
+             try:
+@@ -439,6 +451,7 @@
+         evidence = dict(error=error, result=result_record, peak=peak, surviving_pids=stopped,
+                         cleanup_confirmed=not stopped and not cleanup_uncertain, cleanup_uncertain=cleanup_uncertain, failure_kind=failure_kind if error else None,
+                         stop_required=stop_required if error else False)
++        evidence.update(primary_failure=primary_failure,secondary_failures=secondary_failures)
+         if is_s1:
+             evidence.update(reservation={k:reservation[k] for k in ('sequence','event_sha256')},
+                             acceptance=acceptance, evidence_summary_record=evidence_summary,
+@@ -456,6 +469,7 @@
+                     worker=None, phase='publication', lifecycle=lifecycle)
+                 evidence['terminal_publication_status']='published'
+             except BaseException as exc:
++                secondary_failures.append(dict(error_class=type(exc).__name__,message=str(exc),phase='publication',observed=time.monotonic()))
+                 error = (error or '') + f'; evidence publication failed: {exc}'
+                 if not evidence.get('error'): failure_kind = 'evidence_publication'
+                 stop_required = True
+--- /home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-partial-source-017/tests/test_vipe_benchmark_s1_helper_fixtures.py
++++ /home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py
+@@ -179,7 +179,52 @@
+         evidence=dict(request=fixture['request_record'],authorization=fixture['request']['recovery_authorization']))
+ 
+ 
++def child_progress_trace(fixture,clock,session,sequence):
++    """Bounded existing child artifact seam; no observer or additional process."""
++    import contextlib
++    from unittest.mock import patch
++    from vipe_benchmark import s1_progress as p
++    @contextlib.contextmanager
++    def tracing():
++        path=Path(fixture['root'])/('child-progress-'+str(os.getpid())+'.jsonl')
++        actual=p.trace_event;count=[0];dropped=[0]
++        def event(phase,state):
++            actual(phase,state)
++            now=time.monotonic()
++            if now>=clock.total_deadline:return
++            count[0]+=1
++            if count[0]>4096:
++                dropped[0]+=1
++                if dropped[0]!=1:return
++            row=dict(index=count[0],phase=phase,state=state,observed=now,session=session,request_id=sequence,
++                reservation=clock.mapping()['reservation'],work_deadline=clock.work_deadline,total_deadline=clock.total_deadline,
++                request=fixture['request_record'],pid=os.getpid(),overflow=dropped[0],valid=dropped[0]==0)
++            raw=(json.dumps(row,separators=(',',':'))+'\n').encode()
++            with path.open('ab',buffering=0) as stream:
++                if stream.write(raw)!=len(raw):raise OSError('child boundary trace short write')
++        with patch.object(p,'trace_event',side_effect=event):yield path
++    return tracing()
++
++
+ def progress_operation(operation,token,sequence,mode):
++    from vipe_benchmark.s1_clock import ReservationClock
++    from vipe_benchmark.files import read_json
++    from vipe_benchmark import s1_progress as p
++    args=operation.get('args',{});data=args.get('value',args)
++    fixture=data.get('progress_fixture')
++    if fixture is None and 'local' in args:
++        path=Path(args['local'])/'progress-fixture.json'
++        if path.exists():fixture=read_json(path)
++    if fixture is None:return _progress_operation(operation,token,sequence,mode)
++    if 'reservation' in args:clock=ReservationClock.from_reservation(args['reservation'])
++    else:
++        reference=data.get('progress_context',args.get('progress_context'))
++        if reference is None:return _progress_operation(operation,token,sequence,mode)
++        clock=ReservationClock.from_mapping(p.read_record(reference,p.SMALL_BYTES)['clock'])
++    with child_progress_trace(fixture,clock,token,sequence):return _progress_operation(operation,token,sequence,mode)
++
++
++def _progress_operation(operation,token,sequence,mode):
+     from vipe_benchmark import s1_progress as progress
+     from vipe_benchmark.s1_clock import ReservationClock
+     from vipe_benchmark.files import read_json,write_json,file_record
+@@ -206,7 +251,8 @@
+         for i,row in enumerate(fixture['rows']):
+             path=output/(str(i)+'-produced-row.json')
+             if not path.exists():write_json(path,row)
+-        publisher=progress.Publisher(reference,'reconcile',sequence,request=fixture['request'])
++        clock=ReservationClock.from_mapping(progress.read_record(reference,progress.SMALL_BYTES)['clock'])
++        publisher=progress.Publisher(reference,'reconcile',sequence,clock=clock,request=fixture['request'])
+         original=publisher.seal
+         def seal(*a,**k):
+             value=original(*a,**k)
+@@ -217,7 +263,8 @@
+         publisher.seal=seal
+         real_replace=progress.os.replace
+         def replace(*a,**k):
+-            if mode=='progress_torn' and a[0]=='head.tmp' and publisher.sequence==1:os._exit(10)
++            if mode=='progress_torn' and a[0]=='head.tmp' and publisher.sequence==1:
++                progress.trace_event('P05_pre_head_replace','fault');os._exit(10)
+             return real_replace(*a,**k)
+         from unittest.mock import patch
+         try:
+@@ -249,9 +296,10 @@
+     publisher=Publisher(json.loads(os.environ['VIPE_S1_PROGRESS_CONTEXT']),'worker',1,clock=clock,request=fixture['request'])
+     loader=input_loader(fixture['request'])
+     try:
+-        for i,row in enumerate(fixture['rows']):
+-            publish_segment_row(row,fixture['request'],loader,clock,publisher,output/(str(i)+'-produced-row.json'),output/(str(i)+'-qualified-row.json'),first=i==0)
+-        time.sleep(10)
++        with child_progress_trace(fixture,clock,publisher.context['session'],1):
++            for i,row in enumerate(fixture['rows']):
++                publish_segment_row(row,fixture['request'],loader,clock,publisher,output/(str(i)+'-produced-row.json'),output/(str(i)+'-qualified-row.json'),first=i==0)
++            time.sleep(10)
+     finally:publisher.close()
+ 
+ 
+--- /home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-partial-source-017/tests/test_vipe_benchmark_s1_recovery.py
++++ /home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_recovery.py
+@@ -60,7 +60,8 @@
+     valid = np.ones((540,960), bool)
+     np.save(root/'valid.npy',valid)
+     cv2.imwrite(str(root/'rgb.png'),np.zeros((540,960,3),np.uint8))
+-    rows=[dict(identity=i.record(),rgb=file_record(root/'rgb.png'),valid=file_record(root/'valid.npy'),
++    rgb_record,valid_record=file_record(root/'rgb.png'),file_record(root/'valid.npy')
++    rows=[dict(identity=i.record(),rgb=dict(rgb_record),valid=dict(valid_record),
+         K=np.eye(3).tolist(),grid='distorted-opencv-integer') for i in dict.fromkeys(output_identities(config,'calibration')+annotation_identities(config))]
+     return put('inputs.json', dict(rgb=rows))
+ 
+@@ -1078,15 +1079,28 @@
+                 with patch.dict(os.environ,VIPE_RESERVATION_START='bogus'), patch.object(s1_clock.time,'monotonic',return_value=observation), patch.object(s1_clock,'boot_id',return_value=clock.boot_id):
+                     if kind in ('unavailable','late','nan'):
+                         primary=RuntimeError('original primary')
+-                        record=s1_evidence.preserve_failure(request,output,None,primary,clock=supplied)
+-                        self.assertEqual(read_json(record['path'])['error'],'original primary')
+-                        value=read_json(output/'first-result-qualification.json')
+-                        self.assertEqual(value['clock_status'],'unverified')
+-                        with self.assertRaises((ValueError,TypeError)):
+-                            s1_evidence.reconcile_first(request,output,clock=supplied,error='later error')
+-                        if kind=='late': self.assertEqual(value['elapsed_seconds_from_reservation'],91)
+-                        if kind=='unavailable': self.assertIsNone(value['elapsed_seconds_from_reservation'])
+-                        if kind=='nan': self.assertEqual(value['clock_observation'],'nan')
++                        if kind=='late':
++                            from vipe_benchmark import s1_progress
++                            forbidden=[]
++                            def no_io(*args,**kwargs):
++                                forbidden.append(repr(args));raise AssertionError('filesystem operation after C')
++                            with patch.object(Path,'open',side_effect=no_io),patch.object(s1_progress,'read_bytes',side_effect=no_io),patch.object(s1_evidence,'file_record',side_effect=no_io),patch.object(s1_evidence,'write_json',side_effect=no_io):
++                                record=s1_evidence.preserve_failure(request,output,None,primary,clock=supplied)
++                                with self.assertRaises(TimeoutError):s1_evidence.reconcile_first(request,output,clock=supplied,error='later error')
++                            self.assertIsNone(record);self.assertEqual(forbidden,[])
++                            self.assertEqual(type(primary),RuntimeError);self.assertEqual(str(primary),'original primary')
++                            self.assertIn('total deadline',primary.s1_progress_unavailable)
++                            self.assertIsNone(primary.s1_failure_record);self.assertIsNone(primary.s1_first_result)
++                            self.assertEqual(sorted(p.name for p in output.iterdir()),['config.json'])
++                        else:
++                            record=s1_evidence.preserve_failure(request,output,None,primary,clock=supplied)
++                            self.assertEqual(read_json(record['path'])['error'],'original primary')
++                            value=read_json(output/'first-result-qualification.json')
++                            self.assertEqual(value['clock_status'],'unverified')
++                            with self.assertRaises((ValueError,TypeError)):
++                                s1_evidence.reconcile_first(request,output,clock=supplied,error='later error')
++                            if kind=='unavailable': self.assertIsNone(value['elapsed_seconds_from_reservation'])
++                            if kind=='nan': self.assertEqual(value['clock_observation'],'nan')
+                     else:
+                         if kind != 'missing':
+                             raw=fixture.put(kind+'-raw.json',{'raw':'original'})
+@@ -1507,10 +1521,10 @@
+                 start = time.monotonic(); timed_out = False; process = None
+                 stdout = stderr = ''; returncode = None; owned_observations=[]
+                 try:
+-                    from vipe_benchmark.s1_helper_session import owned_workload,register_owned
++                    from vipe_benchmark.s1_helper_session import owned_workload,register_owned,create_owned_process
+                     if os.environ.get('S1_OWNED_ROOT_NOTE'):
+                         self.assertLessEqual(owned_workload(os.environ['S1_OWNED_ROOT_NOTE'])['total_workers']+1,8)
+-                    process = subprocess.Popen(argv, cwd=ROOT, env=env, stdout=subprocess.PIPE,
++                    process = create_owned_process('direct script',subprocess.Popen,argv, cwd=ROOT, env=env, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, text=True, start_new_session=True)
+                     register_owned(process.pid,'direct script')
+                     if os.environ.get('S1_OWNED_ROOT_NOTE'):
+@@ -1524,6 +1538,9 @@
+                 finally:
+                     if process is not None and process.poll() is None:
+                         os.killpg(process.pid, signal.SIGKILL); process.wait(timeout=2)
++                    if process is not None and process.returncode is not None:
++                        from vipe_benchmark.s1_helper_session import retire_owned
++                        retire_owned(process.pid)
+                     print('S1_SCRIPT_CHILD '+json.dumps(dict(argv=argv, cwd=str(ROOT),
+                         start_monotonic=start, end_monotonic=time.monotonic(),
+                         returncode=returncode, timed_out=timed_out, stdout=stdout, stderr=stderr,owned_observations=owned_observations), sort_keys=True), flush=True)
+--- /home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-partial-source-017/tests/test_vipe_benchmark_supervisor.py
++++ /home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py
+@@ -199,6 +199,25 @@
+ 
+ 
+ SUBTEST_CASES = {
++ 'test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_plan048_pure_memo': [
++  {'kind': 'snapshot_member_once'},
++  {'kind': 'uncached_valid_equivalence'},
++  {'kind': 'uncached_invalid_equivalence'},
++  {'kind': 'same_size_restored_mtime'},
++  {'kind': 'inode_replacement'},
++  {'kind': 'path_replacement'},
++  {'kind': 'request_changed'},
++  {'kind': 'context_changed'},
++  {'kind': 'identity_changed'},
++  {'kind': 'source_changed'},
++  {'kind': 'lookup_before_w'},
++  {'kind': 'lookup_equal_w'},
++  {'kind': 'lookup_after_w'},
++  {'kind': 'retention_cap'},
++  {'kind': 'eviction'},
++  {'kind': 'failure_cleanup'},
++ ],
++
+     'test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_plan047_deadline_steps': [{'operation': 'checkpoint_write', 'when': 'before'},
+  {'operation': 'checkpoint_write', 'when': 'equal'},
+  {'operation': 'checkpoint_write', 'when': 'after'},
+@@ -1090,6 +1109,7 @@
+                 session(mode,instance=current,**bounds)
+                 current.fixture_action_end=action_cutoff; current.fixture_safety_end=safety_cutoff
+                 observed_calls=Trace(128)
++                timing_failures=[]
+                 def observe_call(name,operation):
+                     def observed(*args,**kwargs):
+                         deadline=args[0] if name in ('tick','close') else current.ready_deadline
+@@ -1105,7 +1125,10 @@
+                             returned=self.time.monotonic()
+                             observed_calls.append(dict(operation=name,entered=entered,deadline=effective,returned=returned,
+                                 confirmed=result if name=='close' else None,error=error))
+-                            self.assertLessEqual(returned,effective+.1)
++                            # Save the original pending exception before checking timing.
++                            try:self.assertLessEqual(returned,effective+.1)
++                            except AssertionError as violation:
++                                timing_failures.append(dict(operation=name,message=str(violation),returned=returned,deadline=effective))
+                     return observed
+                 current.tick=observe_call('tick',current.tick)
+                 current.close=observe_call('close',current.close)
+@@ -1128,6 +1151,7 @@
+                     request_counts={role:dict(dispatch=current.dispatch_counts[role].value,response=current.response_counts[role].value) for role in current.requests},
+                     census_request_count=current.census_requests.value,max_gap=current.max_gap,max_turn=current.max_turn,
+                     call_observations=list(observed_calls),call_observation_facts=observed_calls.facts(),
++                    timing_failures=timing_failures,
+                     last_sample=current.last_sample,requests=current.requests,
+                     ownership=current.ownership(),wire={role:dict(sent=w.sent_bytes,received=w.received_bytes,blocked_writes=w.blocked_writes,peek=w.peek_bytes.value,combined=w.combined_bytes.value,last_frame=w.last_frame) for role,w in current.wires.items()})
+                 directory=Path(os.environ['S1_VALIDATION_RUN_DIRECTORY'])
+@@ -1137,6 +1161,7 @@
+                 self.assertLessEqual(action_end-started,2)
+                 self.assertLessEqual(ended-action_end,1)
+                 self.assertLessEqual(ended-started,3)
++                self.assertEqual(timing_failures,[],record)
+         return owned()
+ 
+     def work(self, session, operation=None, sampler=None, seconds=1.5):
+@@ -1278,11 +1303,13 @@
+ 
+     def test_l18_descendant_and_foreign_sentinel(self):
+         import signal
+-        from vipe_benchmark.s1_helper_session import census
++        from vipe_benchmark.s1_helper_session import census,predispatch_owned,register_owned,retire_owned,create_owned_process
+         with self.scenario('L18','descendant') as session:
+             session.await_ready()
+-            sentinel=os.posix_spawn(sys.executable,[sys.executable,'-B','-c','import time; time.sleep(10)'],os.environ,setsid=True)
++            if os.environ.get('S1_OWNED_ROOT_NOTE'):predispatch_owned('L18 sentinel')
++            sentinel=create_owned_process('L18 sentinel',os.posix_spawn,sys.executable,[sys.executable,'-B','-c','import time; time.sleep(10)'],os.environ,setsid=True)
+             try:
++                register_owned(sentinel,'L18 sentinel')
+                 deadline=self.time.monotonic()+.2
+                 while len(session.owner.members)<3 and self.time.monotonic()<deadline: self.time.sleep(.005)
+                 self.assertGreaterEqual(len(session.owner.members),3)
+@@ -1296,7 +1323,7 @@
+                 os.killpg(sentinel,signal.SIGKILL)
+                 limit=self.time.monotonic()+.3
+                 while self.time.monotonic()<limit:
+-                    if os.waitpid(sentinel,os.WNOHANG)[0]: break
++                    if os.waitpid(sentinel,os.WNOHANG)[0]:retire_owned(sentinel);break
+                     self.time.sleep(.005)
+                 else: self.fail('sentinel reap deadline')
+ 
+@@ -1440,12 +1467,13 @@
+         from vipe_benchmark import supervisor as sup
+         @contextlib.contextmanager
+         def managed():
+-            from vipe_benchmark.s1_helper_session import owned_workload,register_owned
++            from vipe_benchmark.s1_helper_session import owned_workload,register_owned,create_owned_process
+             if os.environ.get('S1_OWNED_ROOT_NOTE'):
+                 self.assertLessEqual(owned_workload(os.environ['S1_OWNED_ROOT_NOTE'])['total_workers']+1,8)
+-            worker=subprocess.Popen([sys.executable,'-B','-c',code],start_new_session=True,env=dict(os.environ,OPENCV_FOR_THREADS_NUM='1'))
+-            register_owned(worker.pid,'scenario sentinel')
+-            try: yield worker
++            worker=create_owned_process('scenario sentinel',subprocess.Popen,[sys.executable,'-B','-c',code],start_new_session=True,env=dict(os.environ,OPENCV_FOR_THREADS_NUM='1'))
++            try:
++                register_owned(worker.pid,'scenario sentinel')
++                yield worker
+             finally:
+                 try: session.retire_worker()
+                 finally: self.assertEqual(sup.stop_group(worker,session.fixture_action_end),[])
+@@ -1670,10 +1698,20 @@
+                 self.assertTrue(life.poisoned)
+                 saved=Path(os.environ['S1_VALIDATION_RUN_DIRECTORY'])/('progress-'+label)
+                 shutil.copytree(reference['context']['path'].rsplit('/',1)[0],saved)
++                child_boundaries=[]
++                for trace in sorted(Path(fixture['root']).glob('child-progress-*.jsonl')):
++                    raw=trace.read_bytes();events=[json.loads(line) for line in raw.splitlines()]
++                    self.assertTrue(events);self.assertLessEqual(len(events),4097)
++                    self.assertTrue(all(event['session']==reference['session'] for event in events))
++                    self.assertTrue(all(event['overflow']==0 and event['valid'] for event in events))
++                    target=saved/trace.name;target.write_bytes(raw)
++                    child_boundaries.append(dict(record=file_record(target),events=events))
++                self.assertTrue(child_boundaries,label)
++                if label=='P05':self.assertTrue(any(event['phase']=='P05_pre_head_replace' for trace in child_boundaries for event in trace['events']))
+                 copied=[file_record(path) for path in sorted(saved.rglob('*')) if path.is_file()]
+                 session.events.append(dict(event='progress_outcome',label=label,reference=reference,recovered=recovered,exception=type(caught).__name__,
+                     publication=outcome.get('terminal_publication_status'),primary=dict(error_class=type(caught).__name__,message=str(caught),kind=getattr(caught,'kind',None),stop_required=getattr(caught,'stop_required',None)),primary_observations=primary_observations,finish=outcome,protocol_trace=p.trace_snapshot(),fixture_scope='two-row final-sample loss, not full acceptance' if label=='P04' else label,durable_copies=copied,original_pair=pair,original_clock=observed[0] if observed else reservation,
+-                    production_return=self.time.monotonic(),owner_block_entered=getattr(session.owner,'progress_block_entered',None)))
++                    child_boundaries=child_boundaries,production_return=self.time.monotonic(),owner_block_entered=getattr(session.owner,'progress_block_entered',None)))
+             finally:
+                 frozen=life.progress.snapshot
+                 session.events.append(dict(event='plan047_production_cutoff',observed=self.time.monotonic(),reference=life.progress.reference(),ownership=life.ownership(),safety_cutoff=session.fixture_safety_end))
+@@ -1846,7 +1884,7 @@
+                                 with self.assertRaisesRegex(ValueError,'worker authority'):publisher.publish()
+                             elif case['kind']=='resume':
+                                 prior=publisher.sequence;publisher.close();sequence[0]=2
+-                                publisher=p.Publisher(reference,'reconcile',2,trusted=cache.reference())
++                                publisher=p.Publisher(reference,'reconcile',2,clock=clock,trusted=cache.reference())
+                                 publisher.publish();self.assertEqual(publisher.sequence,prior+1)
+                             elif case['kind']=='publish_adapter':
+                                 document=helper.summary_binding(consumer.context['session'],1,reservation)
+@@ -2118,6 +2156,7 @@
+                         else:parent[key]=[]
+                         pointer=state.cache.snapshot
+                         with self.assertRaises((ValueError,TypeError,KeyError)) as caught:validators[name](value)
++                        self.assertIsInstance(caught.exception,ValueError)
+                         self.assertIs(state.cache.snapshot,pointer)
+                         evidence.append(dict(case,source=validators[name].__name__,observed=type(caught.exception).__name__,fixture=state.reference,pointer_unchanged=True))
+         self.control_record('plan047-nested',evidence)
+@@ -2144,6 +2183,9 @@
+                         os.link(row,root/'two-produced-row.json' if kind=='hardlink_duplicate' else base/(kind+'-hard'))
+                     elif kind=='foreign_candidate_root':
+                         # Result cannot silently substitute a row outside the anchored snapshot.
++                        _,closed=p.candidate_inventory(root,None,deadline)
++                        with self.assertRaisesRegex(ValueError,'foreign candidate root'):
++                            closed.append(p.record(foreign,foreign.read_bytes()))
+                         write_json(root/'result.json',{'rows':[fixture['rows'][0]]});changed=copy.deepcopy(fixture['rows'][0]);changed['metadata']['foreign']=True
+                         action=lambda:p.candidate_inventory(root,{'rows':[changed]},deadline)
+                     elif kind=='fifo_candidate':row.unlink();os.mkfifo(row)
+@@ -2204,7 +2246,13 @@
+                     elif kind=='current_previous_retention':pub.publish();reference=state.cache.reference();self.assertEqual(reference['provenance']['worker']['previous_checkpoint'],state.consumer.previous['worker'][0])
+                     before=state.cache.snapshot;opened=[];actual=p.read_bytes
+                     def read(path,limit):opened.append(str(path));return actual(path,limit)
+-                    with patch.object(p,'read_bytes',side_effect=read),patch.object(Path,'iterdir',side_effect=AssertionError('history enumeration forbidden')):
++                    import contextlib
++                    with contextlib.ExitStack() as recovery_scope,patch.object(p,'read_bytes',side_effect=read),patch.object(Path,'iterdir',side_effect=AssertionError('history enumeration forbidden')):
++                        if kind=='late_recovery':
++                            recovery_scope.enter_context(patch.object(p.time,'monotonic',return_value=state.clock.work_deadline+1))
++                            from vipe_benchmark import s1_evidence
++                            recovery_scope.enter_context(patch.object(s1_evidence,'qualify_row',side_effect=AssertionError('late recovery raw guard')))
++                            recovery_scope.enter_context(patch.object(s1_evidence,'produced_row',side_effect=AssertionError('late recovery raw guard')))
+                         if expected_error:
+                             with self.assertRaises((ValueError,OSError)) as caught:p.recover(reference)
+                             observed=type(caught.exception).__name__
+@@ -2213,6 +2261,9 @@
+                             if kind in ('head_missing_no_intent','head_truncated_no_intent'):
+                                 self.assertTrue(result['stop_required']);self.assertFalse(result['scan_complete']);self.assertEqual(result['integrity_status'],'uncertain')
+                             if kind.startswith('optional_'):self.assertFalse(result['scan_complete']);self.assertEqual(result['integrity_status'],'verified')
++                            if kind=='late_recovery':
++                                self.assertEqual(result['verified_progress_reference'],reference)
++                                self.assertFalse(result['scan_complete'])
+                     self.assertIs(state.cache.snapshot,before);self.assertLessEqual(len(opened),7)
+                     self.assertFalse(any(name.endswith(('.npy','.npz','.png')) for name in opened))
+                     evidence.append(dict(case,source='recover',observed=observed,opened=opened,reference=reference,pointer_unchanged=True))
+@@ -2237,9 +2288,47 @@
+                             action=lambda:p.publication_capacity(**args);source='publication_capacity (also reached by real fixture publication)'
+                         elif name=='path_utf8_bytes':
+                             path='/'+'é'*((value-1)//2)+'x'*((value-1)%2);self.assertEqual(len(path.encode()),value);action=lambda:p.canonical(path);source='canonical UTF-8'
+-                        elif name.endswith('_bytes') and name not in ('error_utf8_bytes','socket_address_bytes'):
+-                            raw=b'{}'+b' '*(value-2);self.assertEqual(len(raw),value)
+-                            action=lambda:p.decode(raw,limit,max_depth=64 if name=='result_bytes' else 12,max_nodes=1048576 if name=='result_bytes' else 65536);source='decode lexical byte bound'
++                        elif name=='metadata_bytes':
++                            row={};row_size=len(p.encode(row,256*1024));base=p.encode(dict(rows=[row]))
++                            raw=base+b' '*(value-row_size-len(base));self.assertEqual(len(raw)+row_size,value)
++                            self.assertLessEqual(len(raw),p.MAX_METADATA)
++                            (directory/'result.json').write_bytes(raw)
++                            action=lambda:p.candidate_inventory(directory,None,None);source='candidate_inventory aggregate raw-result plus canonical-row bytes'
++                        elif name in ('row_bytes','result_bytes'):
++                            base=p.encode(dict(rows=[])) if name=='result_bytes' else b'{}'
++                            raw=base+b' '*(value-len(base));self.assertEqual(len(raw),value)
++                            path=directory/('result.json' if name=='result_bytes' else 'one-produced-row.json');path.write_bytes(raw)
++                            action=lambda:p.candidate_inventory(directory,None,None);source='candidate_inventory anchored '+name+' read'
++                        elif name in ('context_bytes','head_bytes','checkpoint_bytes'):
++                            if name=='context_bytes':doc=state.publisher.context;validator=p.context_document
++                            elif name=='head_bytes':doc=p.read_record(state.cache.reference()['provenance']['worker']['accepted_head'],p.SMALL_BYTES);validator=p.validate_head
++                            else:doc=document;validator=lambda doc:p.validate_checkpoint(doc,state.publisher.context,state.reference)
++                            base=p.encode(doc);raw=base+b' '*(value-len(base));self.assertEqual(len(raw),value)
++                            path=directory/'metadata.json';path.write_bytes(raw);record=p.record(path,raw)
++                            action=lambda:validator(p.read_record(record,limit));source='anchored read_record plus enclosing '+name+' validator'
++                        elif name=='reference_bytes':
++                            ref=copy.deepcopy(state.cache.reference());proof=ref['provenance']['worker']
++                            proof['previous_checkpoint']=copy.deepcopy(state.row_record);proof['previous_head']=copy.deepcopy(state.row_record)
++                            fields=[ref['context'],ref['checkpoints']['worker'],proof['accepted_head'],proof['previous_checkpoint'],proof['previous_head']]
++                            for record in fields:
++                                remaining=value-len(p.encode(ref,p.MAX_METADATA))
++                                if remaining<=0:break
++                                record['path']+='x'*min(remaining,2048-len(record['path'].encode()))
++                            self.assertEqual(len(p.encode(ref,p.MAX_METADATA)),value)
++                            def action():
++                                if value>limit:return p.recover(ref)
++                                # The exact production reference encoder succeeds; the
++                                # deliberately foreign provenance then rejects separately.
++                                with self.assertRaises((ValueError,OSError)):p.recover(ref)
++                            source='recover composite reference encoder before semantic provenance'
++                        elif name=='control_bytes':
++                            base=p.encode(dict(schema='s1-progress-ack/v1',context=state.reference['sha256'],producer='worker',sequence=state.publisher.sequence,current=state.publisher.previous),p.CONTROL_BYTES)
++                            raw=base+b' '*(value-len(base));self.assertEqual(len(raw),value)
++                            def action():
++                                state.publisher.channel.sendto(raw,p.address(state.publisher.context))
++                                result,credentials,sender=p.receive(state.consumer.channel)
++                                return p.validate_ack(result)
++                            source='receive existing datagram truncation/byte bound plus ack validator'
+                         elif name.endswith('_depth') and name!='inventory_depth':
+                             raw=b'['*value+b'0'+b']'*value
+                             action=lambda:p.decode(raw,p.MAX_METADATA,max_depth=limit,max_nodes=1048576);source='decode actual lexical nesting'
+@@ -2261,7 +2350,10 @@
+                             self.assertEqual(len(pub.errors),min(value,limit));self.assertEqual(pub.diagnostics['dropped'],max(0,value-limit));self.assertEqual(pub.diagnostics['primary'],pub.diagnostics['first'])
+                             action=lambda:True;source='Publisher.failure saturation';semantic='overflow is retained as a drop, never lost';limit=value
+                         elif name=='error_utf8_bytes':
+-                            document['errors']=['é'*(value//2)+'x'*(value%2)];action=lambda:p.validate_checkpoint(document,state.publisher.context,state.reference);source='validate_checkpoint UTF-8 error size'
++                            document['errors']=['é'*(value//2)+'x'*(value%2)]
++                            event=dict(error_class='ValueError',message='capacity fixture',phase='test',observed=self.time.monotonic())
++                            document['diagnostics']=dict(dropped=0,first=event,last=event,primary=event)
++                            action=lambda:p.validate_checkpoint(document,state.publisher.context,state.reference);source='validate_checkpoint UTF-8 error size'
+                         elif name=='socket_address_bytes':
+                             context=dict(state.publisher.context,session='x'*(value-len('\0s1-progress--owner')));action=lambda:p.address(context);source='address before bind'
+                         elif name=='inventory_depth':
+@@ -2284,11 +2376,18 @@
+                             self.assertEqual(overflow,value>limit);self.assertEqual(result['counts']['qualified'],0)
+                             action=lambda:True;source='reconcile_rows distinct version insertion';limit=value
+                         else:raise AssertionError(name)
+-                        if value>limit:
+-                            with self.assertRaises((ValueError,OverflowError)) as caught:action()
+-                            observed=type(caught.exception).__name__
+-                        else:action();observed='accepted numeric endpoint'
+-                        evidence.append(dict(case,limit=limits[name],source=source,observed=observed,semantic=semantic,fixture=state.reference))
++                        counters={};actual_counter=p.inventory_capacity
++                        def counter(counter_name,observed_value,maximum):
++                            counters[counter_name]=max(counters.get(counter_name,0),observed_value)
++                            return actual_counter(counter_name,observed_value,maximum)
++                        with patch.object(p,'inventory_capacity',side_effect=counter):
++                            if value>limit:
++                                with self.assertRaises((ValueError,OverflowError)) as caught:action()
++                                observed=type(caught.exception).__name__
++                            else:action();observed='accepted numeric endpoint'
++                        if name in ('metadata_bytes','candidates','inventory_sources','inventory_depth','directory_entries'):
++                            self.assertEqual(counters[name],value)
++                        evidence.append(dict(case,limit=limits[name],source=source,observed=observed,counters=counters,semantic=semantic,fixture=state.reference))
+         self.control_record('plan047-limits',evidence)
+ 
+     def test_progress_plan047_publication_faults(self):
+@@ -2401,6 +2500,22 @@
+                                 result='reserve enforced'
+                         elif kind.startswith('registry_') and kind!='registry_missing_enumeration':
+                             observed=h.predispatch_owned(kind);self.assertEqual(observed['registry_identity'],id(h.INVOCATION));self.assertEqual(observed['root'],baseline['root']);result='same invocation registry'
++                            entry={'registry_owner_dispatch':'Owner.run work','registry_worker_dispatch':'supervisor worker','registry_direct_dispatch':'direct script','registry_sentinel_dispatch':'L18 sentinel'}[kind]
++                            creation=[];gate=h.predispatch_owned
++                            def reached(event):
++                                value=gate(event);creation.append(dict(event=event,registry=value['registry_identity'],charge=value['total_workers']));return value
++                            def syscall(*args,**kwargs):creation.append(dict(syscall='pure creation seam'));return 2147482999
++                            with patch.object(h,'predispatch_owned',side_effect=reached):
++                                self.assertEqual(h.create_owned_process(entry,syscall),2147482999)
++                            self.assertEqual(creation[0]['event'],entry);self.assertEqual(creation[0]['registry'],id(h.INVOCATION))
++                            self.assertEqual(creation[-1],{'syscall':'pure creation seam'})
++                            if kind=='registry_owner_dispatch':
++                                with patch.object(h,'identity',side_effect=OSError('first full identity failed')),self.assertRaises(OSError):h.register_owned(2147482999,entry)
++                                unknown=[r for r in h.INVOCATION.records.values() if r['pid']==2147482999]
++                                self.assertEqual(len(unknown),1);self.assertEqual(unknown[0]['state'],'unresolved')
++                                with self.assertRaisesRegex(ValueError,'unresolved'):h.predispatch_owned(entry)
++                                h.retire_owned(2147482999)
++                            result=dict(control=result,creation=creation,entrypoint='create_owned_process used by actual '+entry)
+                         elif kind in ('detached_grandchild','retained_pid_reuse','registry_missing_enumeration'):
+                             rows=h.census();fake=2147483000;boot=original['ownership_root']['boot_id'];identity=dict(pid=fake,ppid=1,pgid=fake,start_ticks=100,state='S')
+                             h.INVOCATION.records[(boot,fake,100)]=dict(identity,boot_id=boot,threads=[fake],creation_parent=os.getpid(),creation_event='pure observed identity fixture')
+@@ -2412,6 +2527,9 @@
+                                 actual_iter=Path.iterdir;actual_identity=h.identity
+                                 def iterdir(path):return iter([Path(str(fake if str(fake) in str(path) else fake+1))]) if str(path) in (f'/proc/{fake}/task',f'/proc/{fake+1}/task') else actual_iter(path)
+                                 def identify(pid):return {k:rows[pid][k] for k in ('pid','pgid','start_ticks')} if pid in (fake,fake+1) else actual_identity(pid)
++                                actual_thread=h.thread_identity
++                                def identify_thread(pid,tid):return dict(tid=tid,start_ticks=rows[pid]['start_ticks']) if pid in (fake,fake+1) else actual_thread(pid,tid)
++                                stack.enter_context(patch.object(h,'thread_identity',side_effect=identify_thread))
+                                 stack.enter_context(patch.object(h,'census',return_value=rows));stack.enter_context(patch.object(Path,'iterdir',iterdir));stack.enter_context(patch.object(h,'identity',side_effect=identify))
+                                 if kind=='retained_pid_reuse':
+                                     with self.assertRaises(ValueError):h.predispatch_owned(kind)
+@@ -2423,6 +2541,9 @@
+                             contract=Path(h.__file__).with_name('s1_validation_contract.py');(root/'scripts/vipe_benchmark/s1_validation_contract.py').write_bytes(contract.read_bytes());added=root/'tests/test_vipe_benchmark_new.py';added.write_text('')
+                             members=h.validation_sources(root);self.assertIn(added,members);self.assertEqual(members,sorted(members))
+                             if kind=='test_glob_omission':self.assertNotEqual([str(p) for p in members if p!=added],[str(p) for p in members])
++                            self.assertEqual(h.source_membership([dict(path=str(p)) for p in members],root),[str(p) for p in members])
++                            if kind=='test_glob_omission':
++                                with self.assertRaisesRegex(ValueError,'source membership'):h.source_membership([dict(path=str(p)) for p in members if p!=added],root)
+                             result='current contract glob recomputed'
+                         else:
+                             if kind=='paired_env_runner_root':note['ownership_root']=next(r for r in baseline['processes'] if r['pid']==os.getpid())
+@@ -2443,6 +2564,45 @@
+                             stack.enter_context(patch.dict(os.environ,{'S1_OWNED_ROOT_NOTE':str(path),'S1_OWNED_ROOT_SHA256':hashlib.sha256(raw).hexdigest()}))
+                             with self.assertRaises(ValueError):h.owned_workload(path)
+                             result='kernel anchor rejected paired caller substitution'
++                            # Preserve the generic control above, then isolate the
++                            # named pinned authority predicate at its actual entry.
++                            reached=[];saved_anchor=copy.deepcopy(h.INVOCATION.anchor)
++                            target_note=copy.deepcopy(note);target_raw=json.dumps(target_note).encode()
++                            actual_read=Path.read_bytes;actual_stat=Path.stat
++                            root_pid=baseline['root']['pid'];runner=h.INVOCATION.anchor['runner']
++                            stdin=Path(h.INVOCATION.anchor['directory'])/'stdin.py'
++                            command_path=Path('/proc',str(root_pid),'cmdline')
++                            start_path=next(Path(v) for v in original['output_paths'] if v.endswith('-exec-start.json'))
++                            log_path=Path(str(start_path).replace('-exec-start.json','-stdout.log'))
++                            start_doc=json.loads(actual_read(start_path))
++                            expected_error={'stdin_inode_replaced':'stdin descriptor identity','capture_argv_swapped':'capture argv',
++                                'driver_log_inode_swapped':'log descriptor identity','ancestor_empty':'ancestry termination',
++                                'ancestor_truncated':'ancestry termination','ancestor_cycle':'ancestry',
++                                'ancestor_terminal_changed':'ancestry termination','wrapper_unproven':'wrapper ownership',
++                                'stale_dispatch016':'dispatch/plan/status','forged_dispatch_env':'dispatch/plan/status',
++                                'paired_env_runner_root':'capture root binding','capture_omitted':'capture root binding',
++                                'paired_env_foreign_output':'output/command binding'}[kind]
++                            kernel_case=kind in ('stdin_inode_replaced','capture_argv_swapped','driver_log_inode_swapped')
++                            if not kernel_case:
++                                h.INVOCATION.anchor=dict(saved_anchor,raw=target_raw)
++                                start_doc['note']=dict(path=str(original_path),bytes=len(target_raw),sha256=hashlib.sha256(target_raw).hexdigest())
++                            def read_target(path):
++                                if kind=='capture_argv_swapped' and path==command_path:
++                                    reached.append('live_capture_cmdline');return b'\0'.join(v.encode() for v in original['command']+['foreign'])+b'\0'
++                                if not kernel_case and path==original_path:reached.append('pinned_note_bytes');return target_raw
++                                if not kernel_case and path==start_path:return json.dumps(start_doc).encode()
++                                return actual_read(path)
++                            def stat_target(path,*args,**kwargs):
++                                value=actual_stat(path,*args,**kwargs)
++                                if (kind=='stdin_inode_replaced' and path==stdin) or (kind=='driver_log_inode_swapped' and path==log_path):
++                                    reached.append('named_descriptor_inode');fields=list(value);fields[1]+=1;return os.stat_result(fields)
++                                return value
++                            try:
++                                with patch.dict(os.environ,{'S1_OWNED_ROOT_NOTE':str(original_path),'S1_OWNED_ROOT_SHA256':hashlib.sha256(original_path.read_bytes() if kernel_case else target_raw).hexdigest(),'S1_VALIDATION_RUN_DIRECTORY':original['run_directory']}),patch.object(Path,'read_bytes',read_target),patch.object(Path,'stat',stat_target):
++                                    with self.assertRaisesRegex(ValueError,expected_error):h.owned_workload(original_path)
++                                self.assertTrue(reached,kind)
++                            finally:h.INVOCATION.anchor=saved_anchor
++                            result=dict(generic_control=result,target=expected_error,reached=reached)
+                         records.append(dict(case,source='owned_workload/InvocationRegistry/predispatch_owned',observed=result,registry_identity=id(h.INVOCATION),baseline=baseline['root']))
+                     finally:h.INVOCATION.records=actual_records
+         self.control_record('plan047-ownership',records)
+@@ -2457,22 +2617,30 @@
+                 with self.subTest(**case),plan047_state(fixture,Path(temp)/str(index)) as state:
+                     publisher=state.publisher;stage=case['stage'];seen=[];reads=[];pointer=state.cache.snapshot;now=[self.time.monotonic()]
+                     if stage=='worker_authority_read':
+-                        publisher.close();publisher=p.Publisher(state.reference,'reconcile',1,trusted=state.cache.reference());state.publisher=publisher
++                        publisher.close();publisher=p.Publisher(state.reference,'reconcile',1,clock=state.clock,trusted=state.cache.reference());state.publisher=publisher
+                         # Exact acknowledged worker version and sources, no new guard.
+                         doc=state.consumer.current['worker'][1];row=doc['rows'][0]
+                         publisher.rows[0]=dict(row,authority=dict(row['authority'],worker_reference=state.consumer.current['worker'][0]));publisher.sources=doc['sources']
+                     actual=state.consumer.read
+-                    def read(*args,**kwargs):reads.append(args[0]);return actual(*args,**kwargs)
++                    forbidden=[]
++                    def read(*args,**kwargs):
++                        if state.cancelled[0]:forbidden.append(dict(operation='read',record=args[0]))
++                        reads.append(args[0]);return actual(*args,**kwargs)
++                    acknowledge=state.cache.acknowledge
++                    def retain(*args,**kwargs):
++                        if state.cancelled[0]:forbidden.append(dict(operation='retain'))
++                        return acknowledge(*args,**kwargs)
+                     def boundary(name):
+                         seen.append(name)
+                         if name==stage+':'+case['when']:
+                             state.cancelled[0]=True;state.cache.freeze('injected cancellation');now[0]=state.clock.work_deadline
+-                    with patch.object(p,'publication_boundary',side_effect=boundary),patch.object(state.consumer,'read',side_effect=read),patch.object(p.time,'monotonic',side_effect=lambda:now[0]):
++                    with patch.object(p,'publication_boundary',side_effect=boundary),patch.object(state.consumer,'read',side_effect=read),patch.object(state.cache,'acknowledge',side_effect=retain),patch.object(p.time,'monotonic',side_effect=lambda:now[0]):
+                         with self.assertRaises((TimeoutError,InterruptedError)):publisher.publish()
+                     self.assertIn(stage+':'+case['when'],seen)
+                     if stage=='ack_receipt':self.assertIsNot(state.cache.snapshot,pointer)
+                     else:self.assertIs(state.cache.snapshot,pointer)
+                     self.assertTrue(state.cache.frozen)
++                    self.assertEqual(forbidden,[])
+                     records.append(dict(case,source='Consumer.tick/Publisher._publish',events=seen,reads=reads,retained=state.cache.reference(),acknowledged_before_receipt=stage=='ack_receipt'))
+                     publisher.close()
+         self.control_record('plan047-cancellation',records)
+@@ -2564,19 +2732,27 @@
+         with tempfile.TemporaryDirectory() as temp:
+             fixture=progress_fixture(Path(temp)/'fixture')
+             for case in SUBTEST_CASES[f'{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}']:
+-                with self.subTest(**case),plan047_state(fixture,Path(temp)/case['kind'],qualified=case['kind']!='worker_qualified_overclaim') as state:
++                active_fixture=fixture
++                if case['kind'] in ('produced_then_semantic_failure','first_identity_semantics'):
++                    active_fixture=copy.deepcopy(fixture)
++                    if case['kind']=='produced_then_semantic_failure':active_fixture['rows'][0]['metadata']['detections'][0]['class_assignment']['derived_class']='invalid'
++                    else:active_fixture['rows'][0]=copy.deepcopy(fixture['rows'][1])
++                with self.subTest(**case),plan047_state(active_fixture,Path(temp)/case['kind'],qualified=case['kind'] not in ('worker_qualified_overclaim','produced_then_semantic_failure','first_identity_semantics')) as state:
+                     kind=case['kind'];pub=state.publisher;before=state.cache.reference();pointer=state.cache.snapshot;reached=[];observed='rejected';replacement=None
+                     try:
+                         if kind in ('produced_then_semantic_failure','first_identity_semantics'):
+-                            row=copy.deepcopy(fixture['rows'][0 if kind=='produced_then_semantic_failure' else 1])
+-                            if kind=='produced_then_semantic_failure':row['metadata']['detections'][0]['class_assignment']['derived_class']='invalid'
++                            row=p.read_record(state.row_record,256*1024)
++                            self.assertEqual(row,state.row)
++                            self.assertEqual(before['counts']['produced_lower_bound'],1);self.assertEqual(before['counts']['qualified'],0)
+                             with self.assertRaises(ValueError):e.qualify_row(row,fixture['request'],first=True,deadline=state.clock.work_deadline)
+                             self.assertIs(state.cache.snapshot,pointer);reached=['qualify_row real semantic/first guard']
++                            self.assertEqual(state.cache.reference()['counts']['qualified'],0)
++                            self.assertEqual(pub.rows[next(iter(pub.rows))]['version'],p.record(state.row_record['path'],p.encode(row,256*1024))['sha256'])
+                         elif kind.startswith('worker_') or kind in ('trusted_conflict','discovered_conflict','fallback_no_unique_version','fallback_invalidated','conflict_to_closed','overflow_to_closed','overflow_to_incomplete','conflict_plus_overflow'):
+                             if kind=='worker_detached_identity':
+                                 self.assertEqual(pub.binding,state.consumer.bindings('worker')[0]);self.assertEqual(pub.context['boot_id'],state.clock.boot_id);reached=['Consumer pinned full producer binding'];observed='accepted exact registered identity'
+                             else:
+-                                replacement=p.Publisher(state.reference,'reconcile',1,trusted=before);doc=state.consumer.current['worker'][1];sealed=doc['rows'][0]
++                                replacement=p.Publisher(state.reference,'reconcile',1,clock=state.clock,trusted=before);doc=state.consumer.current['worker'][1];sealed=doc['rows'][0]
+                                 replacement.rows[0]=dict(copy.deepcopy(sealed),authority=dict(sealed['authority'],worker_reference=before['checkpoints']['worker']));replacement.sources=copy.deepcopy(doc['sources'])
+                                 if kind=='worker_reuse_exact':
+                                     with patch.object(e,'qualify_row',side_effect=AssertionError('raw guard during reuse')),patch.object(e,'produced_row',side_effect=AssertionError('raw guard during reuse')):replacement.publish()
+@@ -2585,7 +2761,21 @@
+                                     pub.publish()
+                                     with self.assertRaisesRegex(ValueError,'worker authority'):replacement.publish()
+                                 elif kind in ('worker_future_reference','worker_self_reference'):
+-                                    replacement.rows[0]['authority']['worker_reference']=dict(before['checkpoints']['worker'],sha256='0'*64)
++                                    if kind=='worker_future_reference':
++                                        future=copy.deepcopy(doc);future.update(sequence=doc['sequence']+1,previous=before['checkpoints']['worker'])
++                                        path=Path(before['checkpoints']['worker']['path']).with_name(str(future['sequence']).zfill(4)+'.json')
++                                        p.write_exclusive(path,p.encode(future));reference=p.record(path,path.read_bytes())
++                                        p.validate_checkpoint(p.read_record(reference),pub.context,state.reference)
++                                    else:
++                                        issued=copy.deepcopy(doc);issued.update(producer='reconcile',binding=replacement.binding,coverage='closed',sequence=1,previous=None)
++                                        path=Path(state.reference['path']).parent/'reconcile'/'0001.json'
++                                        issued['rows'][0]['authority'].update(producer='reconcile',worker_reference=None)
++                                        p.write_exclusive(path,p.encode(issued));reference=p.record(path,path.read_bytes())
++                                        p.validate_checkpoint(p.read_record(reference),pub.context,state.reference)
++                                        # Keep the attempted current reconcile publication on its next
++                                        # independent filename while the self-issued record stays untrusted.
++                                        path.rename(path.with_name('self-issued.json'));reference=p.record(path.with_name('self-issued.json'),p.encode(issued))
++                                    replacement.rows[0]['authority']['worker_reference']=reference
+                                     with self.assertRaises(ValueError):replacement.publish()
+                                 elif kind=='worker_qualified_overclaim':
+                                     replacement.rows[0]['qualified']=True
+@@ -2611,6 +2801,10 @@
+                                     observed='sticky conflict or closed inventory invalidation'
+                                 else:
+                                     old='conflict' if kind.startswith('conflict') else 'overflow';replacement.coverage=old;replacement.failure(ValueError(old));replacement.publish()
++                                    recovered=p.recover(state.cache.reference());self.assertTrue(recovered['stop_required'])
++                                    self.assertEqual(recovered['coverage']['reconcile'],old)
++                                    self.assertEqual(recovered['diagnostics']['reconcile']['primary']['message'],old)
++                                    self.assertTrue(p.summary_adapter(recovered)['stop_required'])
+                                     if kind=='conflict_plus_overflow':replacement.coverage='overflow';self.assertEqual(replacement.coverage,'conflict');self.assertTrue(any('overflow' in x for x in replacement.errors));observed='both failures retained'
+                                     else:
+                                         new='incomplete' if kind.endswith('incomplete') else 'closed'
+@@ -2677,7 +2871,9 @@
+                         if kind.startswith('result_'):
+                             source='strict result decode/candidate_inventory/validate_result'
+                             raw={'result_duplicate_top':b'{"rows":[],"rows":[]}', 'result_duplicate_row':b'{"rows":[{"identity":{"camera":0,"camera":0}}]}', 'result_nonfinite':b'{"rows":[],"value":NaN}'}.get(kind)
+-                            if raw is not None:action=lambda:p.decode(raw,p.MAX_METADATA,max_depth=64,max_nodes=1048576)
++                            if raw is not None:
++                                root=Path(temp)/kind;root.mkdir();(root/'result.json').write_bytes(raw)
++                                action=lambda:p.candidate_inventory(root,None,state.clock.work_deadline)
+                             elif kind=='result_supplied_bool_int':
+                                 root=Path(temp)/kind;root.mkdir();write_json(root/'result.json',dict(rows=[],count=1));action=lambda:p.candidate_inventory(root,dict(rows=[],count=True),state.clock.work_deadline)
+                             else:
+@@ -2764,19 +2960,69 @@
+                     name=case['operation'];offset={'before':-.001,'equal':0.,'after':.001}[case['when']];now=[self.time.monotonic()];deadline=state.clock.work_deadline;seen=[];phase=['checkpoint'];pointer=state.cache.snapshot;source=name;expected_late=case['when']!='before'
+                     if name in publication:
+                         target=publication[name]
++                        current_stage=[''];injected=[False]
++                        def advance(label):
++                            nonlocal pointer
++                            if injected[0]:return
++                            if name!='ack_send':pointer=state.cache.snapshot
++                            injected[0]=True
++                            seen.append(dict(stage=label,state='preceding_real_return',observed=now[0]));now[0]=deadline+offset
+                         def boundary(stage):
+-                            seen.append(dict(stage=stage,observed=now[0]))
++                            current_stage[0]=stage;seen.append(dict(stage=stage,observed=now[0]))
++                            if stage=='generation_directory_fsync':phase[0]='head'
++                        actual_operation=p.operation
++                        def operation(function,*args,**kwargs):
++                            label=getattr(function,'__name__','operation');stage=current_stage[0]
+                             selected=(not name.startswith('head_') or phase[0]=='head') and (not name.startswith('checkpoint_') or phase[0]=='checkpoint')
+-                            if stage==target and selected:now[0]=deadline+offset
+-                            if stage=='generation_directory_fsync':phase[0]='head'
+-                        stack.enter_context(patch.object(p,'publication_boundary',side_effect=boundary));action=state.publisher.publish
++                            value=actual_operation(function,*args,**kwargs)
++                            predecessor={'checkpoint_flush':('write','write'),'head_flush':('write','write'),
++                                'checkpoint_fsync':('flush','flush'),'head_fsync':('flush','flush'),
++                                'checkpoint_close':('file_fsync','fsync'),'head_close':('file_fsync','fsync'),
++                                'checkpoint_readback':('close','close'),'head_readback':('close','close'),
++                                'generation_dir_fsync':('generation_install','unlink'),
++                                'generation_reopen_hash':('generation_directory_fsync','record'),
++                                'head_dir_fsync':('head_install','replace'),
++                                'final_head_read':('head_directory_fsync','record'),
++                                'final_generation_read':('final_head_read','read_record')}.get(name)
++                            if selected and predecessor==(stage,label):advance(stage+'/'+label)
++                            return value
++                        fdopen=p.os.fdopen
++                        def opened(fd,mode,*args,**kwargs):
++                            value=fdopen(fd,mode,*args,**kwargs)
++                            if mode=='wb' and name==phase[0]+'_write':advance(phase[0]+'/fdopen')
++                            return value
++                        exclusive=p.write_exclusive
++                        def written(path,*args,**kwargs):
++                            value=exclusive(path,*args,**kwargs)
++                            if (name=='generation_install' and Path(path).name=='checkpoint.tmp') or (name=='head_install' and Path(path).name=='head.tmp'):advance(str(path)+'/durable_write_return')
++                            return value
++                        encode=p.encode
++                        def encoded(value,*args,**kwargs):
++                            raw=encode(value,*args,**kwargs)
++                            if isinstance(value,dict) and ((name=='notice_send' and value.get('schema')=='s1-progress-notice/v1') or (name=='owner_retention' and value.get('schema')=='s1-progress-ack/v1')):advance(value['schema']+'/encode')
++                            return raw
++                        retain=state.cache.retain
++                        def retained(snapshot):
++                            value=retain(snapshot)
++                            if name=='ack_send':advance('RetainedProgress.retain')
++                            return value
++                        receive=p.receive
++                        def received(channel):
++                            value=receive(channel)
++                            if name=='ack_receipt' and channel is state.publisher.channel:advance('matching_ack_receive')
++                            return value
++                        stack.enter_context(patch.object(p,'publication_boundary',side_effect=boundary))
++                        stack.enter_context(patch.object(p,'operation',side_effect=operation));stack.enter_context(patch.object(p.os,'fdopen',side_effect=opened))
++                        stack.enter_context(patch.object(p,'write_exclusive',side_effect=written));stack.enter_context(patch.object(p,'encode',side_effect=encoded))
++                        stack.enter_context(patch.object(state.cache,'retain',side_effect=retained));stack.enter_context(patch.object(p,'receive',side_effect=received));action=state.publisher.publish
+                     elif name=='worker_popen':
+                         from types import SimpleNamespace
+                         reservation=dict(state.clock.mapping());original=self.time.monotonic();outcome={};started=[]
+                         reservation=copy.deepcopy(recovery_clock:=dict(event='reserve',job_id='S1-calibration-recovery-001',sequence=7,event_sha256='a'*64,boot_id=state.clock.boot_id,monotonic_start=original,seconds=4,evidence={'request':fixture['request_record'],'authorization':fixture['request']['recovery_authorization']}));deadline=original+3
+                         class Session:
+                             def admission_guard(inner):pass
+-                            def install_progress(inner,*args):seen.append(dict(stage='install_progress',observed=now[0]));now[0]=deadline+offset
++                            def install_progress(inner,*args):
++                                p.read_record(args[0],p.SMALL_BYTES);seen.append(dict(stage='install_progress_real_context_read_return',observed=now[0]));now[0]=deadline+offset
+                             def retire_worker(inner):pass
+                             def close(inner,deadline):return True
+                             def ownership(inner):return []
+@@ -2818,7 +3064,68 @@
+                                 action=lambda:recovery.prepare_terminal_evidence(full.fixture.root,full.reservation,dict(error=None,result=file_record(full.output/'result.json'),acceptance=acceptance),deadline,config=full.fixture.config)
+                         elif name=='next_input':action=lambda:p.operation(e.input_loader(fixture['request']).load,__import__('vipe_benchmark.access',fromlist=['Identity']).Identity(**state.row['identity']),deadline=deadline)
+                         else:raise AssertionError(name)
+-                        now[0]=deadline+offset
++                        injected=[False]
++                        def advance(label):
++                            nonlocal pointer
++                            if injected[0]:return
++                            pointer=state.cache.snapshot;injected[0]=True
++                            seen.append(dict(stage=label,state='preceding_real_return',observed=now[0]));now[0]=deadline+offset
++                        def after(module,attribute,label,predicate=lambda *a,**k:True):
++                            original=getattr(module,attribute)
++                            def completed(*args,**kwargs):
++                                value=original(*args,**kwargs)
++                                if predicate(*args,**kwargs):advance(label)
++                                return value
++                            stack.enter_context(patch.object(module,attribute,side_effect=completed))
++                        if name=='array_npy':
++                            original_open=Path.open
++                            def opened(path,*args,**kwargs):
++                                value=original_open(path,*args,**kwargs)
++                                if path==state.root/'array.npy':advance('array_unbuffered_open_return')
++                                return value
++                            stack.enter_context(patch.object(Path,'open',opened))
++                        elif name=='array_png':
++                            original_exists=Path.exists
++                            def exists(path):
++                                value=original_exists(path)
++                                if path==state.root/'array.png':advance('png_destination_stat_return')
++                                return value
++                            stack.enter_context(patch.object(Path,'exists',exists))
++                        elif name=='array_hash':after(stages.np,'save','npy_serialization_return')
++                        elif name in ('npz_member','npz_finalize','cleanup_next_array'):
++                            import zipfile
++                            closed=[0];original_close=zipfile._ZipWriteFile.close
++                            def member_closed(member):
++                                was_closed=member.closed;value=original_close(member)
++                                if not was_closed:
++                                    closed[0]+=1
++                                    if closed[0]==(2 if name=='npz_finalize' else 1):advance('npz_member_'+str(closed[0])+'_close_return')
++                                return value
++                            stack.enter_context(patch.object(zipfile._ZipWriteFile,'close',member_closed))
++                            if name=='cleanup_next_array':
++                                primary=RuntimeError('original cleanup primary');primary.s1_evidence={'arrays':{'a':np.arange(4),'b':np.arange(4)}}
++                                action=lambda:e.preserve_failure(fixture['request'],state.root,None,primary,clock=state.clock)
++                        elif name in ('produced_json','next_input'):
++                            after(e,'input_loader','input_manifest_read_and_parse_return')
++                        elif name=='produced_read':after(p,'write_exclusive','produced_row_durable_write_return',lambda path,*a,**k:Path(path).name=='produced.json')
++                        elif name in ('produced_guard','qualified_guard'):
++                            action=lambda:p.publish_segment_row(state.row,fixture['request'],e.input_loader(fixture['request']),state.clock,state.publisher,state.root/'produced.json',state.root/'qualified.json',first=True)
++                            if name=='produced_guard':after(p,'read_record','produced_row_read_hash_parse_return',lambda rec,*a,**k:Path(rec['path']).name=='produced.json')
++                            else:after(state.publisher,'seal','produced_guard_seal_ack_return')
++                        elif name in ('first_guard','reuse_after_read'):
++                            if name=='first_guard':action=lambda:p.operation(e.verify_first,p.operation(e.read_json,first['path'],deadline=deadline),fixture['request'],clock=state.clock,deadline=deadline)
++                            after(e,'read_json','first_metadata_read_parse_return',lambda path:Path(path).name=='first-result-qualification.json')
++                        elif name=='runtime_guard':
++                            path=state.root/'runtime.json';write_json(path,fixture['observed_runtime'])
++                            action=lambda:p.operation(e.qualify_runtime,p.operation(e.read_json,path,deadline=deadline),fixture['request'],deadline=deadline)
++                            after(e,'read_json','runtime_metadata_read_parse_return',lambda path:Path(path).name=='runtime.json')
++                        elif name=='accept_after_read':
++                            ready=[False];captured=recovery.captured_clock
++                            def captured_return(*args,**kwargs):
++                                value=captured(*args,**kwargs);ready[0]=True;return value
++                            stack.enter_context(patch.object(recovery,'captured_clock',side_effect=captured_return))
++                            after(p,'checked_read_json','accepted_request_read_parse_return',lambda path:ready[0] and str(path)==full.clock.request_path)
++                        elif name=='complete_after_read':after(p,'checked_read_json','acceptance_metadata_read_parse_return',lambda path:Path(path).name=='acceptance.json')
+                     stack.enter_context(patch.object(p.time,'monotonic',side_effect=lambda:now[0]))
+                     if name=='worker_popen':
+                         with self.assertRaises(sup.SupervisionFailure):action()
+@@ -2828,8 +3135,137 @@
+                         observed=str(caught.exception)
+                         if name!='ack_receipt':self.assertIs(state.cache.snapshot,pointer)
+                     else:action();observed='real operation completed before W'
+-                    evidence.append(dict(case,source=source,events=seen,deadline=deadline,observed=observed,reference=state.cache.reference(),fixture=fixture['request_record']))
++                    if name!='worker_popen':self.assertTrue(injected[0],name)
++                    partial=[dict(path=str(path),bytes=path.stat().st_size,sha256=__import__('hashlib').sha256(path.read_bytes()).hexdigest()) for path in state.root.rglob('*') if path.is_file()]
++                    evidence.append(dict(case,source=source,events=seen,deadline=deadline,observed=observed,reference=state.cache.reference(),partial_files=partial,fixture=fixture['request_record']))
+         self.control_record('plan047-deadline-steps',evidence)
++
++    def test_progress_plan048_pure_memo(self):
++        import contextlib,copy,hashlib,io,json
++        import numpy as np
++        from vipe_benchmark import s1_evidence as e,s1_progress as p
++        from vipe_benchmark.files import file_record,write_json
++        from test_vipe_benchmark_s1_helper_fixtures import progress_fixture,plan047_state
++        records=[]
++        with tempfile.TemporaryDirectory() as temp:
++            root=Path(temp);fixture=progress_fixture(root/'fixture');row=fixture['rows'][0];request=fixture['request']
++            baseline=e.qualify_row(row,request,first=True)
++            for case in SUBTEST_CASES[f'{Path(__file__).stem}.{type(self).__name__}.{self._testMethodName}']:
++                with self.subTest(**case),contextlib.ExitStack() as stack:
++                    kind=case['kind'];memo=e.PureMemo();events=[];counts={'decode':0,'preprocess':0};deadline=self.time.monotonic()+60
++                    actual_load=e.np.load;actual_processed=e.processed_rgb
++                    def load(*args,**kwargs):
++                        if isinstance(args[0],io.BytesIO) and args[0].getbuffer()[:2]==b'PK':counts['decode']+=1;events.append('archive_open')
++                        return actual_load(*args,**kwargs)
++                    def processed(rgb):counts['preprocess']+=1;events.append('processed_rgb');return actual_processed(rgb)
++                    stack.enter_context(patch.object(e.np,'load',side_effect=load));stack.enter_context(patch.object(e,'processed_rgb',side_effect=processed))
++                    self.assertEqual(e.qualify_row(row,request,first=True,memo=memo,deadline=deadline),baseline)
++                    self.assertIsNotNone(memo.entry);retained=memo.retained_bytes;control=dict(counts)
++                    if kind=='snapshot_member_once':
++                        raw=p.verified_bytes(row['diagnostics']);member_counts={}
++                        with actual_load(io.BytesIO(raw),allow_pickle=False) as archive:
++                            class Counted:
++                                files=archive.files
++                                def __getitem__(inner,key):member_counts[key]=member_counts.get(key,0)+1;return archive[key]
++                            snapshot=e.BoundedArrays(Counted())
++                            for key in archive.files:
++                                first=snapshot[key];self.assertIs(snapshot[key],first);self.assertFalse(first.flags.writeable);self.assertFalse(first.dtype.hasobject)
++                            self.assertEqual(member_counts,{key:1 for key in archive.files});snapshot.clear();self.assertEqual(snapshot.bytes,0)
++                        events.append(dict(member_counts=member_counts))
++                    elif kind=='uncached_valid_equivalence':
++                        fresh=e.qualify_row(row,request,first=True,deadline=deadline)
++                        cached=e.qualify_row(row,request,first=True,memo=memo,deadline=deadline)
++                        self.assertEqual(cached,fresh);self.assertEqual(cached,baseline);self.assertEqual(memo.hits,1)
++                        self.assertEqual(counts,{'decode':2,'preprocess':2})
++                    elif kind in ('uncached_invalid_equivalence','failure_cleanup'):
++                        invalid=copy.deepcopy(row);invalid['metadata']['detections'][0]['class_assignment']['derived_class']='invalid'
++                        failures=[]
++                        for active in (None,memo):
++                            with self.assertRaises(ValueError) as caught:e.qualify_row(invalid,request,memo=active,deadline=deadline)
++                            failures.append((type(caught.exception).__name__,str(caught.exception)))
++                        self.assertEqual(failures[0],failures[1]);self.assertIsNone(memo.entry);self.assertEqual(memo.retained_bytes,0)
++                        if kind=='failure_cleanup':
++                            self.assertEqual(e.qualify_row(row,request,memo=memo,deadline=deadline),baseline)
++                            self.assertEqual(memo.misses,2);memo.clear();self.assertIsNone(memo.entry)
++                        events.append(dict(failures=failures))
++                    elif kind in ('same_size_restored_mtime','inode_replacement','path_replacement'):
++                        path=Path(row['diagnostics']['path']);raw=path.read_bytes();old=path.stat();replacement=path.with_name('replacement.npz')
++                        try:
++                            if kind=='same_size_restored_mtime':
++                                changed=bytearray(raw);changed[len(changed)//2]^=1;path.write_bytes(changed);os.utime(path,ns=(old.st_atime_ns,old.st_mtime_ns))
++                                self.assertEqual(path.stat().st_size,old.st_size);self.assertEqual(path.stat().st_mtime_ns,old.st_mtime_ns)
++                                with self.assertRaises(ValueError):e.qualify_row(row,request,memo=memo,deadline=deadline)
++                                self.assertIsNone(memo.entry)
++                            elif kind=='inode_replacement':
++                                replacement.write_bytes(raw);os.replace(replacement,path);self.assertNotEqual(path.stat().st_ino,old.st_ino)
++                                actual=p.read_bytes
++                                def read(path_value,limit):events.append(dict(fresh_read=str(path_value)));return actual(path_value,limit)
++                                with patch.object(p,'read_bytes',side_effect=read):self.assertEqual(e.qualify_row(row,request,memo=memo,deadline=deadline),baseline)
++                                self.assertTrue(any(isinstance(v,dict) and v.get('fresh_read')==str(path) for v in events));self.assertEqual(memo.hits,1)
++                            else:
++                                replacement.write_bytes(raw);actual=p.os.fstat;seen=[0]
++                                def fstat(fd):
++                                    value=actual(fd)
++                                    if value.st_ino==old.st_ino:
++                                        seen[0]+=1
++                                        if seen[0]==2:os.replace(replacement,path);events.append('named_path_replaced_after_read')
++                                    return value
++                                with patch.object(p.os,'fstat',side_effect=fstat),self.assertRaisesRegex(ValueError,'descriptor replacement'):
++                                    e.qualify_row(row,request,memo=memo,deadline=deadline)
++                                self.assertIn('named_path_replaced_after_read',events);self.assertIsNone(memo.entry)
++                            events.append(dict(before_inode=old.st_ino,after_inode=path.stat().st_ino,original_hash=hashlib.sha256(raw).hexdigest(),observed_hash=hashlib.sha256(path.read_bytes()).hexdigest(),bytes=len(raw)))
++                        finally:path.write_bytes(raw);os.utime(path,ns=(old.st_atime_ns,old.st_mtime_ns))
++                    elif kind in ('request_changed','identity_changed'):
++                        changed=copy.deepcopy(row);req=copy.deepcopy(request)
++                        if kind=='request_changed':req['job_id']='other'
++                        else:changed['identity']['camera']=99
++                        with self.assertRaises(ValueError):e.qualify_row(changed,req,memo=memo,deadline=deadline)
++                        self.assertIsNone(memo.entry);events.append('real_row_request_or_identity_rejected')
++                    elif kind in ('context_changed','source_changed'):
++                        with plan047_state(fixture,root/kind) as state:
++                            state.publisher.close();context_path=Path(state.reference['path']);context_raw=context_path.read_bytes();reference=state.reference
++                            if kind=='context_changed':context_path.write_bytes(context_raw+b' ')
++                            else:
++                                doc=p.decode(context_raw,p.SMALL_BYTES);source=root/'guard-copy.py';source.write_bytes(Path(doc['sources']['guard']['path']).read_bytes());doc['sources']['guard']=file_record(source)
++                                raw=p.encode(doc,p.SMALL_BYTES);context_path.write_bytes(raw);reference=p.record(context_path,raw)
++                                control_publisher=p.Publisher(reference,'worker',1,clock=state.clock,request=request);control_publisher.close()
++                                source.write_bytes(source.read_bytes()+b'\n')
++                            with self.assertRaisesRegex(ValueError,'metadata changed|source changed'):p.Publisher(reference,'worker',1,clock=state.clock,request=request)
++                            self.assertEqual(memo.retained_bytes,retained);events.append('fresh_publisher_authority_rejected_before_memo')
++                    elif kind.startswith('lookup_'):
++                        now=[self.time.monotonic()];deadline=now[0]+10;offset={'lookup_before_w':-.001,'lookup_equal_w':0.,'lookup_after_w':.001}[kind]
++                        lookup=memo.lookup;forbidden=[];member=e.BoundedArrays.__getitem__
++                        def completed_lookup(key):
++                            value=lookup(key);events.append('real_lookup_return');now[0]=deadline+offset;return value
++                        def getitem(inner,key):
++                            if now[0]>=deadline:forbidden.append(key);raise AssertionError('member access after lookup reached W')
++                            events.append('member:'+key);return member(inner,key)
++                        with patch.object(memo,'lookup',side_effect=completed_lookup),patch.object(e.BoundedArrays,'__getitem__',getitem),patch.object(p.time,'monotonic',side_effect=lambda:now[0]):
++                            if kind=='lookup_before_w':self.assertEqual(e.qualify_row(row,request,memo=memo,deadline=deadline),baseline)
++                            else:
++                                with self.assertRaises(TimeoutError) as caught:e.qualify_row(row,request,memo=memo,deadline=deadline)
++                                self.assertEqual(str(caught.exception),'progress original work deadline');self.assertIsNone(memo.entry)
++                        self.assertIn('real_lookup_return',events);self.assertEqual(forbidden,[])
++                        self.assertEqual(any(isinstance(v,str) and v.startswith('member:') for v in events),kind=='lookup_before_w')
++                    elif kind=='retention_cap':
++                        self.assertEqual(e.PURE_MEMO_BYTES,64*1024*1024)
++                        self.assertLessEqual(memo.retained_bytes,e.PURE_MEMO_BYTES)
++                        payload=b'x'*e.PURE_MEMO_BYTES
++                        self.assertTrue(memo.retain((payload,),{},None));self.assertEqual(memo.retained_bytes,e.PURE_MEMO_BYTES)
++                        self.assertFalse(memo.retain((payload,b'y'),{},None));self.assertIsNone(memo.entry);self.assertEqual(memo.retained_bytes,0)
++                        del payload
++                        self.assertEqual(e.qualify_row(row,request,memo=memo,deadline=deadline),baseline)
++                        events.append('exact_cap_then_uncached_guard')
++                    elif kind=='eviction':
++                        old=memo.entry[0];new=(b'new-pair',)
++                        self.assertIsNone(memo.lookup(new));self.assertIsNone(memo.entry);self.assertEqual(memo.evictions,1)
++                        self.assertTrue(memo.retain(new,{},None));self.assertEqual(memo.entry[0],new);self.assertNotEqual(memo.entry[0],old)
++                        self.assertIsNone(memo.lookup(old));self.assertEqual(memo.evictions,2);self.assertIsNone(memo.entry)
++                        events.append('one_pair_evicted_exact_key_and_buffers')
++                    else:raise AssertionError(kind)
++                    records.append(dict(case,source='qualify_row/numerical_snapshot/PureMemo/BoundedArrays',positive_control=control,counts=counts,events=events,work_deadline=deadline,retained_bytes=memo.retained_bytes,hits=memo.hits,misses=memo.misses,fixture=fixture['request_record'],archive=row['diagnostics']))
++                    memo.clear();self.assertIsNone(memo.entry);self.assertEqual(memo.retained_bytes,0)
++        self.control_record('plan048-pure-memo',records)
+ 
+     def control_record(self,name,value):
+         import json

@@ -1,0 +1,601 @@
+{
+  "derived_retrospectively_from_exact_pre_edit_snapshot": true,
+  "operational_timeouts_added": false,
+  "entries": [
+    {
+      "version": "before",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 395,
+      "expression": "require(value['retirement'] == dict(identity=child, method='matching Popen.wait', returncode=0, completed=True, absent_after=True), 'exact matching child retirement')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 402,
+      "expression": "require(note.get('schema') == 'plan049-prospective-launch/v1' and note.get('execution_mode') == 'no-timeout' and ('timeout_seconds' in note) and (note['timeout_seconds'] is None), 'Plan049 no-timeout launch required')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 425,
+      "expression": "require(admission.get('execution_mode') == 'no-timeout' and 'timeout_seconds' in admission and (admission['timeout_seconds'] is None), 'admission no-timeout mode')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 299,
+      "expression": "require(type(value.get('timeout_seconds')) is int and 0 < value['timeout_seconds'] <= 300 and (value['elapsed_seconds'] <= value['timeout_seconds']), 'execution invocation cap exceeded')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 302,
+      "expression": "require(value.get('execution_mode') == 'no-timeout' and 'timeout_seconds' in value and (value['timeout_seconds'] is None), 'explicit null no-timeout mode required')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 305,
+      "expression": "require(value.get('wait') == dict(method='Popen.wait', timeout_seconds=None, pid=value['child_pid'], returncode=value['returncode'], completed=True), 'actual unbounded wait evidence required')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 395,
+      "expression": "dict(identity=child, method='matching Popen.wait', returncode=0, completed=True, absent_after=True)",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 305,
+      "expression": "dict(method='Popen.wait', timeout_seconds=None, pid=value['child_pid'], returncode=value['returncode'], completed=True)",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 299,
+      "expression": "type(value.get('timeout_seconds'))",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 299,
+      "expression": "value.get('timeout_seconds')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 148,
+      "expression": "dict(schema='s1-cpu-execution/v1', provenance=self.provenance, requested_argv=list(c.ARGV), cwd=str(ROOT), environment=dict(c.ENVIRONMENT), run_directory=str(self.root), start=stamp(0), end=stamp(21), elapsed_seconds=21.0, child_pid=123, returncode=0, timed_out=False, wait_completed=True, timeout_seconds=300, boot_id=self.inner['boot_id'], sources_before=copy.deepcopy(sources), sources_after=copy.deepcopy(sources), stdin=self.stdin, runner=self.runner, capture=self.capture, interpreter=self.inner['interpreter'], stdout=self.process_stdout, stderr=self.process_stderr)",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1257,
+      "expression": "run(dict(operation='reconcile', args=dict(local=str(fixture.root), config=fixture.config, reservation=reservation, outcome=dict(error='prelaunch failed'), deadline=clock.work_deadline)))",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1257,
+      "expression": "dict(operation='reconcile', args=dict(local=str(fixture.root), config=fixture.config, reservation=reservation, outcome=dict(error='prelaunch failed'), deadline=clock.work_deadline))",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1397,
+      "expression": "real_print('S1_CLOCK_BARRIER ' + json.dumps(dict(case=kind, loader_frames=loads, adapter_calls=len(calls), qualification_observations=verified, completion_observation=now[0], work_deadline=clock.work_deadline, first_publication=published[0] if published else None, production_operations=operations, retrospective_inspection='subsequent byte/guard checks occur outside the production clock patch'), sort_keys=True))",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1401,
+      "expression": "self.assertTrue(all((o['observed'] < clock.work_deadline for o in operations if o['phase'] == 'start')))",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 812,
+      "expression": "dict(approved=True, cleanup_resolved=True, execution_mode='no-timeout', timeout_seconds=None, kind='aggregate', index=1000, reason='synthetic contract fixture; no execution performed', counts_before={'diagnostic': 0, 'aggregate': 999}, sources=outer['sources_before'], source_paths=[r['path'] for r in outer['sources_before']], resource_capacity=dict(B=1, H=0, charge=2, artifact_bytes=0), bindings=dict(plan=plan, dispatch=dispatch_record, status=status, authorization=authorization, driver=driver, command=command, environment=settings, run_directory=str(graph.root), stdin=dict(bytes=len(c.STDIN.encode()), sha256=hashlib.sha256(c.STDIN.encode()).hexdigest()), identity_request=identity_request, addenda=addenda, **identity_fields))",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 820,
+      "expression": "dict(schema='plan049-prospective-launch/v1', execution_mode='no-timeout', timeout_seconds=None, provenance='synthetic contract fixture; no execution performed', run_directory=str(graph.root), kind='aggregate', attempt_index=1000, reason=admission['reason'], counts_before=admission['counts_before'], driver=driver, admission=admitted, bindings=[plan, dispatch_record, status, authorization, admitted, identity_request] + addenda, sources=outer['sources_before'], cpu_bound='B+max(1,H)\u22648', command=command, environment=settings, cwd=str(ROOT), unset_environment=['S1_HELPER_DIAGNOSTIC', 'S1_RECEIPT_DIAGNOSTIC'], stdin_identity=dict(bytes=len(c.STDIN.encode()), sha256=hashlib.sha256(c.STDIN.encode()).hexdigest(), content=c.STDIN), **identity_fields)",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 826,
+      "expression": "outer.update(schema='s1-cpu-execution/v2', execution_mode='no-timeout', timeout_seconds=None, launch_note=file_record(note_path), wait=dict(method='Popen.wait', timeout_seconds=None, pid=outer['child_pid'], returncode=0, completed=True))",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 830,
+      "expression": "dict(before=census([root_identity]), after=census([root_identity, child_identity]), retired=census([root_identity]), child=child_identity, retirement=dict(identity=child_identity, method='matching Popen.wait', returncode=0, completed=True, absent_after=True), authority=admitted, cpu_bound='B+max(1,H)\u22648')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1178,
+      "expression": "math.nextafter(clock.work_deadline, -math.inf)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1327,
+      "expression": "self.assertLess(now[0], clock.work_deadline)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1401,
+      "expression": "all((o['observed'] < clock.work_deadline for o in operations if o['phase'] == 'start'))",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1410,
+      "expression": "self.assertLess(value['elapsed_seconds_from_reservation'], clock.work_deadline - clock.monotonic_start)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1257,
+      "expression": "dict(local=str(fixture.root), config=fixture.config, reservation=reservation, outcome=dict(error='prelaunch failed'), deadline=clock.work_deadline)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1332,
+      "expression": "self.assertLess(now[0], clock.work_deadline)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1397,
+      "expression": "json.dumps(dict(case=kind, loader_frames=loads, adapter_calls=len(calls), qualification_observations=verified, completion_observation=now[0], work_deadline=clock.work_deadline, first_publication=published[0] if published else None, production_operations=operations, retrospective_inspection='subsequent byte/guard checks occur outside the production clock patch'), sort_keys=True)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 827,
+      "expression": "dict(method='Popen.wait', timeout_seconds=None, pid=outer['child_pid'], returncode=0, completed=True)",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 831,
+      "expression": "dict(identity=child_identity, method='matching Popen.wait', returncode=0, completed=True, absent_after=True)",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 838,
+      "expression": "candidate.update(schema='s1-cpu-execution/v1', timeout_seconds=300)",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1180,
+      "expression": "math.nextafter(clock.work_deadline, math.inf)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1397,
+      "expression": "dict(case=kind, loader_frames=loads, adapter_calls=len(calls), qualification_observations=verified, completion_observation=now[0], work_deadline=clock.work_deadline, first_publication=published[0] if published else None, production_operations=operations, retrospective_inspection='subsequent byte/guard checks occur outside the production clock patch')",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1182,
+      "expression": "math.nextafter(clock.total_deadline, math.inf)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1160,
+      "expression": "value.update(monotonic_start=1e+308, effective_seconds=3600, cleanup_reserve_seconds=30.0, total_deadline=1e+308, work_deadline=1e+308)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "before",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1163,
+      "expression": "value.update(monotonic_start=0.0, effective_seconds=math.nextafter(0.0, 1.0), cleanup_reserve_seconds=0.0, total_deadline=math.nextafter(0.0, 1.0), work_deadline=math.nextafter(0.0, 1.0))",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "before",
+      "path": "docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+      "line": 90,
+      "expression": "any((admission.get(k) != v for k, v in dict(kind=kind, index=index, reason=reason, counts_before=counts, execution_mode='no-timeout', timeout_seconds=None, cpu_bound='B+max(1,H)\u22648').items()))",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+      "line": 104,
+      "expression": "dict(schema='plan049-prospective-launch/v1', execution_mode='no-timeout', timeout_seconds=None, driver=record(Path(__file__)), admission=record(admission_path), bindings=bindings, sources=sources, status={k: status[k] for k in ('bytes', 'sha256')}, kind=kind, attempt_index=index, counts_before=counts, counts_after=dict(counts, **{kind: counts[kind] + 1}), reason=reason, command=command, cwd=str(ROOT), run_directory=str(directory), environment=settings, unset_environment=['S1_HELPER_DIAGNOSTIC', 'S1_RECEIPT_DIAGNOSTIC'], stdin_identity=dict(bytes=len(stdin), sha256=hashlib.sha256(stdin).hexdigest(), content=stdin.decode()), ownership_root=root, preexisting_ancestors=ancestors, ancestry_terminal=dict(pid=ancestors[-1]['pid'], ppid=0), retained_wrappers=[], output_paths=outputs, observed=stamp(), cpu_bound='B+max(1,H)\u22648', existing_scenarios=42, direct_scripts=6, scenario_execution_seconds=2, scenario_cleanup_seconds=1)",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+      "line": 115,
+      "expression": "publish(Path(str(prefix) + '-exec-start.json'), dict(schema='plan049-exec-launch/v1', execution_mode='no-timeout', timeout_seconds=None, note=note_record, before_launch=stamp(), logs=logs, command=command, replacement='driver execve unchanged child capture'))",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+      "line": 115,
+      "expression": "dict(schema='plan049-exec-launch/v1', execution_mode='no-timeout', timeout_seconds=None, note=note_record, before_launch=stamp(), logs=logs, command=command, replacement='driver execve unchanged child capture')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+      "line": 90,
+      "expression": "dict(kind=kind, index=index, reason=reason, counts_before=counts, execution_mode='no-timeout', timeout_seconds=None, cpu_bound='B+max(1,H)\u22648').items()",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "before",
+      "path": "docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+      "line": 90,
+      "expression": "dict(kind=kind, index=index, reason=reason, counts_before=counts, execution_mode='no-timeout', timeout_seconds=None, cpu_bound='B+max(1,H)\u22648')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 395,
+      "expression": "require(value['retirement'] == dict(identity=child, method='matching Popen.wait', returncode=0, completed=True, absent_after=True), 'exact matching child retirement')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 507,
+      "expression": "require(note.get('schema') == 'plan049-prospective-launch/v1' and note.get('execution_mode') == 'no-timeout' and ('timeout_seconds' in note) and (note['timeout_seconds'] is None), 'Plan049 no-timeout launch required')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 531,
+      "expression": "require(admission.get('execution_mode') == 'no-timeout' and 'timeout_seconds' in admission and (admission['timeout_seconds'] is None), 'admission no-timeout mode')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 299,
+      "expression": "require(type(value.get('timeout_seconds')) is int and 0 < value['timeout_seconds'] <= 300 and (value['elapsed_seconds'] <= value['timeout_seconds']), 'execution invocation cap exceeded')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 302,
+      "expression": "require(value.get('execution_mode') == 'no-timeout' and 'timeout_seconds' in value and (value['timeout_seconds'] is None), 'explicit null no-timeout mode required')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 305,
+      "expression": "require(value.get('wait') == dict(method='Popen.wait', timeout_seconds=None, pid=value['child_pid'], returncode=value['returncode'], completed=True), 'actual unbounded wait evidence required')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 495,
+      "expression": "require(type(args.get('yield_time_ms')) is int and 0 < args['yield_time_ms'] <= 60000, 'responsive poll yield')",
+      "purpose": "responsive polling; not termination deadline"
+    },
+    {
+      "version": "after",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 395,
+      "expression": "dict(identity=child, method='matching Popen.wait', returncode=0, completed=True, absent_after=True)",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 305,
+      "expression": "dict(method='Popen.wait', timeout_seconds=None, pid=value['child_pid'], returncode=value['returncode'], completed=True)",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 299,
+      "expression": "type(value.get('timeout_seconds'))",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 495,
+      "expression": "type(args.get('yield_time_ms'))",
+      "purpose": "responsive polling; not termination deadline"
+    },
+    {
+      "version": "after",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 299,
+      "expression": "value.get('timeout_seconds')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 495,
+      "expression": "args.get('yield_time_ms')",
+      "purpose": "responsive polling; not termination deadline"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 148,
+      "expression": "dict(schema='s1-cpu-execution/v1', provenance=self.provenance, requested_argv=list(c.ARGV), cwd=str(ROOT), environment=dict(c.ENVIRONMENT), run_directory=str(self.root), start=stamp(0), end=stamp(21), elapsed_seconds=21.0, child_pid=123, returncode=0, timed_out=False, wait_completed=True, timeout_seconds=300, boot_id=self.inner['boot_id'], sources_before=copy.deepcopy(sources), sources_after=copy.deepcopy(sources), stdin=self.stdin, runner=self.runner, capture=self.capture, interpreter=self.inner['interpreter'], stdout=self.process_stdout, stderr=self.process_stderr)",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1397,
+      "expression": "run(dict(operation='reconcile', args=dict(local=str(fixture.root), config=fixture.config, reservation=reservation, outcome=dict(error='prelaunch failed'), deadline=clock.work_deadline)))",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1397,
+      "expression": "dict(operation='reconcile', args=dict(local=str(fixture.root), config=fixture.config, reservation=reservation, outcome=dict(error='prelaunch failed'), deadline=clock.work_deadline))",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1537,
+      "expression": "real_print('S1_CLOCK_BARRIER ' + json.dumps(dict(case=kind, loader_frames=loads, adapter_calls=len(calls), qualification_observations=verified, completion_observation=now[0], work_deadline=clock.work_deadline, first_publication=published[0] if published else None, production_operations=operations, retrospective_inspection='subsequent byte/guard checks occur outside the production clock patch'), sort_keys=True))",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1541,
+      "expression": "self.assertTrue(all((o['observed'] < clock.work_deadline for o in operations if o['phase'] == 'start')))",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 849,
+      "expression": "dict(approved=True, cleanup_resolved=True, execution_mode='no-timeout', timeout_seconds=None, kind='aggregate', index=1000, reason='synthetic contract fixture; no execution performed', counts_before={'diagnostic': 0, 'aggregate': 999}, sources=outer['sources_before'], source_paths=[r['path'] for r in outer['sources_before']], resource_capacity=dict(B=1, H=0, charge=2, artifact_bytes=0), bindings=dict(session_proof=proof_reference, plan=plan, dispatch=dispatch_record, status=status, authorization=authorization, driver=driver, command=command, environment=settings, run_directory=str(graph.root), stdin=dict(bytes=len(c.STDIN.encode()), sha256=hashlib.sha256(c.STDIN.encode()).hexdigest()), identity_request=identity_request, addenda=addenda, **identity_fields))",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 858,
+      "expression": "dict(schema='plan049-prospective-launch/v1', execution_mode='no-timeout', timeout_seconds=None, provenance='synthetic contract fixture; no execution performed', run_directory=str(graph.root), kind='aggregate', attempt_index=1000, reason=admission['reason'], counts_before=admission['counts_before'], driver=driver, admission=admitted, bindings=[plan, dispatch_record, status, authorization, admitted, identity_request, proof_reference, session_authorization] + addenda, sources=outer['sources_before'], cpu_bound='B+max(1,H)\u22648', command=command, environment=settings, cwd=str(ROOT), unset_environment=['S1_HELPER_DIAGNOSTIC', 'S1_RECEIPT_DIAGNOSTIC'], stdin_identity=dict(bytes=len(c.STDIN.encode()), sha256=hashlib.sha256(c.STDIN.encode()).hexdigest(), content=c.STDIN), **identity_fields)",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 864,
+      "expression": "outer.update(schema='s1-cpu-execution/v2', execution_mode='no-timeout', timeout_seconds=None, launch_note=file_record(note_path), wait=dict(method='Popen.wait', timeout_seconds=None, pid=outer['child_pid'], returncode=0, completed=True))",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 868,
+      "expression": "dict(before=census([root_identity]), after=census([root_identity, child_identity]), retired=census([root_identity]), child=child_identity, retirement=dict(identity=child_identity, method='matching Popen.wait', returncode=0, completed=True, absent_after=True), authority=admitted, cpu_bound='B+max(1,H)\u22648')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1318,
+      "expression": "math.nextafter(clock.work_deadline, -math.inf)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1467,
+      "expression": "self.assertLess(now[0], clock.work_deadline)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1541,
+      "expression": "all((o['observed'] < clock.work_deadline for o in operations if o['phase'] == 'start'))",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1550,
+      "expression": "self.assertLess(value['elapsed_seconds_from_reservation'], clock.work_deadline - clock.monotonic_start)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1397,
+      "expression": "dict(local=str(fixture.root), config=fixture.config, reservation=reservation, outcome=dict(error='prelaunch failed'), deadline=clock.work_deadline)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1472,
+      "expression": "self.assertLess(now[0], clock.work_deadline)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1537,
+      "expression": "json.dumps(dict(case=kind, loader_frames=loads, adapter_calls=len(calls), qualification_observations=verified, completion_observation=now[0], work_deadline=clock.work_deadline, first_publication=published[0] if published else None, production_operations=operations, retrospective_inspection='subsequent byte/guard checks occur outside the production clock patch'), sort_keys=True)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 839,
+      "expression": "dict(cmd=shlex.join(['exec', str(ROOT / c.ARGV[0]), '-B', driver['path'], 'aggregate', '1000', 'synthetic contract fixture; no execution performed']), workdir=str(ROOT), tty=True, sandbox_permissions='use_default', yield_time_ms=1000)",
+      "purpose": "responsive polling; not termination deadline"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 839,
+      "expression": "dict(session_id=12345, chars='', yield_time_ms=1000)",
+      "purpose": "responsive polling; not termination deadline"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 865,
+      "expression": "dict(method='Popen.wait', timeout_seconds=None, pid=outer['child_pid'], returncode=0, completed=True)",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 869,
+      "expression": "dict(identity=child_identity, method='matching Popen.wait', returncode=0, completed=True, absent_after=True)",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 978,
+      "expression": "candidate.update(schema='s1-cpu-execution/v1', timeout_seconds=300)",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1320,
+      "expression": "math.nextafter(clock.work_deadline, math.inf)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1537,
+      "expression": "dict(case=kind, loader_frames=loads, adapter_calls=len(calls), qualification_observations=verified, completion_observation=now[0], work_deadline=clock.work_deadline, first_publication=published[0] if published else None, production_operations=operations, retrospective_inspection='subsequent byte/guard checks occur outside the production clock patch')",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1322,
+      "expression": "math.nextafter(clock.total_deadline, math.inf)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1300,
+      "expression": "value.update(monotonic_start=1e+308, effective_seconds=3600, cleanup_reserve_seconds=30.0, total_deadline=1e+308, work_deadline=1e+308)",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "after",
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1303,
+      "expression": "value.update(monotonic_start=0.0, effective_seconds=math.nextafter(0.0, 1.0), cleanup_reserve_seconds=0.0, total_deadline=math.nextafter(0.0, 1.0), work_deadline=math.nextafter(0.0, 1.0))",
+      "purpose": "preserved production W/C behavior"
+    },
+    {
+      "version": "after",
+      "path": "docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+      "line": 116,
+      "expression": "any((admission.get(k) != v for k, v in dict(kind=kind, index=index, reason=reason, counts_before=counts, execution_mode='no-timeout', timeout_seconds=None, cpu_bound='B+max(1,H)\u22648').items()))",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+      "line": 132,
+      "expression": "dict(schema='plan049-prospective-launch/v1', execution_mode='no-timeout', timeout_seconds=None, driver=record(Path(__file__)), admission=record(admission_path), bindings=bindings, sources=sources, status={k: status[k] for k in ('bytes', 'sha256')}, kind=kind, attempt_index=index, counts_before=counts, counts_after=dict(counts, **{kind: counts[kind] + 1}), reason=reason, command=command, cwd=str(ROOT), run_directory=str(directory), environment=settings, unset_environment=['S1_HELPER_DIAGNOSTIC', 'S1_RECEIPT_DIAGNOSTIC'], stdin_identity=dict(bytes=len(stdin), sha256=hashlib.sha256(stdin).hexdigest(), content=stdin.decode()), ownership_root=root, preexisting_ancestors=ancestors, ancestry_terminal=dict(pid=ancestors[-1]['pid'], ppid=0), retained_wrappers=[], output_paths=outputs, observed=stamp(), cpu_bound='B+max(1,H)\u22648', existing_scenarios=42, direct_scripts=6, scenario_execution_seconds=2, scenario_cleanup_seconds=1)",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+      "line": 144,
+      "expression": "publish(Path(str(prefix) + '-exec-start.json'), dict(schema='plan049-exec-launch/v1', execution_mode='no-timeout', timeout_seconds=None, note=note_record, before_launch=stamp(), logs=logs, command=command, replacement='driver execve unchanged child capture'))",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+      "line": 144,
+      "expression": "dict(schema='plan049-exec-launch/v1', execution_mode='no-timeout', timeout_seconds=None, note=note_record, before_launch=stamp(), logs=logs, command=command, replacement='driver execve unchanged child capture')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+      "line": 116,
+      "expression": "dict(kind=kind, index=index, reason=reason, counts_before=counts, execution_mode='no-timeout', timeout_seconds=None, cpu_bound='B+max(1,H)\u22648').items()",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    },
+    {
+      "version": "after",
+      "path": "docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+      "line": 116,
+      "expression": "dict(kind=kind, index=index, reason=reason, counts_before=counts, execution_mode='no-timeout', timeout_seconds=None, cpu_bound='B+max(1,H)\u22648')",
+      "purpose": "legacy execution validation or explicit null no-timeout binding"
+    }
+  ]
+}

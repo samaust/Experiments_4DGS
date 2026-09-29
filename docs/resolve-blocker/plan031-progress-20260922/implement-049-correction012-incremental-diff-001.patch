@@ -1,0 +1,156 @@
+--- before/scripts/vipe_benchmark/s1_validation_contract.py
++++ after/scripts/vipe_benchmark/s1_validation_contract.py
+@@ -582,7 +582,7 @@
+     request=session_json(identity_request['path'])
+     typed_binding(request)
+     require(request==dict(schema='plan049-prospective-identity/v1',kind=note['kind'],index=note['attempt_index'],driver=driver,**{key:note[key] for key in ('ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths')}),'exact pre-admission identity request')
+-    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md')]
++    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md')]
+     require(command_bindings.get('addenda')==addenda and all(row in bindings for row in addenda),'current correction authority')
+     proof_record=strict_record(command_bindings.get('session_proof'))
+     proof=session_proof(proof_record,note['kind'],note['attempt_index'],driver,identity_request,admission_record['path'],admission['reason'])
+--- before/tests/test_vipe_benchmark_s1_recovery.py
++++ after/tests/test_vipe_benchmark_s1_recovery.py
+@@ -807,7 +807,7 @@
+                     identity_path=graph.root/'synthetic-prospective-identity.json'
+                     identity_path.write_text(json.dumps(dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**identity_fields)))
+                     identity_request=file_record(identity_path)
+-                    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md')]
++                    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md')]
+                     settings={key:'1' for key in (*c.THREADS,'OPENCV_FOR_THREADS_NUM','VIPE_CPU_VALIDATION')};settings['PYTHONPATH']=str(ROOT/'scripts')
+                     # Synthetic file-routing seam: fixed logical R paths backed by
+                     # this disposable fixture only. No Main evidence is published.
+--- before/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py
++++ after/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py
+@@ -25,6 +25,30 @@
+         stream.flush();os.fsync(stream.fileno())
+     if path.read_bytes()!=raw:raise ValueError('launch evidence readback')
+     return record(path)
++def identity_difference(stage,check,expected,observed,*,not_sampled=(),invariant=None):
++    """Pure failed-comparison diagnostics from retained operands; no observations."""
++    paths=set()
++    def pointer(key):return str(key).replace('~','~0').replace('/','~1')
++    def compare(left,right,path):
++        if type(left) is not type(right):
++            paths.add(path);return
++        if type(left) is dict:
++            for key in sorted(set(left)|set(right)):
++                child=path+'/'+pointer(key)
++                if key not in left or key not in right:paths.add(child)
++                else:compare(left[key],right[key],child)
++        elif type(left) in (list,tuple):
++            common=min(len(left),len(right))
++            for index in range(common):compare(left[index],right[index],path+'/'+str(index))
++            if len(left)!=len(right):
++                paths.add(path)
++                for index in range(common,max(len(left),len(right))):paths.add(path+'/'+str(index))
++        elif left!=right:paths.add(path)
++    if invariant=='threads_nonempty':paths.add('/threads_before_after')
++    else:compare(expected,observed,'')
++    return 'plan049-identity-diff/v1 '+json.dumps(dict(schema='plan049-identity-diff/v1',stage=stage,check=check,
++        different_paths=sorted(paths),not_sampled=list(not_sampled),invariant=invariant),sort_keys=True,separators=(',',':'),allow_nan=False)
++
+ def main():
+     kind,index,reason=sys.argv[1],int(sys.argv[2]),sys.argv[3]
+     if kind not in ('diagnostic','aggregate') or index<1 or not reason.strip():raise ValueError('launch kind/index/reason')
+@@ -93,15 +117,52 @@
+                 result.append(dict(boot_id=boot,pid=pid,process_start_ticks=first['start_ticks'],tid=int(path.name),start_ticks=int(fields[19])))
+             return result
+         first=row();threads=tasks();again=tasks();last=row()
+-        if first!=last or threads!=again or not threads:raise ValueError('unstable driver identity')
++        if first!=last:
++            error=ValueError('unstable driver identity')
++            try:error.add_note(identity_difference(process.stage,'process_before_after',dict(process_before_after=first),dict(process_before_after=last),not_sampled=('threads_before_after',)))
++            except BaseException:
++                try:error.add_note('plan049-identity-diff/v1 diagnostic-unavailable')
++                except BaseException:pass
++            raise error
++        if threads!=again:
++            error=ValueError('unstable driver identity')
++            try:error.add_note(identity_difference(process.stage,'threads_before_after',dict(threads_before_after=threads),dict(threads_before_after=again)))
++            except BaseException:
++                try:error.add_note('plan049-identity-diff/v1 diagnostic-unavailable')
++                except BaseException:pass
++            raise error
++        if not threads:
++            error=ValueError('unstable driver identity')
++            try:error.add_note(identity_difference(process.stage,'threads_nonempty',None,None,invariant='threads_nonempty'))
++            except BaseException:
++                try:error.add_note('plan049-identity-diff/v1 diagnostic-unavailable')
++                except BaseException:pass
++            raise error
+         return dict(first,threads=threads,threads_before=[dict(task) for task in threads],threads_after=again,process_before=first,process_after=last)
+-    def local_identity():
++    def local_identity(stage='initial'):
++        # Stage metadata only; process calls/samples and predicates stay exact.
++        process.stage=stage
+         root=process(os.getpid());ancestors=[];cursor=root['ppid'];seen={root['pid']}
+         while cursor:
+             if cursor in seen:raise ValueError('ancestry cycle')
+             seen.add(cursor);row=process(cursor);ancestors.append(row);cursor=row['ppid']
+         if not ancestors:raise ValueError('terminated ancestry required')
+-        if process(os.getpid())!=root or [process(row['pid']) for row in ancestors]!=ancestors:raise ValueError('unstable full driver ancestry')
++        observed_root=process(os.getpid())
++        if observed_root!=root:
++            error=ValueError('unstable full driver ancestry')
++            try:error.add_note(identity_difference(stage,'local_root_stability',dict(ownership_root=root),dict(ownership_root=observed_root),not_sampled=('preexisting_ancestors',)))
++            except BaseException:
++                try:error.add_note('plan049-identity-diff/v1 diagnostic-unavailable')
++                except BaseException:pass
++            raise error
++        observed_ancestors=[process(row['pid']) for row in ancestors]
++        if observed_ancestors!=ancestors:
++            error=ValueError('unstable full driver ancestry')
++            try:error.add_note(identity_difference(stage,'local_ancestry_stability',dict(preexisting_ancestors=ancestors),dict(preexisting_ancestors=observed_ancestors)))
++            except BaseException:
++                try:error.add_note('plan049-identity-diff/v1 diagnostic-unavailable')
++                except BaseException:pass
++            raise error
+         return root,ancestors
+     root,ancestors=local_identity()
+     prefix=RUN/('driver-049-'+suffix)
+@@ -121,12 +182,18 @@
+     if type(B) is not int or type(H) is not int or min(B,H)<0 or B+max(1,H)>8 or type(capacity.get('charge')) is not int or capacity['charge']!=B+max(1,H):raise ValueError('main resource capacity proof')
+     if type(capacity.get('artifact_bytes')) is not int or not 0<=capacity['artifact_bytes']<=150*1024**3:raise ValueError('artifact cap proof')
+     if [r['path'] for r in sources]!=admission['source_paths'] or sources!=admission['sources']:raise ValueError('main source snapshot changed')
+-    addenda=[record(RUN/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md')]
++    addenda=[record(RUN/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md')]
+     proof_record=record(RUN/('main-session-proof-049-'+suffix+'.json'))
+     proof=session_proof(proof_record,kind,index,record(Path(__file__)),identity_request,str(admission_path),reason)
+     expected=dict(session_proof=proof_record,plan=plan,dispatch=record(dispatch_path),status=status,authorization=authorization,driver=record(Path(__file__)),command=command,environment=settings,stdin=dict(bytes=len(stdin),sha256=hashlib.sha256(stdin).hexdigest()),run_directory=str(directory),identity_request=identity_request,addenda=addenda,**identity_binding)
+     if json.dumps(admission.get('bindings'),sort_keys=True,allow_nan=False)!=json.dumps(expected,sort_keys=True,allow_nan=False):raise ValueError('main immutable typed command/authority/identity binding')
+-    if local_identity()!=(root,ancestors):raise ValueError('Main prospective identity changed')
++    if (observed_identity:=local_identity('before_note'))!=(root,ancestors):
++        error=ValueError('Main prospective identity changed')
++        try:error.add_note(identity_difference('before_note','prospective_identity',dict(ownership_root=root,preexisting_ancestors=ancestors),dict(ownership_root=observed_identity[0],preexisting_ancestors=observed_identity[1])))
++        except BaseException:
++            try:error.add_note('plan049-identity-diff/v1 diagnostic-unavailable')
++            except BaseException:pass
++        raise error
+     if capacity['B']!=len(root['threads']) or capacity['H']!=0:raise ValueError('Main live driver capacity mismatch')
+     bindings=[plan,record(dispatch_path),status,authorization,record(admission_path),identity_request,proof_record,proof['user_authorization']]+proof['tool_events']+addenda
+     note=dict(schema='plan049-prospective-launch/v1',execution_mode='no-timeout',timeout_seconds=None,driver=record(Path(__file__)),admission=record(admission_path),bindings=bindings,sources=sources,status={k:status[k] for k in ('bytes','sha256')},kind=kind,attempt_index=index,counts_before=counts,counts_after=dict(counts,**{kind:counts[kind]+1}),reason=reason,command=command,cwd=str(ROOT),run_directory=str(directory),environment=settings,unset_environment=['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],stdin_identity=dict(bytes=len(stdin),sha256=hashlib.sha256(stdin).hexdigest(),content=stdin.decode()),ownership_root=root,preexisting_ancestors=ancestors,ancestry_terminal=dict(pid=ancestors[-1]['pid'],ppid=0),retained_wrappers=[],output_paths=outputs,observed=stamp(),cpu_bound='B+max(1,H)≤8',existing_scenarios=42,direct_scripts=6,scenario_execution_seconds=2,scenario_cleanup_seconds=1)
+@@ -140,9 +207,21 @@
+         # Fresh bytes, not age, determine admission immediately before exec.
+         for item in bindings+sources+[note['driver'],note_record]:
+             if record(Path(item['path']))!=item:raise ValueError('authority/source changed before exec')
+-        if local_identity()!=(root,ancestors):raise ValueError('driver identity changed')
++        if (observed_identity:=local_identity('before_exec_record'))!=(root,ancestors):
++            error=ValueError('driver identity changed')
++            try:error.add_note(identity_difference('before_exec_record','prospective_identity',dict(ownership_root=root,preexisting_ancestors=ancestors),dict(ownership_root=observed_identity[0],preexisting_ancestors=observed_identity[1])))
++            except BaseException:
++                try:error.add_note('plan049-identity-diff/v1 diagnostic-unavailable')
++                except BaseException:pass
++            raise error
+         publish(Path(str(prefix)+'-exec-start.json'),dict(schema='plan049-exec-launch/v1',execution_mode='no-timeout',timeout_seconds=None,note=note_record,before_launch=stamp(),logs=logs,command=command,replacement='driver execve unchanged child capture'))
+         os.dup2(out.fileno(),1);os.dup2(err.fileno(),2)
+-    if local_identity()!=(root,ancestors):raise ValueError('driver full identity changed immediately before exec')
++    if (observed_identity:=local_identity('immediate_pre_exec'))!=(root,ancestors):
++        error=ValueError('driver full identity changed immediately before exec')
++        try:error.add_note(identity_difference('immediate_pre_exec','prospective_identity',dict(ownership_root=root,preexisting_ancestors=ancestors),dict(ownership_root=observed_identity[0],preexisting_ancestors=observed_identity[1])))
++        except BaseException:
++            try:error.add_note('plan049-identity-diff/v1 diagnostic-unavailable')
++            except BaseException:pass
++        raise error
+     os.execve(command[0],command,env)
+ if __name__=='__main__':main()

@@ -1,0 +1,475 @@
+"""Static, typed CPU execution evidence contract; never imports test modules."""
+import ast
+import copy
+import datetime
+from functools import lru_cache
+import json
+import hashlib
+import math
+from pathlib import Path
+import re
+
+from .config import ROOT
+from .files import file_record, read_json
+
+SUITES = ('s1_semantics', 's1_recovery', 'backends', 'contracts', 'component_recovery',
+          'execution', 'budgets', 'supervisor', 'review_annotations')
+STDIN = ('import runpy\nimport sys\nsys.path.insert(0, "scripts")\n'
+         'runpy.run_module("vipe_benchmark.s1_validation_runner", run_name="__main__", alter_sys=True, init_globals={"STDIN_PYTHON_ARGV": tuple(sys.argv)})\n')
+ARGV = ['.local/envs/stg-colmap/bin/python', '-B', '-']
+THREADS = ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'NUMEXPR_NUM_THREADS')
+ENVIRONMENT = {**{key: '1' for key in THREADS}, 'VIPE_CPU_VALIDATION': '1', 'S1_HELPER_DIAGNOSTIC': None,
+               'S1_RECEIPT_DIAGNOSTIC': None}
+RUNNER = ROOT / 'scripts/vipe_benchmark/s1_validation_runner.py'
+CAPTURE = ROOT / 'scripts/vipe_benchmark/s1_validation_capture.py'
+
+
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
+
+
+def source_paths():
+    return sorted([ROOT / 'scripts/basketball_vipe_benchmark.py', ROOT / 'scripts/basketball_vipe_worker.py',
+                   ROOT / 'configs/vipe-alternatives/benchmark-v1.json',
+                   *(ROOT / 'scripts/vipe_benchmark').glob('*.py'),
+                   *(ROOT / 'tests').glob('test_vipe_benchmark_*.py')])
+
+
+def strict_record(record):
+    require(type(record) is dict and set(record) == {'path', 'sha256', 'bytes'}, 'strict file record required')
+    require(type(record['path']) is str and type(record['bytes']) is int and record['bytes'] >= 0
+            and type(record['sha256']) is str and re.fullmatch('[0-9a-f]{64}', record['sha256']), 'strict file record fields required')
+    path = Path(record['path'])
+    require('prompts' not in path.parts, 'forbidden evidence path')
+    require(str(path.resolve()) == record['path'] and path.is_file(), 'canonical existing file record required')
+    require(file_record(path) == record, 'stale file record bytes or hash')
+    return record
+
+
+def identity(parameters):
+    require(type(parameters) is dict and all(type(k) is str for k in parameters), 'primitive parameter dictionary required')
+    result = []
+    for key, value in sorted(parameters.items()):
+        kind = type(value)
+        require(kind in (str, bool, int, float, type(None)), 'primitive parameter value required')
+        require(kind is not float or math.isfinite(value), 'finite parameter value required')
+        result.append((key, kind.__name__, value))
+    return json.dumps(result, ensure_ascii=True, separators=(',', ':'), allow_nan=False)
+
+
+def callback_id(parent, parameters):
+    return parent + '::' + identity(parameters)
+
+
+def parse_suite(text, module):
+    """Return isolated declarations, reusing only successful exact-source parsing."""
+    return copy.deepcopy(_parse_suite_cached(text, module))
+
+
+@lru_cache(maxsize=16)
+def _parse_suite_cached(text, module):
+    """Reject ambiguous/dynamic declarations before Python can collapse dict keys."""
+    try:
+        tree = ast.parse(text)
+        parents = {id(child): node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and node.id == 'SUBTEST_CASES':
+                parent = parents.get(id(node))
+                if isinstance(parent, (ast.Attribute, ast.AugAssign, ast.Delete)):
+                    raise ValueError('dynamic declaration mutation forbidden')
+                if isinstance(parent, ast.Subscript) and isinstance(parent.ctx, (ast.Store, ast.Del)):
+                    raise ValueError('dynamic declaration mutation forbidden')
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in ('getattr', 'setattr'):
+                if len(node.args) > 1 and isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str):
+                    require(node.args[1].value != 'subTest' and not node.args[1].value.startswith('test_'),
+                            'unsupported indirect parameterization')
+        assignments = [n for n in ast.walk(tree) if isinstance(n, (ast.Assign, ast.AnnAssign))
+                       and any(isinstance(t, ast.Name) and t.id == 'SUBTEST_CASES'
+                               for t in (n.targets if isinstance(n, ast.Assign) else [n.target]))]
+        require(len(assignments) == 1 and assignments[0] in tree.body
+                and isinstance(assignments[0], ast.Assign) and len(assignments[0].targets) == 1,
+                'exactly one module literal SUBTEST_CASES assignment required')
+        value = assignments[0].value
+        require(isinstance(value, ast.Dict), 'literal declaration dictionary required')
+        for node in ast.walk(value):
+            if isinstance(node, ast.Dict):
+                require(all(k is not None for k in node.keys), 'declaration unpacking forbidden')
+                keys = [ast.literal_eval(k) for k in node.keys]
+                require(all(type(k) is str for k in keys) and len(keys) == len(set(keys)), 'duplicate declaration key')
+        declared = ast.literal_eval(value)
+        expected, parameterized = [], set()
+        seen_classes = set()
+        recognized_calls = set()
+        for cls in sorted((n for n in tree.body if isinstance(n, ast.ClassDef)), key=lambda n: n.name):
+            require(cls.name not in seen_classes, 'duplicate collected class')
+            seen_classes.add(cls.name)
+            for method in sorted((n for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                                  and n.name.startswith('test_')), key=lambda n: n.name):
+                name = f'{module}.{cls.name}.{method.name}'
+                require(name not in expected and isinstance(method, ast.FunctionDef) and not method.decorator_list,
+                        'unsupported dynamic collected method')
+                expected.append(name)
+                calls = [n for n in ast.walk(method) if isinstance(n, ast.Attribute) and n.attr == 'subTest']
+                if calls:
+                    parameterized.add(name)
+                    for call in calls:
+                        require(isinstance(call.value, ast.Name) and call.value.id == 'self'
+                                and isinstance(parents.get(id(call)), ast.Call) and parents[id(call)].func is call,
+                                'unsupported indirect subTest')
+                        recognized_calls.add(id(call))
+        require(all(id(n) in recognized_calls for n in ast.walk(tree)
+                    if isinstance(n, ast.Attribute) and n.attr == 'subTest'), 'unsupported indirect parameterization')
+        require(set(declared) == parameterized, 'missing or extraneous parameter declarations')
+        for name, cases in declared.items():
+            require(type(cases) in (tuple, list) and bool(cases), 'nonempty declaration sequence required')
+            typed = [identity(case) for case in cases]
+            require(len(typed) == len(set(typed)), 'duplicate declared typed tuple')
+            declared[name] = list(cases)
+        return expected, declared
+    except (SyntaxError, TypeError, KeyError) as exc:
+        raise ValueError('invalid literal declaration') from exc
+
+
+def collection():
+    expected, declared = [], {}
+    for suite in SUITES:
+        module = 'test_vipe_benchmark_' + suite
+        methods, cases = parse_suite((ROOT / 'tests' / (module + '.py')).read_text(), module)
+        require(not set(declared).intersection(cases), 'duplicate declaration across suites')
+        expected.extend(methods)
+        declared.update(cases)
+    require(bool(expected) and len(expected) == len(set(expected)), 'unique nonempty collection required')
+    return expected, declared
+
+
+def required_cases():
+    expected, declared = collection()
+    return expected, set(declared)
+
+
+def receipt_totals(cases):
+    return {suite: counters([case for case in cases if case['id'].startswith('test_vipe_benchmark_' + suite + '.')])
+            for suite in SUITES}
+
+
+def counters(cases):
+    return dict(tests_run=len(cases), subtests_run=sum(len(c['subtests']) for c in cases),
+                failures=sum(c['status'] == 'failed' for c in cases),
+                errors=sum(c['status'] == 'error' for c in cases), skipped=sum(c['status'] == 'skipped' for c in cases))
+
+
+def counts_match(value, expected):
+    require(all(type(value.get(k)) is int and value[k] >= 0 and value[k] == v for k, v in expected.items()),
+            'exact integer receipt accounting required')
+
+
+def utc(value):
+    require(type(value) is str, 'UTC timestamp required')
+    try:
+        parsed = datetime.datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError('UTC timestamp malformed') from exc
+    require(parsed.tzinfo is not None and parsed.utcoffset() == datetime.timedelta(0), 'UTC timezone required')
+    return parsed
+
+
+def number(value):
+    require(type(value) in (int, float) and math.isfinite(value) and value >= 0, 'finite nonnegative timing required')
+    return value
+
+
+def interval(value):
+    start, end = value.get('start', {}), value.get('end', {})
+    sm, em = number(start.get('monotonic')), number(end.get('monotonic'))
+    su, eu = utc(start.get('utc')), utc(end.get('utc'))
+    require(sm <= em and su <= eu and abs(number(value.get('elapsed_seconds')) - (em - sm)) <= 1e-6,
+            'inconsistent timing interval')
+    return sm, em, su, eu
+
+
+def contained(child, parent):
+    require(parent[0] <= child[0] <= child[1] <= parent[1]
+            and parent[2] <= child[2] <= child[3] <= parent[3], 'timing outside enclosing interval')
+
+
+def sources_check(records):
+    require(type(records) is list and records == [file_record(p) for p in source_paths()], 'exact current ordered sources required')
+    for record in records:
+        strict_record(record)
+
+
+def environment_check(value):
+    require(type(value) is dict and value == ENVIRONMENT, 'exact validation environment required')
+
+
+def invocation_check(value, directory):
+    require(type(value) is dict and value.get('launcher_argv') == ARGV and value.get('python_argv') == ['-']
+            and value.get('runpy_argv') == [str(RUNNER.resolve())], 'exact launcher argv required')
+    require(value.get('cwd') == str(ROOT.resolve()) and value.get('run_directory') == directory, 'invocation cwd/run directory mismatch')
+    executable = str(ROOT / ARGV[0])
+    require(value.get('executable') == executable and value.get('resolved_interpreter') == str(Path(executable).resolve()),
+            'exact interpreter required')
+    environment_check(value.get('environment'))
+    require(value.get('thread_environment') == {k: '1' for k in THREADS}, 'exact thread environment required')
+
+
+def artifact(value, key, directory, filename):
+    record = strict_record(value.get(key))
+    require(record['path'] == str(Path(directory) / filename), 'artifact path mismatch: ' + key)
+    return Path(record['path']).read_bytes()
+
+
+def validate_inner(value, sources=None):
+    require(type(value) is dict and value.get('schema') == 's1-cpu-aggregate/v2' and value.get('diagnostic') is False,
+            'complete v2 aggregate schema required')
+    require(value.get('suite_order') == list(SUITES) and value.get('discovery_errors') == [], 'exact suite collection without discovery errors required')
+    expected, declared = collection()
+    require(value.get('collected') == expected, 'ordered method collection mismatch')
+    supplied = value.get('declarations')
+    require(type(supplied) is dict and set(supplied) == set(declared), 'complete declarations required')
+    for name in declared:
+        require(type(supplied[name]) is list and [identity(c) for c in supplied[name]] == [identity(c) for c in declared[name]],
+                'typed declaration mismatch')
+    cases = value.get('cases')
+    require(type(cases) is list and [c.get('id') for c in cases] == expected, 'ordered executed methods mismatch')
+    for case in cases:
+        require(case.get('status') == 'passed' and type(case.get('subtests')) is list, 'passing method required')
+        callbacks = case['subtests']
+        wanted = declared.get(case['id'], [])
+        require(len(callbacks) == len(wanted), 'callback multiplicity mismatch')
+        for sub, parameters in zip(callbacks, wanted):
+            require(identity(sub.get('parameters')) == identity(parameters), 'typed callback parameters mismatch')
+            require(sub.get('id') == callback_id(case['id'], parameters), 'canonical callback ID mismatch')
+            require(sub.get('status') == 'passed', 'passing callback required')
+    counts_match(value, counters(cases))
+    require(all(value[k] == 0 for k in ('failures', 'errors', 'skipped')) and value.get('passed') is True
+            and type(value.get('expected_exit_code')) is int and value['expected_exit_code'] == 0, 'passing aggregate required')
+    sources_check(value.get('sources_before'))
+    sources_check(value.get('sources_after'))
+    require(value['sources_before'] == value['sources_after'] and (sources is None or sources == value['sources_before']), 'source snapshots differ')
+    directory = value.get('run_directory')
+    require(type(directory) is str and str(Path(directory).resolve()) == directory and Path(directory).is_dir(), 'canonical run directory required')
+    require(artifact(value, 'stdin', directory, 'stdin.py') == STDIN.encode(), 'prescribed stdin bytes required')
+    require(artifact(value, 'runner', directory, 'runner.py') == RUNNER.read_bytes(), 'current runner snapshot required')
+    artifact(value, 'stdout', directory, 'stdout.log')
+    artifact(value, 'stderr', directory, 'stderr.log')
+    require(strict_record(value.get('interpreter')) == file_record(ROOT / ARGV[0]), 'interpreter file mismatch')
+    invocation_check(value.get('invocation'), directory)
+    require(type(value.get('boot_id')) is str and re.fullmatch('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', value['boot_id']), 'boot identity required')
+    bounds = interval(value)
+    suites = value.get('suites')
+    require(type(suites) is list and [s.get('suite') for s in suites] == list(SUITES), 'ordered suite receipts required')
+    previous = (bounds[0], bounds[2])
+    for suite in suites:
+        rows = [c for c in cases if c['id'].startswith('test_vipe_benchmark_' + suite['suite'] + '.')]
+        require(suite.get('collected') == [c['id'] for c in rows], 'suite collected methods mismatch')
+        counts_match(suite, counters(rows))
+        require(suite.get('invocation') == value['invocation'], 'suite invocation mismatch')
+        child = interval(suite)
+        contained(child, bounds)
+        require(previous[0] <= child[0] and previous[1] <= child[2], 'suite intervals overlap')
+        previous = (child[1], child[3])
+    return value
+
+
+def validate_execution(value, receipt_record, inner):
+    require(type(value) is dict and value.get('schema') in ('s1-cpu-execution/v1','s1-cpu-execution/v2'), 'complete execution schema required')
+    require(value.get('receipt') == strict_record(receipt_record), 'execution/receipt link mismatch')
+    require(type(value.get('returncode')) is int and value['returncode'] == inner['expected_exit_code'] == 0
+            and value.get('timed_out') is False and value.get('wait_completed') is True, 'actual successful wait completion required')
+    require(type(value.get('child_pid')) is int and value['child_pid'] > 0, 'child PID required')
+    require(value.get('requested_argv') == ARGV and value.get('cwd') == str(ROOT.resolve()), 'exact outer argv/cwd required')
+    environment_check(value.get('environment'))
+    directory = inner['run_directory']
+    require(value.get('run_directory') == directory, 'execution run directory mismatch')
+    for key in ('stdin', 'runner', 'interpreter'):
+        require(strict_record(value.get(key)) == inner[key], 'execution artifact mismatch: ' + key)
+    require(artifact(value, 'capture', directory, 'capture.py') == CAPTURE.read_bytes(), 'current capture snapshot required')
+    require(artifact(value, 'stdout', directory, 'process-stdout.log') == Path(inner['stdout']['path']).read_bytes()
+            and artifact(value, 'stderr', directory, 'process-stderr.log') == Path(inner['stderr']['path']).read_bytes(), 'process/runner log bytes differ')
+    sources_check(value.get('sources_before'))
+    sources_check(value.get('sources_after'))
+    require(value['sources_before'] == value['sources_after'] == inner['sources_before'], 'outer source snapshots differ')
+    require(value.get('boot_id') == inner['boot_id'], 'execution boot mismatch')
+    bounds = interval(value)
+    contained(interval(inner), bounds)
+    if value['schema']=='s1-cpu-execution/v1':
+        require('execution_mode' not in value and 'wait' not in value and 'launch_note' not in value,'legacy timed mode cannot claim no-timeout provenance')
+        require(type(value.get('timeout_seconds')) is int and 0 < value['timeout_seconds'] <= 300
+                and value['elapsed_seconds'] <= value['timeout_seconds'], 'execution invocation cap exceeded')
+    else:
+        require(value.get('execution_mode')=='no-timeout' and 'timeout_seconds' in value and value['timeout_seconds'] is None,'explicit null no-timeout mode required')
+        wait=value.get('wait')
+        require(type(wait) is dict and type(wait.get('pid')) is int and type(wait.get('returncode')) is int and wait.get('completed') is True,'typed successful wait evidence required')
+        require(value.get('wait')==dict(method='Popen.wait',timeout_seconds=None,pid=value['child_pid'],returncode=value['returncode'],completed=True),'actual unbounded wait evidence required')
+        note=no_timeout_launch(value.get('launch_note'),directory)
+        validate_creation(value.get('creation'),note,value['child_pid'],value['boot_id'])
+
+    return value
+
+
+def validate_wrapper(value, amendment, configuration):
+    require(type(value) is dict and value.get('schema') == 'plan031-s1-recovery-validation/v2'
+            and value.get('status') == 'passed' and value.get('semantic_amendment') == amendment
+            and value.get('configuration') == configuration, 'complete current amendment-bound source validation required')
+    for key in ('semantic_amendment', 'configuration', 'plan', 'baseline', 'baseline_correction'):
+        strict_record(value.get(key))
+    for key in ('aggregate_passed', 'receipt_milestone_complete', 'implementation_acceptance_complete', 'ready_for_live_admission', 'objective_complete'):
+        require(type(value.get(key)) is bool, 'separate acceptance flags required')
+    require(value['aggregate_passed'], 'aggregate pass required')
+    sources_check(value.get('sources'))
+    diff = value.get('diff_check', {})
+    require(type(diff.get('exit_code')) is int and diff['exit_code'] == 0 and diff.get('command') == 'git diff --check'
+            and type(diff.get('stdout')) is str and type(diff.get('stderr')) is str, 'exact clean diff check required')
+    require('aggregate' not in value, 'alternate aggregate document forbidden')
+    tests = value.get('tests')
+    require(type(tests) is list and len(tests) == 1 and type(tests[0]) is dict
+            and set(tests[0]) == {'receipt', 'execution'}, 'one bound receipt/execution entry required')
+    inner_record = strict_record(tests[0]['receipt'])
+    outer_record = strict_record(tests[0]['execution'])
+    inner = validate_inner(read_json(inner_record['path']), value['sources'])
+    validate_execution(read_json(outer_record['path']), inner_record, inner)
+    return value
+
+
+
+def identity_record(value):
+    require(type(value) is dict,'complete process identity required')
+    base=('boot_id','pid','ppid','pgid','start_ticks')
+    require(set(value)==set(base)|{'threads','threads_before','threads_after','process_before','process_after'},'exact process identity fields')
+    def process(item):
+        require(type(item) is dict and set(item)==set(base),'exact nested process fields')
+        require(type(item['boot_id']) is str and re.fullmatch('[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',item['boot_id']),'boot identity required')
+        for key in ('pid','pgid','start_ticks'):require(type(item[key]) is int and item[key]>0,'positive process identity: '+key)
+        require(type(item['ppid']) is int and item['ppid']>=0,'parent identity required')
+    expected={key:value[key] for key in base};process(expected)
+    for key in ('process_before','process_after'):process(value[key])
+    require(value['process_before']==value['process_after']==expected,'stable process identity required')
+    for key in ('threads','threads_before','threads_after'):
+        tasks=value[key];require(type(tasks) is list and tasks,'complete thread identities required')
+        tids=[]
+        for task in tasks:
+            require(type(task) is dict and set(task)=={'boot_id','pid','process_start_ticks','tid','start_ticks'},'exact thread identity fields')
+            require(type(task['boot_id']) is str and task['boot_id']==value['boot_id'],'thread boot identity')
+            for field in ('pid','process_start_ticks','tid','start_ticks'):require(type(task[field]) is int and task[field]>0,'exact positive thread identity: '+field)
+            require(task['pid']==value['pid'] and task['process_start_ticks']==value['start_ticks'],'thread process binding')
+            require(task['start_ticks']>=value['start_ticks'],'thread birth identity')
+            tids.append(task['tid'])
+        require(tids==sorted(set(tids)) and value['pid'] in tids,'unique sorted complete task census')
+    require(value['threads']==value['threads_before']==value['threads_after'],'stable thread identities around enumeration')
+    return value
+
+
+def launch_output_paths(directory,kind,index):
+    run=ROOT/'docs/resolve-blocker/plan031-progress-20260922'
+    prefix=run/('driver-049-'+kind+'-'+str(index).zfill(3))
+    return [str(Path(directory)/name) for name in ('receipt.json','execution.json','process-stdout.log','process-stderr.log','stdout.log','stderr.log','stdin.py','runner.py','capture.py')]+[str(prefix)+ending for ending in ('-exec-start.json','-stdout.log','-stderr.log')]
+
+
+def validate_creation(value,note,child_pid,boot):
+    require(type(value) is dict and set(value)=={'before','after','retired','child','retirement','authority','cpu_bound'},'complete creation and retirement evidence required')
+    require(value['authority']==file_record(note['admission']['path']) and value['cpu_bound']=='B+max(1,H)≤8','creation Main authority')
+    root=identity_record(note['ownership_root']);child=identity_record(value['child'])
+    require(child['pid']==child_pid and child['ppid']==root['pid'] and child['boot_id']==boot==root['boot_id'] and child['start_ticks']>=root['start_ticks'],'creation child full identity')
+    def snapshot(item):
+        require(type(item) is dict and set(item)=={'root_pid','processes','B','H','charge','complete'},'exact creation census')
+        require(item['complete'] is True and type(item['root_pid']) is int and item['root_pid']==root['pid'],'complete root census')
+        records=item['processes'];require(type(records) is list and records,'creation process census required')
+        for row in records:identity_record(row);require(row['boot_id']==boot,'creation boot mismatch')
+        ids=[row['pid'] for row in records];require(ids==sorted(set(ids)),'unique creation identities')
+        require(root in records,'creation root changed')
+        owned={root['pid']}
+        for _ in records:owned.update(row['pid'] for row in records if row['ppid'] in owned)
+        require(owned==set(ids),'unbound creation descendant')
+        B=sum(len(row['threads']) for row in records)
+        require(type(item['B']) is int and item['B']==B and type(item['H']) is int and item['H']==0 and type(item['charge']) is int and item['charge']==B+1<=8,'creation exact capacity')
+        return records
+    before=snapshot(value['before']);after=snapshot(value['after']);retired=snapshot(value['retired'])
+    require(before==[root] and after==sorted([root,child],key=lambda row:row['pid']) and retired==before,'exact before/after/retired creation identity set')
+    require(value['before']['B']+2<=8,'new child plus reserve before creation')
+    retirement=value['retirement']
+    require(type(retirement) is dict and set(retirement)=={'identity','method','returncode','completed','absent_after'},'exact retirement fields')
+    identity_record(retirement['identity'])
+    require(type(retirement['method']) is str and type(retirement['returncode']) is int and type(retirement['completed']) is bool and type(retirement['absent_after']) is bool,'exact retirement primitive types')
+    require(value['retirement']==dict(identity=child,method='matching Popen.wait',returncode=0,completed=True,absent_after=True),'exact matching child retirement')
+
+
+def no_timeout_launch(reference,directory,*,diagnostic=False):
+    """Fresh fixed Plan049 authority; the environment cannot choose a plan."""
+    run=ROOT/'docs/resolve-blocker/plan031-progress-20260922'
+    record=strict_record(reference);note=read_json(record['path'])
+    require(note.get('schema')=='plan049-prospective-launch/v1' and note.get('execution_mode')=='no-timeout'
+            and 'timeout_seconds' in note and note['timeout_seconds'] is None,'Plan049 no-timeout launch required')
+    require(note.get('run_directory')==directory and note.get('kind')==('diagnostic' if diagnostic else 'aggregate'),'no-timeout launch directory/kind')
+    dispatch_record=file_record(run/'implementation-dispatch-049.json');dispatch=read_json(dispatch_record['path'])
+    require(dispatch.get('schema')=='plan049-implementation-dispatch/v1','fixed Plan049 dispatch schema')
+    require(dispatch['authorization']['invocation_timeout'] is None and dispatch['authorization']['operational_duration_ceiling_seconds'] is None,'no-timeout authorization required')
+    require(dispatch['plan']['path']==str(ROOT/'plans/plan_049.md') and file_record(ROOT/'plans/plan_049.md')['sha256']==dispatch['plan']['sha256'],'fixed Plan049 authority')
+    status=strict_record(dispatch['implementation_status_snapshot']);authorization=strict_record(dispatch['authorization_note'])
+    require(status['path']==str(run/'implementation-status-049.md') and authorization['path']==str(run/'authorization-049.md'),'fixed Plan049 status/authorization')
+    driver=strict_record(note.get('driver'));require(driver['path']==str(run/'launch-049-exec.py'),'fixed Plan049 driver')
+    bindings=note.get('bindings');require(type(bindings) is list,'launch bindings required')
+    for binding in bindings:strict_record(binding)
+    require(dispatch_record in bindings and status in bindings and authorization in bindings
+            and file_record(ROOT/'plans/plan_049.md') in bindings,'complete fixed Plan049 launch bindings')
+    sources_check(note.get('sources'))
+    require(note.get('cpu_bound')=='B+max(1,H)≤8','exact owned CPU cap')
+    expected=[str(ROOT/ARGV[0]),'-B','-m','vipe_benchmark.s1_validation_capture',directory,'--no-timeout']
+    if diagnostic:expected.append('--diagnostic')
+    require(note.get('command')==expected,'exact no-timeout capture command')
+    admission_record=strict_record(note.get('admission'))
+    require(admission_record in bindings,'bound main admission required')
+    admission=read_json(admission_record['path'])
+    require(admission.get('approved') is True and admission.get('cleanup_resolved') is True,'approved resolved main admission required')
+    require(admission.get('execution_mode')=='no-timeout' and 'timeout_seconds' in admission and admission['timeout_seconds'] is None,'admission no-timeout mode')
+    require(admission.get('sources')==note['sources'] and admission.get('source_paths')==[r['path'] for r in note['sources']],'admission complete source binding')
+    for key,note_key in [('kind','kind'),('index','attempt_index'),('reason','reason'),('counts_before','counts_before')]:
+        require(admission.get(key)==note.get(note_key),'admission launch identity: '+key)
+    require(type(admission.get('index')) is int and admission['index']>0 and type(admission.get('reason')) is str and admission['reason'].strip(),'positive no-ceiling attempt/reason')
+    command_bindings=admission.get('bindings',{})
+    require(command_bindings.get('driver')==driver and command_bindings.get('command')==expected and command_bindings.get('run_directory')==directory,'admission driver/command/output binding')
+    require(command_bindings.get('plan')==file_record(ROOT/'plans/plan_049.md') and command_bindings.get('dispatch')==dispatch_record and command_bindings.get('status')==status and command_bindings.get('authorization')==authorization,'admission fixed authority binding')
+    require(command_bindings.get('stdin')==dict(bytes=len(STDIN.encode()),sha256=hashlib.sha256(STDIN.encode()).hexdigest()),'admission exact stdin')
+    settings={key:'1' for key in (*THREADS,'OPENCV_FOR_THREADS_NUM','VIPE_CPU_VALIDATION')}
+    settings['PYTHONPATH']=str(ROOT/'scripts')
+    require(command_bindings.get('environment')==note.get('environment')==settings,'exact admission/launch environment')
+    require(note.get('cwd')==str(ROOT) and note.get('unset_environment')==['S1_HELPER_DIAGNOSTIC','S1_RECEIPT_DIAGNOSTIC'],'exact launch cwd/unset environment')
+    require(note.get('stdin_identity')==dict(bytes=len(STDIN.encode()),sha256=hashlib.sha256(STDIN.encode()).hexdigest(),content=STDIN),'exact launch stdin identity')
+    require(set(command_bindings)=={'plan','dispatch','status','authorization','driver','command','environment','stdin','run_directory','identity_request','addenda','ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths'},'exact admission binding fields')
+    def typed_binding(value):
+        require(type(value) is dict,'identity binding dictionary')
+        identity_record(value.get('ownership_root'))
+        ancestors=value.get('preexisting_ancestors')
+        require(type(ancestors) is list and ancestors,'typed ancestry list')
+        for row in ancestors:identity_record(row)
+        terminal=value.get('ancestry_terminal')
+        require(type(terminal) is dict and set(terminal)=={'pid','ppid'} and type(terminal['pid']) is int and terminal['pid']>0 and type(terminal['ppid']) is int and terminal['ppid']==0,'typed ancestry terminal')
+        require(type(value.get('retained_wrappers')) is list and value['retained_wrappers']==[],'typed retained wrapper list')
+        require(type(value.get('output_paths')) is list and all(type(path) is str for path in value['output_paths']),'typed output paths')
+    typed_binding(note);typed_binding(command_bindings)
+    root=identity_record(note.get('ownership_root'))
+    ancestors=note.get('preexisting_ancestors');require(type(ancestors) is list and ancestors,'terminated ancestry required')
+    cursor=root['ppid'];seen={root['pid']}
+    for row in ancestors:
+        identity_record(row)
+        require(row['pid']==cursor and cursor not in seen and row['boot_id']==root['boot_id'] and row['start_ticks']<=root['start_ticks'],'ancestry identity/age/reuse')
+        seen.add(cursor);cursor=row['ppid']
+    require(cursor==0 and note.get('ancestry_terminal')==dict(pid=ancestors[-1]['pid'],ppid=0),'ancestry termination')
+    require(note.get('retained_wrappers')==[],'unvalidated retained wrapper')
+    outputs=launch_output_paths(directory,note['kind'],note['attempt_index'])
+    require(note.get('output_paths')==outputs,'complete exact output paths')
+    for key in ('ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths'):
+        require(command_bindings.get(key)==note.get(key),'Main prebound identity: '+key)
+    identity_request=strict_record(command_bindings.get('identity_request'))
+    require(identity_request in bindings,'Main prospective identity request binding')
+    request=read_json(identity_request['path'])
+    typed_binding(request)
+    require(request==dict(schema='plan049-prospective-identity/v1',kind=note['kind'],index=note['attempt_index'],driver=driver,**{key:note[key] for key in ('ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths')}),'exact pre-admission identity request')
+    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md')]
+    require(command_bindings.get('addenda')==addenda and all(row in bindings for row in addenda),'current correction authority')
+    capacity=admission.get('resource_capacity',{});B=capacity.get('B');H=capacity.get('H')
+    require(type(B) is int and type(H) is int and min(B,H)>=0 and B+max(1,H)<=8 and capacity.get('charge')==B+max(1,H),'admission exact CPU capacity')
+    require(B==len(root['threads']) and H==0,'Main root thread capacity correlation')
+    require(type(capacity.get('artifact_bytes')) is int and 0<=capacity['artifact_bytes']<=150*1024**3,'admission artifact capacity')
+    return note

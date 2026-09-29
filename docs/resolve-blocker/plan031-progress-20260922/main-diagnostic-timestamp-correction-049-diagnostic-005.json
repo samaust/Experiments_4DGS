@@ -1,0 +1,65 @@
+{
+  "schema": "plan049-main-timestamp-correction/v1",
+  "kind": "diagnostic",
+  "index": 5,
+  "observed": {
+    "utc": "2026-09-23T19:46:55.682793+00:00",
+    "monotonic": 86177.325883783
+  },
+  "reason": "Independent review found the retrospective ADMIT send timestamps were inconsistent with the inner execution start, and the derived terminal summary did not exactly copy the actual post-ADMIT terminal poll timestamps. Preserve every original artifact; this correction identifies which timestamps are usable.",
+  "send_record": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/main-session-049-diagnostic-005-send-001.json",
+    "bytes": 1310,
+    "sha256": "d9a6753efad94eadb0108cb1f62b580a342b3a66a686c505ddf48b2a6612c500"
+  },
+  "send_tool_result": {
+    "tool": "write_stdin",
+    "session_id": 54388,
+    "chunk_id": "c542f2",
+    "arguments": {
+      "chars": "ADMIT\n",
+      "yield_time_ms": 1000,
+      "max_output_tokens": 3000
+    },
+    "wall_time_seconds": 1.001556355,
+    "result_session_remained_live": true,
+    "output": "ADMIT\r\n"
+  },
+  "send_timing": {
+    "contemporaneous_utc_monotonic_start_return": "not captured",
+    "do_not_use_saved_started_or_returned_as_actual": "they were retrospectively synthesized and contradict the actual child execution start",
+    "causal_bracket": {
+      "after_at_admission_poll": {
+        "record": {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/main-session-049-diagnostic-005-event-002.json",
+          "bytes": 717,
+          "sha256": "ce1b1fbb3a18b47ec13d083d8f8e32f65efa14dd0e98c028c8543aadb0c20788"
+        },
+        "returned_utc": "2026-09-23T19:37:13.954Z"
+      },
+      "before_inner_capture_start": {
+        "record": {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/diagnostic-049-005/execution.json",
+          "bytes": 46876,
+          "sha256": "112ad84ff96c8a997e51b15fc2c3fb921eb726f73b3052f8e8f4e193f1419af5"
+        },
+        "started_utc": "2026-09-23T19:38:12.014930+00:00"
+      },
+      "interpretation": "The actual ADMIT tool call occurred after the recorded at-admission poll and before the capture child start. Exact wall-clock start/return of the ADMIT tool call are unknown; retain its exact measured tool wall_time_seconds separately."
+    }
+  },
+  "terminal_poll": {
+    "actual_tool_poll": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/main-session-049-diagnostic-005-poll-003.json",
+      "bytes": 1361,
+      "sha256": "60de70c634bfb69e15a5c718b1f2fe19187f8cf253b62e2c24e2ee9ecb75652f"
+    },
+    "summary_terminal_record": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/main-session-049-diagnostic-005-terminal-001.json",
+      "bytes": 1752,
+      "sha256": "405fa92a1604106d53f1955e2c50002cdc04a7ea55fa03ee7a4e1a8495ebaf5d"
+    },
+    "interpretation": "These refer to one actual write_stdin call/chunk3cc428, not two calls. Use the actual poll event UTC/monotonic stamps (19:39:49.581\u201319:40:12.022Z; 85751.22585546701\u201385773.66509018901). The derived summary terminal returned field used inner execution end instead (19:40:12.005363; 85773.648458514) and is not an actual outer-tool timestamp. The inner execution end remains valid in execution.json."
+  },
+  "no_runtime_change": "No source, tool call, admission, send, test result or artifact bytes are altered by this annotation. The captured no-timeout run remains exit1 with failures/errors; no acceptance is inferred."
+}

@@ -1,0 +1,1691 @@
+{
+  "before": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/implement-049-timer-inventory-before-001.json",
+    "bytes": 424212,
+    "sha256": "c8a97cf2c6d72cff118e2f876fb13a17d902d511b5ade6975d35a0df352a7549"
+  },
+  "entries": [
+    {
+      "path": "scripts/vipe_benchmark/s1_cpu_helper.py",
+      "line": 10,
+      "expression": "guarded(_run, operation, deadline=reservation_deadline(args['reservation']))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_cpu_helper.py",
+      "line": 57,
+      "expression": "guarded(_session_operation, operation, session, request_id, deadline=reservation_deadline(args['reservation']))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 168,
+      "expression": "operation(_first_record, request, output, status, clock=clock, rows=rows, runtime=runtime, error=error, stage=stage, raw=raw, checks=checks, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 240,
+      "expression": "operation(_reconcile_first, request, output, clock=clock, error=error, deadline=require_clock(clock).work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 274,
+      "expression": "operation(_preserve_failure, request, output, identity, error, adapter=adapter, prediction=prediction, stage=stage, parent=parent, runtime=runtime, clock=clock, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 165,
+      "expression": "before(clock.work_deadline if status == 'passed' else clock.total_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 192,
+      "expression": "dict(reservation_clock=clock.mapping(), clock_status='verified', elapsed_seconds_from_reservation=seconds)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 213,
+      "expression": "verify_first(existing, request, clock=clock, deadline=clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 214,
+      "expression": "dict(value, elapsed_seconds_from_reservation=existing['elapsed_seconds_from_reservation'])",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 230,
+      "expression": "verify_first(persisted, request, clock=clock, deadline=clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 239,
+      "expression": "before(clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 253,
+      "expression": "verify_first(value, request, clock=clock, deadline=clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 407,
+      "expression": "operation(_reconcile_rows, output, request, result=result, deadline_value=deadline, publisher=publisher, memo=memo, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 185,
+      "expression": "verify_first(existing, request, clock=clock, deadline=clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 219,
+      "expression": "verify_first(value, request, clock=clock, deadline=clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 324,
+      "expression": "numeric_file(output / (stem + '-failure-evidence.npz'), numeric, deadline=clock.work_deadline if clock is not None else None)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 344,
+      "expression": "dict(clock_status='verified', reservation_clock=clock.mapping(), elapsed_seconds_from_reservation=seconds)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 475,
+      "expression": "produced_row(row, request, loader=loader, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_evidence.py",
+      "line": 478,
+      "expression": "qualify_row(row, request, first=identity == expected[0], loader=loader, memo=memo, progress_context=None if publisher is None else publisher.reference, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_helper_session.py",
+      "line": 654,
+      "expression": "create_owned_process('Owner.run ' + role, os.posix_spawn, sys.executable, [sys.executable, '-B', '-m', 'vipe_benchmark.s1_cpu_helper', role, self.session.token, '100'], env, deadline=self.session.ready_deadline, file_actions=actions, setsid=True)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_helper_session.py",
+      "line": 988,
+      "expression": "dict(request_id=request['id'], dispatch=request['dispatch'], deadline=request['deadline'], pre=pre, post=post, acquisition_start=payload['acquisition_start'], acquisition_end=payload['acquisition_end'], decision=decision)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_helper_session.py",
+      "line": 1141,
+      "expression": "dict(id=sequence, operation=name, dispatch=now, deadline=min(deadline, now + 1.0) if role == 'sample' else deadline, state='queued', operation_payload=operation)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_helper_session.py",
+      "line": 1007,
+      "expression": "dict(event='admission_guard', decision=now, deadline=self.setup_deadline, request_id=self.last_sample['request_id'])",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_helper_session.py",
+      "line": 1038,
+      "expression": "min(deadline, self.fixture_action_end)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_helper_session.py",
+      "line": 1124,
+      "expression": "min(self.ready_deadline, self.fixture_action_end)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_helper_session.py",
+      "line": 1131,
+      "expression": "min(deadline, self.fixture_action_end)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_helper_session.py",
+      "line": 1154,
+      "expression": "min(deadline, self.fixture_safety_end)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 288,
+      "expression": "contextvars.ContextVar('s1_original_work_deadline', default=None)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 425,
+      "expression": "_prepare_context(local, clock, request, authorization, session, work, config, owner_pid=owner_pid, deadline=clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 524,
+      "expression": "keys(value, 'schema context producer binding request_id sequence previous work_deadline verified_at rows sources coverage errors diagnostics runtime first_result acceptance counts')",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 526,
+      "expression": "number(value['work_deadline'])",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 1053,
+      "expression": "operation(_candidate_inventory, output, result, deadline, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 1122,
+      "expression": "operation(_publish_segment_row, row, request, loader, clock, publisher, produced_path, qualified_path, first=first, deadline=clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 1130,
+      "expression": "produced_row(row, request, loader=loader, deadline=clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 1132,
+      "expression": "qualify_row(row, request, first=first, loader=loader, progress_context=publisher.reference, deadline=clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 1139,
+      "expression": "_accepted_progress(publisher, result, result_record, acceptance, deadline=publisher.deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 1227,
+      "expression": "number(value['total_deadline'], 'total_deadline', positive=True)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 1228,
+      "expression": "number(value['work_deadline'], 'work_deadline', positive=True)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 1239,
+      "expression": "dict(schema=SCHEMA, job_id=reservation.get('job_id'), request=reservation.get('evidence', {}).get('request'), reservation={k: reservation.get(k) for k in ('sequence', 'event_sha256')}, boot_id=reservation.get('boot_id'), monotonic_start=reservation.get('monotonic_start'), effective_seconds=reservation.get('seconds'))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 1247,
+      "expression": "value.update(cleanup_reserve_seconds=cleanup, total_deadline=start + total, work_deadline=start + total - cleanup)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 345,
+      "expression": "operation(self.stream.write, data, deadline=self.deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 350,
+      "expression": "operation(self.stream.seek, *args, deadline=self.deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 352,
+      "expression": "operation(self.stream.tell, deadline=self.deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 354,
+      "expression": "operation(self.stream.flush, deadline=self.deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 356,
+      "expression": "operation(self.stream.read, *args, deadline=self.deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 761,
+      "expression": "dict(schema=SCHEMA, context=self.reference, producer=self.producer, binding=self.binding, request_id=self.request_id, sequence=sequence, previous=self.previous, work_deadline=self.deadline, verified_at=observed, rows=rows, sources=self.sources, coverage=self.coverage, errors=self.errors, diagnostics=self.diagnostics, runtime=self.runtime, first_result=self.first_result, acceptance=self.acceptance, counts=counts(rows, complete=self.acceptance is not None))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 770,
+      "expression": "write_exclusive(temp, raw, deadline=self.deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 784,
+      "expression": "write_exclusive(htemp, hraw, deadline=self.deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 820,
+      "expression": "before(self.context['clock']['work_deadline'])",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 824,
+      "expression": "operation(read_record, rec, limit, deadline=self.context['clock']['work_deadline'])",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 1018,
+      "expression": "operation(self._recheck, deadline, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 1066,
+      "expression": "operation(read_bytes, root / 'result.json', MAX_METADATA, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 1442,
+      "expression": "dict(operation='temporary_safety_retirement' if late else 'temporary_cleanup', root=self.name, identity=dict(self.identity), cleanup_deadline=self.cleanup_deadline, start=started, operations=[], resolved=False)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 1554,
+      "expression": "dict(operation='cwd_safety_restoration' if late else 'cwd_restoration', fd=self.fd, identity=self.identity, cleanup_deadline=cleanup_deadline, start=started, restored=False, closed=False)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 828,
+      "expression": "operation(self._tick, deadline=self.context['clock']['work_deadline'])",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 842,
+      "expression": "_trace_binding.set(dict(session=self.context['session'], boot_id=self.context['boot_id'], reservation=self.context['clock']['reservation'], request=self.context['clock']['request'], producer=producer, binding=dict(expected[0]), request_id=notice['request_id'], sequence=notice['sequence'], current=notice['current'], work_deadline=self.context['clock']['work_deadline'], total_deadline=self.context['clock']['total_deadline']))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 911,
+      "expression": "before(min(self.context['clock']['work_deadline'], completed + 0.5))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 842,
+      "expression": "dict(session=self.context['session'], boot_id=self.context['boot_id'], reservation=self.context['clock']['reservation'], request=self.context['clock']['request'], producer=producer, binding=dict(expected[0]), request_id=notice['request_id'], sequence=notice['sequence'], current=notice['current'], work_deadline=self.context['clock']['work_deadline'], total_deadline=self.context['clock']['total_deadline'])",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 911,
+      "expression": "min(self.context['clock']['work_deadline'], completed + 0.5)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 917,
+      "expression": "before(min(self.context['clock']['work_deadline'], completed + 0.5))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 921,
+      "expression": "before(min(self.context['clock']['work_deadline'], completed + 0.5))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 847,
+      "expression": "min(self.context['clock']['work_deadline'], completed + 0.5)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 917,
+      "expression": "min(self.context['clock']['work_deadline'], completed + 0.5)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 921,
+      "expression": "min(self.context['clock']['work_deadline'], completed + 0.5)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_progress.py",
+      "line": 1110,
+      "expression": "operation(read_bytes, location, 256 * 1024, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_recovery.py",
+      "line": 18,
+      "expression": "dict(gpu_concurrency=1, gpu_peak_device_gib_limit=22, gpu_total_seconds_limit=93600, cpu_max_workers=8, cpu_prepare_score_report_seconds_limit=57600, setup_wall_seconds_limit=57600, new_download_gib_limit=60, new_artifact_disk_gib_limit=150, new_setup_attempts=0, new_downloads=0, extra_smoke_jobs=0, reconstruction_attempts=0, cleanup_reserve_seconds_max=30)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_recovery.py",
+      "line": 56,
+      "expression": "dict(schema=SCHEMA, job_id=JOB, original_job_id='S1-calibration', attempts_limit=1, seconds_limit=3600, gpu_total_seconds_limit=93600, reset_previous_consumption=False, changes_to_prescribed_configuration=True, unrelated_attempts_reopened=False, reconstruction_authorized=False, semantic_amendment_approved=True, additional_attempt_approved=True)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_recovery.py",
+      "line": 370,
+      "expression": "operation(_captured_clock, local, config, reservation, command, deadline=reservation_deadline(reservation))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_recovery.py",
+      "line": 493,
+      "expression": "operation(_accept_result, local, config, request, result, output, reservation=reservation, deadline=reservation_deadline(reservation))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_recovery.py",
+      "line": 506,
+      "expression": "validate_result(result, request, config, clock=clock, deadline=clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_recovery.py",
+      "line": 519,
+      "expression": "operation(_prepare_terminal_evidence, local, reservation, outcome, deadline, config=config, publisher=publisher, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_recovery.py",
+      "line": 569,
+      "expression": "qualify_runtime(read_json(record['path']), request, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_recovery.py",
+      "line": 578,
+      "expression": "qualify_runtime(result['runtime'], request, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_recovery.py",
+      "line": 559,
+      "expression": "reconcile_rows(output, request, result=result, deadline=deadline, publisher=publisher)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_validation_capture.py",
+      "line": 87,
+      "expression": "dict(schema='s1-cpu-execution/v1', requested_argv=ARGV, cwd=str(ROOT.resolve()), environment=environment, run_directory=str(directory), start=start, end=end, elapsed_seconds=end['monotonic'] - start['monotonic'], child_pid=process.pid, returncode=returncode, timed_out=timed_out, wait_completed=True, timeout_seconds=timeout_seconds, boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(), sources_before=before, sources_after=[file_record(p) for p in source_paths()], receipt=file_record(receipt) if receipt.exists() else None, stdin=file_record(directory / 'stdin.py'), runner=file_record(directory / 'runner.py'), capture=file_record(directory / 'capture.py'), interpreter=file_record(ROOT / ARGV[0]), stdout=file_record(directory / 'process-stdout.log'), stderr=file_record(directory / 'process-stderr.log'))",
+      "category": "legacy timed branch preserved or explicit null no-timeout mode"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_validation_capture.py",
+      "line": 110,
+      "expression": "capture(args.directory, None if args.no_timeout else 300 if args.timeout is None else args.timeout, args.diagnostic, no_timeout=args.no_timeout)",
+      "category": "legacy timed branch preserved or explicit null no-timeout mode"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_validation_capture.py",
+      "line": 65,
+      "expression": "process.wait(timeout=timeout_seconds)",
+      "category": "legacy timed branch preserved or explicit null no-timeout mode"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_validation_capture.py",
+      "line": 96,
+      "expression": "dict(method='Popen.wait', timeout_seconds=None, pid=process.pid, returncode=returncode, completed=True)",
+      "category": "legacy timed branch preserved or explicit null no-timeout mode"
+    },
+    {
+      "path": "scripts/vipe_benchmark/s1_validation_contract.py",
+      "line": 305,
+      "expression": "dict(method='Popen.wait', timeout_seconds=None, pid=value['child_pid'], returncode=value['returncode'], completed=True)",
+      "category": "legacy timed branch preserved or explicit null no-timeout mode"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 18,
+      "expression": "operation(checked_mkdir, path.parent, parents=True, exist_ok=True, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 29,
+      "expression": "operation(checked_file_record, path, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 37,
+      "expression": "operation(checked_mkdir, path.parent, parents=True, exist_ok=True, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 38,
+      "expression": "operation(path.exists, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 39,
+      "expression": "operation(cv2.imencode, '.png', value, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 42,
+      "expression": "operation(buffer.tobytes, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 43,
+      "expression": "write_exclusive(path, raw, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 175,
+      "expression": "operation(read_json, operation(verify_record, request['inputs'], deadline=deadline)['path'], deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 191,
+      "expression": "operation(_model_runtime, request, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 194,
+      "expression": "operation(checked_mkdir, output, parents=True, exist_ok=False, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 317,
+      "expression": "dict(status='complete', component=component, branch=branch, job_id=request['job_id'], rows=rows, configuration=file_record(output / 'config.json'), runtime=runtime, native_wall_seconds=native_seconds, peak_allocated_bytes=torch.cuda.max_memory_allocated(), peak_reserved_bytes=torch.cuda.max_memory_reserved())",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 24,
+      "expression": "operation(np.save, DeadlineSink(stream, deadline), value, allow_pickle=False, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 25,
+      "expression": "operation(stream.flush, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 25,
+      "expression": "operation(os.fsync, stream.fileno(), deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 25,
+      "expression": "operation(stream.close, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 209,
+      "expression": "operation(build_backend, component, request['assets'], device='cuda', s1_gate=backend_gate, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 324,
+      "expression": "validate_result(result, request, config, clock=clock, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 150,
+      "expression": "before(clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 154,
+      "expression": "operation(_segment, request, output, config, clock=clock, deadline=clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 175,
+      "expression": "operation(verify_record, request['inputs'], deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 207,
+      "expression": "backend_operation(function, *args, cleanup_deadline=clock.total_deadline, **kwargs)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 382,
+      "expression": "dict(**source_row(identity, row), depth=predictions[identity.camera], metadata=prediction.metadata, native_wall_seconds=elapsed)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 225,
+      "expression": "operation(loader.load, i, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 226,
+      "expression": "operation(load_array, loader.row(i)['valid'], deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 254,
+      "expression": "row.update(instances=array_file(stem.with_suffix('.npy'), prediction.labels, deadline=deadline), semantics=prediction.semantics, semantic_static=png_file(stem.with_suffix('.png'), usable, deadline=deadline), metadata=prediction.metadata, final_static='assembled once in mask aggregation with M0', native_group_wall_seconds=elapsed, group_size=size)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 289,
+      "expression": "qualify_runtime(runtime, request, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 254,
+      "expression": "array_file(stem.with_suffix('.npy'), prediction.labels, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 255,
+      "expression": "png_file(stem.with_suffix('.png'), usable, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 266,
+      "expression": "numeric_file(path, arrays, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 270,
+      "expression": "operation(file_record, path, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/stages.py",
+      "line": 269,
+      "expression": "operation(np.savez_compressed, DeadlineSink(stream, deadline), deadline=deadline, **arrays)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/supervisor.py",
+      "line": 51,
+      "expression": "process.wait(timeout=max(0.01, deadline - time.monotonic()))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/supervisor.py",
+      "line": 60,
+      "expression": "subprocess.check_output(['nvidia-smi', *args], text=True, timeout=5)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/supervisor.py",
+      "line": 274,
+      "expression": "reserve(job_id, command, evidence, seconds_limit=seconds_limit)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/supervisor.py",
+      "line": 337,
+      "expression": "create_owned_process('supervisor worker', subprocess.Popen, command, deadline=run_deadline if is_s1 else None, stdout=log, stderr=subprocess.STDOUT, start_new_session=True, env=env)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "scripts/vipe_benchmark/supervisor.py",
+      "line": 432,
+      "expression": "dict(local=str(ledger.path.parent), config=ledger.config, reservation=reservation, outcome=dict(error=error, result=result_record, acceptance=acceptance), deadline=run_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 135,
+      "expression": "dict(local=str(local), reservation=reservation, config={}, outcome={}, deadline=time.monotonic() + 1)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 185,
+      "expression": "dict(event='reserve', job_id='S1-calibration-recovery-001', sequence=7, event_sha256='a' * 64, boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(), monotonic_start=time.monotonic(), seconds=seconds, evidence=dict(request=fixture['request_record'], authorization=fixture['request']['recovery_authorization']))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 468,
+      "expression": "dict(status='complete', job_id=recovery.JOB, component='S1', branch='calibration', rows=rows, runtime=fixture.observed, native_wall_seconds=sum((r['native_group_wall_seconds'] for r in rows)), peak_allocated_bytes=1024, peak_reserved_bytes=2048, configuration=file_record(output / 'config.json'), first_result=first, reservation_clock=clock.mapping())",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 25,
+      "expression": "create_owned_process('Owner.run ' + role, os.posix_spawn, sys.executable, [sys.executable, '-B', '-m', 'test_vipe_benchmark_s1_helper_fixtures', role, self.session.token, '100', self.mode], env, deadline=self.session.ready_deadline, file_actions=actions, setsid=True)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 721,
+      "expression": "p.operation(b.build_backend, 'S1', assets, s1_gate=gate, deadline=time.monotonic() + 3600)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 363,
+      "expression": "dict(event='reserve', monotonic_start=clock.monotonic_start, seconds=clock.effective_seconds)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 385,
+      "expression": "dict(attempts=attempts, entered=entered, cutoff=clock.work_deadline, sequence=publisher.sequence, versions=[row['version'] for row in publisher.rows.values()], binding=publisher.binding, request=fixture['request_record'], session=publisher.context['session'])",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 485,
+      "expression": "e.reconcile_rows(output, fixture['request'], deadline=state.clock.work_deadline, publisher=publisher)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 753,
+      "expression": "p.backend_operation(function, *args, cleanup_deadline=3.0, **kwargs)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 227,
+      "expression": "dict(index=count[0], phase=phase, state=state, observed=now, session=session, reservation=clock.mapping()['reservation'], work_deadline=clock.work_deadline, total_deadline=clock.total_deadline, request=fixture['request_record'], pid=os.getpid(), boot_id=clock.boot_id, overflow=dropped[0], valid=dropped[0] == 0, terminal=finished, late_suffix=fixture.get('late_suffix') if phase == 'P01_late_suffix' else None, **publication)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 249,
+      "expression": "p.before(clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 335,
+      "expression": "reconcile_rows(output, fixture['request'], deadline=publisher.deadline, publisher=publisher)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 359,
+      "expression": "time.sleep(min(0.001, max(0.0, clock.work_deadline - time.monotonic())))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 439,
+      "expression": "evidence.produced_row(row, fixture['request'], deadline=clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 758,
+      "expression": "p.operation(b._s1_tracker, module, bridge.runtime, bridge.arguments, s1_gate=constructor_gate, deadline=2.0)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 1016,
+      "expression": "p.operation(p.owned_temporary_directory, constructor, (), dict(prefix='owned-retire-', dir=str(root)), C, deadline=2.0)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 359,
+      "expression": "min(0.001, max(0.0, clock.work_deadline - time.monotonic()))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 442,
+      "expression": "evidence.qualify_row(row, fixture['request'], first=True, deadline=clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 588,
+      "expression": "SimpleNamespace(token='0' * 32, channels={role: (Channel(), Channel()) for role in ('work', 'sample')}, events=h.Trace(128), ready_deadline=time.monotonic() + 1, term_grace=0.2, progress_cache=p.RetainedProgress())",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 741,
+      "expression": "p.operation(b._s1_call, p.backend_operation, operation, deadline=2.0)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 743,
+      "expression": "p.operation(b._s1_call, p.backend_operation, operation, deadline=2.0)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 359,
+      "expression": "max(0.0, clock.work_deadline - time.monotonic())",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 368,
+      "expression": "e.produced_row(fixture['rows'][0], fixture['request'], loader=loader, deadline=clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 369,
+      "expression": "e.reconcile_rows(output, fixture['request'], deadline=clock.work_deadline, publisher=publisher)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+      "line": 371,
+      "expression": "e.qualify_runtime({}, fixture['request'], deadline=clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 100,
+      "expression": "dict(identity=parent['identity'], K=parent['K'], grid=parent['grid'], valid=parent['valid'], source_rgb_sha256=parent['rgb']['sha256'], instances=file_record(root / 'labels.npy'), semantics=semantics, semantic_static=file_record(root / 'static.png'), metadata=dict(detections=detections, skipped_box_indices=[0] if skip else []), diagnostics=numeric_file(root / 'diagnostics.npz', arrays), native_group_wall_seconds=0.125, group_size=1)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 141,
+      "expression": "dict(schema='s1-cpu-aggregate/v2', provenance=self.provenance, diagnostic=False, suite_order=list(c.SUITES), collected=methods, declarations=declarations, cases=cases, suites=suites, discovery_errors=[], **c.counters(cases), expected_exit_code=0, passed=True, sources_before=copy.deepcopy(sources), sources_after=copy.deepcopy(sources), run_directory=str(self.root), start=stamp(1), end=stamp(20), elapsed_seconds=19.0, boot_id='00000000-0000-0000-0000-000000000000', stdin=self.stdin, runner=self.runner, stdout=self.stdout, stderr=self.stderr, interpreter=file_record(ROOT / c.ARGV[0]), invocation=invocation)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 148,
+      "expression": "dict(schema='s1-cpu-execution/v1', provenance=self.provenance, requested_argv=list(c.ARGV), cwd=str(ROOT), environment=dict(c.ENVIRONMENT), run_directory=str(self.root), start=stamp(0), end=stamp(21), elapsed_seconds=21.0, child_pid=123, returncode=0, timed_out=False, wait_completed=True, timeout_seconds=300, boot_id=self.inner['boot_id'], sources_before=copy.deepcopy(sources), sources_after=copy.deepcopy(sources), stdin=self.stdin, runner=self.runner, capture=self.capture, interpreter=self.inner['interpreter'], stdout=self.process_stdout, stderr=self.process_stderr)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 232,
+      "expression": "self.append(event='setup_recovery_authorized', job_id='E1-setup-recovery-002', original_job_id='E1-setup', environment='E1', preparation_elapsed_seconds=0, authorization=self.put('setup-auth.json', {}))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 261,
+      "expression": "dict(schema=s1.SCHEMA, job_id=s1.JOB, original_job_id='S1-calibration', attempts_limit=1, seconds_limit=3600, gpu_total_seconds_limit=93600, reset_previous_consumption=False, changes_to_prescribed_configuration=True, unrelated_attempts_reopened=False, reconstruction_authorized=False, semantic_amendment_approved=True, additional_attempt_approved=True, authorization='Synthetic CPU fixture only', authorization_context=dict(request_date='fixture', stage='DO', scope='calibration'), semantic_amendment=amendment, original_failure=failure, original_failure_event_sha256=event['event_sha256'], repair_validation=validation, configuration=self.configuration, plan=plan, baseline=baseline, baseline_correction=correction, implementation_review=self.put('implementation-review.json', {}), ledger_baseline=snap, e1_qualification=setup, e1_assets=self.assets, e1_runtime=runtime, inputs=inputs, annotations=annotations, annotation_policy=policy, annotation_review=review, annotation_amendment_event=s1.event_ref(amendment_event), historical_request=historical, original_request_sha256=object_hash(self.original), resource_limits=s1.LIMITS.copy())",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 493,
+      "expression": "dict(cleanup_confirmed=False, surviving_pids=[123], deadline_exceeded=True, acceptance=None)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1489,
+      "expression": "dict(rows=rows, native_wall_seconds=sum((r['native_group_wall_seconds'] for r in rows)), peak_allocated_bytes=1024, peak_reserved_bytes=2048)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 197,
+      "expression": "self.append(event='finish', job_id=job, status='complete', result=result, resource='setup', elapsed_seconds=0, cleanup_confirmed=True)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 223,
+      "expression": "self.append(event='finish', job_id=job, status='complete', result=rec, resource='cpu', elapsed_seconds=0)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 277,
+      "expression": "self.append(event='finish', job_id='fixture-charge', status='failed', resource='gpu', elapsed_seconds=93500)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1217,
+      "expression": "run(dict(operation='reconcile', args=dict(local=str(fixture.root), config=fixture.config, reservation=reservation, outcome=dict(error='prelaunch failed'), deadline=clock.work_deadline)))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1488,
+      "expression": "dict(native_group_wall_seconds=0.125, group_size=1)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 139,
+      "expression": "dict(suite=name, start=stamp(index + 2), end=stamp(index + 2.5), elapsed_seconds=0.5, invocation=copy.deepcopy(invocation), collected=[r['id'] for r in rows], **c.counters(rows))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 407,
+      "expression": "dict(status='complete', job_id=s1.JOB, component='S1', branch='calibration', rows=rows, runtime=self.observed, native_wall_seconds=sum((r['native_group_wall_seconds'] for r in rows)), peak_allocated_bytes=1024, peak_reserved_bytes=2048, configuration=file_record(output / 'config.json'), first_result=first, reservation_clock=self.clock.mapping())",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1217,
+      "expression": "dict(operation='reconcile', args=dict(local=str(fixture.root), config=fixture.config, reservation=reservation, outcome=dict(error='prelaunch failed'), deadline=clock.work_deadline))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1357,
+      "expression": "real_print('S1_CLOCK_BARRIER ' + json.dumps(dict(case=kind, loader_frames=loads, adapter_calls=len(calls), qualification_observations=verified, completion_observation=now[0], work_deadline=clock.work_deadline, first_publication=published[0] if published else None, production_operations=operations, retrospective_inspection='subsequent byte/guard checks occur outside the production clock patch'), sort_keys=True))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1361,
+      "expression": "self.assertTrue(all((o['observed'] < clock.work_deadline for o in operations if o['phase'] == 'start')))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 281,
+      "expression": "self.append(event='finish', job_id='fixture-charge', status='failed', resource='gpu', elapsed_seconds=93600)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 812,
+      "expression": "dict(approved=True, cleanup_resolved=True, execution_mode='no-timeout', timeout_seconds=None, kind='aggregate', index=1000, reason='synthetic contract fixture; no execution performed', counts_before={'diagnostic': 0, 'aggregate': 999}, sources=outer['sources_before'], source_paths=[r['path'] for r in outer['sources_before']], resource_capacity=dict(B=1, H=0, charge=2, artifact_bytes=0), bindings=dict(plan=plan, dispatch=dispatch_record, status=status, authorization=authorization, driver=driver, command=command, environment=settings, run_directory=str(graph.root), stdin=dict(bytes=len(c.STDIN.encode()), sha256=hashlib.sha256(c.STDIN.encode()).hexdigest()), identity_request=identity_request, addenda=addenda, **identity_fields))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 820,
+      "expression": "dict(schema='plan049-prospective-launch/v1', execution_mode='no-timeout', timeout_seconds=None, provenance='synthetic contract fixture; no execution performed', run_directory=str(graph.root), kind='aggregate', attempt_index=1000, reason=admission['reason'], counts_before=admission['counts_before'], driver=driver, admission=admitted, bindings=[plan, dispatch_record, status, authorization, admitted, identity_request] + addenda, sources=outer['sources_before'], cpu_bound='B+max(1,H)\u22648', command=command, environment=settings, cwd=str(ROOT), unset_environment=['S1_HELPER_DIAGNOSTIC', 'S1_RECEIPT_DIAGNOSTIC'], stdin_identity=dict(bytes=len(c.STDIN.encode()), sha256=hashlib.sha256(c.STDIN.encode()).hexdigest(), content=c.STDIN), **identity_fields)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 826,
+      "expression": "outer.update(schema='s1-cpu-execution/v2', execution_mode='no-timeout', timeout_seconds=None, launch_note=file_record(note_path), wait=dict(method='Popen.wait', timeout_seconds=None, pid=outer['child_pid'], returncode=0, completed=True))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1138,
+      "expression": "math.nextafter(clock.work_deadline, -math.inf)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1287,
+      "expression": "self.assertLess(now[0], clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1361,
+      "expression": "all((o['observed'] < clock.work_deadline for o in operations if o['phase'] == 'start'))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1370,
+      "expression": "self.assertLess(value['elapsed_seconds_from_reservation'], clock.work_deadline - clock.monotonic_start)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1217,
+      "expression": "dict(local=str(fixture.root), config=fixture.config, reservation=reservation, outcome=dict(error='prelaunch failed'), deadline=clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1292,
+      "expression": "self.assertLess(now[0], clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1357,
+      "expression": "json.dumps(dict(case=kind, loader_frames=loads, adapter_calls=len(calls), qualification_observations=verified, completion_observation=now[0], work_deadline=clock.work_deadline, first_publication=published[0] if published else None, production_operations=operations, retrospective_inspection='subsequent byte/guard checks occur outside the production clock patch'), sort_keys=True)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 827,
+      "expression": "dict(method='Popen.wait', timeout_seconds=None, pid=outer['child_pid'], returncode=0, completed=True)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 838,
+      "expression": "candidate.update(schema='s1-cpu-execution/v1', timeout_seconds=300)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 888,
+      "expression": "capture.capture(graph.root / 'never-created', arguments[0], no_timeout=arguments[1])",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1140,
+      "expression": "math.nextafter(clock.work_deadline, math.inf)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1357,
+      "expression": "dict(case=kind, loader_frames=loads, adapter_calls=len(calls), qualification_observations=verified, completion_observation=now[0], work_deadline=clock.work_deadline, first_publication=published[0] if published else None, production_operations=operations, retrospective_inspection='subsequent byte/guard checks occur outside the production clock patch')",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 128,
+      "expression": "datetime.timedelta(seconds=seconds)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 832,
+      "expression": "datetime.timedelta(seconds=401)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1142,
+      "expression": "math.nextafter(clock.total_deadline, math.inf)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1120,
+      "expression": "value.update(monotonic_start=1e+308, effective_seconds=3600, cleanup_reserve_seconds=30.0, total_deadline=1e+308, work_deadline=1e+308)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_s1_recovery.py",
+      "line": 1123,
+      "expression": "value.update(monotonic_start=0.0, effective_seconds=math.nextafter(0.0, 1.0), cleanup_reserve_seconds=0.0, total_deadline=math.nextafter(0.0, 1.0), work_deadline=math.nextafter(0.0, 1.0))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 37,
+      "expression": "supervise(self.ledger, 'prepare', self.command(code), self.root / 'output', evidence={'kind': 'disposable CPU fixture; not a model evaluation'}, validate_result=self.validate, poll_seconds=0.02, **kwargs)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1235,
+      "expression": "sup.monitored_call(operation or self.operation, min(session.fixture_action_end, self.time.monotonic() + seconds), sampler or self.sampler, load(), {}, lifecycle=life)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1438,
+      "expression": "sup.monitored_call(self.sampler, min(session.fixture_action_end, self.time.monotonic() + seconds), self.sampler, load(), {}, worker=worker, lifecycle=life, phase='worker_sample')",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3918,
+      "expression": "dict(id=1, dispatch=10.0, deadline=11.0, census_generation=2, pre=pre, final_send_entered=10.2, transmitted_observed=10.25, response_observed=10.4, candidate=dict(value=dict(gpu_pids=[5]), acquisition_start=10.2, acquisition_end=10.3))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1235,
+      "expression": "min(session.fixture_action_end, self.time.monotonic() + seconds)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1239,
+      "expression": "self.scenario(label, mode, ready_seconds=0.08, setup_seconds=0.18, total_seconds=0.3)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1312,
+      "expression": "self.scenario('L08', 'late_spawn', ready_seconds=0.06, setup_seconds=0.12, total_seconds=0.2)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1438,
+      "expression": "min(session.fixture_action_end, self.time.monotonic() + seconds)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1443,
+      "expression": "self.scenario(label, ready_seconds=0.15, setup_seconds=0.3, total_seconds=0.5)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1502,
+      "expression": "min(session.fixture_action_end, self.time.monotonic() + seconds)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1660,
+      "expression": "dict(deadline=session.cleanup_deadline, returned=returned, state=session.state, ownership=session.ownership(), primary=session.primary, actually_acquired=acquired)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1666,
+      "expression": "dict(scenario='L36', constructor_entry=started, action_cutoff=action_end, safety_cutoff=safety_end, production=production, cleanup_confirmed=cleaned, execution_seconds=returned - started, cleanup_seconds=ended - returned, end=ended, ownership=session.ownership(), records=session.owner.records, events=list(session.events), ticks=list(session.ticks), errors=list(session.owner.errors))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1914,
+      "expression": "self.assertLessEqual(self.time.monotonic(), session.fixture_safety_end)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1024,
+      "expression": "self.call(seconds=0.12)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1159,
+      "expression": "record.update(constructor_end=self.time.monotonic(), t0=current.t0, ready_deadline=current.ready_deadline, setup_deadline=current.setup_deadline, setup_cleanup_deadline=current.cleanup_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1347,
+      "expression": "self.work(session, seconds=1.2)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1353,
+      "expression": "self.work(session, seconds=0.12)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1478,
+      "expression": "min(session.fixture_action_end, self.time.monotonic() + 0.3)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1575,
+      "expression": "min(session.fixture_action_end, self.time.monotonic() + 0.2)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1609,
+      "expression": "self.sample(session, seconds=0.15)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1627,
+      "expression": "min(session.fixture_action_end, self.time.monotonic() + 0.3)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1184,
+      "expression": "record.update(action_end=action_end, end=ended, execution_seconds=action_end - started, cleanup_seconds=ended - action_end, cleanup_confirmed=cleaned, records={} if owner is None else owner.records, errors=[] if owner is None else list(owner.errors), signals=[] if owner is None else list(owner.signals), ticks=list(current.ticks), events=list(current.events), trace_facts=current.events.facts(), tick_facts=current.ticks.facts(), owner_error_facts=None if owner is None else owner.errors.facts(), owner_signal_facts=None if owner is None else owner.signals.facts(), request_counts={role: dict(dispatch=current.dispatch_counts[role].value, response=current.response_counts[role].value) for role in current.requests}, census_request_count=current.census_requests.value, max_gap=current.max_gap, max_turn=current.max_turn, call_observations=list(observed_calls), call_observation_facts=observed_calls.facts(), timing_failures=timing_failures, last_sample=current.last_sample, requests=current.requests, ownership=current.ownership(), wire={role: dict(sent=w.sent_bytes, received=w.received_bytes, blocked_writes=w.blocked_writes, peek=w.peek_bytes.value, combined=w.combined_bytes.value, last_frame=w.last_frame) for role, w in current.wires.items()})",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1462,
+      "expression": "dict(event='rejected_admission', decision=session.decision_clock(), deadline=session.setup_deadline, returned=returned, calls=list(calls))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1545,
+      "expression": "self.assertEqual(sup.stop_group(worker, session.fixture_action_end), [])",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1592,
+      "expression": "self.sample(session, worker=worker, seconds=0.12)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1600,
+      "expression": "dict(event='blocked_census_production_return', deadline=deadline, returned=returned, cleanup_uncertain=True)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1651,
+      "expression": "session.__init__(ready_seconds=0.05, setup_seconds=0.1, total_seconds=0.2)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1752,
+      "expression": "session.install_progress(reference, min(session.fixture_action_end, clock.work_deadline))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1806,
+      "expression": "self.assertTrue(all((event['work_deadline'] == context['clock']['work_deadline'] and event['total_deadline'] == context['clock']['total_deadline'] and (event['observed'] < event['total_deadline']) for event in events)))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1867,
+      "expression": "self.assertTrue(all((row['error_class'] == 'TimeoutError' and row['start'] >= event['work_deadline'] and (row['end'] < event['total_deadline']) for row in suffix['attempts'])))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1868,
+      "expression": "self.assertEqual(suffix['cutoff'], event['work_deadline'])",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1874,
+      "expression": "self.assertLess(cutoff_observations[0]['observed'], event['total_deadline'])",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1900,
+      "expression": "session.events.append(dict(event='plan047_production_cutoff', observed=self.time.monotonic(), reference=life.progress.reference(), ownership=life.ownership(), safety_cutoff=session.fixture_safety_end))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3627,
+      "expression": "evidence.append(dict(case, source=source, events=seen, named_target=witness.target, named_successor=witness.successor, named_spec=witness.spec, real_predecessor=injection_observations, write_observations=write_observations, primary=primary_observation, retirement_complete=not owned_descriptors, deadline=deadline, work_deadline=deadline, total_deadline=segment_clock.total_deadline if name == 'next_input' else state.clock.total_deadline, exact_injected_time=deadline + offset, observed=observed, actual_operations=operation_observations, descriptor_observations=descriptor_observations, forbidden_successor_entries=[v for v in operation_observations if v['state'] == 'actual_entry' and v['observed'] >= deadline], reference=state.cache.reference(), partial_files=partial, fixture=fixture['request_record']))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3794,
+      "expression": "records.append(dict(case, source='qualify_row/numerical_snapshot/PureMemo/BoundedArrays', positive_control=control, counts=counts, events=events, work_deadline=deadline, retained_bytes=memo.retained_bytes, hits=memo.hits, misses=memo.misses, fixture=fixture['request_record'], archive=row['diagnostics']))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 205,
+      "expression": "p.wait(timeout=10)",
+      "category": "retrospective completed-process assertion; preceding actual waits unbounded"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1508,
+      "expression": "dict(decision=request['deadline'], real=self.time.monotonic(), frame=dict(session.wires['sample'].last_frame), dispatch=request['dispatch'], deadline=request['deadline'], payload=request['candidate'], pre=request['pre'], post=snap)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1545,
+      "expression": "sup.stop_group(worker, session.fixture_action_end)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1752,
+      "expression": "min(session.fixture_action_end, clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1765,
+      "expression": "sup.monitored_call(operation, min(session.fixture_action_end, clock.work_deadline), self.sampler, load(), {}, lifecycle=life)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1806,
+      "expression": "all((event['work_deadline'] == context['clock']['work_deadline'] and event['total_deadline'] == context['clock']['total_deadline'] and (event['observed'] < event['total_deadline']) for event in events))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1867,
+      "expression": "all((row['error_class'] == 'TimeoutError' and row['start'] >= event['work_deadline'] and (row['end'] < event['total_deadline']) for row in suffix['attempts']))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1900,
+      "expression": "dict(event='plan047_production_cutoff', observed=self.time.monotonic(), reference=life.progress.reference(), ownership=life.ownership(), safety_cutoff=session.fixture_safety_end)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1905,
+      "expression": "life.reap(session.fixture_safety_end)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 2012,
+      "expression": "e.reconcile_rows(output, fixture['request'], deadline=0)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3627,
+      "expression": "dict(case, source=source, events=seen, named_target=witness.target, named_successor=witness.successor, named_spec=witness.spec, real_predecessor=injection_observations, write_observations=write_observations, primary=primary_observation, retirement_complete=not owned_descriptors, deadline=deadline, work_deadline=deadline, total_deadline=segment_clock.total_deadline if name == 'next_input' else state.clock.total_deadline, exact_injected_time=deadline + offset, observed=observed, actual_operations=operation_observations, descriptor_observations=descriptor_observations, forbidden_successor_entries=[v for v in operation_observations if v['state'] == 'actual_entry' and v['observed'] >= deadline], reference=state.cache.reference(), partial_files=partial, fixture=fixture['request_record'])",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3649,
+      "expression": "e.qualify_row(row, request, first=True, memo=memo, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3794,
+      "expression": "dict(case, source='qualify_row/numerical_snapshot/PureMemo/BoundedArrays', positive_control=control, counts=counts, events=events, work_deadline=deadline, retained_bytes=memo.retained_bytes, hits=memo.hits, misses=memo.misses, fixture=fixture['request_record'], archive=row['diagnostics'])",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 996,
+      "expression": "self.call(seconds=0.12)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 999,
+      "expression": "self.call(seconds=0.12)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1010,
+      "expression": "self.call(seconds=0.12)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1013,
+      "expression": "self.call(seconds=0.12)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1765,
+      "expression": "min(session.fixture_action_end, clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 2313,
+      "expression": "evidence.append(dict(stage=case['kind'], reached=reached, deadline=clock.work_deadline, retained=current, previous=retained, raw_files=files, usable=current['integrity_status'] == 'verified'))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 2446,
+      "expression": "recovery_scope.enter_context(patch.object(p.time, 'monotonic', return_value=state.clock.work_deadline + 1))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3663,
+      "expression": "e.qualify_row(row, request, first=True, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3664,
+      "expression": "e.qualify_row(row, request, first=True, memo=memo, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1149,
+      "expression": "dict(operation=name, entered=entered, deadline=effective, returned=returned, confirmed=result if name == 'close' else None, error=error)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1735,
+      "expression": "dict(phase='owner_before_retirement', observed=self.time.monotonic(), worker_pid=process.pid, terminal_witness=marker.exists(), deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 2069,
+      "expression": "e.reconcile_rows(output, fixture['request'], deadline=clock.work_deadline, publisher=publisher)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 2313,
+      "expression": "dict(stage=case['kind'], reached=reached, deadline=clock.work_deadline, retained=current, previous=retained, raw_files=files, usable=current['integrity_status'] == 'verified')",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 2446,
+      "expression": "patch.object(p.time, 'monotonic', return_value=state.clock.work_deadline + 1)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 2952,
+      "expression": "e.qualify_row(row, fixture['request'], first=True, deadline=state.clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3562,
+      "expression": "p.operation(lambda: entries.append('target'), deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3566,
+      "expression": "p.operation(lambda: entries.append('forbidden'), deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3113,
+      "expression": "p.candidate_inventory(root, None, state.clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3118,
+      "expression": "self.assertTrue(e.validate_result(parsed, full.request, full.fixture.config, clock=full.clock, deadline=full.clock.work_deadline))",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3278,
+      "expression": "dict(event='reserve', job_id='S1-calibration-recovery-001', sequence=7, event_sha256='a' * 64, boot_id=state.clock.boot_id, monotonic_start=original, seconds=4, evidence={'request': fixture['request_record'], 'authorization': fixture['request']['recovery_authorization']})",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3311,
+      "expression": "stages.array_file(state.root / 'array.npy', np.zeros((2, 2), np.int32), deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3561,
+      "expression": "p.operation(lambda: entries.append('target'), deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 1154,
+      "expression": "dict(operation=name, message=str(violation), returned=returned, deadline=effective)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3115,
+      "expression": "p.candidate_inventory(root, dict(rows=[], count=True), state.clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3118,
+      "expression": "e.validate_result(parsed, full.request, full.fixture.config, clock=full.clock, deadline=full.clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3312,
+      "expression": "stages.png_file(state.root / 'array.png', np.zeros((2, 2), np.uint8), deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3679,
+      "expression": "e.qualify_row(invalid, request, memo=active, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3683,
+      "expression": "e.qualify_row(row, request, memo=memo, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3313,
+      "expression": "e.numeric_file(state.root / 'array.npz', {'a': np.arange(4), 'b': np.arange(4)}, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3717,
+      "expression": "e.qualify_row(changed, req, memo=memo, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3692,
+      "expression": "e.qualify_row(row, request, memo=memo, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3316,
+      "expression": "e.produced_row(state.row, fixture['request'], deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3709,
+      "expression": "e.qualify_row(row, request, memo=memo, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3735,
+      "expression": "e.qualify_row(row, request, first=True, memo=memo, progress_context=reference, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3317,
+      "expression": "e.qualify_row(state.row, fixture['request'], first=True, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3698,
+      "expression": "e.qualify_row(row, request, memo=memo, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3761,
+      "expression": "e.qualify_row(row, request, memo=memo, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3318,
+      "expression": "e.qualify_runtime(fixture['observed_runtime'], fixture['request'], deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3748,
+      "expression": "e.qualify_row(row, request, memo=memo, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3750,
+      "expression": "e.qualify_row(row, request, memo=memo, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3771,
+      "expression": "e.qualify_row(oversized, request, memo=memo, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3781,
+      "expression": "e.qualify_row(row, request, memo=memo, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3788,
+      "expression": "e.qualify_row(second, request, memo=memo, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3790,
+      "expression": "e.qualify_row(row, request, memo=memo, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3322,
+      "expression": "e.verify_first(value, fixture['request'], clock=state.clock, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3456,
+      "expression": "p.operation(e.verify_first, p.operation(e.read_json, first['path'], deadline=deadline), fixture['request'], clock=state.clock, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3460,
+      "expression": "p.operation(e.qualify_runtime, p.operation(e.read_json, path, deadline=deadline), fixture['request'], deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3030,
+      "expression": "e.reconcile_rows(output, fixture['request'], deadline=state.clock.work_deadline, publisher=replacement)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3456,
+      "expression": "p.operation(e.read_json, first['path'], deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3460,
+      "expression": "p.operation(e.read_json, path, deadline=deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3032,
+      "expression": "e.reconcile_rows(output, fixture['request'], deadline=state.clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3034,
+      "expression": "p.candidate_inventory(output, None, state.clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    },
+    {
+      "path": "tests/test_vipe_benchmark_supervisor.py",
+      "line": 3035,
+      "expression": "inventory.recheck(state.clock.work_deadline)",
+      "category": "behavioral original W/C/protocol/scenario bound"
+    }
+  ],
+  "operational_limits": null,
+  "removed_execution_only": [
+    "direct six-script communicate10/forced2",
+    "generic helper subprocess5",
+    "race actual completion10"
+  ],
+  "retained": "original W/C, equality-is-late, 2s action/1s retirement, setup/census/request/ack/native timing assertions",
+  "legacy_timed_capture_retained": true
+}

@@ -1,0 +1,271 @@
+{
+  "schema": "plan049-correction010-finding-map/v1",
+  "source_map": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/implement-049-correction010-after-ast-001.json",
+    "bytes": 4183718,
+    "sha256": "3f3febb4800457897ffc0d55fa8c2197ddccee1e8821634c3d3dd2e9cdcc94ce"
+  },
+  "findings": [
+    {
+      "id": "permission",
+      "paths": [
+        "scripts/vipe_benchmark/s1_validation_contract.py",
+        "docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+        "tests/test_vipe_benchmark_s1_recovery.py"
+      ],
+      "controls": [
+        "ReceiptContractTests.test_execution_mutations cap"
+      ],
+      "status": "implemented; static only",
+      "detail": "require_escalated only; required exact kind-specific justification and exact typed prefix; corrections001-010; correction008 remains named trust amendment; default-negative injected value changed to use_default without assertion/ID changes",
+      "source_records": [
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_contract.py",
+          "bytes": 44326,
+          "sha256": "dcd6b886cb2673861e427bd3314bfaeae497c748b896af103cf4b19ae9cf5494"
+        },
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py",
+          "bytes": 13089,
+          "sha256": "897497beb9fa35c1b2d186fbe49c22d7dffe2375704ed3d08fa7ecd122ba49e1"
+        },
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_recovery.py",
+          "bytes": 196432,
+          "sha256": "7d8007de1fe33d88b92994512789c456ddeac2792826d674736c6bba3567a99a"
+        }
+      ]
+    },
+    {
+      "id": "ownership-eight",
+      "paths": [
+        "scripts/vipe_benchmark/s1_helper_session.py",
+        "tests/test_vipe_benchmark_supervisor.py"
+      ],
+      "controls": [
+        "test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_plan047_ownership::[[\"kind\",\"str\",\"paired_env_foreign_output\"]]",
+        "test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_plan047_ownership::[[\"kind\",\"str\",\"stale_dispatch016\"]]",
+        "test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_plan047_ownership::[[\"kind\",\"str\",\"forged_dispatch_env\"]]",
+        "test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_plan047_ownership::[[\"kind\",\"str\",\"ancestor_empty\"]]",
+        "test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_plan047_ownership::[[\"kind\",\"str\",\"ancestor_truncated\"]]",
+        "test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_plan047_ownership::[[\"kind\",\"str\",\"ancestor_cycle\"]]",
+        "test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_plan047_ownership::[[\"kind\",\"str\",\"ancestor_terminal_changed\"]]",
+        "test_vipe_benchmark_supervisor.HelperSessionTests.test_progress_plan047_ownership::[[\"kind\",\"str\",\"wrapper_unproven\"]]"
+      ],
+      "status": "implemented; static only",
+      "detail": "per-case positive unmodified graph; projected original canonical note/request/readiness/event/proof/admission/exec-start bytes and hashes; early exact local authority predicates followed by complete contract validation on success; original target-specific regex assertions retained",
+      "source_records": [
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py",
+          "bytes": 67884,
+          "sha256": "04bdb09881519795217cc22c3e21f5662e4886e886f7a008de54f615ecca5ba7"
+        },
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py",
+          "bytes": 320525,
+          "sha256": "faffcc1a9070ad31aaadf4b2367ba97c7cea5ca56cb8f8ba57394932ddd2b256"
+        }
+      ]
+    },
+    {
+      "id": "secondary-open",
+      "paths": [
+        "tests/test_vipe_benchmark_s1_helper_fixtures.py"
+      ],
+      "controls": [
+        "registry_worker_dispatch -> scenario_secondary_controls"
+      ],
+      "status": "implemented; static only",
+      "detail": "old endswith(-secondary.json) matched both scenario-pure-secondary.json and scenario-pure-secondary-secondary.json; now exact secondary filename and exclusive-write mode; original expected1 unchanged",
+      "source_records": [
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+          "bytes": 111548,
+          "sha256": "db17586a88f4e5cfbe88f902ce2cf5abede514868fb4aa97442fe0a211f892f9"
+        }
+      ]
+    },
+    {
+      "id": "L25-L26-Plan046",
+      "paths": [
+        "scripts/vipe_benchmark/s1_helper_session.py",
+        "scripts/vipe_benchmark/supervisor.py",
+        "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+        "tests/test_vipe_benchmark_supervisor.py"
+      ],
+      "controls": [
+        "L25",
+        "L26",
+        "test_progress_plan046_launch_deadline before/equal/after",
+        "registry_owner_dispatch -> named_creation_controls"
+      ],
+      "status": "source repair; real timing/reachability unverified",
+      "detail": "removed duplicate full audit of the same Owner spawn while retaining the actual common creation gate plus post-audit/observer original deadline; one-audit observations checked through actual Owner.run; actual reserve-descriptor entry recorded/asserted; post-installation gate message explicitly identifies forbidden immediate worker launch without changing gate/cutoff",
+      "source_records": [
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py",
+          "bytes": 67884,
+          "sha256": "04bdb09881519795217cc22c3e21f5662e4886e886f7a008de54f615ecca5ba7"
+        },
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py",
+          "bytes": 29275,
+          "sha256": "444c47ae4d17f21ebd7f1045c2eaf21b9f749c31a3f9dfb9960ebcd6942739f7"
+        },
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+          "bytes": 111548,
+          "sha256": "db17586a88f4e5cfbe88f902ce2cf5abede514868fb4aa97442fe0a211f892f9"
+        },
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py",
+          "bytes": 320525,
+          "sha256": "faffcc1a9070ad31aaadf4b2367ba97c7cea5ca56cb8f8ba57394932ddd2b256"
+        }
+      ]
+    },
+    {
+      "id": "L08",
+      "paths": [
+        "scripts/vipe_benchmark/s1_helper_session.py",
+        "tests/test_vipe_benchmark_s1_helper_fixtures.py",
+        "tests/test_vipe_benchmark_supervisor.py"
+      ],
+      "controls": [
+        "L08 late_owner_retained"
+      ],
+      "status": "source repair; original retained-late outcome unverified",
+      "detail": "same single-audit fix; actual opaque spawn-return PID/time recorded before existing .45 hold; test additionally requires that real held-return boundary. Original .06/.12/.2 cutoffs and all close/ownership/lower-bound assertions unchanged. No historical causal certainty or passing latency claim",
+      "source_records": [
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py",
+          "bytes": 67884,
+          "sha256": "04bdb09881519795217cc22c3e21f5662e4886e886f7a008de54f615ecca5ba7"
+        },
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+          "bytes": 111548,
+          "sha256": "db17586a88f4e5cfbe88f902ce2cf5abede514868fb4aa97442fe0a211f892f9"
+        },
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py",
+          "bytes": 320525,
+          "sha256": "faffcc1a9070ad31aaadf4b2367ba97c7cea5ca56cb8f8ba57394932ddd2b256"
+        }
+      ]
+    },
+    {
+      "id": "L24",
+      "paths": [
+        "tests/test_vipe_benchmark_supervisor.py",
+        "tests/test_vipe_benchmark_s1_helper_fixtures.py"
+      ],
+      "controls": [
+        "L24 summary_reference_adapter"
+      ],
+      "status": "implemented; static only",
+      "detail": "existing disposable S1RecoveryTests fixture performs real register/command/Ledger.reserve during preparation; exact returned last event and command transported/recorded; helper verifies captured_clock against actual ledger. No synthesized reserve event; reservation-negative injection uses actual sequence+1",
+      "source_records": [
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py",
+          "bytes": 320525,
+          "sha256": "faffcc1a9070ad31aaadf4b2367ba97c7cea5ca56cb8f8ba57394932ddd2b256"
+        },
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+          "bytes": 111548,
+          "sha256": "db17586a88f4e5cfbe88f902ce2cf5abede514868fb4aa97442fe0a211f892f9"
+        }
+      ]
+    },
+    {
+      "id": "L35",
+      "paths": [
+        "tests/test_vipe_benchmark_supervisor.py"
+      ],
+      "controls": [
+        "L35 exited_leader_live_descendant"
+      ],
+      "status": "bootstrap fixed; original2s timing unverified",
+      "detail": "existing child prepends exact absolute tests path before importing existing fixture module, same interpreter/argv/process tree. Original2s assertion and failed diagnostic002 measurement preserved",
+      "source_records": [
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py",
+          "bytes": 320525,
+          "sha256": "faffcc1a9070ad31aaadf4b2367ba97c7cea5ca56cb8f8ba57394932ddd2b256"
+        }
+      ]
+    },
+    {
+      "id": "L36",
+      "paths": [
+        "tests/test_vipe_benchmark_supervisor.py"
+      ],
+      "controls": [
+        "L36 ambiguous_native_start_retained"
+      ],
+      "status": "primary/outcome source fix; acquisition runtime uncertain",
+      "detail": "initialize production/returned/cleanup state before fallible creation; attach only actually returned native handle; ordered secondary steps never replace pending primary; real outcome persists on no-acquisition failure and is explicitly checked for presence. Startup primary and actual acquired list retained. All original acquisition/state/cleanup/timing assertions remain",
+      "source_records": [
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py",
+          "bytes": 320525,
+          "sha256": "faffcc1a9070ad31aaadf4b2367ba97c7cea5ca56cb8f8ba57394932ddd2b256"
+        }
+      ]
+    },
+    {
+      "id": "closed-inventory",
+      "paths": [],
+      "controls": [
+        "test_progress_closed_inventory_and_faults kind=deadline"
+      ],
+      "status": "blocked pending separately authorized assertion correction",
+      "detail": "unchanged call e.reconcile_rows(deadline=0) enters operation(_reconcile_rows, deadline=0); before(0) must raise before _reconcile_rows for monotonic>=0. Existing result scan_complete/count assertions require return. s1_evidence is frozen by correction010. Main independently confirmed contradiction and requested narrow user authorization; callback untouched",
+      "source_records": []
+    },
+    {
+      "id": "full-completion-interpreter",
+      "paths": [
+        "tests/test_vipe_benchmark_s1_helper_fixtures.py"
+      ],
+      "controls": [
+        "plan047_full_fixture callers: full completion, state authority and deadline controls"
+      ],
+      "status": "fixture integration repaired; static only",
+      "detail": "prepare canonical target/file record of exact original invoked executable, assert unchanged argv and loaded manifest identity; scoped adapter routes only that spelling to actual gated no-follow reader and rechecks target/digest. Arbitrary evidence symlink still rejects. No interpreter replacement, generic reader/evidence edits, or global symlink-following",
+      "source_records": [
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_s1_helper_fixtures.py",
+          "bytes": 111548,
+          "sha256": "db17586a88f4e5cfbe88f902ce2cf5abede514868fb4aa97442fe0a211f892f9"
+        }
+      ]
+    },
+    {
+      "id": "P01-P06-final-outcomes",
+      "paths": [
+        "tests/test_vipe_benchmark_supervisor.py"
+      ],
+      "controls": [
+        "P01",
+        "P02",
+        "P03",
+        "P04",
+        "P05",
+        "P06"
+      ],
+      "status": "implemented evidence ordering; boundaries/outcomes unverified",
+      "detail": "finally captures actual primary/secondary/outcome/reference/frozen-pointer/clock/cleanup after assertion failures; enclosing existing scenario records startup/preparation failures too. Bounded retained memory only in safety scope, existing enclosing retrospective artifact persistence. Diagnostic002 records remain absent; P01/P06 EPERM causality explicitly unproven",
+      "source_records": [
+        {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_vipe_benchmark_supervisor.py",
+          "bytes": 320525,
+          "sha256": "faffcc1a9070ad31aaadf4b2367ba97c7cea5ca56cb8f8ba57394932ddd2b256"
+        }
+      ]
+    }
+  ],
+  "controls_executed": false,
+  "launch_ready": false
+}

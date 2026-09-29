@@ -1,0 +1,469 @@
+--- before/scripts/vipe_benchmark/s1_validation_contract.py
++++ after/scripts/vipe_benchmark/s1_validation_contract.py
+@@ -601,7 +601,7 @@
+     request=session_json(identity_request['path'])
+     typed_binding(request)
+     require(request==dict(schema='plan049-prospective-identity/v1',kind=note['kind'],index=note['attempt_index'],driver=driver,**{key:note[key] for key in ('ownership_root','preexisting_ancestors','ancestry_terminal','retained_wrappers','output_paths')}),'exact pre-admission identity request')
+-    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md')]
++    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md','plan049-correction-015.md')]
+     require(command_bindings.get('addenda')==addenda and all(row in bindings for row in addenda),'current correction authority')
+     ancestor_authorization=file_record(run/'authorization-049-ancestor-process-001.md')
+     require(ancestor_authorization['sha256']=='734fc8fc67f2cc7f60ead6eba279b797abff47bbf32602cf5106e07ef540605d','fixed ancestor authorization bytes')
+--- before/scripts/vipe_benchmark/supervisor.py
++++ after/scripts/vipe_benchmark/supervisor.py
+@@ -171,7 +171,8 @@
+         # Idle time between supervised phases is not an active monitor tick.
+         if session.ready:
+             session.resume()
+-        session.await_ready()
++        if session.ready.keys() != {'work','sample'}:
++            session.await_ready()
+         session.set_worker(worker)
+         if phase == 'initial_sample':
+             deadline = min(deadline, session.setup_deadline)
+--- before/tests/test_vipe_benchmark_s1_helper_fixtures.py
++++ after/tests/test_vipe_benchmark_s1_helper_fixtures.py
+@@ -22,9 +22,11 @@
+     def spawn(self, role, actions, env):
+         env = dict(env, PYTHONPATH=env['PYTHONPATH']+os.pathsep+str(Path(__file__).parent))
+         from vipe_benchmark.s1_helper_session import create_owned_process
++        entered=time.monotonic();self.session.events.append(dict(event='fixture_spawn_entry',role=role,observed=entered,ready_deadline=self.session.ready_deadline))
+         pid = create_owned_process('Owner.run '+role,os.posix_spawn,sys.executable,
+             [sys.executable, '-B', '-m', 'test_vipe_benchmark_s1_helper_fixtures', role, self.session.token, '100', self.mode],
+             env,deadline=self.session.ready_deadline,admission_observer=lambda observed:self.session.events.append(dict(event='owned_dispatch',role=role,**observed)),file_actions=actions,setsid=True)
++        self.session.events.append(dict(event='fixture_spawn_return',role=role,pid=pid,entered=entered,observed=time.monotonic(),ready_deadline=self.session.ready_deadline))
+         if role == 'work' and self.mode in ('held_spawn','late_spawn'):
+             self.session.events.append(dict(event='opaque_spawn_return_held',role=role,pid=pid,observed=time.monotonic(),mode=self.mode))
+             time.sleep(.16 if self.mode == 'held_spawn' else .45)
+@@ -163,6 +165,48 @@
+ 
+ 
+ 
++def fixture_interpreter_metadata(fixture):
++    """Pin only this existing fixture's invoked interpreter and manifest."""
++    from vipe_benchmark.files import file_record,read_json
++    invoked=fixture['request']['runtime']['python']
++    if invoked!=sys.executable:raise ValueError('fixture interpreter spelling differs from actual runtime')
++    target=Path(invoked).resolve(strict=True);record=file_record(target)
++    manifest=fixture['observed_runtime']['loaded_files']
++    if file_record(manifest['path'])!=manifest:raise ValueError('fixture loaded manifest bytes changed')
++    if read_json(manifest['path'])['interpreter']!=dict(invoked_executable=invoked,executable=record):raise ValueError('fixture loaded interpreter disagreement')
++    return dict(invoked=invoked,target=str(target),record=record,manifest=manifest)
++
++
++def fixture_interpreter_adapter(fixture,events,*,deadline=None):
++    """Scoped exact-spelling adapter; every use freshly verifies real bytes."""
++    import contextlib
++    from unittest.mock import patch
++    from vipe_benchmark import s1_progress as p,s1_evidence as e
++    @contextlib.contextmanager
++    def adapter():
++        metadata=fixture['interpreter_adapter'];invoked=metadata['invoked'];target=Path(metadata['target'])
++        if invoked!=sys.executable or invoked!=fixture['request']['runtime']['python']:raise ValueError('fixture interpreter spelling differs from actual runtime')
++        if metadata['manifest']!=fixture['observed_runtime']['loaded_files']:raise ValueError('fixture loaded manifest binding')
++        guarded=e.file_record
++        def interpreter_record(path,*args,**kwargs):
++            if str(path)!=invoked:return guarded(path,*args,**kwargs)
++            event=dict(operation='fixture_interpreter_target',invoked=invoked,target=str(target),entered=time.monotonic(),completed=False)
++            events.append(event)
++            try:
++                p.before(deadline)
++                if Path(sys.executable).resolve(strict=True)!=target:raise ValueError('fixture original interpreter target changed')
++                p.before(deadline)
++                manifest=p.operation(p.read_record,metadata['manifest'],deadline=deadline)
++                if manifest['interpreter']!=dict(invoked_executable=sys.executable,executable=metadata['record']):raise ValueError('fixture loaded interpreter disagreement')
++                value=p.checked_file_record(target,*args,**kwargs)
++                if value!=metadata['record']:raise ValueError('fixture original interpreter bytes changed')
++                p.before(deadline);event.update(completed=True,record=value,manifest=metadata['manifest']);return value
++            except BaseException as error:event.update(error_class=type(error).__name__,message=str(error));raise
++            finally:event['exited']=time.monotonic()
++        with patch.object(e,'file_record',side_effect=interpreter_record):yield interpreter_record
++    return adapter()
++
++
+ def progress_fixture(root,*,states=False):
+     """Small shared real numerical artifacts, mixed admitted fit/selection rows."""
+     import copy
+@@ -182,7 +226,9 @@
+     request_record=put('request.json',request)
+     row,_=synthetic_row(root/'numeric',request)
+     second=copy.deepcopy(row);second['identity']['frame']=150
+-    return dict(root=str(root),request=request,request_record=request_record,rows=[row,second],observed_runtime=observed)
++    fixture=dict(root=str(root),request=request,request_record=request_record,rows=[row,second],observed_runtime=observed)
++    if states:fixture['interpreter_adapter']=fixture_interpreter_metadata(fixture)
++    return fixture
+ 
+ 
+ def progress_reservation(fixture,seconds=1.4):
+@@ -191,7 +237,7 @@
+         evidence=dict(request=fixture['request_record'],authorization=fixture['request']['recovery_authorization']))
+ 
+ 
+-def child_progress_trace(fixture,clock,session,sequence):
++def child_progress_trace(fixture,clock,session,sequence,*,adapter_events=None):
+     """Bounded child evidence; missing terminal event is incomplete, never valid."""
+     import contextlib
+     from unittest.mock import patch
+@@ -231,7 +277,7 @@
+                 row=dict(index=count[0],phase=phase,state=state,observed=now,session=session,
+                     reservation=clock.mapping()['reservation'],work_deadline=clock.work_deadline,total_deadline=clock.total_deadline,
+                     request=fixture['request_record'],pid=os.getpid(),boot_id=clock.boot_id,overflow=dropped[0],valid=dropped[0]==0,
+-                    terminal=finished,late_suffix=fixture.get('late_suffix') if phase=='P01_late_suffix' else None,**publication)
++                    terminal=finished,interpreter_adapter=list(adapter_events or ()),late_suffix=fixture.get('late_suffix') if phase=='P01_late_suffix' else None,**publication)
+                 gate();text=json.dumps(row,separators=(',',':'))+'\n'
+                 gate();raw=text.encode()
+                 gate()
+@@ -280,7 +326,11 @@
+         reference=data.get('progress_context',args.get('progress_context'))
+         if reference is None:return _progress_operation(operation,token,sequence,mode)
+         clock=ReservationClock.from_mapping(p.read_record(reference,p.SMALL_BYTES)['clock'])
+-    with child_progress_trace(fixture,clock,token,sequence):return _progress_operation(operation,token,sequence,mode)
++    import contextlib
++    adapter_events=[]
++    with contextlib.ExitStack() as stack:
++        if mode=='progress_final':stack.enter_context(fixture_interpreter_adapter(fixture,adapter_events,deadline=clock.work_deadline))
++        with child_progress_trace(fixture,clock,token,sequence,adapter_events=adapter_events):return _progress_operation(operation,token,sequence,mode)
+ 
+ 
+ def _progress_operation(operation,token,sequence,mode):
+@@ -1283,7 +1333,7 @@
+     # first exception; iterator-close failure cannot overwrite next() failure.
+     for target in ('scandir_owned_fd','scandir_next','scandir_close','openat_directory_nofollow','unlinkat','rmdirat','rmdirat_root'):
+         for primary_present in (False,True):
+-            now=[1.];objects=[];old_owners=list(p.TEMPORARY_OWNERS);attempts=[]
++            now=[1.];objects=[];old_owners=list(p.TEMPORARY_OWNERS);attempts=[];all_attempts=[];resources=[];retained_objects=[];fd_tokens={};iterator_tokens={};selected=[None]
+             pending_error=RuntimeError('pending interior primary');failure=OSError('interior '+target);secondary=OSError('iterator close secondary')
+             actual_call=p.RetirementGate.call;actual_ctor=tempfile.TemporaryDirectory
+             def constructor(*args,**kwargs):
+@@ -1291,15 +1341,50 @@
+                 (Path(obj.name)/'nested').mkdir();(Path(obj.name)/'nested'/'item').write_bytes(b'owned')
+                 return obj
+             def call(gate,label,function,*args,**kwargs):
+-                attempts.append(label)
+-                if label==target:
+-                    def function(*args,**kwargs):raise failure
+-                elif target=='scandir_next' and label=='scandir_close':
+-                    def function(*args,**kwargs):raise secondary
+-                return actual_call(gate,label,function,*args,**kwargs)
++                # Tokens belong to retained acquisitions, never recycled fd/id alone.
++                if label in ('scandir_next','scandir_close'):
++                    handle=args[0] if label=='scandir_next' else function.__self__
++                    token=iterator_tokens[id(handle)];parent=resources[token]['parent']
++                elif label=='rmdirat_root':handle=owner.root_fd;token=fd_tokens[handle];parent=resources[token]['parent']
++                else:
++                    fd=kwargs.get('dir_fd',args[0] if args and type(args[0]) is int else None)
++                    token=fd_tokens.get(fd);parent=None if token is None else resources[token]['parent'];handle=fd
++                root_token=1  # Retained root acquisition; owner.root_fd clears on close.
++                eligible=(label==target and ((target in ('scandir_next','scandir_close') and parent==root_token)
++                    or target in ('scandir_owned_fd','openat_directory_nofollow','rmdirat','rmdirat_root') and token==root_token
++                    or target=='unlinkat' and token is not None and resources[token]['parent']==root_token))
++                if selected[0] is None and eligible:selected[0]=token
++                event=dict(operation=label,resource=token,parent=parent,root=root_token,original_handle=id(handle) if label in ('scandir_next','scandir_close') else handle,name=args[0] if args and type(args[0]) is str else args[1] if len(args)>1 and type(args[1]) is str else None,entered=now[0],completed=False)
++                all_attempts.append(event)
++                if token==selected[0] and token is not None:attempts.append(label)
++                original=function;retain=kwargs.pop('retain',None)
++                def acquired(value):
++                    if label in ('openat_directory_nofollow','scandir_owned_fd'):
++                        generation=len(resources);retained_objects.append(value)
++                        item=dict(generation=generation,kind='iterator' if label=='scandir_owned_fd' else 'directory_fd',parent=token,root=root_token,original_handle=id(value) if label=='scandir_owned_fd' else value,acquired=now[0],operation=label)
++                        resources.append(item)
++                        if label=='scandir_owned_fd':iterator_tokens[id(value)]=generation
++                        else:fd_tokens[value]=generation
++                        event['acquired_resource']=generation
++                    if retain is not None:retain(value)
++                if eligible:
++                    def function(*args,**kwargs):
++                        if target=='scandir_close':original(*args,**kwargs)
++                        raise failure
++                elif target=='scandir_next' and label=='scandir_close' and token==selected[0]:
++                    def function(*args,**kwargs):
++                        original(*args,**kwargs)
++                        raise secondary
++                try:
++                    value=actual_call(gate,label,function,*args,retain=acquired,**kwargs);event['completed']=True;return value
++                except BaseException as error:event.update(error_class=type(error).__name__,message=str(error));raise
++                finally:event['exited']=now[0]
+             caught=None
+             with patch.object(p.time,'monotonic',side_effect=lambda:now[0]):
+                 owner=p.operation(p.owned_temporary_directory,constructor,(),dict(prefix='interior-fault-',dir=str(root)),3.,deadline=2.)
++                for kind,fd in (('parent',owner.parent_fd),('root',owner.root_fd)):
++                    generation=len(resources);fd_tokens[fd]=generation;retained_objects.append(owner)
++                    resources.append(dict(generation=generation,kind='directory_fd',parent=None if kind=='parent' else 0,root=1,original_handle=fd,retained_before_retirement=now[0],operation='owned_temporary_directory/'+kind))
+                 with patch.object(p.RetirementGate,'call',call):
+                     try:
+                         if primary_present:
+@@ -1307,15 +1392,21 @@
+                             except RuntimeError as current:owner.cleanup();test.assertIs(current,pending_error)
+                         else:owner.cleanup()
+                     except BaseException as error:caught=error
+-            test.assertEqual(attempts.count(target),1)
+-            if primary_present:test.assertIsNone(caught);test.assertIn(owner,pending_error.s1_temporary_owners)
+-            else:test.assertIs(caught,failure);test.assertIn(owner,caught.s1_temporary_owners)
+-            test.assertTrue(owner.unresolved);test.assertEqual(owner.state,'uncertain')
+-            if target=='scandir_next':
+-                test.assertEqual(attempts.count('scandir_close'),1)
+-                test.assertTrue(any(item['message']==str(secondary) for item in owner.events[-1]['secondary']))
+-            evidence.append(dict(kind='interior_failure',target=target,primary_present=primary_present,attempts=attempts,retirement=list(owner.events),primary_preserved=True))
+-            fixture_cleanup([value for value in p.TEMPORARY_OWNERS if value not in old_owners],objects)
++                    finally:
++                        # Persist before any assertion can discard a failed resource witness.
++                        test.control_record('plan049-retirement-resource-'+target+'-'+str(primary_present),dict(target=target,primary_present=primary_present,selected=selected[0],resources=resources,all_attempts=all_attempts,selected_attempts=attempts,retirement=list(owner.events)))
++            try:
++                test.assertIsNotNone(selected[0])
++                test.assertEqual(attempts.count(target),1)
++                if primary_present:test.assertIsNone(caught);test.assertIn(owner,pending_error.s1_temporary_owners)
++                else:test.assertIs(caught,failure);test.assertIn(owner,caught.s1_temporary_owners)
++                test.assertTrue(owner.unresolved);test.assertEqual(owner.state,'uncertain')
++                if target=='scandir_next':
++                    test.assertEqual(attempts.count('scandir_close'),1)
++                    test.assertTrue(any(item['message']==str(secondary) for item in owner.events[-1]['secondary']))
++                evidence.append(dict(kind='interior_failure',target=target,primary_present=primary_present,attempts=attempts,selected=selected[0],resources=resources,all_attempts=all_attempts,retirement=list(owner.events),primary_preserved=True))
++            finally:
++                fixture_cleanup([value for value in p.TEMPORARY_OWNERS if value not in old_owners],objects)
+     # A root-open return crossing C followed by fstat failure must keep the
+     # already-observed deadline as primary, with the safety error secondary.
+     objects=[];old_owners=list(p.TEMPORARY_OWNERS);now=[1.];secondary=OSError('post-cross root fstat')
+--- before/tests/test_vipe_benchmark_s1_recovery.py
++++ after/tests/test_vipe_benchmark_s1_recovery.py
+@@ -812,7 +812,7 @@
+                     identity_path=graph.root/'synthetic-prospective-identity.json'
+                     identity_path.write_text(json.dumps(dict(schema='plan049-prospective-identity/v1',kind='aggregate',index=1000,driver=driver,**identity_fields)))
+                     identity_request=file_record(identity_path)
+-                    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md')]
++                    addenda=[file_record(run/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md','plan049-correction-015.md')]
+                     ancestor_authorization=file_record(run/'authorization-049-ancestor-process-001.md')
+                     settings={key:'1' for key in (*c.THREADS,'OPENCV_FOR_THREADS_NUM','VIPE_CPU_VALIDATION')};settings['PYTHONPATH']=str(ROOT/'scripts')
+                     # Synthetic file-routing seam: fixed logical R paths backed by
+--- before/tests/test_vipe_benchmark_supervisor.py
++++ after/tests/test_vipe_benchmark_supervisor.py
+@@ -1139,7 +1139,7 @@
+                         effective=min(deadline,safety_cutoff if name=='close' else action_cutoff)
+                         if name=='tick' and current.requests['sample'] is not None:
+                             effective=min(effective,current.requests['sample']['deadline'])
+-                        entered=self.time.monotonic();result=None;error=None
++                        entered=self.time.monotonic();result=None;error=None;ready_before=sorted(getattr(current,'ready',{}))
+                         try:
+                             result=operation(*args,**kwargs);return result
+                         except BaseException as exc:
+@@ -1147,7 +1147,7 @@
+                         finally:
+                             returned=self.time.monotonic()
+                             observed_calls.append(dict(operation=name,entered=entered,deadline=effective,returned=returned,
+-                                confirmed=result if name=='close' else None,error=error))
++                                confirmed=result if name=='close' else None,error=error,ready_before=ready_before,ready_after=sorted(getattr(current,'ready',{}))))
+                             # Save the original pending exception before checking timing.
+                             try:self.assertLessEqual(returned,effective+.1)
+                             except AssertionError as violation:
+@@ -1930,9 +1930,11 @@
+                     publication=outcome.get('terminal_publication_status'),primary=dict(error_class=type(caught).__name__,message=str(caught),kind=getattr(caught,'kind',None),stop_required=getattr(caught,'stop_required',None)),primary_observations=primary_observations,finish=outcome,protocol_trace=p.trace_snapshot(),fixture_scope='two-row final-sample loss, not full acceptance' if label=='P04' else label,durable_copies=copied,original_pair=pair,original_clock=observed[0] if observed else reservation,
+                     child_boundaries=child_boundaries,late_parent_entries=late_parent_entries,cutoff_observations=cutoff_observations,production_return=self.time.monotonic(),owner_block_entered=getattr(session.owner,'progress_block_entered',None)))
+             finally:
+-                pending=sys.exception();frozen=None;cleanup_errors=[]
++                pending=sys.exception();frozen=None;cleanup_errors=[];safety_steps=[]
+                 def safety_step(name,function):
+-                    try:return function()
++                    observation=dict(operation=name,entered=self.time.monotonic(),action_cutoff=session.fixture_action_end,safety_cutoff=session.fixture_safety_end,completed=False);safety_steps.append(observation)
++                    try:
++                        value=function();observation['completed']=True;return value
+                     except BaseException as secondary:
+                         item=dict(operation=name,error_class=type(secondary).__name__,message=str(secondary))
+                         cleanup_errors.append(item)
+@@ -1940,6 +1942,7 @@
+                         if caught is not None:
+                             caught.progress_safety_secondary=list(cleanup_errors)
+                         return None
++                    finally:observation['returned']=self.time.monotonic()
+                 def cutoff():
+                     session.events.append(dict(event='plan047_production_cutoff',observed=self.time.monotonic(),reference=life.progress.reference(),ownership=life.ownership(),safety_cutoff=session.fixture_safety_end))
+                 frozen=safety_step('frozen_snapshot',lambda:life.progress.snapshot)
+@@ -1960,7 +1963,7 @@
+                             primary_failure=getattr(caught,'primary_failure',None),secondary_failures=getattr(caught,'secondary_failures',None)),
+                         assertion_or_setup_failure=None if pending is None else dict(error_class=type(pending).__name__,message=str(pending)),
+                         finish=dict(outcome),reference=life.progress.reference(),retained_snapshot_present=frozen is not None,pointer_unchanged=life.progress.snapshot is frozen,primary_observations=list(primary_observations),
+-                        cleanup_secondary=list(cleanup_errors),ownership=life.ownership(),observed=self.time.monotonic(),
++                        cleanup_secondary=list(cleanup_errors),safety_steps=list(safety_steps),ownership=life.ownership(),observed=self.time.monotonic(),
+                         causal_status='recorded actual outcome; no inferred EPERM cause',original_clock=observed[0] if observed else reservation))
+                 safety_step('final_outcome_record',final_outcome)
+                 if pending is None and cleanup_errors:raise AssertionError('progress safety failures: '+repr(cleanup_errors))
+@@ -2393,8 +2396,22 @@
+                 checkpoint=p.read_record(pub.previous);head=p.read_record(state.cache.reference()['provenance']['worker']['accepted_head'],p.SMALL_BYTES)
+                 notice=dict(schema='s1-progress-notice/v1',context=state.reference,producer='worker',binding=pub.binding,request_id=1,sequence=pub.sequence,current=pub.previous,previous=checkpoint['previous'],head=state.cache.reference()['provenance']['worker']['accepted_head'],completed=checkpoint['verified_at'])
+                 ack=dict(schema='s1-progress-ack/v1',context=state.reference['sha256'],producer='worker',sequence=pub.sequence,current=pub.previous)
+-                with patch.object(state.consumer,'read',side_effect=OSError('stop after credentialed intended successor')):
++                def transient_successor(rec,limit=p.CHECKPOINT_BYTES):
++                    intended=state.cache.reference()['provenance']['worker']['intended_successor']
++                    self.assertEqual(rec,state.reference)
++                    self.assertGreater(intended['sequence'],checkpoint['sequence'])
++                    evidence.append(dict(control='credentialed_transient_successor',record=rec,intended=intended,context=state.reference,observed=self.time.monotonic()))
++                    raise TimeoutError('stop after credentialed intended successor')
++                with patch.object(state.consumer,'read',side_effect=transient_successor):
+                     with self.assertRaises(OSError):pub.publish()
++                self.assertTrue(state.consumer.cache.reference()['provenance']['worker']['intended_successor'])
++                with plan047_state(fixture,Path(temp)/'ordinary-oserror') as untrusted:
++                    untrusted.publisher.failure(ValueError('independent integrity control'),'schema')
++                    with patch.object(untrusted.consumer,'read',side_effect=OSError('ordinary integrity failure')):
++                        with self.assertRaises(OSError):untrusted.publisher.publish()
++                    self.assertTrue(untrusted.cache.integrity)
++                    with self.assertRaisesRegex(ValueError,'progress recovery unverified'):p.recover(untrusted.cache.reference())
++                    evidence.append(dict(control='ordinary_oserror_remains_integrity',integrity=untrusted.cache.integrity,reference=untrusted.cache.reference()))
+                 reference=state.cache.reference()
+                 trusted=p.recover(reference)
+                 summary=dict(runtime={'final':{'status':'unverified','value':None}},first_result={'status':'unverified','value':None},verification_errors=[])
+@@ -3327,6 +3344,7 @@
+                         from test_vipe_benchmark_s1_helper_fixtures import backend_retirement_transition_controls,publication_equality_controls
+                         seen.append(dict(stage='correction006_retirement_and_exact_C',retirement=backend_retirement_transition_controls(self,state.root),publication=publication_equality_controls(self,fixture,state.root)))
+                     if name in publication:
++                        if name in ('notice_send','owner_retention','ack_send','ack_receipt'):now[0]=deadline-.25
+                         target=publication[name]
+                         current_stage=[''];injected=[False]
+                         def advance(label):
+@@ -3370,6 +3388,9 @@
+                         encode=p.encode
+                         def encoded(value,*args,**kwargs):
+                             raw=encode(value,*args,**kwargs)
++                            if isinstance(value,dict) and value.get('schema')=='s1-progress-notice/v1':
++                                seen.append(dict(stage='actual_notice_freshness',completed=value['completed'],publication_clock=now[0],boundary=deadline+offset,fresh_until=min(deadline,value['completed']+.5)))
++                                if name in ('notice_send','owner_retention','ack_send','ack_receipt') and not expected_late:self.assertLess(deadline+offset,min(deadline,value['completed']+.5))
+                             if isinstance(value,dict) and ((name=='notice_send' and value.get('schema')=='s1-progress-notice/v1') or (name=='owner_retention' and value.get('schema')=='s1-progress-ack/v1')):advance(value['schema']+'/encode')
+                             return raw
+                         retain=state.cache.retain
+@@ -3431,6 +3452,18 @@
+                         elif name=='qualified_guard':action=lambda:e.qualify_row(state.row,fixture['request'],first=True,deadline=deadline)
+                         elif name=='runtime_guard':action=lambda:e.qualify_runtime(fixture['observed_runtime'],fixture['request'],deadline=deadline)
+                         elif name in ('first_guard','reuse_after_read'):
++                            from test_vipe_benchmark_s1_helper_fixtures import fixture_interpreter_adapter
++                            adapter=stack.enter_context(fixture_interpreter_adapter(fixture,seen,deadline=deadline))
++                            self.assertEqual(adapter(fixture['request']['runtime']['python']),fixture['interpreter_adapter']['record'])
++                            alias=state.root/'untrusted-interpreter-alias';alias.symlink_to(fixture['interpreter_adapter']['target'])
++                            try:
++                                with self.assertRaises(OSError):adapter(alias)
++                            finally:alias.unlink()
++                            original_target=fixture['interpreter_adapter']['target']
++                            with patch.dict(fixture['interpreter_adapter'],target=str(state.root/'substituted-target')):
++                                with self.assertRaisesRegex(ValueError,'fixture original interpreter target changed'):
++                                    with fixture_interpreter_adapter(fixture,seen,deadline=deadline) as altered:altered(fixture['request']['runtime']['python'])
++                            self.assertEqual(fixture['interpreter_adapter']['target'],original_target)
+                             checks=e.qualify_row(state.row,fixture['request'],first=True);kwargs=dict(clock=state.clock,rows=[state.row],runtime=fixture['observed_runtime'],checks=checks,raw=[state.row['diagnostics']])
+                             first=e.first_record(fixture['request'],state.root,'passed',**kwargs);value=read_json(first['path'])
+                             action=(lambda:e.verify_first(value,fixture['request'],clock=state.clock,deadline=deadline)) if name=='first_guard' else (lambda:e.first_record(fixture['request'],state.root,'passed',**kwargs))
+@@ -3439,7 +3472,16 @@
+                             deadline=full.clock.work_deadline
+                             if name=='accept_after_read':action=lambda:recovery.accept_result(full.fixture.root,full.fixture.config,full.request,full.result,full.output,reservation=full.reservation)
+                             else:
++                                # Explicit real prerequisite; this callback cannot inherit
++                                # a failed accept callback as an implicit baseline.
++                                if not (full.output/'acceptance.json').exists():
++                                    recovery.accept_result(full.fixture.root,full.fixture.config,full.request,full.result,full.output,reservation=full.reservation)
++                                e.validate_result(full.result,full.request,full.fixture.config,clock=full.clock,deadline=deadline)
+                                 acceptance=file_record(full.output/'acceptance.json')
++                                accepted=p.read_record(acceptance,32*1024*1024)
++                                self.assertEqual(accepted['result'],file_record(full.output/'result.json'))
++                                self.assertEqual(accepted['count'],510)
++                                seen.append(dict(stage='real_acceptance_prerequisite',acceptance=acceptance,result=accepted['result'],fresh_validation=True,observed=now[0]))
+                                 action=lambda:recovery.prepare_terminal_evidence(full.fixture.root,full.reservation,dict(error=None,result=file_record(full.output/'result.json'),acceptance=acceptance),deadline,config=full.fixture.config)
+                         elif name=='next_input':
+                             import builtins
+@@ -3460,6 +3502,7 @@
+                                     second_entries.append(now[0]);self.assertLess(now[0],deadline)
+                                     event=dict(operation='load_rgb(frame62)',entered=now[0],completed=False);witness.target.append(event)
+                                     value=actual_load(loader,identity);event.update(exited=now[0],completed=True)
++                                    load_context[0]='second_input_validation'
+                                     return value
+                                 return actual_load(loader,identity)
+                             def predicted(*args,**kwargs):
+@@ -3478,18 +3521,30 @@
+                                 advance('segment_frame50_print_return_before_frame62')
+                                 return value
+                             inline_reference,inline_cache=stack.enter_context(inline_progress(segment_fixture.root,segment_clock,segment_request,segment_fixture.config))
+-                            actual_array=e.load_array;actual_publish=p.publish_segment_row
++                            actual_array=e.load_array;actual_publish=p.publish_segment_row;load_context=['native_work'];load_calls=[]
++                            actual_preserve=e.preserve_failure;intended_valid=e.input_loader(segment_request).row(Identity('calibration',0,62))['valid']
+                             def valid_array(*args,**kwargs):
+-                                if injected[0]:
+-                                    witness.successor.append(dict(operation='frame62_valid_array',entered=now[0]))
+-                                    self.assertLess(now[0],deadline)
+-                                    raise RuntimeError('plan049 actual frame62 deliberate stop')
+-                                return actual_array(*args,**kwargs)
++                                event=dict(context=load_context[0],record=copy.deepcopy(args[0]),entered=now[0],completed=False);load_calls.append(event)
++                                try:
++                                    if injected[0] and load_context[0]=='second_input_validation':
++                                        self.assertEqual(args[0],intended_valid)
++                                        witness.successor.append(dict(operation='frame62_valid_array',entered=now[0],record=copy.deepcopy(args[0]),context=load_context[0]))
++                                        self.assertLess(now[0],deadline)
++                                        raise RuntimeError('plan049 actual frame62 deliberate stop')
++                                    value=actual_array(*args,**kwargs);event['completed']=True;return value
++                                except BaseException as error:event.update(error_class=type(error).__name__,message=str(error));raise
++                                finally:event['exited']=now[0]
++                            def preserving(request,output,identity,error,*args,**kwargs):
++                                previous=load_context[0];load_context[0]='failure_preservation'
++                                seen.append(dict(stage='actual_failure_preservation',identity=identity.record(),failure_stage=kwargs.get('stage'),error_class=type(error).__name__,entered=now[0]))
++                                try:return actual_preserve(request,output,identity,error,*args,**kwargs)
++                                finally:load_context[0]=previous
++
+                             def raw_row(row,*args,**kwargs):
+                                 if row['identity']['frame']==62:
+                                     witness.successor.append(dict(operation='frame62_raw',entered=now[0]));raise AssertionError('frame62 raw successor')
+                                 return actual_publish(row,*args,**kwargs)
+-                            stack.enter_context(patch.object(e,'load_array',valid_array));stack.enter_context(patch.object(p,'publish_segment_row',raw_row))
++                            stack.enter_context(patch.object(e,'load_array',valid_array));stack.enter_context(patch.object(e,'preserve_failure',preserving));stack.enter_context(patch.object(p,'publish_segment_row',raw_row))
+                             stack.enter_context(patch.dict(sys.modules,{'torch':SimpleNamespace(cuda=SimpleNamespace(synchronize=lambda:None,max_memory_allocated=lambda:0,max_memory_reserved=lambda:0))}))
+                             stack.enter_context(patch.object(stages,'_model_runtime',return_value=copy.deepcopy(segment_fixture.observed)))
+                             stack.enter_context(patch('vipe_benchmark.backends.build_backend',return_value=SimpleNamespace(segment=predicted)))
+@@ -3503,6 +3558,8 @@
+                                     if str(error)!='plan049 actual frame62 deliberate stop':raise
+                                     self.assertEqual(second_entries,[deadline+offset])
+                                 finally:
++                                    seen.append(dict(stage='complete_load_call_ledger',calls=load_calls))
++                                    self.control_record('plan049-next-input-load-'+case['when'],dict(calls=load_calls,second_entries=second_entries,native_entries=native_entries,work_deadline=deadline))
+                                     self.assertEqual(len(native_entries),1)
+                                     self.assertEqual(len(second_entries),0 if expected_late else 1)
+                                     seen.append(dict(stage='actual_segment_frame62',target_entries=second_entries,native_entries=native_entries,forbidden_successor='frame62 valid/native/raw'))
+@@ -3619,6 +3676,8 @@
+                     class ObservedStream:
+                         def __init__(inner,stream,closefd):inner.stream=stream;inner.closefd=closefd;inner.descriptor=stream.fileno()
+                         def __getattr__(inner,attribute):return getattr(inner.stream,attribute)
++                        def __iter__(inner):return inner
++                        def __next__(inner):return next(inner.stream)
+                         def write(inner,data):
+                             offset=inner.stream.tell();value=inner.stream.write(data)
+                             if observing[0]:write_observations.append(dict(path=fd_paths.get(inner.descriptor),offset=offset,bytes=value,content_hex=bytes(data[:value]).hex(),observed=now[0]))
+@@ -4086,6 +4145,28 @@
+         with self.assertRaisesRegex(ValueError,'sequence exhausted'):current.submit('work',self.operation,self.time.monotonic()+.1)
+         current.census_sequence=UINT64_MAX
+         with self.assertRaisesRegex(ValueError,'generation exhausted'):current.request_census({'id':1},'pre')
++        # Exercise the actual acquisition/readiness prefix with pure existing
++        # lifecycle seams; submit rejection stays in the real Session method.
++        import ast,inspect,textwrap
++        from unittest.mock import Mock
++        from vipe_benchmark import supervisor as sup
++        monitored=ast.parse(textwrap.dedent(inspect.getsource(sup.monitored_call))).body[0]
++        prefix=next(node for node in monitored.body if isinstance(node,ast.Try)).body[:4]
++        readiness=[]
++        for ready in ({},{'work':{}},{'sample':{}},{'work':{},'sample':{}}):
++            events=[]
++            selected=types.SimpleNamespace(ready=ready,resume=Mock(side_effect=lambda:events.append('resume')),await_ready=Mock(side_effect=lambda:events.append('await_ready')),set_worker=Mock(side_effect=lambda worker:events.append('set_worker')))
++            life=types.SimpleNamespace(acquire=Mock(return_value=selected))
++            exec(compile(ast.Module(body=prefix,type_ignores=[]),'<actual-monitored-readiness>','exec'),dict(lifecycle=life,worker=None))
++            self.assertEqual(selected.await_ready.call_count,0 if ready.keys()=={'work','sample'} else 1)
++            self.assertEqual(events,(['resume'] if ready else [])+([] if ready.keys()=={'work','sample'} else ['await_ready'])+['set_worker'])
++            readiness.append(dict(ready=list(ready),events=events))
++        current.sequences['work']=0;current.requests['work']=None
++        for fault in ('poisoned','cancelled','deadline'):
++            current.poisoned=fault=='poisoned';current.owner.cancelled=fault=='cancelled'
++            with self.assertRaisesRegex(TimeoutError if fault=='deadline' else ValueError,'S1 work dispatch deadline' if fault=='deadline' else 'helper session unavailable'):
++                current.submit('work',self.operation,self.time.monotonic() if fault=='deadline' else self.time.monotonic()+.1)
++        self.control_record('plan049-ready-reuse',readiness)
+         self.control_record('trace-controls',dict(rings=records,primary_retained=primary,request_retained=retained,role_order=order))
+ 
+     def test_control_primitive_and_frame_mutations(self):
+--- before/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py
++++ after/docs/resolve-blocker/plan031-progress-20260922/launch-049-exec.py
+@@ -191,7 +191,7 @@
+     if type(B) is not int or type(H) is not int or min(B,H)<0 or B+max(1,H)>8 or type(capacity.get('charge')) is not int or capacity['charge']!=B+max(1,H):raise ValueError('main resource capacity proof')
+     if type(capacity.get('artifact_bytes')) is not int or not 0<=capacity['artifact_bytes']<=150*1024**3:raise ValueError('artifact cap proof')
+     if [r['path'] for r in sources]!=admission['source_paths'] or sources!=admission['sources']:raise ValueError('main source snapshot changed')
+-    addenda=[record(RUN/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md')]
++    addenda=[record(RUN/name) for name in ('plan049-correction-001.md','plan049-correction-002.md','plan049-correction-003.md','plan049-correction-004.md','plan049-correction-005.md','plan049-correction-006.md','plan049-correction-007.md','plan049-correction-008.md','plan049-correction-009.md','plan049-correction-010.md','plan049-correction-011.md','plan049-correction-012.md','plan049-correction-013.md','plan049-correction-014.md','plan049-correction-015.md')]
+     ancestor_authorization=record(RUN/'authorization-049-ancestor-process-001.md')
+     if ancestor_authorization['sha256']!='734fc8fc67f2cc7f60ead6eba279b797abff47bbf32602cf5106e07ef540605d':raise ValueError('fixed ancestor authorization bytes')
+     proof_record=record(RUN/('main-session-proof-049-'+suffix+'.json'))

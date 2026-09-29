@@ -1,0 +1,26 @@
+{
+  "schema": "plan049-main-pre_admission-proof-validation/v1",
+  "kind": "diagnostic",
+  "index": 8,
+  "arguments": {
+    "cmd": ".local/envs/stg-colmap/bin/python -B -c 'import hashlib,json,pathlib,sys; sys.path.insert(0,\"scripts\"); from vipe_benchmark.s1_validation_contract import session_proof; p=pathlib.Path(\"docs/resolve-blocker/plan031-progress-20260922/main-session-proof-049-diagnostic-008.json\"); b=p.read_bytes(); ref=dict(path=str(p.resolve()),bytes=len(b),sha256=hashlib.sha256(b).hexdigest());\ntry:\n session_proof(ref,\"diagnostic\",8,{}, {}, str(p.parent/\"launch-admission-049-diagnostic-008.json\"),\"Plan049 Correction015 runtime diagnostics for F1 F7 F8 F10\")\n print(json.dumps({\"verdict\":\"PASS\"}))\nexcept Exception as e:\n print(json.dumps({\"verdict\":\"FAIL\",\"error_type\":type(e).__name__,\"error\":str(e)})); sys.exit(2)'",
+    "shell": "/bin/bash",
+    "login": false,
+    "workdir": "/home/auss/git_repos/samaust/Experiments_4DGS",
+    "yield_time_ms": 10000,
+    "max_output_tokens": 2000
+  },
+  "result": {
+    "chunk_id": "bd116a",
+    "wall_time_seconds": 0.000008441,
+    "exit_code": 2,
+    "original_token_count": 23,
+    "output": "{\"verdict\": \"FAIL\", \"error_type\": \"ValueError\", \"error\": \"session driver/request binding\"}\n"
+  },
+  "started": {
+    "utc": "2026-09-24T23:14:39.703Z"
+  },
+  "returned": {
+    "utc": "2026-09-24T23:14:39.911Z"
+  }
+}
