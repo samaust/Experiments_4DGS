@@ -1,0 +1,119 @@
+{
+  "schema": "issue3-s1-observed-dispatch-outcome/v1",
+  "job_id": "S1-calibration-recovery-004",
+  "authorization": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/issue3-preparation/s1-calibration-recovery-authorization-004-do-002.json",
+    "sha256": "d3d29393bafa4ca9686ae6ec0a80ca9940e54b482f76136f9b4fe0f6975cd336",
+    "bytes": 8809
+  },
+  "ledger": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/issue3-preparation/s1-dispatch-004-outcome/post-dispatch-ledger-004.jsonl",
+    "sha256": "daeeb2422a117df93c2acefb582e93a8131d1035b5c4ad3466c8272e855b1942",
+    "bytes": 371748
+  },
+  "ledger_events": 472,
+  "terminal_event": {
+    "acceptance": null,
+    "cleanup_confirmed": true,
+    "cleanup_uncertain": false,
+    "deadline_exceeded": false,
+    "elapsed_seconds": 1.0312923620222136,
+    "error": "TimeoutError: S1 resource sample timeout; evidence publication failed: RuntimeError: retained helper unavailable for terminal publication",
+    "event": "finish",
+    "evidence_summary_record": null,
+    "failure_kind": "job_deadline",
+    "helper_cleanup_errors": [],
+    "helper_ownership": [],
+    "job_id": "S1-calibration-recovery-004",
+    "peak": {
+      "artifact_bytes": 67820552192,
+      "device_bytes": 750780416,
+      "download_bytes": 26213724892
+    },
+    "previous_sha256": "e55aba30865fe306e291114e8e0cb480e964a310ddea5b43ca41989f8d7e374b",
+    "primary_failure": {
+      "error_class": "TimeoutError",
+      "kind": "job_deadline",
+      "message": "S1 resource sample timeout",
+      "observed": 294796.783656822,
+      "phase": "prelaunch",
+      "stop_required": true
+    },
+    "recorded_unix": 1790721492.3134987,
+    "reservation": {
+      "event_sha256": "01e1c6bcd040cdf933a4f26ad0e36f743124b9c340350ca4327057f9746582ee",
+      "sequence": 469
+    },
+    "resource": "gpu",
+    "result": null,
+    "secondary_failures": [
+      {
+        "error_class": "RuntimeError",
+        "message": "retained helper unavailable for terminal publication",
+        "observed": 294796.804099522,
+        "phase": "evidence_publication"
+      }
+    ],
+    "secondary_outcome_kind": "evidence_publication",
+    "sequence": 471,
+    "status": "failed",
+    "stop_required": true,
+    "surviving_pids": [],
+    "terminal_publication_status": "unavailable",
+    "terminal_receipt": null,
+    "verified_progress_reference": null,
+    "event_sha256": "df0d0750fd0f4d5872c4bbc69e0833a98b493d96b3ba13ed02f64772dc18296e"
+  },
+  "controller_log": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/issue3-preparation/s1-dispatch-004-outcome/controller.log",
+    "sha256": "54b2c13eeff035d20eddbdc952be674deb6aa48a8a0feb7a831525a29c1073c2",
+    "bytes": 2727
+  },
+  "attempt_consumed": true,
+  "worker_output_directory_exists": false,
+  "first_result_qualified": false,
+  "successful_calibration": false,
+  "terminal_receipt_published": false,
+  "original_467_event_prefix_preserved": true,
+  "historical_records_verified": 283,
+  "post_dispatch_gpu_observation": {
+    "device_bytes": 742391808,
+    "gpu_pids": []
+  },
+  "full_cpu_suite": {
+    "tests_run": 1007,
+    "errors": 6,
+    "skipped": 5,
+    "elapsed_seconds": 288.451,
+    "log": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/issue3-preparation/s1-dispatch-004-outcome/fullsuite-006.log",
+      "sha256": "9de50a9788c4d57d6f67472186d24f0d1bb0515e5b9100e977c658a6e6f1356d",
+      "bytes": 37305
+    },
+    "limitations": [
+      "matplotlib missing",
+      "pytest missing for three modules",
+      "plyfile missing",
+      "historical basketball v6 deadline error"
+    ]
+  },
+  "read_only_sampler_observations": {
+    "direct_elapsed_seconds": 0.8658474370022304,
+    "helper_elapsed_seconds": [
+      0.9561554849497043,
+      0.8680388070060872,
+      0.861789382994175,
+      0.8750564079964533
+    ],
+    "samples_completed": true,
+    "helper_cleanup_confirmed": true,
+    "diagnosis": "Timeout not reproduced; timings near the one-second deadline. Root cause unresolved."
+  },
+  "required_stop": true,
+  "next_actions": [
+    "Diagnose sampler timeout and terminal-publication failure without allocating another model attempt.",
+    "Obtain explicit resume after the required stop for the nine unstarted E5/E6/E7 and D2/D3/D4 fit/check slots.",
+    "A further S1 identity requires a separately reviewed allocation and explicit approval after a validated repair.",
+    "Import independent human annotation evidence before claiming scored benchmark or physical-depth accuracy."
+  ]
+}
