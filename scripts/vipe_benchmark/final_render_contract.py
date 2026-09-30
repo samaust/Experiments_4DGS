@@ -23,6 +23,8 @@ COMPOSITIONS={
 }
 PHASES={'geometry':('gpu',5400),'initializer':('cpu',900),'train':('gpu',3600),'render':('gpu',900)}
 PRESET_SOURCE='fc3e4320da73a470d0a16bcb5803f84d1bda5bdeafb000fcc39e022fbcfaaeb4'
+PROCESSED_MANIFEST=('.local/sync-pivot/basketball-zero/manifest.json',
+    '02006f379925cbb599ed071df48b7985e40cd3995b2d24293d92ecb736c26f94',561748)
 FROZEN_SCOPE={
     'proposal':('docs/specs/plan031-execution/qualitative-final-render-review-proposal-001.md',
         'fc5b3e84852ac49e029fb8ebd3f2d4514183d7631ee0db1a887d7d20e92e5f62',11220),
@@ -146,6 +148,7 @@ def parse_request(value):
         for record in initializer['voxel_basis_source'].values():_verify(record)
     names={'proposal','source','preset','runtime','config','qualification','scene_manifest','inputs',
         'segmentation_decision','depth_decision','S2','D4_fit','D4_check','M0','M1','M2','N0','N1','N2'}
+    if value['record_kind']=='actual' or 'scene_freeze' in value['bindings']:names.add('scene_freeze')
     _require(set(value['bindings'])==names,'complete exact prerequisite bindings required')
     for record in value['bindings'].values():_verify(record)
     if value['record_kind']=='actual':
@@ -243,6 +246,46 @@ def _coverage(request,events):
     return 30*len(KEYFRAMES)*3
 
 
+def _processed_scene_validation(value,scene_record):
+    # This independent pure adapter checks the existing processed manifest,
+    # union exclusions, D4 scale, historical normalization, cameras and units.
+    # Lazy loading avoids a contract/adapter import cycle and has no GPU path.
+    from .final_render_initializer import validate_scene
+    scene,matrix=validate_scene(value,scene_record)
+    return dict(schema='plan067-final-render-scene-validation/v1',status='passed',
+        manifest=value['bindings']['scene_manifest'],scene_freeze=scene_record,
+        transform=matrix.tolist(),native_execution_qualified=False)
+
+
+def validate_scene_bindings(value):
+    """Validate the actual accepted processed manifest through its existing seam."""
+    bindings=value['bindings'];scene=_bound(bindings['scene_manifest'])
+    if value['record_kind']=='actual':
+        relative,sha256,size=PROCESSED_MANIFEST
+        expected=dict(path=str((ROOT/relative).resolve()),sha256=sha256,bytes=size)
+        _require(bindings['scene_manifest']==expected,'accepted processed manifest path/hash/size differs')
+        _verify(expected)
+        _require(scene.get('schema')=='basketball-processed/v1','actual accepted processed manifest required')
+    if scene.get('schema')=='basketball-processed/v1':
+        _require('scene_freeze' in bindings,'processed manifest requires bound scene_freeze')
+        _verify(bindings['scene_freeze'])
+        return _processed_scene_validation(value,bindings['scene_freeze'])
+    _require(value['record_kind']=='fixture','actual accepted processed manifest required')
+    _require(scene['schema']=='dynamic-gaussian-scene/v1' and scene['evaluation']['training_cameras']==[str(c) for c in TRAINING_CAMERAS]
+        and set(scene['evaluation']['held_out_cameras'])=={'0','10','20','30'},'exact fixture train/held-out camera split required')
+    _require(scene['frames']['ids']==list(range(50)) and scene['frames']['count']==50 and
+        scene['frames']['normalized_time']['formula']=='frame_offset / count' and scene['source']['frame_rate']==25,'fixture scene time normalization mismatch')
+    if 'normalization' in scene:
+        normalization=value['initializer_contract']['normalization']
+        if 'transform' in normalization:
+            _require(scene['normalization'].get('transform')==normalization['transform'],'initializer full transform differs from bound scene manifest')
+        else:_require(scene['normalization']==normalization,'initializer normalization differs from bound scene manifest')
+    consumed_keys={(str(c),f) for c in TRAINING_CAMERAS for k in KEYFRAMES for f in (k,k+1)}
+    exclusions={(str(r['camera']),r['frame']) for r in scene.get('excluded_observations',[])}
+    _require(not consumed_keys & exclusions,'scene manifest exclusion intersects frozen initialization coverage')
+    return dict(schema='plan067-final-render-scene-validation/v1',status='passed',record_kind='fixture',native_execution_qualified=False)
+
+
 def admit_review(value,ledger,storage):
     """Check prospective scope against a ledger snapshot without writing it."""
     request=parse_request(value);events=ledger.events();bindings=request.payload['bindings']
@@ -257,21 +300,7 @@ def admit_review(value,ledger,storage):
         from .s1_validation_contract import validate_wrapper
         validate_wrapper(qualification,qualification['semantic_amendment'],bindings['config'])
     else:_require(qualification.get('status')=='passed' and qualification.get('record_kind')=='fixture','passing CPU fixture qualification required')
-    scene=_bound(bindings['scene_manifest'])
-    _require(scene['schema']=='dynamic-gaussian-scene/v1' and scene['evaluation']['training_cameras']==[str(c) for c in TRAINING_CAMERAS]
-        and set(scene['evaluation']['held_out_cameras'])=={'0','10','20','30'},'exact train/held-out camera split required')
-    _require(scene['frames']['ids']==list(range(50)) and scene['frames']['count']==50 and
-        scene['frames']['normalized_time']['formula']=='frame_offset / count' and scene['source']['frame_rate']==25,'scene time normalization mismatch')
-    if 'normalization' in scene:
-        normalization=value['initializer_contract']['normalization']
-        if 'transform' in normalization:
-            _require(scene['normalization'].get('transform')==normalization['transform'],'initializer full transform differs from bound scene manifest')
-        else:_require(scene['normalization']==normalization,'initializer normalization differs from bound scene manifest')
-    # Explicit observation exclusions from any upstream manifest must be united;
-    # no exclusion may silently delete one of the frozen directed edges.
-    consumed_keys={(str(c),f) for c in TRAINING_CAMERAS for k in KEYFRAMES for f in (k,k+1)}
-    exclusions={(str(r['camera']),r['frame']) for r in scene.get('excluded_observations',[])}
-    _require(not consumed_keys & exclusions,'scene manifest exclusion intersects frozen initialization coverage')
+    validate_scene_bindings(value)
     coverage=_coverage(request,events)
     totals=ledger.totals(events);gpu=sum(a.seconds for a in request.allocations if a.resource=='gpu');cpu=sum(a.seconds for a in request.allocations if a.resource=='cpu')
     for resource,seconds,key in [('gpu',gpu,'gpu_total_seconds_limit'),('cpu',cpu,'cpu_prepare_score_report_seconds_limit')]:

@@ -16,6 +16,10 @@ behavior; it does not qualify geometry, training or rendered results.
 - `admit_review(value, ledger, storage) -> ReviewAdmission`: validates a ledger
   snapshot without writing, reserving or executing jobs. Its
   `execution_authorized` is always false and blockers remain explicit.
+- `validate_scene_bindings(request)`: pins the accepted actual
+  `basketball-processed/v1` manifest and delegates its bound `scene_freeze`
+  validation to the independent pure initializer adapter. Legacy
+  `dynamic-gaussian-scene/v1` inputs are accepted only as CPU fixtures.
 - `initializer_arrays_hash(arrays)`: hashes names, shapes, dtypes and values.
 - `normalization_matrix(normalization, actual=False)`: validates a finite affine
   4×4 transform with positive isotropic scale and proper rotation. Actual
@@ -43,6 +47,11 @@ and 960×540/25 fps held-out cameras 0/10/20/30 at frames 0–49.
 Verified `bindings` cover proposal, contract source, preset, installed runtime,
 original allocation config, current CPU qualification, scene manifest, accepted
 inputs, actual S2/D4 human decisions, S2, D4 fit/check, all M and all N results.
+Actual bindings additionally require `scene_freeze`. The processed manifest is
+pinned to `.local/sync-pivot/basketball-zero/manifest.json`, SHA256
+`02006f379925cbb599ed071df48b7985e40cd3995b2d24293d92ecb736c26f94`,
+561,748 bytes. The gate uses the already-produced accepted format rather than
+requesting a replacement scientific scene schema.
 Actual admission validates the existing qualification wrapper against current
 source hashes and reconstructs the connection to actual human submissions.
 It first pins proposal 001 and the 8,484-byte S2 and 8,825-byte D4 decisions
@@ -87,6 +96,13 @@ diagnostic subsets and trained checkpoints cannot be relabeled as QF artifacts.
 Scene-manifest exclusion unions, camera/time calibration, physical normalization
 and velocity conversion need an independently checked adapter receipt. A bound
 manifest normalization, when present, must match the initializer contract.
+The processed-scene gate delegates to `final_render_initializer.validate_scene`:
+the existing full rig, normalized timestamps and comparison timing union are
+checked; zero offsets and origin 0/duration 2 preserve `frame/50` and the declared
+velocity conversion. The bound scene must retain exact historical freeze/map
+lineage, selected D4 scale, rebased full transform, camera calibration and units.
+This gate does not qualify full RoMa geometry, trained checkpoints or native
+execution. The independent adapter module is a required integration dependency.
 
 Native source, binaries, preset resolution and installed compatibility need
 qualification. Initializer counts, optimizer/checkpoint retention and peak

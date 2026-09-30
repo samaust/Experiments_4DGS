@@ -184,6 +184,29 @@ class ContractTests(unittest.TestCase):
             with self.assertRaises(ValueError):normalization_matrix(dict(transform=altered),actual=True)
         with self.assertRaisesRegex(ValueError,'full transform'):
             normalization_matrix(dict(translate=[0,0,0],radius=1),actual=True)
+    def test_actual_processed_manifest_gate_uses_bound_scene_without_new_schema(self):
+        from unittest.mock import patch
+        from vipe_benchmark.final_render_contract import validate_scene_bindings
+        # This positive seam uses the real accepted manifest and a real existing
+        # diagnostic scene record. The separate checked adapter is mocked here:
+        # no actual full D4 geometry or native qualification is manufactured.
+        repository=Path('/home/auss/git_repos/samaust/Experiments_4DGS')
+        manifest=file_record(repository/'.local/sync-pivot/basketball-zero/manifest.json')
+        scene=file_record(repository/'.local/vipe-alternatives/plan031-20260913T032700Z/jobs/C0/scene-freeze.json')
+        request=dict(self.request,record_kind='actual',bindings=dict(self.request['bindings'],scene_manifest=manifest,scene_freeze=scene))
+        with patch('vipe_benchmark.final_render_contract.ROOT',repository),patch('vipe_benchmark.final_render_contract._processed_scene_validation',return_value={'status':'checked-adapter-seam'}) as validator:
+            self.assertEqual(validate_scene_bindings(request)['status'],'checked-adapter-seam')
+            validator.assert_called_once_with(request,scene)
+        from vipe_benchmark.files import read_json
+        for name,change in (
+            ('heldout',lambda m:m.update(heldout_camera_ids=['0','10','20'])),
+            ('timing',lambda m:m['time'].update(duration_seconds=3)),
+            ('union',lambda m:m['training_exclusions'].append(dict(camera_id='1',source_frame_id=0,reasons=['changed']))),
+        ):
+            altered=read_json(manifest['path']);change(altered)
+            request['bindings']['scene_manifest']=self.record('processed-'+name,altered)
+            with patch('vipe_benchmark.final_render_contract.ROOT',repository):
+                with self.assertRaisesRegex(ValueError,'accepted processed manifest'):validate_scene_bindings(request)
     def test_actual_result_cannot_be_claimed_and_training_iterations_must_match(self):
         result=dict(schema='plan067-final-render-worker-result/v1',record_kind='fixture',status='complete',arm='QF-B',
             phase='train',allocation_id='qf-001/QF-B/train',elapsed_seconds=1,completed_iterations=5000,
