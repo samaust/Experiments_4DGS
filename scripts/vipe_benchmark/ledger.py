@@ -126,9 +126,9 @@ class Ledger:
             if job_id in S1_RECOVERY_JOBS:
                 from .s1_recovery import reservation_binding
                 reservation_binding(self.path.parent, self.config, events, evidence, command=command)
-            if job_id == 'E5-setup-recovery-001':
+            if job_id in ('E5-setup-recovery-001', 'E5-setup-recovery-002'):
                 from .e5_recovery import reservation_binding
-                reservation_binding(self.path.parent, self.config, events, command, evidence)
+                reservation_binding(self.path.parent, self.config, events, command, evidence, job_id=job_id)
             spec = allocated[job_id]
             resource = spec['resource']
             total = self.totals(events)[resource]['elapsed_seconds']
@@ -373,18 +373,19 @@ class Ledger:
         intact, and the new process shares the original cumulative setup cap.
         """
         document = read_json(verify_record(authorization)['path'])
-        if document.get('schema') == 'vipe-benchmark-e5-packaging-recovery/v1':
-            from .e5_recovery import JOB, validate
+        if document.get('schema') in ('vipe-benchmark-e5-packaging-recovery/v1',
+                                     'vipe-benchmark-e5-packaging-recovery/v2'):
+            from .e5_recovery import validate
             with self.locked() as (stream, events):
                 document = validate(self.path.parent, self.config, authorization, events)
-                if any(e['event'] == 'setup_recovery_authorized' and e['environment'] == 'E5' for e in events):
+                if any(e['event'] == 'setup_recovery_authorized' and e['job_id'] == document['job_id'] for e in events):
                     raise ValueError('E5 recovery already allocated; no additional recovery attempt')
                 if any(s['event'] == 'reserve' for s in self.states(events).values()):
                     raise ValueError('unreconciled active attempt; refusing E5 recovery allocation')
                 if self.totals(events)['setup']['elapsed_seconds'] >= self.config['setup_wall_seconds_limit']:
                     raise ValueError('cumulative setup allocation exhausted')
                 return self._append(stream, events, dict(event='setup_recovery_authorized',
-                    job_id=JOB, original_job_id='E5-setup', environment='E5',
+                    job_id=document['job_id'], original_job_id='E5-setup', environment='E5',
                     original_failure_event_sha256=document['original_failure_event_sha256'],
                     authorization=authorization, preparation_elapsed_seconds=0.,
                     preparation_evidence=document['repair_validation']))

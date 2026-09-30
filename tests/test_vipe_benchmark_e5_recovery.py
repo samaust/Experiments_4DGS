@@ -60,24 +60,94 @@ class E5RecoveryTests(unittest.TestCase):
         return e5_recovery.propose(self.root, self.config, self.validation, self.asset_record, output)
 
     def dispatch_contract(self):
-        registered = next(e for e in self.ledger.events()
-            if e['event'] == 'setup_recovery_authorized' and e['environment'] == 'E5')
+        registered = [e for e in self.ledger.events()
+            if e['event'] == 'setup_recovery_authorized' and e['environment'] == 'E5'][-1]
+        job_id = registered['job_id']
         with patch('vipe_benchmark.setup_recipes.shutil.which', return_value='/fixture/uv'):
             request = dict(setup_recipes.recovery_request(self.root, registered['authorization']),
                 configuration=file_record(ROOT / 'configs/vipe-alternatives/benchmark-v1.json'))
-        path = self.root / 'requests/E5-setup-recovery-001.json'
+        path = self.root / 'requests' / (job_id + '.json')
         if not path.exists():
             write_json(path, request)
         worker = file_record(ROOT / 'scripts/basketball_vipe_worker.py')
         command = [str(ROOT / '.local/envs/stg-colmap/bin/python'), worker['path'],
             '--operation', 'setup', '--config', request['configuration']['path'],
-            '--request', str(path), '--output', str(self.root / 'jobs/E5-setup-recovery-001')]
+            '--request', str(path), '--output', str(self.root / 'jobs' / job_id)]
         return command, dict(request=file_record(path), worker=worker)
 
     def reserve(self):
         command, evidence = self.dispatch_contract()
         with patch('vipe_benchmark.setup_recipes.shutil.which', return_value='/fixture/uv'):
             return self.ledger.reserve('E5-setup-recovery-001', command, evidence)
+
+    def test_second_review_binds_cleaned_first_failure_without_reopening_it(self):
+        first = e5_recovery.approve(self.proposal(), 'Synthetic first attempt', self.root / 'do-first.json')
+        self.ledger.authorize_setup_recovery(first)
+        self.reserve()
+        failure = self.ledger.finish('E5-setup-recovery-001', 'failed', 74.805,
+            cleanup_confirmed=True, cleanup_uncertain=False, surviving_pids=[])
+        before = self.ledger.path.read_bytes()
+        review = e5_recovery.propose(self.root, self.config, self.validation,
+            self.asset_record, self.root / 'second-review', job_id='E5-setup-recovery-002')
+        document = read_json(review['path'])
+        self.assertEqual(document['schema'], 'vipe-benchmark-e5-packaging-recovery/v2')
+        self.assertEqual(document['previous_failure_event_sha256'], failure['event_sha256'])
+        self.assertEqual(document['attempt_wall_seconds_limit'], 3600.)
+        self.assertEqual(self.ledger.path.read_bytes(), before)
+        with self.assertRaisesRegex(ValueError, 'explicit DO approval'):
+            self.ledger.authorize_setup_recovery(review)
+        approval = e5_recovery.approve(review, 'Synthetic exactly one second attempt', self.root / 'do-second.json')
+        self.ledger.authorize_setup_recovery(approval)
+        self.assertEqual(self.ledger.jobs['E5-setup-recovery-002']['seconds'], 3600.)
+        self.assertEqual(self.ledger.states()['E5-setup-recovery-001'], failure)
+        command, evidence = self.dispatch_contract()
+        before_reserve = self.ledger.path.read_bytes()
+        with patch('vipe_benchmark.setup_recipes.shutil.which', return_value='/fixture/uv'):
+            with self.assertRaisesRegex(ValueError, 'canonical E5'):
+                self.ledger.reserve('E5-setup-recovery-002', [], evidence)
+            self.assertEqual(self.ledger.path.read_bytes(), before_reserve)
+            self.ledger.reserve('E5-setup-recovery-002', command, evidence)
+        self.ledger.finish('E5-setup-recovery-002', 'failed', 3., cleanup_confirmed=True)
+        self.assertAlmostEqual(self.ledger.totals()['setup']['elapsed_seconds'], 187.271)
+        with self.assertRaisesRegex(ValueError, 'already allocated'):
+            e5_recovery.propose(self.root, self.config, self.validation, self.asset_record,
+                self.root / 'third-review', job_id='E5-setup-recovery-002')
+        with self.assertRaisesRegex(ValueError, 'already allocated'):
+            self.ledger.authorize_setup_recovery(approval)
+
+    def test_second_review_refuses_skipped_active_or_unclean_predecessor(self):
+        before = self.ledger.path.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'failed recovery001'):
+            e5_recovery.propose(self.root, self.config, self.validation, self.asset_record,
+                self.root / 'skipped', job_id='E5-setup-recovery-002')
+        self.assertEqual(self.ledger.path.read_bytes(), before)
+        with self.assertRaisesRegex(ValueError, 'exact E5 recovery'):
+            e5_recovery.propose(self.root, self.config, self.validation, self.asset_record,
+                self.root / 'unknown', job_id='E5-setup-recovery-003')
+        approval = e5_recovery.approve(self.proposal(), 'Synthetic first attempt', self.root / 'do-first.json')
+        self.ledger.authorize_setup_recovery(approval)
+        self.reserve()
+        before = self.ledger.path.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'failed recovery001'):
+            e5_recovery.propose(self.root, self.config, self.validation, self.asset_record,
+                self.root / 'active', job_id='E5-setup-recovery-002')
+        self.assertEqual(self.ledger.path.read_bytes(), before)
+        self.ledger.finish('E5-setup-recovery-001', 'failed', 1., cleanup_confirmed=False,
+            cleanup_uncertain=True, surviving_pids=[123])
+        with self.assertRaisesRegex(ValueError, 'failed recovery001'):
+            e5_recovery.propose(self.root, self.config, self.validation, self.asset_record,
+                self.root / 'unclean', job_id='E5-setup-recovery-002')
+
+    def test_second_review_refuses_successful_predecessor(self):
+        approval = e5_recovery.approve(self.proposal(), 'Synthetic first attempt', self.root / 'first.json')
+        self.ledger.authorize_setup_recovery(approval)
+        self.reserve()
+        self.ledger.finish('E5-setup-recovery-001', 'complete', 1., cleanup_confirmed=True)
+        before = self.ledger.path.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'failed recovery001'):
+            e5_recovery.propose(self.root, self.config, self.validation, self.asset_record,
+                self.root / 'success-refusal', job_id='E5-setup-recovery-002')
+        self.assertEqual(self.ledger.path.read_bytes(), before)
 
     def test_review_binds_failure_recipe_sources_and_charges_without_allocation(self):
         before = self.ledger.path.read_bytes()
