@@ -137,41 +137,65 @@ class ActualModeReviewIntegrationTests(unittest.TestCase):
     """
     def setUp(self):
         from PIL import Image
-        from vipe_benchmark.qualitative_package import publish
-        self.tmp=tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.root=Path(self.tmp.name)
-        evidence=self.root/'test-only-provenance.json'
-        write_json(evidence,{'test_fixture':True})
-        evidence_record=file_record(evidence)
-        self.image=self.root/'test-only-frame.png'
-        Image.new('RGB',(16,12),color=(255,0,0)).save(self.image)
-        self.manifest={'schema':'plan067-qualitative-package/v1','id':'temporary-test-only',
-            'mode':'qualitative','record_kind':'actual',
-            'bindings':{key:evidence_record for key in ('source','config','inputs','amendment')},
-            'settings':{'fps':25,'resolution':[16,12],'color_handling':'sRGB','crop':[0,0,16,12],'detail_regions':[]},
-            'selections':[{'id':'f150','kind':'frame','role':'selection','camera_id':'0','frame_ids':[150],'timestamps':[6.0]}],
-            'candidates':[{'id':key,'label':key,'is_control':key=='control','stage':'test-only',
-                'output_type':'reference' if key=='control' else 'component','status':'available','reason':'',
-                'provenance':{name:evidence_record for name in ('source_result','ledger_outcome','configuration')},
-                'media':[{'selection_id':'f150','kind':'frame','record':file_record(self.image),
-                    'frame_ids':[150],'timestamps':[6.0],'resolution':[16,12]}]} for key in ('control','candidate')]}
-        published=publish(self.manifest,self.root/'package')
+        from unittest.mock import patch
+        from test_vipe_benchmark_qualitative_generation import GenerationTests
+        from vipe_benchmark.config import ROOT
+        from vipe_benchmark.files import read_json
+        from vipe_benchmark.qualitative_generation import generate, publish_generation
+        # Reuse the generation seam fixture, then construct its real charged
+        # graph. Everything remains temporary, including simulated authority.
+        fixture=GenerationTests()
+        fixture.setUp()
+        self.addCleanup(fixture.tearDown)
+        self.root=fixture.root
+        self.ledger=fixture.ledger
+        request=fixture.request
+        request.update(record_kind='actual',max_new_artifact_bytes=2**20,
+            reconstruction_frames=[0,1],detail_regions=[{'id':'center','crop':[4,3,8,6]}])
+        config=self.root/'config.json';write_json(config,self.ledger.config)
+        inputs_value=read_json(request['bindings']['inputs']['path'])
+        inputs_value['rgb'].append(dict(fixture.input,identity=dict(fixture.identity,frame=1,pair_start=0)))
+        inputs=self.root/'prepare/inputs.json';write_json(inputs,inputs_value)
+        approval=self.root/'test-only-approval.json'
+        write_json(approval,{'schema':'plan067-implementation-approval/v1','record_kind':'user-authorization',
+            'instruction':'Simulated fixture authorization, never a real approval',
+            'scope':{'qualitative_preparation':'Implement and generate immutable matched diagnostic packages from valid existing results within remaining CPU and artifact ceilings.'}})
+        request['bindings'].update(config=file_record(config),inputs=file_record(inputs),approval=file_record(approval),
+            amendment=file_record(ROOT/'docs/specs/plan031-execution/qualitative-comparison-amendment.md'))
+        mask=self.root/'test-only-mask.png';Image.new('L',(16,12),0).save(mask)
+        worker=self.root/'test-only-worker.json'
+        write_json(worker,{'component':'S2','configuration':file_record(config),'inputs':file_record(inputs)})
+        row=dict(fixture.input,source_rgb_sha256=fixture.input['rgb']['sha256'],semantic_static=file_record(mask))
+        source=self.root/'test-only-source-result.json'
+        write_json(source,{'status':'complete','component':'S2','configuration':file_record(worker),'rows':[row]})
+        self.events=[{'event':'finish','status':'complete','result':file_record(source)}]
+        self.ledger.events=lambda:self.events[:]
+        self.ledger.charge_cpu_preparation=lambda seconds,evidence:self.events.append({'event':'cpu_preparation_charge','evidence':evidence})
+        ledger_patch=patch('vipe_benchmark.qualitative_generation.Ledger',return_value=self.ledger)
+        ledger_patch.start();self.addCleanup(ledger_patch.stop)
+        with patch('vipe_benchmark.qualitative_generation.resources',return_value={'artifact_bytes':0}), patch(
+                'vipe_benchmark.qualitative_generation.result_record',side_effect=lambda local,job:file_record(source) if job=='S2-reconstruction' else None):
+            self.generated=generate(request,self.root/'generated',ledger=self.ledger)
+            published=publish_generation(self.generated['manifests']['segmentation'],self.root/'package',ledger=self.ledger)
         self.package_record=published['package']
+        self.manifest=read_json(self.package_record['path'])
+        self.candidate=next(candidate for candidate in self.manifest['candidates'] if candidate['id']=='S2')
+        self.image=Path(self.candidate['media'][0]['record']['path'])
+        selection_id=self.candidate['media'][0]['selection_id']
         self.form=review.blank_review(self.package_record)
         self.form.update(reviewer={'name':'Test-only simulated reviewer','reviewed_at':'2026-09-29'},tradeoffs='Simulated tradeoff; not an actual opinion')
-        for key,criterion in self.form['criteria'].items():
+        for criterion in self.form['criteria'].values():
             criterion.update(observation='Simulated test observation; not human feedback',
-                preference={'outcome':'preferred','candidate_ids':['candidate']},
-                examples=[{'candidate_id':'candidate','selection_id':'f150','frame_id':150}])
-        self.form['criteria']['motion'].update(preference={'outcome':'unjudgeable','candidate_ids':[]},examples=[],observation='No clips in this temporary test package')
+                preference={'outcome':'preferred','candidate_ids':['S2']},
+                examples=[{'candidate_id':'S2','selection_id':selection_id,'frame_id':0}])
+        self.form['criteria']['motion'].update(preference={'outcome':'unjudgeable','candidate_ids':[]},examples=[],observation='S2 has no complete matched continuous clip in this temporary test package')
 
     def test_actual_mode_full_package_import_choice_and_report(self):
         write_json(self.root/'test-only-submission.json',self.form)
         accepted=review.import_review(self.package_record,file_record(self.root/'test-only-submission.json'),self.root/'accepted.json')
         eligibility={key:{'eligible':True,'reason':'Test-only eligibility'} for key in self.form['candidate_ids']}
         decision=review.freeze_decision(accepted,eligibility,self.root/'decision.json')
-        self.assertEqual(decision['selected_candidate_ids'],['candidate'])
+        self.assertEqual(decision['selected_candidate_ids'],['S2'])
         report=review.build_report(accepted,file_record(self.root/'decision.json'),self.root/'report.json')
         self.assertEqual(report['human_review'],self.form)
         self.assertTrue(report['actual_human_review'])
@@ -181,23 +205,22 @@ class ActualModeReviewIntegrationTests(unittest.TestCase):
         with self.assertRaises(ValueError): review.build_report(accepted,file_record(self.root/'decision.json'),self.root/'changed-report.json')
 
     def test_available_candidate_without_selected_media_refused(self):
-        from vipe_benchmark.qualitative_package import publish
-        self.manifest['selections'].append({'id':'f151','kind':'frame','role':'selection','camera_id':'0','frame_ids':[151],'timestamps':[6.04]})
-        self.manifest['candidates'][1]['media'][0].update(selection_id='f151',frame_ids=[151],timestamps=[6.04])
-        # Keep a true comparable pair at f150, and an additional available arm
-        # whose media only covers f151. Availability alone is insufficient.
-        third=copy.deepcopy(self.manifest['candidates'][0]); third.update(id='other',label='other',is_control=False)
-        self.manifest['candidates'].append(third)
-        published=publish(self.manifest,self.root/'package2')
-        self.form['package']=published['package']
-        self.form['candidate_ids'].append('other')
+        # S2 has a bound output at frame 0, but no native row for frame 1.
+        missing_selection=next(selection for selection in self.manifest['selections'] if selection['frame_ids']==[1])
+        self.form['criteria']['overall']['examples']=[{'candidate_id':'S2','selection_id':missing_selection['id'],'frame_id':1}]
         with self.assertRaisesRegex(ValueError,'unknown candidate selection'): review.validate_review(self.form)
 
     def test_readiness_inventory_cannot_count_as_actual_comparison(self):
-        from vipe_benchmark.qualitative_package import publish
-        self.manifest['candidates'][1].update(status='missing',reason='No output',media=[])
-        published=publish(self.manifest,self.root/'inventory')
+        from unittest.mock import patch
+        from vipe_benchmark.qualitative_generation import publish_generation
+        with patch('vipe_benchmark.qualitative_generation.resources',return_value={'artifact_bytes':0}):
+            published=publish_generation(self.generated['manifests']['depth'],self.root/'inventory',ledger=self.ledger)
+        self.assertEqual(published['readiness'],'readiness-inventory')
         self.form['package']=published['package']
         with self.assertRaisesRegex(ValueError,'readiness inventory'): review.validate_review(self.form)
+
+    def test_missing_generation_charge_invalidates_actual_review(self):
+        self.events[:]=[event for event in self.events if event['event']!='cpu_preparation_charge']
+        with self.assertRaisesRegex(ValueError,'charge'): review.validate_review(self.form)
 
 if __name__ == '__main__': unittest.main()
