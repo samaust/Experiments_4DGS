@@ -3417,7 +3417,62 @@ class S1ReviewProposalTests(unittest.TestCase):
         self.snapshot = outcome['ledger']
         self.validation = self.predecessor['repair_validation']
         self.review = self.predecessor['implementation_review']
-        self.before = (self.local / 'ledger.jsonl').read_bytes()
+        # Keep the historical path spellings required by preservation, but
+        # serve immutable pre-dispatch bytes instead of the mutable live ledger.
+        import io
+        import os
+        from vipe_benchmark import s1_progress, ledger as ledger_module
+        self.ledger_path = self.local / 'ledger.jsonl'
+        self.live_before = self.ledger_path.read_bytes()
+        self.before = (ROOT / 'docs/research/vipe-alternatives/plan031-execution/e5-recovery-001/outcome/ledger-after.jsonl').read_bytes()
+        self.fixture_raw = self.before
+        self.agents_path = self.main / 'AGENTS.md'
+        self.historical_agents = (ROOT / 'docs/research/vipe-alternatives/plan031-execution/s1-proposal-fixture-001/historical-agents.md').read_bytes()
+        amendment = read_json(self.main / 'docs/research/vipe-alternatives/issue3-preparation/s1-process-file-amendment-001.json')
+        import hashlib
+        self.assertEqual(hashlib.sha256(self.historical_agents).hexdigest(), amendment['new']['sha256'])
+        self.assertEqual(len(self.historical_agents), amendment['new']['bytes'])
+        original_open, original_stat = Path.open, Path.stat
+        original_bytes, original_events = s1_progress.read_bytes, ledger_module.Ledger.events
+        def fixture_open(path, mode='r', *args, **kwargs):
+            if path == self.ledger_path and mode == 'rb':
+                return io.BytesIO(self.fixture_raw)
+            if path == self.agents_path and mode == 'rb':
+                return io.BytesIO(self.historical_agents)
+            return original_open(path, mode, *args, **kwargs)
+        def fixture_stat(path, *args, **kwargs):
+            value = original_stat(path, *args, **kwargs)
+            if path == self.agents_path:
+                fields = list(value); fields[6] = len(self.historical_agents)
+                return os.stat_result(fields)
+            return value
+        def fixture_bytes(path, limit, *args, **kwargs):
+            if Path(path) == self.agents_path:
+                self.assertEqual(limit, len(self.historical_agents))
+                return self.historical_agents
+            return original_bytes(path, limit, *args, **kwargs)
+        def fixture_events(ledger):
+            if ledger.path == self.ledger_path:
+                return [__import__('json').loads(line) for line in self.fixture_raw.splitlines()]
+            return original_events(ledger)
+        # Assert real on-disk bytes after all patches have been removed.
+        def unchanged_live():
+            with original_open(self.ledger_path, 'rb') as stream:
+                self.assertEqual(stream.read(), self.live_before)
+        self.addCleanup(unchanged_live)
+        for mocked in (patch.object(Path, 'open', fixture_open),
+                patch.object(Path, 'stat', fixture_stat),
+                patch.object(s1_progress, 'read_bytes', fixture_bytes),
+                patch.object(ledger_module.Ledger, 'events', fixture_events)):
+            mocked.start(); self.addCleanup(mocked.stop)
+
+    def test_proposal_rejects_actual_consumed_fifth_state(self):
+        self.fixture_raw = (ROOT / 'docs/research/vipe-alternatives/plan031-execution/s1-recovery-005/outcome/ledger-after.jsonl').read_bytes()
+        events = [__import__('json').loads(line) for line in self.fixture_raw.splitlines()]
+        self.assertTrue(any(event.get('job_id') == 'S1-calibration-recovery-005'
+                            and event['event'] == 'finish' for event in events))
+        with self.assertRaisesRegex(ValueError, 'consumed or previously registered'):
+            self.proposal()
 
     def proposal(self, **changes):
         from vipe_benchmark.s1_review_proposal import build_review_proposal
