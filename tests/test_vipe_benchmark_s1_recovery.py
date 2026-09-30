@@ -3403,4 +3403,146 @@ SUBTEST_CASES = {
 }
 
 
+
+class S1ReviewProposalTests(unittest.TestCase):
+    """CPU-only proposals use existing immutable evidence, never the live writer."""
+    def setUp(self):
+        outcome = read_json(ROOT / 'docs/research/vipe-alternatives/issue3-preparation/s1-dispatch-004-outcome/outcome.json')
+        self.main = Path(outcome['authorization']['path']).parents[4]
+        self.local = self.main / '.local/vipe-alternatives/plan031-20260913T032700Z'
+        self.predecessor = read_json(outcome['authorization']['path'])
+        self.snapshot = outcome['ledger']
+        self.validation = self.predecessor['repair_validation']
+        self.review = self.predecessor['implementation_review']
+        self.before = (self.local / 'ledger.jsonl').read_bytes()
+
+    def proposal(self, **changes):
+        from vipe_benchmark.s1_review_proposal import build_review_proposal
+        args = dict(local=self.local, config=load(), validation=self.validation,
+                    implementation_review=self.review, request_date='2026-09-29')
+        args.update(changes)
+        with patch.object(s1, 'ROOT', self.main), patch.object(s1, 'PROCESS_FILE_AMENDMENT', self.main / 'docs/research/vipe-alternatives/issue3-preparation/s1-process-file-amendment-001.json'), patch.object(
+                s1, 'validation_record', return_value=read_json(self.validation['path'])):
+            return build_review_proposal(**args)
+
+    def test_proposal_rejects_consumed_and_skipped_identities(self):
+        with self.assertRaisesRegex(ValueError, 'next unconsumed'):
+            self.proposal(job_id='S1-calibration-recovery-004')
+        with self.assertRaisesRegex(ValueError, 'next unconsumed'):
+            self.proposal(job_id='S1-calibration-recovery-006')
+        with self.assertRaisesRegex(ValueError, 'next unconsumed'):
+            self.proposal(job_id='S1-reconstruction-recovery-005')
+
+    def test_proposal_rejects_already_registered_fifth_identity(self):
+        import json
+        events = [json.loads(line) for line in self.before.splitlines()]
+        event = dict(event='account', job_id='S1-calibration-recovery-005', sequence=len(events),
+                     previous_sha256=events[-1]['event_sha256'], status='blocked')
+        event['event_sha256'] = object_hash(event)
+        with tempfile.TemporaryDirectory() as directory:
+            local = Path(directory)
+            (local / 'ledger.jsonl').write_bytes(self.before + (canonical(event) + '\n').encode())
+            before = (local / 'ledger.jsonl').read_bytes()
+            with self.assertRaisesRegex(ValueError, 'consumed or previously registered'):
+                self.proposal(local=local)
+            self.assertEqual((local / 'ledger.jsonl').read_bytes(), before)
+
+    def test_proposal_rejects_stale_source_qualification(self):
+        from vipe_benchmark.s1_review_proposal import build_review_proposal
+        with patch.object(s1, 'ROOT', self.main), patch.object(s1, 'PROCESS_FILE_AMENDMENT', self.main / 'docs/research/vipe-alternatives/issue3-preparation/s1-process-file-amendment-001.json'), patch.object(s1, 'validation_record', side_effect=ValueError('exact current ordered sources required')):
+            with self.assertRaisesRegex(ValueError, 'current ordered sources'):
+                build_review_proposal(self.local, load(), self.validation, self.review, '2026-09-29')
+        self.assertEqual((self.local / 'ledger.jsonl').read_bytes(), self.before)
+
+    def test_fifth_admission_requires_exact_review_and_explicit_do_approval(self):
+        proposal = self.proposal()
+        from vipe_benchmark.ledger import Ledger
+        with tempfile.TemporaryDirectory() as directory:
+            review_path = Path(directory) / 'review.json'
+            write_json(review_path, proposal)
+            approved = dict(proposal, additional_attempt_approved=True,
+                authorization="I'm giving approval for Fresh S1/E5 attempts",
+                authorization_context=dict(proposal['authorization_context'], stage='DO'),
+                review_proposal=file_record(review_path))
+            approved_path = Path(directory) / 'approved.json'
+            write_json(approved_path, approved)
+            events = Ledger(self.local / 'ledger.jsonl', load()).events()
+            with patch.object(s1, 'ROOT', self.main), patch.object(s1, 'PROCESS_FILE_AMENDMENT', self.main / 'docs/research/vipe-alternatives/issue3-preparation/s1-process-file-amendment-001.json'), patch.object(s1, 'validation_record', return_value=read_json(self.validation['path'])):
+                bound, request = s1.validate_binding(self.local, load(), file_record(approved_path), events=events)
+                self.assertEqual(bound['job_id'], 'S1-calibration-recovery-005')
+                self.assertEqual(request['job_id'], 'S1-calibration')
+                with self.assertRaisesRegex(ValueError, 'explicit S1 calibration'):
+                    s1.validate_binding(self.local, load(), file_record(review_path), events=events)
+                altered = dict(approved, required_rows=509)
+                altered_path = Path(directory) / 'altered.json'
+                write_json(altered_path, altered)
+                with self.assertRaisesRegex(ValueError, 'REVIEW'):
+                    s1.validate_binding(self.local, load(), file_record(altered_path), events=events)
+        self.assertEqual((self.local / 'ledger.jsonl').read_bytes(), self.before)
+
+    def test_fifth_registration_requires_do_and_never_allocates_review(self):
+        from contextlib import contextmanager
+        from vipe_benchmark import ledger as ledger_module
+        proposal = self.proposal()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            review_path = root / 'review.json'
+            write_json(review_path, proposal)
+            approved = dict(proposal, additional_attempt_approved=True,
+                authorization="I'm giving approval for Fresh S1/E5 attempts",
+                authorization_context=dict(proposal['authorization_context'], stage='DO'),
+                review_proposal=file_record(review_path))
+            approved_path = root / 'approved.json'
+            write_json(approved_path, approved)
+            authorization = file_record(approved_path)
+            evidence = {key: approved[key] for key in ('semantic_amendment', 'configuration',
+                'original_failure', 'e1_qualification', 'e1_assets', 'e1_runtime', 'inputs',
+                'annotations', 'annotation_policy', 'annotation_review', 'baseline_correction')}
+            evidence.update(s1_recovery_authorization=authorization,
+                            implementation_validation=approved['repair_validation'])
+            admission_path = root / 'admission.json'
+            write_json(admission_path, dict(status='admitted', evidence=evidence))
+            events = [__import__('json').loads(line) for line in self.before.splitlines()]
+            admission = dict(event='admission', evidence=file_record(admission_path),
+                sequence=len(events), previous_sha256=events[-1]['event_sha256'])
+            admission['event_sha256'] = object_hash(admission)
+            events.append(admission)
+            ledger = ledger_module.Ledger(self.local / 'ledger.jsonl', load())
+            @contextmanager
+            def locked():
+                yield None, events
+            original_read = ledger_module.read_json
+            def fixture_read(path):
+                if str(path) == self.validation['path']:
+                    return dict(status='passed', sources=[file_record(self.main / 'scripts/basketball_vipe_worker.py')])
+                return original_read(path)
+            # Disposable append sink exercises the public registration method
+            # while the real immutable predecessor remains read-only.
+            with patch.object(ledger, 'locked', locked), patch.object(ledger, '_append', side_effect=lambda stream, rows, event: event) as append, patch.object(ledger_module, 'read_json', side_effect=fixture_read), patch.object(s1, 'ROOT', self.main), patch.object(s1, 'PROCESS_FILE_AMENDMENT', self.main / 'docs/research/vipe-alternatives/issue3-preparation/s1-process-file-amendment-001.json'), patch.object(s1, 'validation_record', return_value=read_json(self.validation['path'])):
+                with self.assertRaises(ValueError):
+                    ledger.authorize_component_recovery(file_record(review_path))
+                append.assert_not_called()
+                registered = ledger.authorize_component_recovery(authorization)
+                self.assertEqual(registered['job_id'], 'S1-calibration-recovery-005')
+                self.assertEqual(registered['admission'], file_record(admission_path))
+                self.assertEqual(append.call_count, 1)
+        self.assertEqual((self.local / 'ledger.jsonl').read_bytes(), self.before)
+
+    def test_proposal_preserves_frozen_request_and_failure_without_allocating(self):
+        proposal = self.proposal()
+        self.assertEqual(proposal['job_id'], 'S1-calibration-recovery-005')
+        self.assertEqual(proposal['authorization_context']['stage'], 'REVIEW')
+        self.assertFalse(proposal['additional_attempt_approved'])
+        self.assertFalse(proposal['reconstruction_authorized'])
+        self.assertEqual(proposal['seconds_limit'], 3600)
+        self.assertEqual(proposal['resource_limits'], s1.LIMITS)
+        self.assertEqual(proposal['required_rows'], 510)
+        self.assertEqual(proposal['row_metadata_bytes_limit'], 262144)
+        self.assertEqual(proposal['resource_sample_seconds'], 2.)
+        self.assertEqual(proposal['historical_request'], self.predecessor['historical_request'])
+        self.assertEqual(proposal['previous_recovery_failure']['failure_kind'], 'job_deadline')
+        self.assertEqual(proposal['previous_recovery_primary_failure']['phase'], 'prelaunch')
+        self.assertEqual(proposal['previous_recovery_secondary_failures'][0]['phase'], 'evidence_publication')
+        self.assertEqual((self.local / 'ledger.jsonl').read_bytes(), self.before)
+
 if __name__=='__main__': unittest.main()

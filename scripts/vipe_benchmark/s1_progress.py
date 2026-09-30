@@ -19,7 +19,7 @@ import threading
 import time
 
 SCHEMA = 's1-verified-progress/v2'
-S1_RECOVERY_JOBS = frozenset({'S1-calibration-recovery-001', 'S1-calibration-recovery-002', 'S1-calibration-recovery-003', 'S1-calibration-recovery-004'})
+S1_RECOVERY_JOBS = frozenset({'S1-calibration-recovery-001', 'S1-calibration-recovery-002', 'S1-calibration-recovery-003', 'S1-calibration-recovery-004', 'S1-calibration-recovery-005'})
 CHECKPOINT_BYTES = 1024 * 1024
 REQUEST_BYTES = 512 * 1024
 SMALL_BYTES = 8192

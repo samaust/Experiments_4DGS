@@ -631,7 +631,14 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
                     terminal_receipt=None,terminal_publication_status='unavailable')
             final_step('progress_reference',progress_fields)
             def publish():
-                if lifecycle.poisoned or lifecycle.progress.integrity or time.monotonic()>=deadline-min(.1,cleanup_reserve/10):
+                # A failed sample poisons and retires the sole retained
+                # session. Preserve the original failure; do not recreate a
+                # helper or claim a receipt after its safety proof was lost.
+                reason = ('poisoned_helper' if lifecycle.poisoned else
+                          'progress_integrity' if lifecycle.progress.integrity else
+                          'publication_deadline' if time.monotonic() >= deadline-min(.1,cleanup_reserve/10) else None)
+                evidence['terminal_publication_block_reason'] = reason
+                if reason:
                     raise RuntimeError('retained helper unavailable for terminal publication')
                 if terminal_publisher is None:raise ValueError('S1 charged terminal publisher required')
                 evidence['terminal_receipt']=monitored_call(dict(operation='publish',args=dict(local=str(ledger.path.parent),

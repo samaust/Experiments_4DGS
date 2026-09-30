@@ -1165,6 +1165,55 @@ class HelperSessionTests(unittest.TestCase):
         self.sampler = dict(operation='constant', args=dict(value=self.reading))
         self.operation = dict(operation='constant', args=dict(value=37))
 
+    def test_prelaunch_timeout_preserves_primary_and_explains_unavailable_publication(self):
+        from vipe_benchmark import supervisor as sup
+        from test_vipe_benchmark_s1_helper_fixtures import progress_fixture, progress_reservation
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = progress_fixture(root / 'fixture')
+            reservation = progress_reservation(fixture, 4.)
+            reservation['monotonic_start'] = 100.
+            life = sup.HelperLifecycle(retain=True)
+            class FakeSession:
+                def admission_guard(self): pass
+                def retire_worker(self): pass
+                def close(self, deadline): return True
+                def ownership(self): return []
+            life.helpers.append(FakeSession())
+            outcome = {}
+            class DisposableLedger:
+                path = root / 'ledger.jsonl'
+                config = load()
+                jobs = {'S1-calibration-recovery-001': dict(resource='gpu')}
+                def reserve(self, *args, **kwargs): return reservation
+                def note(self, *args, **kwargs): pass
+                def finish(self, job, status, elapsed, **evidence):
+                    outcome.update(status=status, elapsed=elapsed, **evidence)
+            phases = []
+            def monitor(*args, **kwargs):
+                phase = kwargs['phase']
+                phases.append(phase)
+                if phase == 'initial_sample': return self.reading
+                if phase == 'prelaunch':
+                    error = TimeoutError('S1 resource sample timeout')
+                    sup.record_progress_failure(life, error, phase)
+                    raise error
+                raise AssertionError('poisoned helper was reused: ' + phase)
+            with patch.object(sup, 'HelperLifecycle', return_value=life), patch.object(sup, 'monitored_call', side_effect=monitor), patch.object(sup.time, 'monotonic', return_value=101.), patch.object(sup.subprocess, 'Popen', side_effect=AssertionError('worker must not launch')):
+                with self.assertRaises(sup.SupervisionFailure) as caught:
+                    sup.supervise(DisposableLedger(), 'S1-calibration-recovery-001', ['unused'],
+                        root / 'output', evidence={}, sample_resources=self.sampler,
+                        terminal_publisher=True, terminal_docs=root)
+            self.assertEqual(phases, ['initial_sample', 'prelaunch'])
+            self.assertEqual(outcome['primary_failure']['error_class'], 'TimeoutError')
+            self.assertEqual(outcome['primary_failure']['phase'], 'prelaunch')
+            self.assertEqual(outcome['failure_kind'], 'job_deadline')
+            self.assertEqual(outcome['secondary_failures'][0]['phase'], 'evidence_publication')
+            self.assertEqual(outcome['terminal_publication_block_reason'], 'poisoned_helper')
+            self.assertIsNone(outcome['terminal_receipt'])
+            self.assertTrue(outcome['cleanup_confirmed'])
+            self.assertEqual(caught.exception.primary_failure, outcome['primary_failure'])
+
     def test_prelaunch_accepts_sample_between_one_and_two_seconds(self):
         from test_vipe_benchmark_s1_helper_fixtures import session as fixture_session
         from vipe_benchmark.supervisor import HelperLifecycle, monitored_call
