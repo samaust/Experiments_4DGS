@@ -12,8 +12,12 @@ SECOND_JOB = 'E5-setup-recovery-002'
 SECOND_SCHEMA = 'vipe-benchmark-e5-packaging-recovery/v2'
 THIRD_JOB = 'E5-setup-recovery-003'
 THIRD_SCHEMA = 'vipe-benchmark-e5-packaging-recovery/v3'
-JOBS = (JOB, SECOND_JOB, THIRD_JOB)
-SCHEMAS = dict(zip(JOBS, (SCHEMA, SECOND_SCHEMA, THIRD_SCHEMA)))
+FOURTH_JOB = 'E5-setup-recovery-004'
+FOURTH_SCHEMA = 'vipe-benchmark-e5-packaging-recovery/v4'
+JOBS = (JOB, SECOND_JOB, THIRD_JOB, FOURTH_JOB)
+SCHEMAS = dict(zip(JOBS, (SCHEMA, SECOND_SCHEMA, THIRD_SCHEMA, FOURTH_SCHEMA)))
+PREDECESSORS = {SECOND_JOB: JOB, THIRD_JOB: SECOND_JOB, FOURTH_JOB: THIRD_JOB}
+PRESERVED_HISTORY = {THIRD_JOB: (JOB, SECOND_JOB), FOURTH_JOB: (JOB, SECOND_JOB, THIRD_JOB)}
 ATTEMPT_SECONDS = 3600.
 TARGET = dict(python='3.11', torch='2.5.1+cu124', torchvision='0.20.1+cu124', numpy='1.26.4')
 
@@ -46,7 +50,7 @@ def _qualification(record):
 
 def _scope(config, job_id=JOB):
     if job_id not in JOBS:
-        raise ValueError('only exact E5 recovery identities 001, 002 and 003 are supported')
+        raise ValueError('only exact E5 recovery identities 001, 002, 003 and 004 are supported')
     from .setup_recipes import recipe
     selected = recipe('E5')
     if TARGETS['E5'] != TARGET or [r for r in selected['requirements'] if r.startswith('editables')] != ['editables~=0.3']:
@@ -63,9 +67,9 @@ def _scope(config, job_id=JOB):
 def _predecessor(ledger, events, job_id):
     if job_id == JOB:
         return None
-    predecessor_job = JOB if job_id == SECOND_JOB else SECOND_JOB
-    if job_id == THIRD_JOB:
-        _predecessor(ledger, events, SECOND_JOB)
+    predecessor_job = PREDECESSORS[job_id]
+    if predecessor_job != JOB:
+        _predecessor(ledger, events, predecessor_job)
     registrations = [e for e in events if e['event'] == 'setup_recovery_authorized'
                      and e['job_id'] == predecessor_job and e['environment'] == 'E5']
     previous = ledger.states(events).get(predecessor_job, {})
@@ -109,9 +113,9 @@ def propose(local, config, validation, asset_provenance, output, *, job_id=JOB):
             attempt_wall_seconds_limit=min(ATTEMPT_SECONDS, remaining))
         if previous is not None:
             document.update(previous_job_id=previous['job_id'], previous_failure_event_sha256=previous['event_sha256'])
-        if job_id == THIRD_JOB:
+        if job_id in PRESERVED_HISTORY:
             document['preserved_recovery_failures'] = [dict(job_id=j, event_sha256=ledger.states(events)[j]['event_sha256'])
-                for j in (JOB, SECOND_JOB)]
+                for j in PRESERVED_HISTORY[job_id]]
         write_json(output / 'review.json', document)
         return file_record(output / 'review.json')
 
@@ -156,12 +160,12 @@ def validate(local, config, authorization, events):
     if previous is not None and (review.get('previous_job_id') != previous['job_id'] or
             review.get('previous_failure_event_sha256') != previous['event_sha256']):
         raise ValueError('E5 recovery must bind the preserved predecessor failure')
-    if review['job_id'] == THIRD_JOB and any(ledger.states(events).get(j) != ledger.states(baseline).get(j)
-                                           for j in (JOB, SECOND_JOB)):
-        raise ValueError('E5 recovery003 prior failure history changed after REVIEW')
-    if review['job_id'] == THIRD_JOB and review.get('preserved_recovery_failures') != [
-            dict(job_id=j, event_sha256=ledger.states(baseline)[j]['event_sha256']) for j in (JOB, SECOND_JOB)]:
-        raise ValueError('E5 recovery003 must preserve both prior recovery failures')
+    if review['job_id'] in PRESERVED_HISTORY and any(ledger.states(events).get(j) != ledger.states(baseline).get(j)
+                                           for j in PRESERVED_HISTORY[review['job_id']]):
+        raise ValueError('E5 recovery prior failure history changed after REVIEW')
+    if review['job_id'] in PRESERVED_HISTORY and review.get('preserved_recovery_failures') != [
+            dict(job_id=j, event_sha256=ledger.states(baseline)[j]['event_sha256']) for j in PRESERVED_HISTORY[review['job_id']]]:
+        raise ValueError('E5 recovery must preserve all reviewed prior recovery failures')
     remaining = config['setup_wall_seconds_limit'] - ledger.totals(baseline)['setup']['elapsed_seconds']
     if type(review.get('attempt_wall_seconds_limit')) not in (float, int) or review['attempt_wall_seconds_limit'] != min(ATTEMPT_SECONDS, remaining) or remaining <= 0:
         raise ValueError('E5 recovery requires the reviewed bounded setup allocation')

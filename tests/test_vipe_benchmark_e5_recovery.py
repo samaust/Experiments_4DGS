@@ -123,7 +123,7 @@ class E5RecoveryTests(unittest.TestCase):
         self.assertEqual(self.ledger.path.read_bytes(), before)
         with self.assertRaisesRegex(ValueError, 'exact E5 recovery'):
             e5_recovery.propose(self.root, self.config, self.validation, self.asset_record,
-                self.root / 'unknown', job_id='E5-setup-recovery-004')
+                self.root / 'unknown', job_id='E5-setup-recovery-005')
         approval = e5_recovery.approve(self.proposal(), 'Synthetic first attempt', self.root / 'do-first.json')
         self.ledger.authorize_setup_recovery(approval)
         self.reserve()
@@ -231,6 +231,86 @@ class E5RecoveryTests(unittest.TestCase):
             self.ledger.authorize_setup_recovery(approval)
         self.assertEqual(self.ledger.path.read_bytes(), before)
         validation_path.write_bytes(original)
+
+    def fourth_proposal(self, *, third_cleanup=True):
+        third_review = self.third_proposal()
+        approval = e5_recovery.approve(third_review, 'Synthetic predecessor approval', self.root / 'third-do.json')
+        self.ledger.authorize_setup_recovery(approval)
+        command, evidence = self.dispatch_contract()
+        with patch('vipe_benchmark.setup_recipes.shutil.which', return_value='/fixture/uv'):
+            self.ledger.reserve('E5-setup-recovery-003', command, evidence)
+        self.ledger.finish('E5-setup-recovery-003', 'failed', 75.792, cleanup_confirmed=third_cleanup,
+            cleanup_uncertain=not third_cleanup, surviving_pids=[])
+        before = self.ledger.path.read_bytes()
+        review = e5_recovery.propose(self.root, self.config, self.validation, self.asset_record,
+            self.root / 'fourth-review', job_id='E5-setup-recovery-004')
+        self.assertEqual(self.ledger.path.read_bytes(), before)
+        return review
+
+    def test_fourth_review_binds_three_consumed_failures_and_reserves_exactly_once(self):
+        review = self.fourth_proposal()
+        document = read_json(review['path'])
+        self.assertEqual(document['schema'], 'vipe-benchmark-e5-packaging-recovery/v4')
+        self.assertEqual(document['previous_job_id'], 'E5-setup-recovery-003')
+        self.assertEqual(document['previous_failure_event_sha256'],
+            self.ledger.states()['E5-setup-recovery-003']['event_sha256'])
+        self.assertEqual(len(document['preserved_recovery_failures']), 3)
+        self.assertEqual(document['attempt_wall_seconds_limit'], 3600.)
+        before = self.ledger.path.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'explicit DO approval'):
+            self.ledger.authorize_setup_recovery(review)
+        self.assertEqual(self.ledger.path.read_bytes(), before)
+        approval = e5_recovery.approve(review, 'Synthetic approved one fourth attempt', self.root / 'fourth-do.json')
+        self.ledger.authorize_setup_recovery(approval)
+        command, evidence = self.dispatch_contract()
+        before = self.ledger.path.read_bytes()
+        with patch('vipe_benchmark.setup_recipes.shutil.which', return_value='/fixture/uv'):
+            with self.assertRaisesRegex(ValueError, 'canonical E5'):
+                self.ledger.reserve('E5-setup-recovery-004', [], evidence)
+            self.assertEqual(self.ledger.path.read_bytes(), before)
+            self.ledger.reserve('E5-setup-recovery-004', command, evidence)
+        self.ledger.finish('E5-setup-recovery-004', 'failed', 2., cleanup_confirmed=True)
+        self.assertAlmostEqual(self.ledger.totals()['setup']['elapsed_seconds'], 338.258)
+        with self.assertRaisesRegex(ValueError, 'already allocated'):
+            self.ledger.authorize_setup_recovery(approval)
+
+    def test_fourth_review_refuses_skipped_third_attempt(self):
+        self.third_proposal()
+        before = self.ledger.path.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'failed E5-setup-recovery-003'):
+            e5_recovery.propose(self.root, self.config, self.validation, self.asset_record,
+                self.root / 'skipped-fourth', job_id='E5-setup-recovery-004')
+        self.assertEqual(self.ledger.path.read_bytes(), before)
+        self.assertNotIn('E5-setup-recovery-004', self.ledger.jobs)
+
+    def test_fourth_review_refuses_uncertain_third_cleanup(self):
+        with self.assertRaisesRegex(ValueError, 'failed E5-setup-recovery-003'):
+            self.fourth_proposal(third_cleanup=False)
+        self.assertNotIn('E5-setup-recovery-004', self.ledger.jobs)
+
+    def test_fourth_do_cannot_omit_history_increase_scope_or_change_ledger_prefix(self):
+        review = self.fourth_proposal()
+        document = read_json(review['path'])
+        changed_history = [dict(row) for row in document['preserved_recovery_failures']]
+        changed_history[-1]['event_sha256'] = '0' * 64
+        for index, changes in enumerate((dict(preserved_recovery_failures=document['preserved_recovery_failures'][:-1]),
+                dict(preserved_recovery_failures=changed_history),
+                dict(previous_failure_event_sha256='0' * 64),
+                dict(previous_job_id='E5-setup-recovery-002'), dict(recovery_attempts_limit=2),
+                dict(attempt_wall_seconds_limit=3601.))):
+            with self.subTest(changes=changes):
+                path = self.root / f'changed-fourth-review-{index}.json'
+                write_json(path, dict(document, **changes))
+                do = e5_recovery.approve(file_record(path), 'Synthetic fourth attempt', self.root / f'changed-fourth-do-{index}.json')
+                before = self.ledger.path.read_bytes()
+                with self.assertRaises(ValueError):
+                    self.ledger.authorize_setup_recovery(do)
+                self.assertEqual(self.ledger.path.read_bytes(), before)
+        do = e5_recovery.approve(review, 'Synthetic fourth attempt', self.root / 'fourth-do.json')
+        events = [dict(e) for e in self.ledger.events()]
+        events[0]['event_sha256'] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'ledger prefix'):
+            e5_recovery.validate(self.root, self.config, do, events)
 
     def test_review_binds_failure_recipe_sources_and_charges_without_allocation(self):
         before = self.ledger.path.read_bytes()

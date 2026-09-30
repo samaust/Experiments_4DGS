@@ -126,7 +126,7 @@ class Ledger:
             if job_id in S1_RECOVERY_JOBS:
                 from .s1_recovery import reservation_binding
                 reservation_binding(self.path.parent, self.config, events, evidence, command=command)
-            if job_id in ('E5-setup-recovery-001', 'E5-setup-recovery-002', 'E5-setup-recovery-003'):
+            if job_id in ('E5-setup-recovery-001', 'E5-setup-recovery-002', 'E5-setup-recovery-003', 'E5-setup-recovery-004'):
                 from .e5_recovery import reservation_binding
                 reservation_binding(self.path.parent, self.config, events, command, evidence, job_id=job_id)
             spec = allocated[job_id]
@@ -375,7 +375,8 @@ class Ledger:
         document = read_json(verify_record(authorization)['path'])
         if document.get('schema') in ('vipe-benchmark-e5-packaging-recovery/v1',
                                      'vipe-benchmark-e5-packaging-recovery/v2',
-                                     'vipe-benchmark-e5-packaging-recovery/v3'):
+                                     'vipe-benchmark-e5-packaging-recovery/v3',
+                                     'vipe-benchmark-e5-packaging-recovery/v4'):
             from .e5_recovery import validate
             with self.locked() as (stream, events):
                 document = validate(self.path.parent, self.config, authorization, events)
