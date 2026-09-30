@@ -1,4 +1,4 @@
-"""One source-bound E5 packaging recovery; REVIEW never grants an attempt."""
+"""Explicit source-bound E5 recovery identities; REVIEW never grants an attempt."""
 from pathlib import Path
 
 from .config import ROOT
@@ -10,7 +10,10 @@ SCHEMA = 'vipe-benchmark-e5-packaging-recovery/v1'
 JOB = 'E5-setup-recovery-001'
 SECOND_JOB = 'E5-setup-recovery-002'
 SECOND_SCHEMA = 'vipe-benchmark-e5-packaging-recovery/v2'
-JOBS = (JOB, SECOND_JOB)
+THIRD_JOB = 'E5-setup-recovery-003'
+THIRD_SCHEMA = 'vipe-benchmark-e5-packaging-recovery/v3'
+JOBS = (JOB, SECOND_JOB, THIRD_JOB)
+SCHEMAS = dict(zip(JOBS, (SCHEMA, SECOND_SCHEMA, THIRD_SCHEMA)))
 ATTEMPT_SECONDS = 3600.
 TARGET = dict(python='3.11', torch='2.5.1+cu124', torchvision='0.20.1+cu124', numpy='1.26.4')
 
@@ -43,14 +46,14 @@ def _qualification(record):
 
 def _scope(config, job_id=JOB):
     if job_id not in JOBS:
-        raise ValueError('only exact E5 recovery identities 001 and 002 are supported')
+        raise ValueError('only exact E5 recovery identities 001, 002 and 003 are supported')
     from .setup_recipes import recipe
     selected = recipe('E5')
     if TARGETS['E5'] != TARGET or [r for r in selected['requirements'] if r.startswith('editables')] != ['editables~=0.3']:
         raise ValueError('E5 repair must preserve target pins and exact editables dependency')
     if [r for r in selected['requirements'] if r.startswith('xformers')] != ['xformers==0.0.28.post3']:
         raise ValueError('E5 repair must preserve prescribed xFormers')
-    return dict(schema=SCHEMA if job_id == JOB else SECOND_SCHEMA, job_id=job_id, original_job_id='E5-setup', environment='E5',
+    return dict(schema=SCHEMAS[job_id], job_id=job_id, original_job_id='E5-setup', environment='E5',
         recovery_attempts_limit=1, setup_wall_seconds_limit=config['setup_wall_seconds_limit'],
         reset_previous_consumption=False, changes_to_prescribed_runtime=False,
         unrelated_attempts_reopened=False, configuration_sha256=object_hash(config),
@@ -60,14 +63,17 @@ def _scope(config, job_id=JOB):
 def _predecessor(ledger, events, job_id):
     if job_id == JOB:
         return None
+    predecessor_job = JOB if job_id == SECOND_JOB else SECOND_JOB
+    if job_id == THIRD_JOB:
+        _predecessor(ledger, events, SECOND_JOB)
     registrations = [e for e in events if e['event'] == 'setup_recovery_authorized'
-                     and e['job_id'] == JOB and e['environment'] == 'E5']
-    previous = ledger.states(events).get(JOB, {})
+                     and e['job_id'] == predecessor_job and e['environment'] == 'E5']
+    previous = ledger.states(events).get(predecessor_job, {})
     if (len(registrations) != 1 or previous.get('event') != 'finish'
             or previous.get('status') != 'failed' or previous.get('cleanup_confirmed') is not True
             or previous.get('cleanup_uncertain') or previous.get('surviving_pids')
             or previous.get('stop_required')):
-        raise ValueError('E5 recovery002 requires the cleaned-up failed recovery001')
+        raise ValueError(f'{job_id} requires the cleaned-up failed {predecessor_job}')
     strict_record(registrations[0]['authorization'])
     return previous
 
@@ -102,7 +108,10 @@ def propose(local, config, validation, asset_provenance, output, *, job_id=JOB):
             ledger_before=file_record(output / 'ledger-before.json'), cumulative_totals=totals,
             attempt_wall_seconds_limit=min(ATTEMPT_SECONDS, remaining))
         if previous is not None:
-            document.update(previous_job_id=JOB, previous_failure_event_sha256=previous['event_sha256'])
+            document.update(previous_job_id=previous['job_id'], previous_failure_event_sha256=previous['event_sha256'])
+        if job_id == THIRD_JOB:
+            document['preserved_recovery_failures'] = [dict(job_id=j, event_sha256=ledger.states(events)[j]['event_sha256'])
+                for j in (JOB, SECOND_JOB)]
         write_json(output / 'review.json', document)
         return file_record(output / 'review.json')
 
@@ -111,7 +120,7 @@ def approve(review, approval, output):
     """Bind the explicit human instruction to the exact reviewed document."""
     strict_record(review)
     document = read_json(review['path'])
-    if document.get('schema') not in (SCHEMA, SECOND_SCHEMA) or document.get('mode') != 'REVIEW' or not isinstance(approval, str) or not approval.strip():
+    if document.get('schema') not in tuple(SCHEMAS.values()) or document.get('mode') != 'REVIEW' or not isinstance(approval, str) or not approval.strip():
         raise ValueError('E5 recovery requires an exact REVIEW and explicit DO approval')
     write_json(output, dict(document, mode='DO', authorization=approval, reviewed_proposal=review))
     return file_record(output)
@@ -142,11 +151,17 @@ def validate(local, config, authorization, events):
             or failure.get('surviving_pids') or failure.get('event_sha256') != review.get('original_failure_event_sha256')):
         raise ValueError('E5 recovery requires the preserved cleaned-up failure')
     previous = _predecessor(ledger, baseline, review['job_id'])
-    if previous is not None and ledger.states(events).get(JOB) != previous:
-        raise ValueError('E5 recovery002 predecessor changed after REVIEW')
-    if previous is not None and (review.get('previous_job_id') != JOB or
+    if previous is not None and ledger.states(events).get(previous['job_id']) != previous:
+        raise ValueError('E5 recovery predecessor changed after REVIEW')
+    if previous is not None and (review.get('previous_job_id') != previous['job_id'] or
             review.get('previous_failure_event_sha256') != previous['event_sha256']):
-        raise ValueError('E5 recovery002 must bind the preserved first recovery failure')
+        raise ValueError('E5 recovery must bind the preserved predecessor failure')
+    if review['job_id'] == THIRD_JOB and any(ledger.states(events).get(j) != ledger.states(baseline).get(j)
+                                           for j in (JOB, SECOND_JOB)):
+        raise ValueError('E5 recovery003 prior failure history changed after REVIEW')
+    if review['job_id'] == THIRD_JOB and review.get('preserved_recovery_failures') != [
+            dict(job_id=j, event_sha256=ledger.states(baseline)[j]['event_sha256']) for j in (JOB, SECOND_JOB)]:
+        raise ValueError('E5 recovery003 must preserve both prior recovery failures')
     remaining = config['setup_wall_seconds_limit'] - ledger.totals(baseline)['setup']['elapsed_seconds']
     if type(review.get('attempt_wall_seconds_limit')) not in (float, int) or review['attempt_wall_seconds_limit'] != min(ATTEMPT_SECONDS, remaining) or remaining <= 0:
         raise ValueError('E5 recovery requires the reviewed bounded setup allocation')

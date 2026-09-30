@@ -117,24 +117,24 @@ class E5RecoveryTests(unittest.TestCase):
 
     def test_second_review_refuses_skipped_active_or_unclean_predecessor(self):
         before = self.ledger.path.read_bytes()
-        with self.assertRaisesRegex(ValueError, 'failed recovery001'):
+        with self.assertRaisesRegex(ValueError, 'failed E5-setup-recovery-001'):
             e5_recovery.propose(self.root, self.config, self.validation, self.asset_record,
                 self.root / 'skipped', job_id='E5-setup-recovery-002')
         self.assertEqual(self.ledger.path.read_bytes(), before)
         with self.assertRaisesRegex(ValueError, 'exact E5 recovery'):
             e5_recovery.propose(self.root, self.config, self.validation, self.asset_record,
-                self.root / 'unknown', job_id='E5-setup-recovery-003')
+                self.root / 'unknown', job_id='E5-setup-recovery-004')
         approval = e5_recovery.approve(self.proposal(), 'Synthetic first attempt', self.root / 'do-first.json')
         self.ledger.authorize_setup_recovery(approval)
         self.reserve()
         before = self.ledger.path.read_bytes()
-        with self.assertRaisesRegex(ValueError, 'failed recovery001'):
+        with self.assertRaisesRegex(ValueError, 'failed E5-setup-recovery-001'):
             e5_recovery.propose(self.root, self.config, self.validation, self.asset_record,
                 self.root / 'active', job_id='E5-setup-recovery-002')
         self.assertEqual(self.ledger.path.read_bytes(), before)
         self.ledger.finish('E5-setup-recovery-001', 'failed', 1., cleanup_confirmed=False,
             cleanup_uncertain=True, surviving_pids=[123])
-        with self.assertRaisesRegex(ValueError, 'failed recovery001'):
+        with self.assertRaisesRegex(ValueError, 'failed E5-setup-recovery-001'):
             e5_recovery.propose(self.root, self.config, self.validation, self.asset_record,
                 self.root / 'unclean', job_id='E5-setup-recovery-002')
 
@@ -144,10 +144,93 @@ class E5RecoveryTests(unittest.TestCase):
         self.reserve()
         self.ledger.finish('E5-setup-recovery-001', 'complete', 1., cleanup_confirmed=True)
         before = self.ledger.path.read_bytes()
-        with self.assertRaisesRegex(ValueError, 'failed recovery001'):
+        with self.assertRaisesRegex(ValueError, 'failed E5-setup-recovery-001'):
             e5_recovery.propose(self.root, self.config, self.validation, self.asset_record,
                 self.root / 'success-refusal', job_id='E5-setup-recovery-002')
         self.assertEqual(self.ledger.path.read_bytes(), before)
+
+    def third_proposal(self, *, second_cleanup=True, skip_second=False):
+        for index, job in enumerate(('E5-setup-recovery-001', 'E5-setup-recovery-002')):
+            if index == 1 and skip_second:
+                break
+            review = e5_recovery.propose(self.root, self.config, self.validation, self.asset_record,
+                self.root / f'predecessor-{index}', job_id=job)
+            approval = e5_recovery.approve(review, 'Synthetic predecessor approval', self.root / f'do-{index}.json')
+            self.ledger.authorize_setup_recovery(approval)
+            command, evidence = self.dispatch_contract()
+            with patch('vipe_benchmark.setup_recipes.shutil.which', return_value='/fixture/uv'):
+                self.ledger.reserve(job, command, evidence)
+            self.ledger.finish(job, 'failed', 75. + index, cleanup_confirmed=second_cleanup if index else True,
+                cleanup_uncertain=not second_cleanup if index else False,
+                surviving_pids=[123] if index and not second_cleanup else [])
+        return e5_recovery.propose(self.root, self.config, self.validation, self.asset_record,
+            self.root / 'third-review', job_id='E5-setup-recovery-003')
+
+    def test_third_review_and_canonical_reservation_preserve_two_consumed_failures(self):
+        review = self.third_proposal()
+        before = self.ledger.path.read_bytes()
+        document = read_json(review['path'])
+        self.assertEqual(document['schema'], 'vipe-benchmark-e5-packaging-recovery/v3')
+        self.assertEqual(document['previous_job_id'], 'E5-setup-recovery-002')
+        self.assertEqual(document['previous_failure_event_sha256'],
+            self.ledger.states()['E5-setup-recovery-002']['event_sha256'])
+        self.assertEqual(len(document['preserved_recovery_failures']), 2)
+        self.assertEqual(document['attempt_wall_seconds_limit'], 3600.)
+        with self.assertRaisesRegex(ValueError, 'explicit DO approval'):
+            self.ledger.authorize_setup_recovery(review)
+        self.assertEqual(self.ledger.path.read_bytes(), before)
+        approval = e5_recovery.approve(review, 'Synthetic approved exactly one third E5 attempt', self.root / 'do-third.json')
+        self.ledger.authorize_setup_recovery(approval)
+        command, evidence = self.dispatch_contract()
+        before = self.ledger.path.read_bytes()
+        with patch('vipe_benchmark.setup_recipes.shutil.which', return_value='/fixture/uv'):
+            with self.assertRaisesRegex(ValueError, 'canonical E5'):
+                self.ledger.reserve('E5-setup-recovery-003', [], evidence)
+            self.assertEqual(self.ledger.path.read_bytes(), before)
+            self.ledger.reserve('E5-setup-recovery-003', command, evidence)
+        self.ledger.finish('E5-setup-recovery-003', 'failed', 3., cleanup_confirmed=True)
+        self.assertAlmostEqual(self.ledger.totals()['setup']['elapsed_seconds'], 263.466)
+        with self.assertRaisesRegex(ValueError, 'already allocated'):
+            self.ledger.authorize_setup_recovery(approval)
+
+    def test_third_review_refuses_skipped_second_identity(self):
+        with self.assertRaisesRegex(ValueError, 'failed E5-setup-recovery-002'):
+            self.third_proposal(skip_second=True)
+        self.assertNotIn('E5-setup-recovery-003', self.ledger.jobs)
+
+    def test_third_review_refuses_uncertain_second_cleanup(self):
+        with self.assertRaisesRegex(ValueError, 'failed E5-setup-recovery-002'):
+            self.third_proposal(second_cleanup=False)
+        self.assertNotIn('E5-setup-recovery-003', self.ledger.jobs)
+
+    def test_third_allocation_rejects_changed_prefix_scope_and_prior_failure_binding(self):
+        review = self.third_proposal()
+        approval = e5_recovery.approve(review, 'Synthetic third attempt', self.root / 'third-do.json')
+        events = self.ledger.events()
+        changed_events = [dict(e) for e in events]
+        changed_events[0]['event_sha256'] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'ledger prefix'):
+            e5_recovery.validate(self.root, self.config, approval, changed_events)
+        document = read_json(review['path'])
+        for index, changes in enumerate((dict(recovery_attempts_limit=2),
+                dict(previous_job_id='E5-setup-recovery-001'), dict(preserved_recovery_failures=[]),
+                dict(attempt_wall_seconds_limit=3601.))):
+            with self.subTest(changes=changes):
+                path = self.root / f'changed-third-review-{index}.json'
+                write_json(path, dict(document, **changes))
+                changed_do = e5_recovery.approve(file_record(path), 'Synthetic third attempt', self.root / f'changed-third-do-{index}.json')
+                before = self.ledger.path.read_bytes()
+                with self.assertRaises(ValueError):
+                    self.ledger.authorize_setup_recovery(changed_do)
+                self.assertEqual(self.ledger.path.read_bytes(), before)
+        validation_path = Path(self.validation['path'])
+        original = validation_path.read_bytes()
+        validation_path.write_text('{}')
+        before = self.ledger.path.read_bytes()
+        with self.assertRaises(ValueError):
+            self.ledger.authorize_setup_recovery(approval)
+        self.assertEqual(self.ledger.path.read_bytes(), before)
+        validation_path.write_bytes(original)
 
     def test_review_binds_failure_recipe_sources_and_charges_without_allocation(self):
         before = self.ledger.path.read_bytes()
