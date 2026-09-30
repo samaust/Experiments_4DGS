@@ -9,17 +9,17 @@ import subprocess
 import time
 
 from .files import file_record
-from .s1_validation_contract import ROOT, STDIN, ARGV, RUNNER, CAPTURE, ENVIRONMENT, QUALIFICATION_TIMEOUT_SECONDS, source_paths, no_timeout_launch
+from .s1_validation_contract import ROOT, STDIN, ARGV, RUNNER, CAPTURE, ENVIRONMENT, source_paths, no_timeout_launch
 
 
 def stamp():
     return dict(utc=datetime.datetime.now(datetime.timezone.utc).isoformat(), monotonic=time.monotonic())
 
 
-def capture(directory, timeout_seconds=QUALIFICATION_TIMEOUT_SECONDS, diagnostic=False, *, no_timeout=False):
+def capture(directory, timeout_seconds=240, diagnostic=False, *, no_timeout=False):
     if type(no_timeout) is not bool or (no_timeout and timeout_seconds is not None):
         raise ValueError('no-timeout mode requires null timeout')
-    if not no_timeout and (type(timeout_seconds) is not int or not 0 < timeout_seconds <= (120 if diagnostic else QUALIFICATION_TIMEOUT_SECONDS)):
+    if not no_timeout and (type(timeout_seconds) is not int or not 0 < timeout_seconds <= (120 if diagnostic else 240)):
         raise ValueError('invalid invocation cap')
     directory = Path(directory).resolve()
     launch=None
@@ -118,8 +118,7 @@ def main():
     mode.add_argument('--no-timeout',action='store_true')
     parser.add_argument('--diagnostic', action='store_true')
     args = parser.parse_args()
-    default_timeout = 120 if args.diagnostic else QUALIFICATION_TIMEOUT_SECONDS
-    return capture(args.directory,None if args.no_timeout else (default_timeout if args.timeout is None else args.timeout),args.diagnostic,no_timeout=args.no_timeout)
+    return capture(args.directory,None if args.no_timeout else (240 if args.timeout is None else args.timeout),args.diagnostic,no_timeout=args.no_timeout)
 
 
 if __name__ == '__main__':

@@ -1057,6 +1057,36 @@ class ReceiptContractTests(unittest.TestCase):
         self.assertIn('no execution performed', graph.validate()['provenance'])
         graph.contract.validate_inner(graph.inner)
 
+    def test_timed_qualification_accepts_six_hundred_second_cap(self):
+        graph = self.fixture()
+        graph.outer.update(timeout_seconds=600, elapsed_seconds=300.)
+        graph.outer['end'] = dict(utc='2026-01-01T00:05:00+00:00', monotonic=300.)
+        graph.publish()
+        graph.validate()
+        graph.outer['timeout_seconds'] = 601
+        graph.publish()
+        with self.assertRaisesRegex(ValueError, 'execution invocation cap exceeded'):
+            graph.validate()
+
+    def test_capture_records_six_hundred_second_default_and_rejects_excess(self):
+        from vipe_benchmark import s1_validation_capture as capture
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)/'capture'
+            with patch.object(capture.subprocess, 'Popen') as launch, patch('builtins.print'):
+                launch.return_value.pid = 123
+                launch.return_value.wait.return_value = 0
+                self.assertEqual(capture.capture(output), 0)
+                launch.return_value.wait.assert_called_once_with(timeout=600)
+            execution = read_json(output/'execution.json')
+            self.assertEqual(execution['timeout_seconds'], 600)
+            self.assertFalse(execution['timed_out'])
+            with self.assertRaisesRegex(ValueError, 'invalid invocation cap'):
+                capture.capture(Path(temporary)/'excess', 601)
+            with self.assertRaisesRegex(ValueError, 'invalid invocation cap'):
+                capture.capture(Path(temporary)/'diagnostic-excess', 121, diagnostic=True)
+            self.assertFalse((Path(temporary)/'excess').exists())
+            self.assertFalse((Path(temporary)/'diagnostic-excess').exists())
+
     def test_typed_primitive_callbacks(self):
         from vipe_benchmark.s1_validation_contract import identity
         seen = set()

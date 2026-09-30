@@ -23,6 +23,7 @@ ENVIRONMENT = {**{key: '1' for key in THREADS}, 'VIPE_CPU_VALIDATION': '1', 'S1_
                'S1_RECEIPT_DIAGNOSTIC': None}
 RUNNER = ROOT / 'scripts/vipe_benchmark/s1_validation_runner.py'
 CAPTURE = ROOT / 'scripts/vipe_benchmark/s1_validation_capture.py'
+QUALIFICATION_TIMEOUT_SECONDS = 600
 
 
 def require(condition, message):
@@ -298,7 +299,7 @@ def validate_execution(value, receipt_record, inner):
     contained(interval(inner), bounds)
     if value['schema']=='s1-cpu-execution/v1':
         require('execution_mode' not in value and 'wait' not in value and 'launch_note' not in value,'legacy timed mode cannot claim no-timeout provenance')
-        require(type(value.get('timeout_seconds')) is int and 0 < value['timeout_seconds'] <= 240
+        require(type(value.get('timeout_seconds')) is int and 0 < value['timeout_seconds'] <= QUALIFICATION_TIMEOUT_SECONDS
                 and value['elapsed_seconds'] <= value['timeout_seconds'], 'execution invocation cap exceeded')
     else:
         require(value.get('execution_mode')=='no-timeout' and 'timeout_seconds' in value and value['timeout_seconds'] is None,'explicit null no-timeout mode required')

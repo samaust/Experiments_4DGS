@@ -1,6 +1,6 @@
 # Implementation review 001
 
-Baseline: `15249ac6`. Final reviewed implementation: `13df2ed6`.
+Baseline: `15249ac6`. Final reviewed implementation: `4f936224`.
 Independent Standards and Spec agents reviewed `git diff 15249ac6...HEAD`.
 
 ## Standards
@@ -26,6 +26,8 @@ No remaining blocking findings. The review identified and implementation fixed:
 - Historical S1 fixture process bytes and a fake FFmpeg qualifier's stale
   isolation module: narrowly corrected tests preserve the live production
   checks and real audit enforcement. Both changes received independent review.
+- Viewer cards: viewports now stay within their cards and shared zoom starts
+  at 25%; original size and common detail controls remain available.
 
 Artifacts are checked after individual writes as well as between stages; a
 single file can exceed the preparation allowance before failure is recorded.
@@ -42,6 +44,17 @@ clips are brief and do not establish sustained or final rendered motion quality.
 
 Integrated focused validation before the final fixture corrections: 46 tests
 passed in 3.877 seconds. The corrections passed 16 S1 tests and nine audit/runtime
-tests respectively. The full
-repository suite and canonical source-bound CPU qualification are recorded
-separately; no earlier receipt is represented as current passing evidence.
+tests respectively. Corrected full discovery ran 1,093 tests: 1,082 passed,
+five skipped and six existing unrelated dependency/deadline errors. The viewer
+layout fix separately passed nine tests and JavaScript syntax validation.
+Canonical source-bound CPU qualification is recorded separately; this full-suite
+result and earlier receipts are not represented as current passing qualification.
+
+## Subsequent timeout amendment review
+
+The prospective diff against `4f936224` for the user-authorized qualification
+timeout amendment received separate Standards and Spec review: zero findings
+on either axis. The shared aggregate cap/default is 600 seconds, the diagnostic
+cap remains 120 seconds, and no-timeout requirements remain unchanged. Three
+focused tests and AST validation passed. Qualification 007 must independently
+establish actual current-source success; this review does not substitute for it.
