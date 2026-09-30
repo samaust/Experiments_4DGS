@@ -2,6 +2,7 @@
 import base64
 import copy
 import hashlib
+import importlib
 import os
 from pathlib import Path
 import sys
@@ -44,10 +45,13 @@ class FFmpegBindingTests(unittest.TestCase):
                           torch='2.5.1+cu124', torchvision='0.20.1+cu124', numpy=np.__version__)
 
     def qualify(self, imports):
+        # Import before patch.dict snapshots sys.modules: deleting this module
+        # afterwards would leave the package attribute pointing at a stale guard.
+        isolation = importlib.import_module(f'{runtime.__package__}.isolation')
         with patch.dict(sys.modules, self.modules), patch.dict(runtime.TARGETS, E5=self.target), \
              patch('importlib.metadata.distribution', return_value=self.distribution), \
              patch.object(sys, 'prefix', str(self.root)), \
-             patch('scripts.vipe_benchmark.isolation.deny_vipe', return_value={'subprocesses': False}), \
+             patch.object(isolation, 'deny_vipe', return_value={'subprocesses': False}), \
              patch.object(runtime, '_native_api_imports', side_effect=imports):
             runtime.qualify_imports(self.request, self.root / 'imports.json')
         return read_json(self.root / 'imports.json')
@@ -174,14 +178,41 @@ class FFmpegBindingTests(unittest.TestCase):
             self.assertEqual(os.environ['IMAGEIO_FFMPEG_EXE'], str(self.binary))
             self.assertEqual(os.environ['FFMPEG_BINARY'], 'ffmpeg-imageio')
             return {'subprocesses': False}
+        isolation = importlib.import_module(f'{stages.__package__}.isolation')
         with patch.dict(sys.modules, self.modules), \
              patch('importlib.metadata.distribution', return_value=self.distribution), \
              patch.object(sys, 'prefix', str(self.root)), \
-             patch('scripts.vipe_benchmark.isolation.deny_vipe', side_effect=guard), \
+             patch.object(isolation, 'deny_vipe', side_effect=guard), \
              patch.dict(os.environ, IMAGEIO_FFMPEG_EXE='/caller/override'), \
              patch('socket.create_connection'), patch('socket.socket.connect'), patch('socket.socket.connect_ex'):
             observed = stages._model_runtime(request)
         self.assertFalse(observed['isolation']['subprocesses'])
+
+    def test_fake_qualification_and_worker_do_not_install_permanent_audit_hooks(self):
+        # Repeated fixtures must remain safe even when isolation starts unimported.
+        child = textwrap.dedent(r"""
+            import subprocess, sys, unittest
+            sys.path.insert(0, 'tests')
+            from test_vipe_benchmark_ffmpeg_binding import FFmpegBindingTests
+            assert 'scripts.vipe_benchmark.isolation' not in sys.modules
+            names = (
+                'test_qualification_binds_verified_wheel_binary_before_offline_imports',
+                'test_d2_worker_import_boundary_propagates_verified_setup_binding',
+            )
+            from test_vipe_benchmark_runtime import RuntimeTests
+            suite = unittest.TestSuite([FFmpegBindingTests(names[0]),
+                RuntimeTests('test_qualifier_blocks_model_forward_and_truthfully_records_incidental_cuda_init'),
+                FFmpegBindingTests(names[1]), FFmpegBindingTests(names[0]), FFmpegBindingTests(names[1])])
+            result = unittest.TextTestRunner(verbosity=2).run(suite)
+            if not result.wasSuccessful():
+                raise AssertionError('fake qualification or worker installed a real isolation guard')
+            completed = subprocess.run([sys.executable, '-c', 'print("fixture subprocess allowed")'],
+                                       text=True, capture_output=True, check=True)
+            assert completed.stdout.strip() == 'fixture subprocess allowed'
+        """)
+        completed = subprocess.run([sys.executable, '-B', '-c', child],
+                                   text=True, capture_output=True, timeout=30)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
 
     def test_real_audit_guard_remains_closed_after_qualifier_binding(self):
         # Audit hooks cannot be removed; keep this fixture in its own CPU child.
