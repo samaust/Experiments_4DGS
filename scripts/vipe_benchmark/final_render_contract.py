@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import hashlib
 import math
 
+from .config import ROOT
 from .files import file_record, object_hash, read_json, verify_record
 
 TRAINING_CAMERAS=tuple(c for c in range(34) if c not in (0,10,20,30))
@@ -22,6 +23,14 @@ COMPOSITIONS={
 }
 PHASES={'geometry':('gpu',5400),'initializer':('cpu',900),'train':('gpu',3600),'render':('gpu',900)}
 PRESET_SOURCE='fc3e4320da73a470d0a16bcb5803f84d1bda5bdeafb000fcc39e022fbcfaaeb4'
+FROZEN_SCOPE={
+    'proposal':('docs/specs/plan031-execution/qualitative-final-render-review-proposal-001.md',
+        'fc5b3e84852ac49e029fb8ebd3f2d4514183d7631ee0db1a887d7d20e92e5f62',11220),
+    'segmentation_decision':('docs/research/vipe-alternatives/plan067-execution/human-review-001/segmentation-decision.json',
+        '3d2ebe52be579b131a03c1aa14f388c91e05ef81a67708cbab4a62d9d3cad2f7',8484),
+    'depth_decision':('docs/research/vipe-alternatives/plan067-execution/human-depth-review-001/depth-decision.json',
+        'ab7c0808b5c5aaeb570dca1da4d16d84e1ccb580c2fe0cd01f01a53daf353c6d',8825),
+}
 BLOCKERS=('QF native geometry/initializer/train/reload-render adapter is unimplemented and unqualified.',
           'Scene-manifest exclusion union, calibration transforms and physical normalization require a checked adapter receipt.',
           'Measured initializer storage, checkpoint retention, native memory and cleanup reserves are not established.',
@@ -78,9 +87,23 @@ def allocation_specs(identity):
     return values
 
 
+def validate_scope_bindings(bindings):
+    """Bind actual REVIEW scope to proposal 001 and its exact human decisions.
+
+    A later human choice or changed eligibility requires a new explicit proposal
+    contract. Hash-valid caller-authored replacements cannot revise this scope.
+    """
+    for name,(relative,sha256,size) in FROZEN_SCOPE.items():
+        expected=dict(path=str((ROOT/relative).resolve()),sha256=sha256,bytes=size)
+        _require(bindings.get(name)==expected,'frozen proposal-001 '+name+' binding differs')
+        _verify(expected)
+    return dict(scope='proposal-001',bindings={name:copy.deepcopy(bindings[name]) for name in FROZEN_SCOPE})
+
+
 def parse_request(value):
     _require(value.get('schema')=='plan067-final-render-request/v1','wrong QF request schema')
     _require(value.get('record_kind') in ('actual','fixture') and value.get('mode')=='REVIEW','QF contract is REVIEW only; DO adapter is unimplemented')
+    if value['record_kind']=='actual':validate_scope_bindings(value['bindings'])
     _require(value.get('compositions')==COMPOSITIONS,'fixed isolated five-arm compositions required')
     _require(type(value.get('seed')) is int and value['seed']==0,'seed must equal zero')
     _require(type(value.get('iterations')) is int and value['iterations']==5000,'equal 5000 training iterations required')

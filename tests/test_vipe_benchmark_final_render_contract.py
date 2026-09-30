@@ -7,6 +7,7 @@ import unittest
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from vipe_benchmark.files import file_record,object_hash,write_json
 from vipe_benchmark.final_render_contract import COMPOSITIONS,TRAINING_CAMERAS,KEYFRAMES,allocation_specs,admit_review,initializer_arrays_hash,validate_initializer,validate_worker_result
+from vipe_benchmark.config import ROOT
 
 
 class ContractTests(unittest.TestCase):
@@ -135,6 +136,37 @@ class ContractTests(unittest.TestCase):
             phase='train',allocation_id='qf-001/QF-B/train',elapsed_seconds=float('inf'),
             request_sha256=object_hash(self.request),reason='fixture')
         with self.assertRaisesRegex(ValueError,'finite deadline'):validate_worker_result(self.request,'QF-B','train',result)
+    def test_actual_scope_rejects_rewritten_choice_eligibility_and_proposal_before_admission(self):
+        from vipe_benchmark.final_render_contract import validate_scope_bindings
+        bindings=dict(self.request['bindings'])
+        names={
+            'proposal':'docs/specs/plan031-execution/qualitative-final-render-review-proposal-001.md',
+            'segmentation_decision':'docs/research/vipe-alternatives/plan067-execution/human-review-001/segmentation-decision.json',
+            'depth_decision':'docs/research/vipe-alternatives/plan067-execution/human-depth-review-001/depth-decision.json',
+        }
+        for name,path in names.items():bindings[name]=file_record(ROOT/path)
+        self.assertEqual(validate_scope_bindings(bindings)['scope'],'proposal-001')
+        # These copies are explicit mutation fixtures. They never stand in for
+        # performed human review or actual coverage/qualification.
+        from vipe_benchmark.files import read_json
+        for name,mutation in (
+            ('segmentation_decision',lambda value:value.update(human_choice={'candidate_ids':['S2'],'reason':'rewritten'})),
+            ('depth_decision',lambda value:value['engineering_eligibility']['D4'].update(reason='rewritten eligibility')),
+        ):
+            altered=read_json(bindings[name]['path']);mutation(altered)
+            changed=dict(bindings);changed[name]=self.record('altered-'+name,altered)
+            with self.assertRaisesRegex(ValueError,'frozen proposal-001'):validate_scope_bindings(changed)
+            actual=dict(self.request,record_kind='actual',bindings=changed)
+            with self.assertRaisesRegex(ValueError,'frozen proposal-001'):admit_review(actual,self.ledger,self.storage)
+        changed=dict(bindings);path=self.root/'changed-proposal.md';path.write_text('Changed proposal scope')
+        changed['proposal']=file_record(path)
+        with self.assertRaisesRegex(ValueError,'frozen proposal-001'):validate_scope_bindings(changed)
+        with self.assertRaisesRegex(ValueError,'frozen proposal-001'):
+            admit_review(dict(self.request,record_kind='actual',bindings=changed),self.ledger,self.storage)
+        # Identical bytes at another path also cannot replace the frozen scope.
+        path=self.root/'relocated-proposal.md';path.write_bytes(Path(bindings['proposal']['path']).read_bytes())
+        changed['proposal']=file_record(path)
+        with self.assertRaisesRegex(ValueError,'frozen proposal-001'):validate_scope_bindings(changed)
     def test_actual_result_cannot_be_claimed_and_training_iterations_must_match(self):
         result=dict(schema='plan067-final-render-worker-result/v1',record_kind='fixture',status='complete',arm='QF-B',
             phase='train',allocation_id='qf-001/QF-B/train',elapsed_seconds=1,completed_iterations=5000,

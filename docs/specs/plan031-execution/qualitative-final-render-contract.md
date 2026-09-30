@@ -11,6 +11,8 @@ behavior; it does not qualify geometry, training or rendered results.
 - `allocation_specs(prefix)`: 21 distinct prospective identities: geometry,
   initializer, train and render for five QF arms, plus one media/package identity.
 - `parse_request(value) -> Request`: frozen typed allocations and a copied request.
+- `validate_scope_bindings(bindings)`: binds actual scope to proposal 001 and
+  its exact original S2/D4 human decisions by repository path, SHA256 and size.
 - `admit_review(value, ledger, storage) -> ReviewAdmission`: validates a ledger
   snapshot without writing, reserving or executing jobs. Its
   `execution_authorized` is always false and blockers remain explicit.
@@ -39,6 +41,11 @@ original allocation config, current CPU qualification, scene manifest, accepted
 inputs, actual S2/D4 human decisions, S2, D4 fit/check, all M and all N results.
 Actual admission validates the existing qualification wrapper against current
 source hashes and reconstructs the connection to actual human submissions.
+It first pins proposal 001 and the 8,484-byte S2 and 8,825-byte D4 decisions
+named there. A changed choice, eligibility statement or proposal, including a
+hash-valid replacement at another path, cannot revise this scope. A later
+decision requires a new explicit proposal contract. Fixture bindings remain
+flexible and clearly labeled.
 Fixture evidence cannot be promoted to actual human or native completion.
 
 Admission requires both native rows of every pair for all 30 training cameras,
