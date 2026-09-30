@@ -1,6 +1,7 @@
 """One source-bound E5 packaging recovery; REVIEW never grants an attempt."""
 from pathlib import Path
 
+from .config import ROOT
 from .files import file_record, object_hash, read_json, write_json
 from .runtime import TARGETS
 from .s1_validation_contract import source_paths, strict_record
@@ -120,4 +121,34 @@ def validate(local, config, authorization, events):
     remaining = config['setup_wall_seconds_limit'] - ledger.totals(baseline)['setup']['elapsed_seconds']
     if type(review.get('attempt_wall_seconds_limit')) not in (float, int) or review['attempt_wall_seconds_limit'] != min(ATTEMPT_SECONDS, remaining) or remaining <= 0:
         raise ValueError('E5 recovery requires the reviewed bounded setup allocation')
+    return document
+
+
+def reservation_binding(local, config, events, command, evidence):
+    """Only the reviewed setup request and canonical worker may spend E5's attempt."""
+    from .setup_recipes import request as setup_request
+    registered = [e for e in events if e['event'] == 'setup_recovery_authorized'
+                  and e['job_id'] == JOB and e['environment'] == 'E5']
+    if len(registered) != 1:
+        raise ValueError('unique E5 recovery registration required')
+    authorization = registered[0]['authorization']
+    document = validate(local, config, authorization, events)
+    assets = _assets(local, document['asset_provenance'])
+    configuration = file_record(ROOT / 'configs/vipe-alternatives/benchmark-v1.json')
+    expected = dict(setup_request(local, 'E5'), job_id=JOB,
+        recovery_authorization=authorization, reuse_assets={'da3_snapshot': assets['da3_snapshot']},
+        reuse_source_archives={'da3_source': assets['da3_source']['archive']}, configuration=configuration)
+    request_path = str((Path(local).resolve() / 'requests' / (JOB + '.json')).resolve())
+    worker = file_record(ROOT / 'scripts/basketball_vipe_worker.py')
+    if type(evidence) is not dict or set(evidence) != {'request', 'worker'}:
+        raise ValueError('canonical E5 reservation evidence required')
+    request = strict_record(evidence['request'])
+    if (request['path'] != request_path or read_json(request['path']) != expected
+            or evidence['worker'] != worker):
+        raise ValueError('canonical E5 recovery request/path/worker changed')
+    expected_command = [str(ROOT / '.local/envs/stg-colmap/bin/python'), worker['path'],
+        '--operation', 'setup', '--config', configuration['path'], '--request', request_path,
+        '--output', str((Path(local).resolve() / 'jobs' / JOB).resolve())]
+    if command != expected_command:
+        raise ValueError('canonical E5 recovery command changed')
     return document

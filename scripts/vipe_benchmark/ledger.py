@@ -127,9 +127,8 @@ class Ledger:
                 from .s1_recovery import reservation_binding
                 reservation_binding(self.path.parent, self.config, events, evidence, command=command)
             if job_id == 'E5-setup-recovery-001':
-                from .e5_recovery import validate
-                event = next(e for e in events if e['event'] == 'setup_recovery_authorized' and e['job_id'] == job_id)
-                validate(self.path.parent, self.config, event['authorization'], events)
+                from .e5_recovery import reservation_binding
+                reservation_binding(self.path.parent, self.config, events, command, evidence)
             spec = allocated[job_id]
             resource = spec['resource']
             total = self.totals(events)[resource]['elapsed_seconds']
