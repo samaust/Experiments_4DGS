@@ -32,3 +32,9 @@ Existing annotation validators and independent-scoring code retain their origina
 Test package/review request/result and admission/ledger boundaries with small CPU media fixtures and explicit fake human records. Check synchronized membership/time, media integrity, immutable lineage, absent evidence, actual-review distinction, tied/blocked choices and downstream eligibility. Review changes and preserve exact validation outcomes. Actual human judgment cannot be replaced by synthetic tests.
 
 Deliver immutable manifests, comparison viewer/media, human review records, choice records, downstream output dispositions, final qualitative report and an issue-by-issue completion assessment. Existing pending CPU qualification and runtime failures remain explicit engineering gates.
+
+## Execution checkpoint — 2026-09-30
+
+The newly approved E5 recovery003 and S1 recovery007 were each consumed once, serially, after qualification009 passed298 tests/1030 subtests under the600-second cap. E5 failed import qualification at the blanket constructor guard's rejection of Normalize preprocessing. S1 produced and individually qualified all510 calibration rows, then failed final runtime acceptance because a recorded generated Torch source file had been deleted with its temporary directory. S1 terminal publication is unavailable and stop_required remains true. Both cleaned up; neither timed out.
+
+Affected E5/S1 execution is stopped under AGENTS.md pending user resolution. No repeat or reconstruction is authorized. D2 remains blocked by E5. Actual human feedback remains pending. Exact outcomes and proposed CPU corrections are in [fresh runtime attempts assessment](../docs/research/vipe-alternatives/plan067-execution/fresh-runtime-attempts-assessment-001.md). No incomplete issue was closed.

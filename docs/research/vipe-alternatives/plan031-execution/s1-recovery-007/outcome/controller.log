@@ -1,0 +1,39 @@
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py", line 558, in supervise
+    result_record, acceptance = monitored_call(dict(operation='accept', args=dict(
+                                ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        local=str(ledger.path.parent), config=ledger.config, reservation=reservation,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        command=command, output=str(output))), run_deadline, sampler,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        ledger.config, peak, worker=process, phase='acceptance', lifecycle=lifecycle)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py", line 313, in monitored_call
+    responses = session.tick(deadline)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py", line 2545, in tick
+    raise RuntimeError('helper operation failed: '+str(payload['value']))
+RuntimeError: helper operation failed: {'error_class': 'FileNotFoundError', 'message': "[Errno 2] No such file or directory: 'tmp_ronuary'", 'record': {'path': '/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration-recovery-007/helper-error-4ede048a21e3491180a2dd3b7971d934-2.json', 'sha256': 'abc36de43e999e984ee4e7fc774fee87f5891c38115c67cd73a1114d16bc81b1', 'bytes': 4441}}
+evidence_publication: RuntimeError: retained helper unavailable for terminal publication
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_benchmark.py", line 300, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_benchmark.py", line 293, in main
+    return execute(args, config)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_benchmark.py", line 190, in execute
+    execute_s1_recovery(local, docs, config, authorization)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/execution.py", line 689, in execute_s1_recovery
+    return dispatch(local, docs, config, component_recovery_request(local, config, job))
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/execution.py", line 559, in dispatch
+    result = supervise(ledger, job, command, local / 'jobs' / suffix,
+        evidence=evidence,
+        sample_resources=s1_sampling_operation(local, job) if job in S1_RECOVERY_JOBS else lambda: resources(local, gpu=device_monitored),
+        validate_result=validate, poll_seconds=.1 if job in S1_RECOVERY_JOBS else 2., checkpoint=checkpoint, resume_checkpoint=resume_checkpoint,
+        terminal_publisher=publish if job in S1_RECOVERY_JOBS else None, terminal_docs=docs)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py", line 676, in supervise
+    raise failure from primary_exception
+vipe_benchmark.supervisor.SupervisionFailure: RuntimeError: helper operation failed: {'error_class': 'FileNotFoundError', 'message': "[Errno 2] No such file or directory: 'tmp_ronuary'", 'record': {'path': '/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration-recovery-007/helper-error-4ede048a21e3491180a2dd3b7971d934-2.json', 'sha256': 'abc36de43e999e984ee4e7fc774fee87f5891c38115c67cd73a1114d16bc81b1', 'bytes': 4441}}; evidence publication failed: RuntimeError: retained helper unavailable for terminal publication
