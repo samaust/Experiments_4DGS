@@ -317,8 +317,13 @@ class E5RecoveryTests(unittest.TestCase):
                 self.assertIn('--no-build-isolation', command)
                 (Path(command[-1]) / 'generated.py').write_text('fixture build artifact')
             elif '--qualify-imports' in command:
+                normalize_source = Path(command[-1]).parent / 'environment/lib/python3.11/site-packages/torchvision/transforms/transforms.py'
+                normalize_source.parent.mkdir(parents=True, exist_ok=True)
+                normalize_source.write_text('fixture pinned Normalize source')
                 write_json(command[-1], dict(status='complete', forwards=0, cuda_context_initialized=False,
-                    native_model_constructors_called=False, import_only_environment={
+                    native_model_constructors_called=False, preprocessing_constructors=dict(
+                        class_name='torchvision.transforms.transforms.Normalize', count=1, file=file_record(normalize_source)),
+                    import_only_environment={
                         'XFORMERS_FORCE_DISABLE_TRITON': '1', 'XFORMERS_ENABLE_TRITON': '0'}))
             elif 'runtime_inventory.py' in command[1]:
                 packages = [dict(name=r.split('==')[0], version=r.split('==')[1])

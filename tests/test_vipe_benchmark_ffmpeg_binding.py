@@ -38,8 +38,13 @@ class FFmpegBindingTests(unittest.TestCase):
         write_json(self.request, dict(environment='E5', assets=file_record(assets), forbidden_vipe_roots=[]))
         self.torch = SimpleNamespace(__version__='2.5.1+cu124',
             nn=SimpleNamespace(Module=type('Module', (), {'_call_impl': lambda *args: None})),
-            cuda=SimpleNamespace(is_initialized=lambda: False))
-        self.modules = dict(torch=self.torch, torchvision=SimpleNamespace(__version__='0.20.1+cu124'),
+            cuda=SimpleNamespace(is_initialized=lambda: False, _lazy_init=lambda: None))
+        self.normalize_source = self.root / 'torchvision/transforms/transforms.py'
+        self.normalize_source.parent.mkdir(parents=True)
+        self.normalize_source.write_text('fixture pinned Normalize source')
+        normalize = type('Normalize', (self.torch.nn.Module,), {'__module__': 'torchvision.transforms.transforms'})
+        self.modules = dict(torch=self.torch, torchvision=SimpleNamespace(__version__='0.20.1+cu124',
+            __file__=str(self.root / 'torchvision/__init__.py'), transforms=SimpleNamespace(Normalize=normalize)),
                             cv2=SimpleNamespace(__version__='fixture'))
         self.target = dict(python=f'{sys.version_info.major}.{sys.version_info.minor}',
                           torch='2.5.1+cu124', torchvision='0.20.1+cu124', numpy=np.__version__)
@@ -51,6 +56,7 @@ class FFmpegBindingTests(unittest.TestCase):
         with patch.dict(sys.modules, self.modules), patch.dict(runtime.TARGETS, E5=self.target), \
              patch('importlib.metadata.distribution', return_value=self.distribution), \
              patch.object(sys, 'prefix', str(self.root)), \
+             patch('inspect.getfile', return_value=str(self.normalize_source)), \
              patch.object(isolation, 'deny_vipe', return_value={'subprocesses': False}), \
              patch.object(runtime, '_native_api_imports', side_effect=imports):
             runtime.qualify_imports(self.request, self.root / 'imports.json')
@@ -262,8 +268,11 @@ class FFmpegBindingTests(unittest.TestCase):
                 read_text=lambda name: f'{relative},sha256={digest},{binary.stat().st_size}\n')
             torch = SimpleNamespace(__version__='2.5.1+cu124',
                 nn=SimpleNamespace(Module=type('Module', (), {'_call_impl': lambda *args: None})),
-                cuda=SimpleNamespace(is_initialized=lambda: False))
-            fake = dict(torch=torch, torchvision=SimpleNamespace(__version__='0.20.1+cu124'),
+                cuda=SimpleNamespace(is_initialized=lambda: False, _lazy_init=lambda: None))
+            normalize = type('Normalize', (torch.nn.Module,), {'__module__': 'torchvision.transforms.transforms'})
+            source = root / 'torchvision/transforms/transforms.py'
+            fake = dict(torch=torch, torchvision=SimpleNamespace(__version__='0.20.1+cu124',
+                __file__=str(root / 'torchvision/__init__.py'), transforms=SimpleNamespace(Normalize=normalize)),
                         cv2=SimpleNamespace(__version__='fixture'))
             target = dict(python=f'{sys.version_info.major}.{sys.version_info.minor}',
                 torch='2.5.1+cu124', torchvision='0.20.1+cu124', numpy=np.__version__)
@@ -279,6 +288,7 @@ class FFmpegBindingTests(unittest.TestCase):
             with patch.dict(sys.modules, fake), patch.dict(runtime.TARGETS, E5=target), \
                  patch('importlib.metadata.distribution', return_value=distribution), \
                  patch.object(sys, 'prefix', str(root)), \
+                 patch('inspect.getfile', return_value=str(source)), \
                  patch.object(runtime, '_native_api_imports', side_effect=imports):
                 runtime.qualify_imports(request, root / 'child-imports.json')
             evidence = read_json(root / 'child-imports.json')

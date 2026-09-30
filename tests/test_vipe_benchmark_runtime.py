@@ -392,9 +392,16 @@ runtime.download('https://fixture.invalid/blob', root / 'data.bin', root / 'tran
                 source = Path(command[-1])
                 (source / 'generated-native.so').write_bytes(b'fixture compiled artifact')
             elif '--qualify-imports' in command:
+                normalize_source = Path(command[-1]).parent / 'environment/lib/python3.11/site-packages/torchvision/transforms/transforms.py'
+                normalize_source.parent.mkdir(parents=True, exist_ok=True)
+                normalize_source.write_text('fixture pinned Normalize source')
+                preprocessing = dict(class_name='torchvision.transforms.transforms.Normalize',
+                                     count=1, file=file_record(normalize_source))
+                preprocessing = request.get('_fixture_preprocessing', preprocessing)
                 write_json(command[-1], dict(status='complete', forwards=0,
                            cuda_context_initialized=bool(request.get('_fixture_cuda_initialized')),
                            native_model_constructors_called=request.get('_fixture_constructor_called', False),
+                           preprocessing_constructors=preprocessing,
                            import_only_environment=request.get('_fixture_import_environment',
                                {'XFORMERS_FORCE_DISABLE_TRITON': '1', 'XFORMERS_ENABLE_TRITON': '0'}
                                if request['environment'] == 'E5' else {})))
@@ -527,6 +534,23 @@ runtime.download('https://fixture.invalid/blob', root / 'data.bin', root / 'tran
                 runtime.setup(request, self.root / 'E5-constructor', self.config)
         self.assertFalse((self.root / 'E5-constructor/result.json').exists())
 
+    def test_e5_qualification_refuses_missing_or_forged_preprocessing_evidence(self):
+        request, assets = self.fixture_request('E5')
+        outside = self.root / 'torchvision/transforms/transforms.py'
+        outside.parent.mkdir(parents=True)
+        outside.write_text('unowned source')
+        for index, evidence in enumerate((None, {}, dict(class_name='torch.nn.Linear', count=1, file={}),
+                dict(class_name='torchvision.transforms.transforms.Normalize', count=True, file={}),
+                dict(class_name='torchvision.transforms.transforms.Normalize', count=-1, file={}),
+                dict(class_name='torchvision.transforms.transforms.Normalize', count=1, file=file_record(outside)))):
+            with self.subTest(evidence=evidence):
+                altered = dict(request, _fixture_preprocessing=evidence)
+                output = self.root / f'E5-preprocessing-{index}'
+                with self.mocked_setup(altered, assets, []):
+                    with self.assertRaisesRegex(ValueError, 'preprocessing constructor evidence'):
+                        runtime.setup(altered, output, self.config)
+                self.assertFalse((output / 'result.json').exists())
+
     def test_e2_requires_sam2_extension_flags_and_exact_transformers(self):
         request, assets = self.fixture_request('E2')
         request['_fixture_cuda_initialized'] = True
@@ -643,6 +667,67 @@ runtime.download('https://fixture.invalid/blob', root / 'data.bin', root / 'tran
              patch('importlib.import_module', return_value=SimpleNamespace(__file__=str(file), enable_corr=False)):
             with self.assertRaisesRegex(ValueError, 'implicit fallback'):
                 runtime._native_api_imports('E1', {'aot_source': {'path': str(source)}})
+
+    def test_e5_qualifier_allows_only_pinned_normalize_constructor(self):
+        import numpy as np
+        from scripts.vipe_benchmark import isolation, ffmpeg_binding
+        vision_root = self.root / 'torchvision'
+        source = vision_root / 'transforms/transforms.py'
+        source.parent.mkdir(parents=True)
+        source.write_text('pinned fixture Normalize source')
+        class Module:
+            def __init__(self):
+                self.initialized = True
+            def _call_impl(self):
+                raise AssertionError('unguarded forward')
+        class Normalize(Module):
+            pass
+        Normalize.__module__ = 'torchvision.transforms.transforms'
+        class Subclass(Normalize):
+            pass
+        cuda_init = Mock(side_effect=AssertionError('unguarded CUDA context'))
+        fake_torch = SimpleNamespace(__version__='2.5.1+cu124', nn=SimpleNamespace(Module=Module),
+            cuda=SimpleNamespace(is_initialized=lambda: False, _lazy_init=cuda_init))
+        fake_vision = SimpleNamespace(__version__='0.20.1+cu124', __file__=str(vision_root / '__init__.py'),
+            transforms=SimpleNamespace(Normalize=Normalize))
+        assets = self.root / 'assets.json'
+        write_json(assets, {})
+        request = self.root / 'imports-request.json'
+        write_json(request, dict(environment='E5', assets=file_record(assets), forbidden_vipe_roots=[]))
+        actual = dict(python=f'{sys.version_info.major}.{sys.version_info.minor}', numpy=np.__version__,
+                      torch=fake_torch.__version__, torchvision=fake_vision.__version__)
+        previous_environment = {name: os.environ.get(name) for name in runtime.E5_IMPORT_ONLY_ENV}
+        def imports(*args):
+            instance = Normalize()
+            self.assertTrue(instance.initialized)
+            for forbidden in (Module, Subclass):
+                with self.assertRaisesRegex(RuntimeError, 'model constructors'):
+                    forbidden()
+            for action in (instance._call_impl, lambda: fake_torch.cuda._lazy_init()):
+                with self.assertRaisesRegex(RuntimeError, 'prohibits'):
+                    action()
+            self.assertEqual(os.environ['XFORMERS_FORCE_DISABLE_TRITON'], '1')
+            return []
+        with patch.dict(sys.modules, torch=fake_torch, torchvision=fake_vision,
+                        cv2=SimpleNamespace(__version__='fixture'),
+                        **{'torchvision.transforms.transforms': SimpleNamespace(__file__=str(source))}), \
+             patch.dict(runtime.TARGETS, E5=actual), \
+             patch.object(isolation, 'deny_vipe', return_value={'fixture': True}), \
+             patch.object(ffmpeg_binding, 'bind', return_value={'fixture': True}), \
+             patch('inspect.getfile', return_value=str(source)), \
+             patch.object(runtime, '_native_api_imports', side_effect=imports):
+            runtime.qualify_imports(request, self.root / 'imports.json')
+            with patch('inspect.getfile', return_value=str(self.root / 'unowned.py')):
+                with self.assertRaisesRegex(ValueError, 'pinned torchvision source'):
+                    runtime.qualify_imports(request, self.root / 'unowned-imports.json')
+        self.assertEqual({name: os.environ.get(name) for name in runtime.E5_IMPORT_ONLY_ENV}, previous_environment)
+        result = read_json(self.root / 'imports.json')
+        self.assertEqual(result['preprocessing_constructors'], dict(
+            class_name='torchvision.transforms.transforms.Normalize', count=1, file=file_record(source)))
+        self.assertFalse(result['native_model_constructors_called'])
+        self.assertFalse(result['cuda_context_initialized'])
+        self.assertTrue(Module().initialized)
+        cuda_init.assert_not_called()
 
     def test_qualifier_blocks_model_forward_and_truthfully_records_incidental_cuda_init(self):
         import numpy as np

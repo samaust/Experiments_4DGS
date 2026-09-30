@@ -595,6 +595,7 @@ def _native_api_imports(environment, assets):
 def qualify_imports(request, output):
     """Subprocess entry: import APIs only, with network/ViPE/forwards denied."""
     import importlib.metadata
+    import inspect
     import socket
     from unittest.mock import patch
     from contextlib import nullcontext
@@ -616,18 +617,34 @@ def qualify_imports(request, output):
         ffmpeg = bind()
     isolation = deny_vipe(settings['forbidden_vipe_roots'])
     import_only_environment = E5_IMPORT_ONLY_ENV if settings['environment'] == 'E5' else {}
-    def prohibited_constructor(*args, **kwargs):
+    preprocessing = None
+    original_constructor = torch.nn.Module.__init__
+    if settings['environment'] == 'E5':
+        normalize = torchvision.transforms.Normalize
+        normalize_source = safe_path(inspect.getfile(normalize)).resolve()
+        expected_source = safe_path(torchvision.__file__).resolve().parent / 'transforms/transforms.py'
+        if normalize.__module__ != 'torchvision.transforms.transforms' or normalize_source != expected_source:
+            raise ValueError('E5 Normalize constructor differs from pinned torchvision source')
+        preprocessing = dict(class_name='torchvision.transforms.transforms.Normalize',
+                             count=0, file=file_record(normalize_source))
+    def prohibited_constructor(instance, *args, **kwargs):
+        if preprocessing is not None and type(instance) is normalize:
+            original_constructor(instance, *args, **kwargs)
+            preprocessing['count'] += 1
+            return
         raise RuntimeError('setup import qualification prohibits model constructors')
     constructor_guard = (patch.object(torch.nn.Module, '__init__', prohibited_constructor)
                          if settings['environment'] == 'E5' else nullcontext())
-    with constructor_guard, patch.dict(os.environ, import_only_environment), \
+    cuda_guard = (patch.object(torch.cuda, '_lazy_init', prohibited)
+                  if settings['environment'] == 'E5' else nullcontext())
+    with constructor_guard, cuda_guard, patch.dict(os.environ, import_only_environment), \
          patch.object(socket, 'create_connection', prohibited), patch.object(socket.socket, 'connect', prohibited), \
          patch.object(socket.socket, 'connect_ex', prohibited), patch.object(torch.nn.Module, '_call_impl', prohibited):
         modules = _native_api_imports(settings['environment'], read_json(verify_record(settings['assets'])['path']))
     write_json(output, dict(status='complete', environment=settings['environment'], modules=modules,
         native_model_constructors_called=False, forwards=0, cuda_context_initialized=bool(torch.cuda.is_initialized()),
         isolation=isolation, offline=True, ffmpeg=ffmpeg,
-        import_only_environment=import_only_environment,
+        import_only_environment=import_only_environment, preprocessing_constructors=preprocessing,
         imported_base=dict(torch=torch.__version__, torchvision=torchvision.__version__,
                            opencv=cv2.__version__, numpy=importlib.metadata.version('numpy'))))
 
@@ -752,6 +769,16 @@ def setup(request, output, config):
         raise ValueError('native import qualification was incomplete or performed model forwards')
     if environment == 'E5' and qualification.get('native_model_constructors_called') is not False:
         raise ValueError('E5 setup import qualification performed model constructors')
+    if environment == 'E5':
+        preprocessing = qualification.get('preprocessing_constructors')
+        if (not isinstance(preprocessing, dict) or set(preprocessing) != {'class_name', 'count', 'file'} or
+                preprocessing['class_name'] != 'torchvision.transforms.transforms.Normalize' or
+                type(preprocessing['count']) is not int or preprocessing['count'] < 0):
+            raise ValueError('E5 setup import qualification lacks valid preprocessing constructor evidence')
+        source = safe_path(verify_record(preprocessing['file'])['path']).resolve()
+        if (not source.is_relative_to(env_path.resolve()) or
+                source.parts[-3:] != ('torchvision', 'transforms', 'transforms.py')):
+            raise ValueError('E5 preprocessing constructor evidence is outside pinned torchvision environment')
     if environment == 'E5' and qualification.get('import_only_environment') != E5_IMPORT_ONLY_ENV:
         raise ValueError('E5 setup import qualification changed the import-only Triton settings')
     if environment == 'E5' and qualification['cuda_context_initialized'] is not False:
