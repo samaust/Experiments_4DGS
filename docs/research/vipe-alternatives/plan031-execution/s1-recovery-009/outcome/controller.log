@@ -1,0 +1,39 @@
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py", line 558, in supervise
+    result_record, acceptance = monitored_call(dict(operation='accept', args=dict(
+                                ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        local=str(ledger.path.parent), config=ledger.config, reservation=reservation,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        command=command, output=str(output))), run_deadline, sampler,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        ledger.config, peak, worker=process, phase='acceptance', lifecycle=lifecycle)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py", line 313, in monitored_call
+    responses = session.tick(deadline)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py", line 2545, in tick
+    raise RuntimeError('helper operation failed: '+str(payload['value']))
+RuntimeError: helper operation failed: {'error_class': 'OSError', 'message': "[Errno 40] Too many levels of symbolic links: 'model.safetensors'", 'record': {'path': '/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration-recovery-009/helper-error-b807c87d770a4e40a559fb317f1e56e6-2.json', 'sha256': '871a18132499d6587a6730e258484f3f061d6034b0da5a89922e1ea0fee96a0d', 'bytes': 4259}}
+evidence_publication: RuntimeError: retained helper unavailable for terminal publication
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_benchmark.py", line 300, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_benchmark.py", line 293, in main
+    return execute(args, config)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_benchmark.py", line 190, in execute
+    execute_s1_recovery(local, docs, config, authorization)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/execution.py", line 689, in execute_s1_recovery
+    return dispatch(local, docs, config, component_recovery_request(local, config, job))
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/execution.py", line 559, in dispatch
+    result = supervise(ledger, job, command, local / 'jobs' / suffix,
+        evidence=evidence,
+        sample_resources=s1_sampling_operation(local, job) if job in S1_RECOVERY_JOBS else lambda: resources(local, gpu=device_monitored),
+        validate_result=validate, poll_seconds=.1 if job in S1_RECOVERY_JOBS else 2., checkpoint=checkpoint, resume_checkpoint=resume_checkpoint,
+        terminal_publisher=publish if job in S1_RECOVERY_JOBS else None, terminal_docs=docs)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py", line 676, in supervise
+    raise failure from primary_exception
+vipe_benchmark.supervisor.SupervisionFailure: RuntimeError: helper operation failed: {'error_class': 'OSError', 'message': "[Errno 40] Too many levels of symbolic links: 'model.safetensors'", 'record': {'path': '/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration-recovery-009/helper-error-b807c87d770a4e40a559fb317f1e56e6-2.json', 'sha256': '871a18132499d6587a6730e258484f3f061d6034b0da5a89922e1ea0fee96a0d', 'bytes': 4259}}; evidence publication failed: RuntimeError: retained helper unavailable for terminal publication
