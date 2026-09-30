@@ -2,6 +2,7 @@
 import json
 import math
 import subprocess
+import time
 
 from .files import file_record, safe_path, write_json
 
@@ -23,7 +24,17 @@ def _crop(crop, resolution):
         raise ValueError('crop outside full frame')
 
 
-def _media(media, selection, resolution):
+def _remaining(deadline):
+    if deadline is None:
+        return 30
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError('qualitative package publication deadline')
+    return min(30, remaining)
+
+
+def _media(media, selection, resolution, deadline):
+    _remaining(deadline)
     if media['frame_ids'] != selection['frame_ids'] or media['timestamps'] != selection['timestamps']:
         raise ValueError('media frame/time identity mismatch')
     if media['resolution'] != resolution:
@@ -39,9 +50,9 @@ def _media(media, selection, resolution):
                 raise ValueError('PNG resolution/format mismatch')
             image.load()
     elif kind in ('clip', 'sequence'):
-        completed = subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+        completed = subprocess.run(['ffprobe', '-v', 'error', '-threads', '1', '-select_streams', 'v:0',
             '-count_frames', '-show_entries', 'stream=width,height,avg_frame_rate,nb_read_frames',
-            '-of', 'json', str(path)], capture_output=True, text=True, timeout=30, check=True)
+            '-of', 'json', str(path)], capture_output=True, text=True, timeout=_remaining(deadline), check=True)
         streams = json.loads(completed.stdout)['streams']
         if len(streams) != 1:
             raise ValueError('missing video stream')
@@ -55,14 +66,16 @@ def _media(media, selection, resolution):
         if kind == 'clip' and not contiguous:
             raise ValueError('sparse predictions must be labeled sequence')
         # Full decode rejects truncated/corrupt packets even when headers still parse.
-        subprocess.run(['ffmpeg','-v','error','-xerror','-i',str(path),'-f','null','-'],
-            capture_output=True, timeout=30, check=True)
+        subprocess.run(['ffmpeg','-v','error','-xerror','-threads','1','-i',str(path),'-threads','1','-f','null','-'],
+            capture_output=True, timeout=_remaining(deadline), check=True)
     else:
         raise ValueError('unknown media kind')
+    _remaining(deadline)
 
 
-def validate(manifest):
+def validate(manifest, *, deadline=None):
     """Verify frozen selection, matched membership, provenance and media bytes."""
+    _remaining(deadline)
     if manifest['schema'] != SCHEMA or manifest['mode'] != 'qualitative':
         raise ValueError('wrong package mode/schema')
     if manifest['record_kind'] not in ('actual','fixture') or not manifest['id'].strip():
@@ -132,7 +145,7 @@ def validate(manifest):
                 raise ValueError('media kind/selection mismatch')
             if status != 'available' and media['kind'] != 'diagnostic':
                 raise ValueError('partial failed output must be diagnostic')
-            _media(media,selection,resolution)
+            _media(media,selection,resolution,deadline)
             if media['kind'] != 'diagnostic':
                 available.add(key)
         if status == 'available' and not available:
@@ -170,9 +183,10 @@ $('export').onclick=()=>{try{const review={schema:'plan067-qualitative-review/v1
 </script>'''.replace('PAYLOAD',payload)
 
 
-def publish(manifest, output_directory):
+def publish(manifest, output_directory, *, deadline=None):
     """Publish once into a new directory; assets remain hash-bound in place."""
-    summary = validate(manifest)
+    summary = validate(manifest, deadline=deadline)
+    _remaining(deadline)
     output = safe_path(output_directory)
     output.mkdir(parents=True, exist_ok=False)
     write_json(output/'package.json',manifest)
@@ -182,5 +196,7 @@ def publish(manifest, output_directory):
         stream.write(_viewer(manifest,record))
     result = dict(schema='plan067-qualitative-package-result/v1', package=record,
         viewer=file_record(output/'viewer.html'), **summary)
+    _remaining(deadline)
     write_json(output/'result.json',result)
+    _remaining(deadline)
     return result

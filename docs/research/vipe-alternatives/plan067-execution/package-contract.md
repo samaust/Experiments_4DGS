@@ -1,6 +1,6 @@
 # Qualitative package interface (#30)
 
-`scripts/vipe_benchmark/qualitative_package.py` exposes `validate(manifest)` (also `validate_package`) and `publish(manifest, new_directory)`. Publication refuses an existing directory and emits immutable `package.json`, `viewer.html`, and `result.json`. Assets remain at their hash-bound local paths; keep those paths available while reviewing. Open `viewer.html` directly in a browser. No service or network access is required. Export downloads a human review JSON; it does not change the package or mark a review complete.
+`scripts/vipe_benchmark/qualitative_package.py` exposes `validate(manifest)` (also `validate_package`) and `publish(manifest, new_directory)` (both accept the optional monotonic `deadline` keyword). Publication refuses an existing directory and emits immutable `package.json`, `viewer.html`, and `result.json`. Assets remain at their hash-bound local paths; keep those paths available while reviewing. Open `viewer.html` directly in a browser. No service or network access is required. Export downloads a human review JSON; it does not change the package or mark a review complete.
 
 ## Manifest v1
 
@@ -17,4 +17,6 @@ The viewer provides matched selection, shared crop/zoom, original media access, 
 
 ## Validation
 
-Public package publication tests use small synthetic PNG/MP4 assets and fake provenance records marked `fixture`. Seven tests cover exclusive publication, readiness, changed hashes, invalid crop/roles/metadata, absent arms, corrupt PNG, complete video decoding/frame counts sparse sequence handling and refusal to promote fixture bytes to actual packages. These fixtures are engineering evidence only. AST parsing and generated JavaScript syntax checks supplement the tests; no configured static typechecker was available in this lane.
+Public package publication tests use small synthetic PNG/MP4 assets and fake provenance records marked `fixture`. Nine tests cover exclusive publication, readiness, changed hashes, invalid crop/roles/metadata, absent arms, corrupt PNG, complete video decoding/frame counts sparse sequence handling refusal to promote fixture bytes to actual packages, expired publication deadlines and subprocess thread/deadline bounds. These fixtures are engineering evidence only. AST parsing and generated JavaScript syntax checks supplement the tests; no configured static typechecker was available in this lane.
+
+Publication shares its caller's monotonic deadline: each media check runs before/after validation, and ffprobe/ffmpeg decode receive at most the remaining time or 30 seconds. Decoding uses one worker thread. Standalone fixture validation retains the per-subprocess 30-second bound.

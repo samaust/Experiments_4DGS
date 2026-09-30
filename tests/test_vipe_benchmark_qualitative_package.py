@@ -93,3 +93,26 @@ class PackageTests(unittest.TestCase):
         self.manifest['record_kind']='actual'
         with self.assertRaisesRegex(ValueError,'generation'):
             validate(self.manifest)
+    def test_expired_publication_deadline_prevents_any_output(self):
+        import time
+        with self.assertRaises(TimeoutError):
+            publish(self.manifest,self.root/'expired',deadline=time.monotonic()-1)
+        self.assertFalse((self.root/'expired').exists())
+    def test_video_validation_uses_one_thread_and_shared_remaining_deadline(self):
+        import json
+        import time
+        from unittest.mock import patch
+        from subprocess import CompletedProcess
+        selection=dict(id='clip150',kind='clip',role='selection',camera_id='0',frame_ids=[150,151],timestamps=[6.,6.04])
+        self.manifest['selections']=[selection]
+        for c in self.manifest['candidates']:
+            c['media']=[dict(selection_id='clip150',kind='clip',record=c['media'][0]['record'],frame_ids=[150,151],timestamps=[6.,6.04],resolution=[16,12])]
+        probe=json.dumps({'streams':[dict(width=16,height=12,avg_frame_rate='25/1',nb_read_frames='2')]})
+        with patch('vipe_benchmark.qualitative_package.subprocess.run',side_effect=lambda command,**kw: CompletedProcess(command,0,stdout=probe)) as run:
+            validate(self.manifest,deadline=time.monotonic()+2)
+        self.assertEqual(run.call_count,4)
+        for call in run.call_args_list:
+            command=call.args[0]
+            self.assertEqual(command[command.index('-threads')+1],'1')
+            self.assertLessEqual(call.kwargs['timeout'],2)
+            self.assertGreater(call.kwargs['timeout'],0)
