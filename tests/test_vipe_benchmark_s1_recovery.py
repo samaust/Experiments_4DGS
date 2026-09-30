@@ -3868,4 +3868,139 @@ class S1SeventhReviewTests(unittest.TestCase):
             self.assertEqual(append.call_count, 1)
         self.assertEqual(self.ledger_path.read_bytes(), self.before)
 
+
+
+class S1GeneratedSourceTests(unittest.TestCase):
+    """CPU worker provenance -> owned cleanup -> supervisor acceptance seam."""
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        def put(name, value):
+            path = self.root / name
+            write_json(path, value)
+            return file_record(path)
+        assets, runtime, self.observed = synthetic_assets(self.root, put)
+        self.request = dict(runtime=runtime, assets=assets, forbidden_vipe_roots=['/fixture/vipe'])
+
+    def generated_capture(self, *, generated_bytes=None, foreign_owner=False):
+        import json
+        from vipe_benchmark.s1_evidence import qualify_runtime
+        from vipe_benchmark.s1_progress import backend_resource_scope, backend_operation, loaded_runtime
+        job = 'S1-calibration-recovery-007'
+        self.request['job_id'] = job
+        output = self.root / 'jobs' / job
+        output.mkdir(parents=True)
+        parent = output.with_name(job + '-temporary')
+        parent.mkdir()
+        generator = self.root / 'packages/torch/distributed/nn/jit/instantiator.py'
+        generator.parent.mkdir(parents=True)
+        generator.write_text('def instantiate_non_scriptable_remote_module_template():\n'
+            '    generated_module_name = "_remote_module_non_scriptable"\n'
+            '    str_dict = dict(assign_module_interface_cls="module_interface_cls = None", args="*args", '
+            'kwargs="**kwargs", arg_types="*args, **kwargs", arrow_and_return_type="", '
+            'arrow_and_future_return_type="", jit_script_decorator="")\n'
+            '    return _do_instantiate_remote_module_template(generated_module_name, str_dict, True)\n')
+        template = generator.parent / 'templates/remote_module_template.py'
+        template.parent.mkdir()
+        template.write_text('_TEMPLATE_PREFIX = "{assign_module_interface_cls}\\n"\n'
+                            '_REMOTE_FORWARD_TEMPLATE_ENABLE_MOVING_CPU_TENSORS_TO_CUDA = "# {args} {kwargs}\\n"\n')
+        inventory = json.loads(Path(self.request['runtime']['inventory']['path']).read_text())
+        inventory['packages'][0]['files'] += [file_record(generator), file_record(template)]
+        inventory_path = self.root / 'generated-inventory.json'
+        write_json(inventory_path, inventory)
+        self.request['runtime']['inventory'] = self.observed['installed_inventory'] = file_record(inventory_path)
+        manifest = json.loads(Path(self.observed['loaded_files']['path']).read_text())
+        modules = {name: SimpleNamespace(__file__=entry['path'])
+                   for entry in manifest['files'] for name in entry['modules']}
+        maps = self.root / 'maps'
+        maps.write_text(''.join('0 0 0 0 0 ' + entry['path'] + '\n'
+                              for entry in manifest['files'] if entry['mapped_native_library']))
+        with backend_resource_scope():
+            owner = backend_operation(tempfile.TemporaryDirectory, dir=parent)
+            generated = Path(owner.name) / '_remote_module_non_scriptable.py'
+            generated.write_bytes(b'module_interface_cls = None\n# *args **kwargs\n' if generated_bytes is None else generated_bytes)
+            modules['torch.distributed.nn.jit.instantiator'] = SimpleNamespace(__file__=str(generator),
+                _TEMP_DIR=object() if foreign_owner else owner, INSTANTIATED_TEMPLATE_DIR_PATH=owner.name)
+            modules['torch.distributed.nn.jit.templates.remote_module_template'] = SimpleNamespace(__file__=str(template))
+            modules['_remote_module_non_scriptable'] = SimpleNamespace(__file__=str(generated))
+            self.observed['loaded_files'] = loaded_runtime(output / 'loaded-runtime.json', modules=modules,
+                                                         maps_path=maps, request=self.request)
+            qualify_runtime(self.observed, self.request)
+        self.assertFalse(generated.exists())
+        return json.loads(Path(self.observed['loaded_files']['path']).read_text())
+
+    def test_generated_source_is_accepted_after_owned_cleanup(self):
+        from vipe_benchmark.s1_evidence import qualify_runtime
+        self.generated_capture()
+        qualify_runtime(self.observed, self.request)
+
+
+    def changed_manifest(self, manifest):
+        path = Path(self.observed['loaded_files']['path']).with_name('altered-loaded-runtime.json')
+        write_json(path, manifest)
+        self.observed['loaded_files'] = file_record(path)
+
+    def test_retained_source_tampering_is_rejected_after_cleanup(self):
+        from vipe_benchmark.s1_evidence import qualify_runtime
+        manifest = self.generated_capture()
+        entry = next(item for item in manifest['files'] if 'generated_source' in item)
+        Path(entry['generated_source']['retained']['path']).write_bytes(b'changed source')
+        with self.assertRaisesRegex(ValueError, 'progress source bytes changed'):
+            qualify_runtime(self.observed, self.request)
+
+    def test_missing_retained_source_is_rejected_after_cleanup(self):
+        from vipe_benchmark.s1_evidence import qualify_runtime
+        manifest = self.generated_capture()
+        entry = next(item for item in manifest['files'] if 'generated_source' in item)
+        Path(entry['generated_source']['retained']['path']).unlink()
+        with self.assertRaises(FileNotFoundError):
+            qualify_runtime(self.observed, self.request)
+
+    def test_generated_source_requires_exact_job_owner_module_and_generator_bindings(self):
+        from vipe_benchmark.s1_evidence import qualify_runtime
+        original = self.generated_capture()
+        changes = ('foreign-root', 'foreign-retained', 'unsupported-module', 'missing-generator', 'missing-binding')
+        for change in changes:
+            with self.subTest(change=change):
+                manifest = copy.deepcopy(original)
+                entry = next(item for item in manifest['files'] if 'generated_source' in item)
+                binding = entry['generated_source']
+                if change == 'foreign-root': binding['temporary']['root'] = str(self.root / 'foreign')
+                elif change == 'foreign-retained': binding['retained']['path'] = binding['original']['path']
+                elif change == 'unsupported-module': entry['modules'] = ['_remote_module_other']
+                elif change == 'missing-generator': binding['generators'].pop('torch.distributed.nn.jit.instantiator')
+                else: del entry['generated_source']
+                path = Path(self.observed['loaded_files']['path']).with_name('altered-' + change + '.json')
+                write_json(path, manifest)
+                self.observed['loaded_files'] = file_record(path)
+                with self.assertRaises(ValueError): qualify_runtime(self.observed, self.request)
+
+    def test_changed_admitted_generator_is_rejected_after_cleanup(self):
+        from vipe_benchmark.s1_evidence import qualify_runtime
+        manifest = self.generated_capture()
+        entry = next(item for item in manifest['files'] if 'generated_source' in item)
+        Path(entry['generated_source']['generators']['torch.distributed.nn.jit.instantiator']['path']).write_bytes(b'changed generator')
+        with self.assertRaisesRegex(ValueError, 'progress source bytes changed'):
+            qualify_runtime(self.observed, self.request)
+
+    def test_generated_source_capture_rejects_non_template_bytes(self):
+        with self.assertRaisesRegex(ValueError, 'differs from admitted template'):
+            self.generated_capture(generated_bytes=b'arbitrary Python source')
+
+    def test_generated_source_capture_rejects_foreign_temporary_owner(self):
+        with self.assertRaisesRegex(ValueError, 'temporary ownership required'):
+            self.generated_capture(foreign_owner=True)
+
+    def test_missing_loaded_generator_binding_is_rejected(self):
+        from vipe_benchmark.s1_evidence import qualify_runtime
+        manifest = self.generated_capture()
+        for entry in manifest['files']:
+            if 'torch.distributed.nn.jit.instantiator' in entry['modules']:
+                entry['modules'] = []
+        self.changed_manifest(manifest)
+        with self.assertRaisesRegex(ValueError, 'loaded generator identity changed'):
+            qualify_runtime(self.observed, self.request)
+
+
 if __name__=='__main__': unittest.main()

@@ -1413,7 +1413,7 @@ def backend_operation(function, *args, cleanup_deadline=None, **kwargs):
     return operation(function,*args,**kwargs)
 
 
-def loaded_runtime(output, *, modules=None, maps_path=Path('/proc/self/maps')):
+def loaded_runtime(output, *, modules=None, maps_path=Path('/proc/self/maps'), request=None):
     """S1 equivalent of runtime_capture, with every owned I/O return gated."""
     import sys
     from . import files
@@ -1423,7 +1423,9 @@ def loaded_runtime(output, *, modules=None, maps_path=Path('/proc/self/maps')):
         filename=getattr(module,'__file__',None)
         if filename is None:continue
         path=operation(backend_operation(files.safe_path,filename).resolve)
-        if not operation(path.is_file):continue
+        if not operation(path.is_file):
+            if name.startswith('_remote_module_'):raise ValueError('S1 generated source missing before capture')
+            continue
         names.setdefault(path,[]).append(name)
     path=backend_operation(files.safe_path,maps_path)
     stream=acquire(path.open,lambda stream:stream.close(),'r')
@@ -1442,7 +1444,11 @@ def loaded_runtime(output, *, modules=None, maps_path=Path('/proc/self/maps')):
         libraries.add(operation(backend_operation(files.safe_path,filename).resolve))
     records=[]
     for path in sorted(set(names)|libraries):
-        records.append(dict(backend_operation(files.file_record,path),modules=sorted(names.get(path,[])),mapped_native_library=path in libraries))
+        entry=dict(backend_operation(files.file_record,path),modules=sorted(names.get(path,[])),mapped_native_library=path in libraries)
+        if any(name.startswith('_remote_module_') for name in entry['modules']):
+            from .s1_generated_source import capture
+            entry['generated_source']=capture(path,entry['modules'],modules,output,request)
+        records.append(entry)
     checked_write_json(output,dict(schema='vipe-benchmark-loaded-runtime/v1',files=records,
         interpreter=dict(version=sys.version,executable=backend_operation(files.file_record,sys.executable),
             invoked_executable=sys.executable,prefix=sys.prefix,base_prefix=sys.base_prefix),

@@ -286,7 +286,8 @@ def _segment(request, output, config, *, clock=None):
                     from .runtime_capture import loaded_runtime
                     if deadline is not None:
                         from .s1_progress import loaded_runtime
-                    runtime['loaded_files'] = loaded_runtime(output / 'loaded-runtime.json')
+                    runtime['loaded_files'] = (loaded_runtime(output / 'loaded-runtime.json', request=request)
+                        if deadline is not None else loaded_runtime(output / 'loaded-runtime.json'))
                     runtime['installed_inventory'] = verify_record(request['runtime']['inventory'])
                 if request['job_id'] in S1_RECOVERY_JOBS:
                     from .s1_evidence import first_record, qualify_runtime

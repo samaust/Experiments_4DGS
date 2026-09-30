@@ -874,7 +874,11 @@ def qualify_runtime(runtime, request):
             raise ValueError('S1 forbidden/duplicate loaded runtime file')
         seen.add(entry['path'])
         record = {k:entry[k] for k in ('path','sha256','bytes')}
-        operation(strict_record,record)
+        if 'generated_source' in entry or any(name.startswith('_remote_module_') for name in names):
+            from .s1_generated_source import verify
+            operation(verify,entry,request,runtime['loaded_files']['path'])
+        else:
+            operation(strict_record,record)
         if entry['path'] in admitted and any(record[k] != admitted[entry['path']][k] for k in ('sha256','bytes')):
             raise ValueError('S1 loaded file differs from admitted inventory')
         for name in names:
@@ -888,6 +892,10 @@ def qualify_runtime(runtime, request):
         native |= entry.get('mapped_native_library') is True
         if any(n.split('.')[0] in ('torch','torchvision','numpy') for n in names) and entry['path'] not in admitted:
             raise ValueError('S1 required module absent from admitted inventory')
+    for entry in manifest['files']:
+        if 'generated_source' in entry and any(loaded_names.get(name) != record
+                for name,record in entry['generated_source']['generators'].items()):
+            raise ValueError('S1 generated source loaded generator identity changed')
     if any(loaded_names.get(name) != imported[name]['file'] for name, _, _ in required_imports):
         raise ValueError('S1 loaded native/import identity differs from E1')
     native_file = imported['groundingdino._C']['file']
