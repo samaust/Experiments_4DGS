@@ -32,9 +32,9 @@ verification records; recheck changed or conflicting evidence during integration
 
 ## Blocked by
 
-- T1 — Verify the D0–D4 reference comparison and discovery map.
-- T2 — Compare additional monocular metric depth models.
-- T3 — Compare relative and diffusion depth models.
-- T4 — Compare video depth and temporal consistency.
-- T5 — Compare multi-view depth and geometric models.
-- T6 — Compare efficient and high-resolution depth methods.
+- [#37 — Verify the D0–D4 reference comparison and discovery map](https://github.com/samaust/Experiments_4DGS/issues/37).
+- [#38 — Compare additional monocular metric depth models](https://github.com/samaust/Experiments_4DGS/issues/38).
+- [#39 — Compare relative and diffusion depth models](https://github.com/samaust/Experiments_4DGS/issues/39).
+- [#40 — Compare video depth and temporal consistency](https://github.com/samaust/Experiments_4DGS/issues/40).
+- [#41 — Compare multi-view depth and geometric models](https://github.com/samaust/Experiments_4DGS/issues/41).
+- [#42 — Compare efficient and high-resolution depth methods](https://github.com/samaust/Experiments_4DGS/issues/42).

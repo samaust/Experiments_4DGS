@@ -1,30 +1,31 @@
-# Proposed tickets for the depth model survey
+# Depth model survey tickets
 
 Source: [issue #36](https://github.com/samaust/Experiments_4DGS/issues/36), Plan 068.
-Status: **draft breakdown awaiting user approval; no child tickets published**.
-Prepared 2026-09-30 after reading the live issue and all comments. The issue was
-open, with no comments, blockers or children.
+Status: **approved and published** on 2026-09-30. The user approved the seven-ticket
+breakdown with “I approve.” All seven issues are open, carry `ready-for-agent`,
+and have verified native parent and blocking relationships. Their published
+bodies match the local ticket documents.
 
-## Proposed breakdown
+## Published breakdown
 
-| Draft | Title | What it delivers | Blocked by |
+| Ticket | Title | What it delivers | Blocked by |
 | --- | --- | --- | --- |
-| [T1](01-reference-comparison-and-discovery-map.md) | Verify the D0–D4 reference comparison and discovery map | A source-checked reference section, current artifact/license dispositions, and an initial category map from every supplied search entry point. | None |
-| [T2](02-additional-monocular-metric-depth.md) | Compare additional monocular metric depth models | A complete comparison of further metric candidates, their camera/scale assumptions, releases and commercial terms. | None |
-| [T3](03-relative-and-diffusion-depth.md) | Compare relative and diffusion depth models | A complete comparison of relative-depth quality, alignment assumptions, diffusion cost, releases and commercial terms. | None |
-| [T4](04-video-depth-and-temporal-consistency.md) | Compare video depth and temporal consistency | A complete comparison of temporal evidence, motion/sequence assumptions, releases and commercial terms. | None |
-| [T5](05-multi-view-depth-and-geometry.md) | Compare multi-view depth and geometric models | A complete comparison of camera/view requirements, depth/geometry evidence, dynamic-scene limits, releases and commercial terms. | None |
-| [T6](06-efficient-and-high-resolution-depth.md) | Compare efficient and high-resolution depth methods | A complete comparison of reported quality/detail versus compute, with exact model combinations, releases and commercial terms. | None |
-| [T7](07-consolidated-survey-report.md) | Publish the consolidated depth-model survey | One compact report, reconciled evidence inventories, coverage assessment and justified future-test shortlists. | T1–T6 |
+| [#37](https://github.com/samaust/Experiments_4DGS/issues/37) | [Verify the D0–D4 reference comparison and discovery map](01-reference-comparison-and-discovery-map.md) | A source-checked reference section, current artifact/license dispositions, and an initial category map from every supplied search entry point. | None |
+| [#38](https://github.com/samaust/Experiments_4DGS/issues/38) | [Compare additional monocular metric depth models](02-additional-monocular-metric-depth.md) | A complete comparison of further metric candidates, their camera/scale assumptions, releases and commercial terms. | None |
+| [#39](https://github.com/samaust/Experiments_4DGS/issues/39) | [Compare relative and diffusion depth models](03-relative-and-diffusion-depth.md) | A complete comparison of relative-depth quality, alignment assumptions, diffusion cost, releases and commercial terms. | None |
+| [#40](https://github.com/samaust/Experiments_4DGS/issues/40) | [Compare video depth and temporal consistency](04-video-depth-and-temporal-consistency.md) | A complete comparison of temporal evidence, motion/sequence assumptions, releases and commercial terms. | None |
+| [#41](https://github.com/samaust/Experiments_4DGS/issues/41) | [Compare multi-view depth and geometric models](05-multi-view-depth-and-geometry.md) | A complete comparison of camera/view requirements, depth/geometry evidence, dynamic-scene limits, releases and commercial terms. | None |
+| [#42](https://github.com/samaust/Experiments_4DGS/issues/42) | [Compare efficient and high-resolution depth methods](06-efficient-and-high-resolution-depth.md) | A complete comparison of reported quality/detail versus compute, with exact model combinations, releases and commercial terms. | None |
+| [#43](https://github.com/samaust/Experiments_4DGS/issues/43) | [Publish the consolidated depth-model survey](07-consolidated-survey-report.md) | One compact report, reconciled evidence inventories, coverage assessment and justified future-test shortlists. | #37, #38, #39, #40, #41, #42 |
 
-The initial frontier is T1–T6. They can proceed in parallel because the parent
+The initial frontier is #37–#42. They can proceed in parallel because the parent
 already defines the evidence fields, cutoff and confirmed report/source review
-boundary, and source reconnaissance is available. T1 contributes an initial
+boundary, and source reconnaissance is available. #37 contributes an initial
 cross-category discovery map; other tickets can search their own categories
-without waiting for it. T7 genuinely needs all six completed sections.
+without waiting for it. #43 genuinely needs all six completed sections.
 
 No prefactoring or new application interface is needed for this documentation
-and research work. Each T1–T6 ticket covers discovery, source extraction,
+and research work. Each #37–#42 ticket covers discovery, source extraction,
 availability, licensing, readable findings and verification for one bounded
 section. There is no separate horizontal ticket for collecting data, checking
 licenses, or building a validator.
@@ -38,15 +39,15 @@ licenses, or building a validator.
   identifiers, exact versions and table locations, metric definitions and
   directions, input and alignment settings, reporting provenance, release
   dispositions, four commercial-use findings, and explicit missing evidence.
-  Use scoped identifiers where needed; T7 reconciles aliases and duplicate
+  Use scoped identifiers where needed; #43 reconciles aliases and duplicate
   observations rather than requiring a shared mutable registry during research.
 - Keep D0–D4 reference rows distinct from newly discovered variants. A candidate
   may appear in several category tables for different capabilities. Cross-link
   the same exact variant; record discrepancies for final reconciliation.
-- T1 screens all specified discovery entry points and records the initial
-  category map. T2–T6 conduct category searches and two rounds of expansion from
+- #37 screens all specified discovery entry points and records the initial
+  category map. #38–#42 conduct category searches and two rounds of expansion from
   relevant paper comparison tables. Later cross-category leads are recorded
-  for the owning section and T7's targeted gap review.
+  for the owning section and #43's targeted gap review.
 - The cutoff is 2026-09-30. Results are reported paper evidence. Review is the
   user-confirmed report/source boundary, with ordinary document/data checks.
   All work remains within the parent's literature-only scope.
@@ -55,19 +56,18 @@ licenses, or building a validator.
 
 | Parent requirement | Ticket ownership |
 | --- | --- |
-| All starting sources, baseline identity and initial category coverage | T1; T7 verifies combined coverage |
-| Further monocular metric candidates and physical-scale assumptions | T2 |
-| Relative/depth-alignment and diffusion candidates | T3 |
-| Temporal evidence and moving scenes | T4 |
-| Multi-view inputs and geometric foundation models | T5 |
-| Efficiency, high-resolution and boundary/detail tradeoffs | T6 |
-| Source traceability, exact variants, availability and four licensing findings | Every research slice; T7 reconciles |
-| Compact report, consolidated evidence, project fit and shortlists | T7 |
+| All starting sources, baseline identity and initial category coverage | #37; #43 verifies combined coverage |
+| Further monocular metric candidates and physical-scale assumptions | #38 |
+| Relative/depth-alignment and diffusion candidates | #39 |
+| Temporal evidence and moving scenes | #40 |
+| Multi-view inputs and geometric foundation models | #41 |
+| Efficiency, high-resolution and boundary/detail tradeoffs | #42 |
+| Source traceability, exact variants, availability and four licensing findings | Every research slice; #43 reconciles |
+| Compact report, consolidated evidence, project fit and shortlists | #43 |
 
-Before publication, obtain approval of granularity and blocking edges as required
-by the to-tickets skill. Then create one `ready-for-agent` issue per approved
-draft, referencing #36 and using native child and blocking relationships.
-Replace draft blocker names with actual issue numbers after creation. Preserve
-the parent issue's title, body, labels and open state; do not add a parent comment
-or close it as part of ticket publication. Verify all created relationships and
-published bodies before recording the publication result here.
+Publication verification confirmed that #37–#42 have no blockers and each
+blocks #43; #43 is blocked by exactly those six issues. Issue #36 has exactly
+the seven published children, all incomplete. Its title, body, labels, comments,
+parent, blockers and open state match the snapshot taken before publication.
+Ticket publication completes this planning milestone; the research deliverables
+remain pending.
