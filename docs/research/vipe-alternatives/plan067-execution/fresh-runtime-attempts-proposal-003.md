@@ -28,7 +28,8 @@ training require separate concrete proposals if not already allocated.
 
 ## Preserved state and remaining gates
 
-Recovery008 failed after36.640664215025026 seconds, zero qualified rows; finish558
+Recovery008 failed after36.640664215025026 seconds, zero accepted calibration
+rows; preserved progress records one individually qualified partial row. Finish558
 SHA256 518054576325370a9bbfb13ab662f1e0d116a9990cf1a1edc30e6fe83b038514.
 Cleanup confirmed, no survivors, stop_required=false and terminal receipt
 published. Preserve all earlier failures, including recovery007's unaccepted510
