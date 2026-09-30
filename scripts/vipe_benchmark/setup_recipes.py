@@ -24,7 +24,7 @@ EXTRAS = {
            'termcolor', 'timm', 'tqdm', 'trimesh', 'triton>=2.4.0', 'wandb'],
     'E5': ['xformers==0.0.28.post3', 'pre-commit', 'trimesh', 'einops', 'huggingface_hub',
            'imageio', 'opencv-python', 'open3d', 'fastapi', 'uvicorn', 'requests', 'typer>=0.9.0',
-           'pillow', 'omegaconf', 'evo', 'e3nn', 'moviepy==1.0.3', 'plyfile', 'pillow_heif',
+           'pillow', 'omegaconf', 'evo', 'e3nn', 'moviepy==1.0.3', 'imageio-ffmpeg==0.6.0', 'plyfile', 'pillow_heif',
            'safetensors', 'pycolmap', 'hatchling>=1.25', 'hatch-vcs>=0.4', 'editables~=0.3', 'scipy', 'addict'],
     'E6': ['xformers==0.0.21', 'opencv-python', 'Pillow', 'DateTime', 'matplotlib', 'plyfile',
            'HTML4Vision', 'timm', 'tensorboardX', 'imgaug', 'iopath', 'imagecorruptions', 'mmcv==1.7.2', 'yapf==0.40.1', 'scipy'],

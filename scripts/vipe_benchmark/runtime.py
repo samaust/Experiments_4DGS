@@ -606,13 +606,17 @@ def qualify_imports(request, output):
         raise ValueError('actually imported base modules differ from the prescribed environment')
     def prohibited(*args, **kwargs):
         raise RuntimeError('setup import qualification prohibits network access and model forwards')
+    ffmpeg = None
+    if settings['environment'] == 'E5':
+        from .ffmpeg_binding import bind
+        ffmpeg = bind()
     isolation = deny_vipe(settings['forbidden_vipe_roots'])
     with patch.object(socket, 'create_connection', prohibited), patch.object(socket.socket, 'connect', prohibited), \
          patch.object(socket.socket, 'connect_ex', prohibited), patch.object(torch.nn.Module, '_call_impl', prohibited):
         modules = _native_api_imports(settings['environment'], read_json(verify_record(settings['assets'])['path']))
     write_json(output, dict(status='complete', environment=settings['environment'], modules=modules,
         native_model_constructors_called=False, forwards=0, cuda_context_initialized=bool(torch.cuda.is_initialized()),
-        isolation=isolation, offline=True,
+        isolation=isolation, offline=True, ffmpeg=ffmpeg,
         imported_base=dict(torch=torch.__version__, torchvision=torchvision.__version__,
                            opencv=cv2.__version__, numpy=importlib.metadata.version('numpy'))))
 

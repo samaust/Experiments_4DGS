@@ -108,6 +108,9 @@ def _model_runtime(request):
         from .native_helpers import NativeHelpers
         helpers = NativeHelpers(Path(importlib.util.find_spec('triton').origin).parent,
                                 os.environ['TMPDIR'], request['forbidden_vipe_roots'])
+    if component == 'D2':
+        from .ffmpeg_binding import bind_runtime
+        bind_runtime(request['runtime'])
     if gated:deny_vipe=_s1_deny_vipe
     isolation = (dict(reference_vipe_access=True) if component in ('S0', 'D0') else
                  deny_vipe(request['forbidden_vipe_roots'], native_helpers=helpers))
