@@ -1,6 +1,6 @@
 # Qualitative downstream generation proposal
 
-**Current scope:** [Scope amendment 001](qualitative-comparison-scope-amendment-001.md) takes precedence: human comparisons and the active viewer cover segmentation and depth only. Motion and neighbors remain historical engineering groups and require no human review for completion. The motion criterion and clip diagnostics remain available where applicable.
+**Current scope:** [Scope amendment 001](qualitative-comparison-scope-amendment-001.md) takes precedence: isolated packages and initial review (#33) cover segmentation and depth only. Motion and neighbor method effects remain required comparisons on actual final renders (#34/#35); isolated M/N diagnostics are excluded from the current viewer. Applicable motion criteria and clip controls remain.
 
 ## Authority and readiness
 
@@ -57,6 +57,12 @@ support three cameras and LK roundtrip 1 pixel. Diagnostic camera/pair selection
 remain those frozen in benchmark-v1.json. These are diagnostic outputs only.
 
 ## Trained RGB proposal and concrete limits
+
+The two-arm pilot below does not establish all motion/neighbor method effects.
+The latest scope requires a concrete final-render coverage/budget proposal for
+M0–M2 and N0–N2, with matched settings and controlled component substitutions.
+Do not expand this pilot's allocation implicitly or infer M/N winners from isolated
+diagnostics; unresolved coverage remains open under #34/#35.
 
 A matched trained comparison needs a separate adapter from accepted geometry to
 training initialization. The existing diagnostic subset is not the full-rig
