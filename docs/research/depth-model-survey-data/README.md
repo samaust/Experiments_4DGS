@@ -15,6 +15,23 @@ inventories retain source provenance and reconcile exact model identities
 across sections. Additional variants and contradictory observations remain
 visible rather than being silently averaged or discarded.
 
+The four root CSVs consolidate the section records without changing their scoped
+identifiers or source fields. They are a reading/export view of the section data,
+not additional independent evidence. Update them together with any corrected
+section rows. `identity-links.csv` records explicit relationships using
+`source_model_id,target_model_id,relation,rationale`. Both IDs resolve in
+`models.csv`, except `not_applicable` for a screened lead with no audited target.
+An unlisted pair is not an assertion of different families.
+
+Only `same_release` denotes an exact duplicate release record. Same weights with
+different inputs/implementations remain different experimental controls.
+`family_only`, `paper_model_reference`, `paper_architecture_reference` and
+`discovery_route` do not establish checkpoint equivalence. Refreshes, derived
+models, retraining and unresolved mappings retain separate identities. Benchmark
+observations retain evaluator provenance even when models share weights. The
+verification note records the duplicate-observation check and material conflicts;
+no family count or independent-repeat count is inferred from CSV row counts.
+
 All CSV files are UTF-8 with a header row and standard CSV quoting. Fields are
 strings. Multiple URLs or identifiers in a field are separated by semicolons.
 Use `unknown` for genuinely unavailable information and `not_applicable` where
