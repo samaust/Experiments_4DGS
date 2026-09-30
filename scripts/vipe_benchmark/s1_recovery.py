@@ -22,6 +22,8 @@ SCHEMA_4 = 'vipe-benchmark-s1-amendment-calibration-recovery/v4'
 JOB_4 = 'S1-calibration-recovery-004'
 SCHEMA_5 = 'vipe-benchmark-s1-amendment-calibration-recovery/v5'
 JOB_5 = 'S1-calibration-recovery-005'
+SCHEMA_6 = 'vipe-benchmark-s1-amendment-calibration-recovery/v6'
+JOB_6 = 'S1-calibration-recovery-006'
 AMENDMENT = 'plan031-s1-s0-token-sum-v1'
 LIMITS = dict(gpu_concurrency=1, gpu_peak_device_gib_limit=22,
     gpu_total_seconds_limit=93600, cpu_max_workers=8,
@@ -33,6 +35,8 @@ BINDINGS = ('semantic_amendment', 'repair_validation', 'configuration',
             'original_request_sha256', 'baseline_correction')
 PROCESS_FILE_AMENDMENT = ROOT / 'docs/research/vipe-alternatives/issue3-preparation/s1-process-file-amendment-001.json'
 PROCESS_FILE_AMENDMENT_SHA256 = 'e273a23b2b5b594ce8e1deae48b659e27c3a8f4ee1b28d680ea21cfb005c84dc'
+PROCESS_FILE_AMENDMENT_2 = ROOT / 'docs/research/vipe-alternatives/plan031-execution/s1-process-file-amendment-002.json'
+PROCESS_FILE_AMENDMENT_2_SHA256 = 'fdcad90cb7fd680b5c6b0c536f20eea01b39b34019705d341a8456774ae10cb6'
 
 
 # Compatibility exports keep admission and execution on one static contract.
@@ -126,7 +130,8 @@ def register_source_requalification(local, config, amendment):
 def validate_fifth_review(document):
     """Exact reviewed proposal plus one explicit approval; no allocation drift."""
     proposal = read_json(strict_record(document.get('review_proposal'))['path'])
-    if (proposal.get('schema') != SCHEMA_5 or proposal.get('job_id') != JOB_5
+    if (proposal.get('schema') != {JOB_5: SCHEMA_5, JOB_6: SCHEMA_6}.get(document.get('job_id'))
+            or proposal.get('job_id') != document.get('job_id')
             or proposal.get('additional_attempt_approved') is not False
             or proposal.get('authorization_context', {}).get('stage') != 'REVIEW'
             or proposal.get('required_rows') != 510
@@ -141,6 +146,17 @@ def validate_fifth_review(document):
         raise ValueError('fifth DO differs from the exact REVIEW proposal')
 
 
+def validate_sixth_predecessor(finish, authorization):
+    """Keep the fifth consumed attempt's actual terminal evidence bound."""
+    terminal = read_json(strict_record(finish.get('terminal_receipt'))['path'])
+    if (terminal.get('job_id') != JOB_5 or terminal.get('status') != 'failed'
+            or terminal.get('authorization') != authorization
+            or terminal.get('reservation') != finish.get('reservation')
+            or terminal.get('attempt_consumed') is not True
+            or terminal.get('reconstruction_authorized') is not False):
+        raise ValueError('sixth requires exact fifth consumed terminal receipt')
+
+
 def validate_binding(local, config, authorization, *, events=None, consumed=False):
     """Read-only admission; consumed=True is only for terminal resolution."""
     from .ledger import Ledger
@@ -152,9 +168,9 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
     states = ledger.states(events)
     document = read_json(strict_record(authorization)['path'])
     job = document.get('job_id')
-    if job not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5):
+    if job not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5, JOB_6):
         raise ValueError('unrecognized S1 recovery identity')
-    required = dict(schema={JOB: SCHEMA, JOB_2: SCHEMA_2, JOB_3: SCHEMA_3, JOB_4: SCHEMA_4, JOB_5: SCHEMA_5}[job], job_id=job, original_job_id='S1-calibration',
+    required = dict(schema={JOB: SCHEMA, JOB_2: SCHEMA_2, JOB_3: SCHEMA_3, JOB_4: SCHEMA_4, JOB_5: SCHEMA_5, JOB_6: SCHEMA_6}[job], job_id=job, original_job_id='S1-calibration',
         attempts_limit=1, seconds_limit=3600, gpu_total_seconds_limit=93600,
         reset_previous_consumption=False, changes_to_prescribed_configuration=True,
         unrelated_attempts_reopened=False, reconstruction_authorized=False,
@@ -166,7 +182,7 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
             or document['authorization_context']['stage'] != 'DO'
             or document.get('branch', 'calibration') != 'calibration'):
         raise ValueError('exact explicit S1 calibration amendment authorization required')
-    if job == JOB_5:
+    if job in (JOB_5, JOB_6):
         validate_fifth_review(document)
     configuration = strict_record(document['configuration'])
     if (configuration != file_record(ROOT / 'configs/vipe-alternatives/benchmark-v1.json')
@@ -245,11 +261,20 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
             raise ValueError('fourth S1 identity requires exact consumed cleaned-up third attempt')
     else:
         predecessor = strict_record(document['previous_recovery_authorization'])
-        finished = states.get(JOB_4, {})
-        chain = [JOB, JOB_2, JOB_3, JOB_4]
-        if (len(prior) not in (4, 5) or [event['job_id'] for event in prior[:4]] != chain
-                or prior[3]['authorization'] != predecessor
-                or any(event['job_id'] != JOB_5 or event['authorization'] != authorization for event in prior[4:])
+        chain = [JOB, JOB_2, JOB_3, JOB_4] + ([JOB_5] if job == JOB_6 else [])
+        finished = states.get(chain[-1], {})
+        count = len(chain)
+        if job == JOB_6 and len(prior) >= count:
+            linked = predecessor
+            for index in range(count - 1, -1, -1):
+                if linked != prior[index]['authorization']:
+                    raise ValueError('sixth predecessor authorization chain changed')
+                linked_document = read_json(strict_record(linked)['path'])
+                if index:
+                    linked = linked_document['previous_recovery_authorization']
+        if (len(prior) not in (count, count + 1) or [event['job_id'] for event in prior[:count]] != chain
+                or prior[count-1]['authorization'] != predecessor
+                or any(event['job_id'] != job or event['authorization'] != authorization for event in prior[count:])
                 or finished.get('event') != 'finish' or finished.get('status') != 'failed'
                 or finished.get('cleanup_confirmed') is not True or finished.get('cleanup_uncertain') is not False
                 or finished.get('surviving_pids') or finished != document.get('previous_recovery_failure')
@@ -259,7 +284,7 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
         raise ValueError('consumed S1 identity or active attempt')
     total = ledger.totals(events)['gpu']
     if not consumed and (total['elapsed_seconds'] + total['reserved_seconds'] >= 93600
-            or (job == JOB_5 and total['elapsed_seconds'] + total['reserved_seconds'] + 3600 > 93600)):
+            or (job in (JOB_5, JOB_6) and total['elapsed_seconds'] + total['reserved_seconds'] + 3600 > 93600)):
         raise ValueError('cumulative GPU allocation exhausted')
     def artifact(job, field=None):
         state = states.get(job, {})
@@ -312,7 +337,7 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
     return document, request
 
 
-def preservation(local, document, events, authorization):
+def preservation(local, document, events, authorization, *, process_amendment_override=None):
     """Exact scientific bytes, original ledger prefix, explicit bookkeeping policy."""
     import hashlib
     from .files import canonical
@@ -348,17 +373,20 @@ def preservation(local, document, events, authorization):
             or [r for r in records if r['path'] == snap['path']] !=
                 [{k: snap[k] for k in ('path', 'sha256', 'bytes')} ]):
         raise ValueError('exact baseline preservation categories required')
-    process_amendment = document.get('process_file_amendment')
+    process_amendment = process_amendment_override or document.get('process_file_amendment')
+    sixth_amendment = document['job_id'] == JOB_6 or process_amendment_override is not None
     amended_record = None
     if process_amendment is not None:
-        if (strict_record(process_amendment) != file_record(PROCESS_FILE_AMENDMENT)
-                or process_amendment['sha256'] != PROCESS_FILE_AMENDMENT_SHA256):
+        expected_amendment = PROCESS_FILE_AMENDMENT_2 if sixth_amendment else PROCESS_FILE_AMENDMENT
+        expected_sha256 = PROCESS_FILE_AMENDMENT_2_SHA256 if sixth_amendment else PROCESS_FILE_AMENDMENT_SHA256
+        if (strict_record(process_amendment) != file_record(expected_amendment)
+                or process_amendment['sha256'] != expected_sha256):
             raise ValueError('exact S1 process-file amendment required')
         note = read_json(process_amendment['path'])
         agents = [record for record in frozen if record['path'] == str((ROOT / 'AGENTS.md').resolve())]
         if (len(agents) != 1 or set(note) != {'schema', 'issue', 'scope', 'baseline',
-                'baseline_correction', 'old', 'new'}
-                or note['schema'] != 'plan031-s1-process-file-preservation-amendment/v1'
+                'baseline_correction', 'old', 'new'} | ({'previous_amendment'} if sixth_amendment else set())
+                or note['schema'] != ('plan031-s1-process-file-preservation-amendment/v2' if sixth_amendment else 'plan031-s1-process-file-preservation-amendment/v1')
                 or note['issue'] != 3
                 or note['scope'] != 'AGENTS.md process instructions only; no scientific input, allocation, attempt, or approval change'
                 or note['baseline'] != document['baseline']
@@ -366,6 +394,9 @@ def preservation(local, document, events, authorization):
                 or note['old'] != agents[0]
                 or note['new'] != file_record(ROOT / 'AGENTS.md')):
             raise ValueError('S1 process-file preservation scope changed')
+        if sixth_amendment and (strict_record(note['previous_amendment']) != file_record(PROCESS_FILE_AMENDMENT)
+                or note['previous_amendment']['sha256'] != PROCESS_FILE_AMENDMENT_SHA256):
+            raise ValueError('historical process-file amendment changed')
         strict_record(note['new'])
         amended_record = agents[0]
     for record in frozen:
@@ -401,18 +432,23 @@ def preservation(local, document, events, authorization):
             or actual != prefix or hashlib.sha256(prefix).hexdigest() != snap['sha256']
             or len(prefix) != snap['bytes'] or events[n-1]['event_sha256'] != snap['last_event_sha256']):
         raise ValueError('preserved ledger prefix required')
-    if document['job_id'] == JOB_5:
+    if document['job_id'] in (JOB_5, JOB_6):
+        sixth = document['job_id'] == JOB_6
+        count_predecessor = 520 if sixth else 472
         prior = strict_record(document['prior_ledger_snapshot'])
-        expected = ROOT / 'docs/research/vipe-alternatives/issue3-preparation/s1-dispatch-004-outcome/post-dispatch-ledger-004.jsonl'
+        expected = ROOT / ('docs/research/vipe-alternatives/plan031-execution/s1-recovery-005/outcome/ledger-after.jsonl' if sixth else 'docs/research/vipe-alternatives/issue3-preparation/s1-dispatch-004-outcome/post-dispatch-ledger-004.jsonl')
         previous_record = strict_record(document['previous_recovery_authorization'])
         previous = read_json(previous_record['path'])
-        if (prior != file_record(expected) or previous.get('job_id') != JOB_4
-                or len(events) < 472 or events[471] != document['previous_recovery_failure']):
+        if (prior != file_record(expected) or previous.get('job_id') != (JOB_5 if sixth else JOB_4)
+                or len(events) < count_predecessor or events[count_predecessor-1] != document['previous_recovery_failure']):
             raise ValueError('fifth consumed predecessor snapshot changed')
-        preservation(local, previous, events[:472], previous_record)
+        if sixth:
+            validate_sixth_predecessor(events[count_predecessor-1], previous_record)
+        preservation(local, previous, events[:count_predecessor], previous_record,
+                     process_amendment_override=process_amendment if sixth_amendment else None)
         live = document['live_ledger_snapshot']
         count = live.get('events')
-        if type(count) is not int or not 472 <= count <= len(events):
+        if type(count) is not int or not count_predecessor <= count <= len(events):
             raise ValueError('fifth REVIEW live ledger prefix required')
         prefix = ''.join(canonical(event) + '\n' for event in events[:count]).encode()
         if (live != dict(path=str((Path(local) / 'ledger.jsonl').resolve()), bytes=len(prefix),
@@ -505,7 +541,7 @@ def lifecycle(events, authorization, document):
             if not reservation or not event.get('phase') or not event.get('foreign_pids'):
                 raise ValueError('S1 lifecycle ownership diagnostic outside active phase')
         elif kind == 'monitor_gap_recovered':
-            if (not started or job not in (JOB_3, JOB_4, JOB_5) or type(event.get('expired_samples')) is not int
+            if (not started or job not in (JOB_3, JOB_4, JOB_5, JOB_6) or type(event.get('expired_samples')) is not int
                     or event['expired_samples'] < 1 or type(event.get('gap_seconds')) not in (int, float)
                     or not 0 < event['gap_seconds'] <= 15):
                 raise ValueError('S1 recovered monitor gap outside bounded worker phase')
@@ -585,7 +621,7 @@ def active_binding(local, config, captured, command, *, with_reservation=False):
     events = Ledger(Path(local) / 'ledger.jsonl', config).events()
     states = Ledger(Path(local) / 'ledger.jsonl', config).states(events)
     active = states.get(captured['job_id']) if captured is not None else next(
-        (states.get(job) for job in (JOB_5, JOB_4, JOB_3, JOB_2, JOB) if states.get(job, {}).get('event') == 'reserve'), None)
+        (states.get(job) for job in (JOB_6, JOB_5, JOB_4, JOB_3, JOB_2, JOB) if states.get(job, {}).get('event') == 'reserve'), None)
     if not active or active.get('event') != 'reserve':
         raise ValueError('missing active S1 reservation')
     from .s1_clock import typed_equal
@@ -619,7 +655,7 @@ def worker_clock(args, request, config):
     import sys
     from .s1_clock import ReservationClock
     path = args.request.resolve()
-    if request.get('job_id') not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5) or path.name != request['job_id'] + '.json' or path.parent.name != 'requests':
+    if request.get('job_id') not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5, JOB_6) or path.name != request['job_id'] + '.json' or path.parent.name != 'requests':
         raise ValueError('canonical worker request path required')
     local = path.parent.parent
     command = [request['runtime']['python'], str((ROOT / 'scripts/basketball_vipe_worker.py').resolve()),
@@ -666,7 +702,7 @@ def reservation_binding(local, config, events, evidence, command=None):
 
 def resolved_result(local, config, events, finish):
     job = finish.get('job_id')
-    if job not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5): raise ValueError('S1 result identity')
+    if job not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5, JOB_6): raise ValueError('S1 result identity')
     registered = [e for e in events if e['event'] == 'component_recovery_authorized' and e['job_id'] == job]
     if (len(registered) != 1 or finish.get('cleanup_confirmed') is not True
             or finish.get('surviving_pids') or finish.get('deadline_exceeded')
@@ -850,7 +886,7 @@ def terminal_receipt(local, docs, config, authorization, *, error=None,
         pass
     job = reservation['job_id'] if reservation is not None else (
         supplied_document.get('job_id', JOB) if isinstance(supplied_document, dict) else JOB)
-    if job not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5): raise ValueError('S1 terminal identity')
+    if job not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5, JOB_6): raise ValueError('S1 terminal identity')
     if reservation is None:
         if any(e.get('job_id') == job and e['event'] == 'reserve' for e in events):
             raise ValueError('consumed S1 publication belongs to active supervisor')

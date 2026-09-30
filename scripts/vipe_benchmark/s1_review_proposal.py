@@ -13,7 +13,8 @@ from . import s1_recovery as recovery
 from .files import canonical, file_record, object_hash, read_json, safe_path
 from .ledger import Ledger
 
-NEXT_JOB = 'S1-calibration-recovery-005'
+HISTORICAL_JOB = 'S1-calibration-recovery-005'
+NEXT_JOB = 'S1-calibration-recovery-006'
 
 
 def _events(raw):
@@ -31,13 +32,13 @@ def _events(raw):
 
 
 def build_review_proposal(local, config, validation, implementation_review,
-                         request_date, *, job_id=NEXT_JOB):
-    """Bind a concrete fifth proposal to a stable live snapshot, without writes.
+                         request_date, *, job_id=HISTORICAL_JOB):
+    """Bind a concrete fifth or sixth proposal to a stable live snapshot, without writes.
 
     Ticket #25 must bind this exact proposal and explicit approval before
-    the fifth identity can register or dispatch.
+    the exact identity can register or dispatch.
     """
-    if job_id != NEXT_JOB:
+    if job_id not in (HISTORICAL_JOB, NEXT_JOB):
         raise ValueError('only the next unconsumed fifth REVIEW identity is allowed')
     if not isinstance(request_date, str) or not request_date.strip():
         raise ValueError('REVIEW request date required')
@@ -56,9 +57,10 @@ def build_review_proposal(local, config, validation, implementation_review,
         raise ValueError('active attempt prevents a stable REVIEW proposal')
     prior = [event for event in events if event['event'] == 'component_recovery_authorized'
              and event.get('original_job_id', '').startswith('S1-')]
-    identities = [recovery.JOB, recovery.JOB_2, recovery.JOB_3, recovery.JOB_4]
+    sixth = job_id == NEXT_JOB
+    identities = [recovery.JOB, recovery.JOB_2, recovery.JOB_3, recovery.JOB_4] + ([recovery.JOB_5] if sixth else [])
     if [event['job_id'] for event in prior] != identities:
-        raise ValueError('exact consumed first through fourth recovery chain required')
+        raise ValueError('next unconsumed identity requires ordered consumed predecessor recovery chain')
     previous_record = None
     previous_finish = None
     for event in prior:
@@ -78,15 +80,21 @@ def build_review_proposal(local, config, validation, implementation_review,
                     or document.get('previous_recovery_failure_event_sha256') != previous_finish['event_sha256']))):
             raise ValueError('exact consumed cleaned-up predecessor required')
         previous_record, previous_finish = record, finish
+    if sixth:
+        recovery.validate_sixth_predecessor(previous_finish, previous_record)
     predecessor = document
-    snapshot = recovery.strict_record(file_record(recovery.ROOT /
-        'docs/research/vipe-alternatives/issue3-preparation/s1-dispatch-004-outcome/post-dispatch-ledger-004.jsonl'))
+    snapshot = recovery.strict_record(file_record(recovery.ROOT / (
+        'docs/research/vipe-alternatives/plan031-execution/s1-recovery-005/outcome/ledger-after.jsonl' if sixth else
+        'docs/research/vipe-alternatives/issue3-preparation/s1-dispatch-004-outcome/post-dispatch-ledger-004.jsonl')))
+    predecessor_count = 520 if sixth else 472
     frozen = Path(snapshot['path']).read_bytes()
     frozen_events = _events(frozen)
     if (not raw.startswith(frozen) or frozen_events[-1] != previous_finish
-            or len(frozen_events) != 472):
+            or len(frozen_events) != predecessor_count):
         raise ValueError('fourth recovery immutable finish prefix changed')
-    recovery.preservation(local, predecessor, frozen_events, previous_record)
+    process_amendment = file_record(recovery.PROCESS_FILE_AMENDMENT_2) if sixth else None
+    recovery.preservation(local, predecessor, frozen_events, previous_record,
+                          process_amendment_override=process_amendment)
     configuration = recovery.strict_record(predecessor['configuration'])
     if (configuration != file_record(recovery.ROOT / 'configs/vipe-alternatives/benchmark-v1.json')
             or read_json(configuration['path']) != config
@@ -127,7 +135,7 @@ def build_review_proposal(local, config, validation, implementation_review,
     if totals['gpu']['elapsed_seconds'] + totals['gpu']['reserved_seconds'] + 3600 > recovery.LIMITS['gpu_total_seconds_limit']:
         raise ValueError('insufficient cumulative GPU allowance for proposed attempt')
     proposal = copy.deepcopy(predecessor)
-    proposal.update(schema='vipe-benchmark-s1-amendment-calibration-recovery/v5',
+    proposal.update(schema=recovery.SCHEMA_6 if sixth else recovery.SCHEMA_5,
         job_id=job_id, additional_attempt_approved=False,
         authorization=f'Proposed only: exactly one {job_id} GPU calibration attempt; explicit user approval required before dispatch.',
         authorization_context=dict(request_date=request_date, stage='REVIEW',
@@ -144,6 +152,8 @@ def build_review_proposal(local, config, validation, implementation_review,
         cumulative_resource_totals=totals, required_rows=510,
         row_metadata_bytes_limit=256*1024, resource_sample_seconds=2.,
         dispatch_supported=True, approval_required=True)
+    if sixth:
+        proposal['process_file_amendment'] = process_amendment
     # Detect a concurrent append while verification was in progress. Callers
     # must still recheck the live state at any later approval/admission boundary.
     if path.read_bytes() != raw:
@@ -164,7 +174,7 @@ def main(argv=None):
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args(argv)
     value = build_review_proposal(args.local, load(), file_record(args.validation),
-        file_record(args.implementation_review), args.request_date)
+        file_record(args.implementation_review), args.request_date, job_id=NEXT_JOB)
     write_json(args.output, value)
     print(json.dumps(file_record(args.output), sort_keys=True))
     return 0

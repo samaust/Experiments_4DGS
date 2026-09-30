@@ -158,8 +158,11 @@ class S1NextIdentityTests(unittest.TestCase):
         fifth = dict(reservation, job_id=s1.JOB_5)
         self.assertEqual(ReservationClock.from_reservation(fifth).job_id, s1.JOB_5)
         self.assertEqual(helper_job({'reservation': fifth}), s1.JOB_5)
+        sixth = dict(reservation, job_id='S1-calibration-recovery-006')
+        self.assertEqual(ReservationClock.from_reservation(sixth).job_id, 'S1-calibration-recovery-006')
+        self.assertEqual(helper_job({'reservation': sixth}), 'S1-calibration-recovery-006')
         with self.assertRaises(ValueError):
-            ReservationClock.from_reservation(dict(reservation, job_id='S1-calibration-recovery-006'))
+            ReservationClock.from_reservation(dict(reservation, job_id='S1-calibration-recovery-007'))
 
     def test_third_identity_binds_consumed_live_prefix_without_mutation(self):
         local = ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z'
@@ -3602,5 +3605,83 @@ class S1ReviewProposalTests(unittest.TestCase):
         self.assertEqual(proposal['previous_recovery_primary_failure']['phase'], 'prelaunch')
         self.assertEqual(proposal['previous_recovery_secondary_failures'][0]['phase'], 'evidence_publication')
         self.assertEqual((self.local / 'ledger.jsonl').read_bytes(), self.before)
+
+class S1SixthReviewTests(unittest.TestCase):
+    """New attempt admission preserves the historical chain without live writes."""
+    def setUp(self):
+        current_agents = (ROOT / 'AGENTS.md').read_bytes()
+        S1ReviewProposalTests.setUp(self)
+        self.fixture_raw = (ROOT / 'docs/research/vipe-alternatives/plan031-execution/s1-recovery-005/outcome/ledger-after.jsonl').read_bytes()
+        self.historical_agents = current_agents
+        self.process_amendment = ROOT / 'docs/research/vipe-alternatives/plan031-execution/s1-process-file-amendment-002.json'
+        self.before = self.fixture_raw
+
+    def proposal(self, **changes):
+        from vipe_benchmark.s1_review_proposal import build_review_proposal
+        args = dict(local=self.local, config=load(), validation=self.validation,
+                    implementation_review=self.review, request_date='2026-10-01',
+                    job_id='S1-calibration-recovery-006')
+        args.update(changes)
+        with patch.object(s1, 'ROOT', self.main), patch.object(s1, 'PROCESS_FILE_AMENDMENT', self.main / 'docs/research/vipe-alternatives/issue3-preparation/s1-process-file-amendment-001.json'), patch.object(s1, 'PROCESS_FILE_AMENDMENT_2', self.process_amendment), patch.object(s1, 'validation_record', return_value=read_json(self.validation['path'])):
+            return build_review_proposal(**args)
+
+    def test_sixth_review_keeps_consumed_fifth_and_requires_exact_do(self):
+        from vipe_benchmark.ledger import Ledger
+        proposal = self.proposal()
+        self.assertEqual(proposal['job_id'], 'S1-calibration-recovery-006')
+        self.assertEqual(proposal['previous_recovery_failure']['sequence'], 519)
+        self.assertEqual(proposal['previous_recovery_failure']['job_id'], 'S1-calibration-recovery-005')
+        self.assertEqual(proposal['required_rows'], 510)
+        self.assertEqual(proposal['seconds_limit'], 3600)
+        self.assertFalse(proposal['reconstruction_authorized'])
+        self.assertEqual(proposal['process_file_amendment'], file_record(self.process_amendment))
+        events = Ledger(self.local / 'ledger.jsonl', load()).events()
+        with tempfile.TemporaryDirectory() as directory:
+            review = Path(directory) / 'review.json'
+            write_json(review, proposal)
+            approved = dict(proposal, additional_attempt_approved=True,
+                authorization='I approve all those specific approvals.',
+                authorization_context=dict(proposal['authorization_context'], stage='DO'),
+                review_proposal=file_record(review))
+            do = Path(directory) / 'do.json'
+            write_json(do, approved)
+            with patch.object(s1, 'ROOT', self.main), patch.object(s1, 'PROCESS_FILE_AMENDMENT', self.main / 'docs/research/vipe-alternatives/issue3-preparation/s1-process-file-amendment-001.json'), patch.object(s1, 'PROCESS_FILE_AMENDMENT_2', self.process_amendment), patch.object(s1, 'validation_record', return_value=read_json(self.validation['path'])):
+                bound, request = s1.validate_binding(self.local, load(), file_record(do), events=events)
+                self.assertEqual(bound['job_id'], 'S1-calibration-recovery-006')
+                self.assertEqual(request['job_id'], 'S1-calibration')
+                with self.assertRaisesRegex(ValueError, 'explicit S1 calibration'):
+                    s1.validate_binding(self.local, load(), file_record(review), events=events)
+                altered = dict(approved, resource_sample_seconds=3.)
+                bad = Path(directory) / 'bad.json'
+                write_json(bad, altered)
+                with self.assertRaisesRegex(ValueError, 'REVIEW'):
+                    s1.validate_binding(self.local, load(), file_record(bad), events=events)
+        self.assertEqual(self.ledger_path.read_bytes(), self.before)
+
+    def test_sixth_registered_identity_cannot_be_proposed_again(self):
+        events = [__import__('json').loads(line) for line in self.fixture_raw.splitlines()]
+        event = dict(event='account', job_id='S1-calibration-recovery-006', sequence=len(events),
+                     previous_sha256=events[-1]['event_sha256'], status='blocked')
+        event['event_sha256'] = object_hash(event)
+        self.fixture_raw += (canonical(event) + '\n').encode()
+        with self.assertRaisesRegex(ValueError, 'consumed or previously registered'):
+            self.proposal()
+
+    def test_sixth_process_amendment_cannot_substitute_another_record(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bad = Path(directory) / 'amendment.json'
+            value = read_json(self.process_amendment)
+            value['new']['bytes'] += 1
+            write_json(bad, value)
+            self.process_amendment = bad
+            with self.assertRaisesRegex(ValueError, 'process-file amendment'):
+                self.proposal()
+
+    def test_sixth_requires_consumed_predecessor_and_rejects_skips(self):
+        with self.assertRaisesRegex(ValueError, 'next unconsumed'):
+            self.proposal(job_id='S1-calibration-recovery-007')
+        self.fixture_raw = (ROOT / 'docs/research/vipe-alternatives/plan031-execution/e5-recovery-001/outcome/ledger-after.jsonl').read_bytes()
+        with self.assertRaisesRegex(ValueError, 'next unconsumed'):
+            self.proposal()
 
 if __name__=='__main__': unittest.main()
