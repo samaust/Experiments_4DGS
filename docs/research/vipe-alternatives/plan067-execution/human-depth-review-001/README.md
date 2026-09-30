@@ -1,10 +1,10 @@
 # Depth human review 001 — active comparison scope
 
-The latest user correction is: **“I make a mistake. Remove Motion and Neighbors.
-Keep segmentation and depth.”** This supersedes the earlier instruction to
-remove depth and neighbors. The active qualitative comparison therefore covers
-segmentation and depth only; motion and neighbors are excluded. Earlier scope
-instructions remain history and are not active gates.
+The initial isolated comparison covers segmentation and depth. The user clarified
+that motion and neighbor methods must still be compared through their effects on
+final renders, rather than through this viewer's isolated pictures and videos.
+Those final-render reviews remain downstream requirements; they do not block
+this initial depth review. Earlier scope instructions remain preserved history.
 
 `depth-submitted.json` preserves the exact original depth review, including its
 blank reviewer/date, empty examples, blank tradeoffs, observations and lexical
@@ -31,5 +31,5 @@ to the newer package containing D2 and cannot imply the reviewer compared D2.
 Motion and artifacts retain the submitted `not_applicable` dispositions.
 Colorized depth-map sharpness and boundary observations are human visual
 preferences; they do not establish measured physical depth accuracy, final-render
-sharpness or quality of an unseen combined pipeline. Historical excluded-group
-results and engineering obligations remain preserved separately.
+sharpness or quality of an unseen combined pipeline. Motion/neighbor results and
+engineering obligations remain preserved for the downstream final-render comparison.
