@@ -807,12 +807,13 @@ def backend_gate_controls(test,fixture,root):
         'groundingdino.util.inference':SimpleNamespace(predict=lambda *args,**kwargs:None),
         'segment_anything':SimpleNamespace(SamPredictor=lambda model:SimpleNamespace(model=model),sam_model_registry={'vit_b':sam_model}),
         'aot_tracker':native_module,'aot':SimpleNamespace(__path__=[assets['aot_source']['path']]),
-        'networks.layers.attention':SimpleNamespace(enable_corr=True)}
+        'networks.layers.attention':SimpleNamespace(enable_corr=True),
+        'aot.networks.layers.attention':SimpleNamespace(enable_corr=True)}
     for name,module in modules.items():
         if name.startswith('groundingdino'):source='grounding_source'
         elif name=='segment_anything':source='sam_source'
         elif name=='aot_tracker':source='samtrack_source'
-        elif name=='networks.layers.attention':source='aot_source'
+        elif name in ('networks.layers.attention','aot.networks.layers.attention'):source='aot_source'
         else:continue
         module.__file__=assets[source]['files'][0]['path']
     actual_import=b.importlib.import_module
