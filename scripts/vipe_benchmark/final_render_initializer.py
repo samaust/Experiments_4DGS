@@ -95,11 +95,14 @@ def validate_scene(request, record):
     _require(set(scene['cameras']) == {str(c) for c in TRAINING_CAMERAS}, 'scene must contain exactly training cameras')
     inputs = _bound(request['bindings']['inputs'])
     reference = inputs['reference_geometry']
-    _bound(reference['freeze']); _bound(inputs['map'])
+    historical_freeze = _bound(reference['freeze'])
+    normalization_source = _bound(reference['normalization_source'])
+    _bound(inputs['map'])
+    _require(reference.get('scale') == historical_freeze.get('scale') and
+        reference.get('normalization') == normalization_source.get('normalization'),
+        'historical reference differs from verified sources')
     _require(scene.get('historical_reference') == reference and scene.get('map') == inputs['map'] and
         manifest.get('freeze_sha256') == reference['freeze']['sha256'], 'scene/manifest accepted map/freeze lineage differs')
-    if request['record_kind'] == 'actual':
-        _bound(reference['normalization_source'])
     source_scale = inputs['reference_geometry']['scale']; target_scale = scene['scale']
     _require(type(source_scale) in (int, float) and math.isfinite(source_scale) and source_scale > 0 and
         type(target_scale) in (int, float) and math.isfinite(target_scale) and target_scale > 0, 'finite positive camera scale required')

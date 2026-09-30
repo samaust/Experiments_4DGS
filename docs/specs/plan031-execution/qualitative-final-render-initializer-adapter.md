@@ -32,6 +32,11 @@ Its full 4×4 normalization supports rotation and must be a finite affine positi
 isotropic similarity. Camera intrinsics add/remove the half pixel exactly once;
 rotations remain unchanged and translations/centers scale together. Source and
 normalized coordinate arrays must agree under that matrix.
+Before deriving that geometry, the historical reference's declared scale must
+equal the verified freeze's scale, and its complete normalization must equal the
+verified normalization source's payload, including `scene_scale`. Fixture inputs
+also supply these source records; consistent rewrites of the reference, scene and
+voxel basis cannot alter their retained source bytes.
 
 The accepted manifest must retain 34 cameras, original 25 fps, frames0–49, held-out
 cameras0/10/20/30, and the union of corrected-time exclusions. Recompute the union
@@ -90,11 +95,14 @@ source identities/neighbors, wrong physical normalization/velocity/time/camera,
 manifest exclusions/offsets and fixture/provenance/voxel substitution are rejected.
 No model, CUDA import, GPU operation, runtime setup or live ledger write is used.
 
-Focused qualification: nine adapter CPU fixtures and twelve contract fixtures
-passed together (21 tests) with the explicit root `stg-colmap`
+Focused qualification: ten adapter CPU fixtures and twelve contract fixtures
+passed together (22 tests) with the explicit root `stg-colmap`
 virtual-environment interpreter. The public actual-assembly regression first reached
 later scene checks instead of rejecting a consistently rewritten manifest; the
 shared binding gate now rejects it before geometry validation. Scene normalization
-reuses the contract's similarity validator and tolerance. AST parsing and diff
+reuses the contract's similarity validator and tolerance. Historical-reference
+regressions first assembled rewritten scale/transform/basis and scene-scale
+declarations with original source records; both now fail the source-content gate.
+AST parsing and diff
 checks supplement the tests. No configured static typechecker
 or native/GPU qualification is claimed.

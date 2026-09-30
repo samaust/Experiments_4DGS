@@ -46,7 +46,10 @@ class InitializerTests(unittest.TestCase):
         basis=self.root/'voxel-basis.npz';np.savez(basis,normalized_positions=np.array([[0.,0.,0.],[0.,0.,1.]],np.float32))
         self.request['initializer_contract']['voxel_basis']=file_record(basis)
         inputs = self._read(self.request['bindings']['inputs'])
-        inputs['reference_geometry'] = dict(scale=1.7,normalization=dict(scene_scale=10.,transform=self.transform.tolist()),freeze=self.base.record('historical-freeze',{}))
+        historical_normalization=dict(scene_scale=10.,transform=self.transform.tolist())
+        inputs['reference_geometry'] = dict(scale=1.7,normalization=historical_normalization,
+            freeze=self.base.record('historical-freeze',dict(scale=1.7)),
+            normalization_source=self.base.record('historical-normalization',dict(normalization=historical_normalization)))
         inputs['map']=self.base.record('accepted-map',{})
         self.manifest['freeze_sha256']=inputs['reference_geometry']['freeze']['sha256']
         self.request['bindings']['scene_manifest']=self.base.record('manifest-frozen',self.manifest)
@@ -191,6 +194,36 @@ class InitializerTests(unittest.TestCase):
         width=self._read(self.width);width['scene']=g['scene'];width['request_sha256']=object_hash(request)
         with self.assertRaisesRegex(ValueError,'historical normalized coordinates'):
             assemble(request,'QF-B',self.base.record('changed-scene-geometry',g),self.base.record('changed-scene-width',width))
+
+    def test_rewritten_historical_reference_retaining_sources_rejected(self):
+        for changed in ('scale','scene_scale'):
+            with self.subTest(changed=changed):
+                request=copy.deepcopy(self.request)
+                inputs=self._read(request['bindings']['inputs']);reference=inputs['reference_geometry']
+                original_sources={k:reference[k] for k in ('freeze','normalization_source')}
+                if changed=='scale':
+                    reference['scale']=3.4
+                    historical=self.transform.copy();historical[:3,:3]/=2
+                    reference['normalization']['transform']=historical.tolist()
+                    basis=self.root/'rewritten-historical-basis.npz'
+                    np.savez(basis,normalized_positions=np.array([[.5,1.,1.5],[.5,1.,2.]],np.float32))
+                    request['initializer_contract']['voxel_basis']=file_record(basis)
+                else:
+                    reference['normalization']['scene_scale']=20.
+                self.assertEqual({k:reference[k] for k in original_sources},original_sources)
+                request['bindings']['inputs']=self.base.record('rewritten-inputs-'+changed,inputs)
+                neighbors=self._read(request['bindings']['N0']);neighbors['inputs']=request['bindings']['inputs']
+                request['bindings']['N0']=self.base.record('rewritten-neighbors-'+changed,neighbors)
+                scene=self._read(self.scene_record);scene['historical_reference']=reference
+                geometry=copy.deepcopy(self.geometry);geometry['scene']=self.base.record('rewritten-reference-scene-'+changed,scene)
+                geometry['prerequisites']['N0']=request['bindings']['N0']
+                geometry['request_sha256']=object_hash(request)
+                width=self._read(self.width);width.update(scene=geometry['scene'],request_sha256=object_hash(request),
+                    basis=request['initializer_contract']['voxel_basis'])
+                if changed=='scale':width['width']=.25
+                with self.assertRaisesRegex(ValueError,'historical reference differs from verified sources'):
+                    assemble(request,'QF-B',self.base.record('rewritten-reference-geometry-'+changed,geometry),
+                             self.base.record('rewritten-reference-width-'+changed,width))
 
     def test_voxel_basis_origin_and_normalized_points_rejected(self):
         for broken in ('origin','basis'):
