@@ -1,0 +1,89 @@
+{
+  "schema": "plan067-qualitative-review/v1",
+  "record_kind": "human",
+  "reviewer": {
+    "name": "samaust",
+    "reviewed_at": "2026-09-30"
+  },
+  "package": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/qualitative-packages-001/depth/package.json",
+    "sha256": "d4d425c71c8a23337b16ce94691f688a77dc7ce6b5b35bc28eb55f81a736976f",
+    "bytes": 23886
+  },
+  "candidate_ids": [
+    "source-rgb",
+    "D0",
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "final-render"
+  ],
+  "criteria": {
+    "frozen_frame": {
+      "observation": "D0, D1, D3: they have a depth artifact on edge of close object.\nD4: does not have this artifact on edge of close object. This probably works better. However, the farthest objects like the crown are not captured or they have depth values difficult to see for the naked eye.",
+      "preference": {
+        "outcome": "preferred",
+        "candidate_ids": [
+          "D4"
+        ]
+      },
+      "examples": [
+        {
+          "candidate_id": "D4",
+          "selection_id": "camera1-selection-175",
+          "frame_id": 175
+        }
+      ]
+    },
+    "motion": {
+      "observation": "Motion is irrelevant for this test.",
+      "preference": {
+        "outcome": "not_applicable",
+        "candidate_ids": []
+      },
+      "examples": []
+    },
+    "artifacts": {
+      "observation": "Artifacts are irrelevant for this test.",
+      "preference": {
+        "outcome": "not_applicable",
+        "candidate_ids": []
+      },
+      "examples": []
+    },
+    "sharpness": {
+      "observation": "As mentionned in frozen_frame, D0, D1, D3 have something that looks like sharpness cranked too high that causes artifacts on the edge of clone objects.\nD4 is less sharp but looks much better.",
+      "preference": {
+        "outcome": "preferred",
+        "candidate_ids": [
+          "D4"
+        ]
+      },
+      "examples": [
+        {
+          "candidate_id": "D4",
+          "selection_id": "camera1-selection-175",
+          "frame_id": 175
+        }
+      ]
+    },
+    "overall": {
+      "observation": "Prefer D4",
+      "preference": {
+        "outcome": "preferred",
+        "candidate_ids": [
+          "D4"
+        ]
+      },
+      "examples": [
+        {
+          "candidate_id": "D4",
+          "selection_id": "camera1-selection-175",
+          "frame_id": 175
+        }
+      ]
+    }
+  },
+  "tradeoffs": "D4 is less sharp but looks much better."
+}
