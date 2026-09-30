@@ -89,3 +89,7 @@ class PackageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'candidate'): validate(changed)
         with (self.root/'frame.png').open('ab') as stream: stream.write(b'changed')
         with self.assertRaisesRegex(ValueError,'changed file'): validate(self.manifest)
+    def test_fixture_bytes_cannot_be_promoted_to_actual_without_generation_receipts(self):
+        self.manifest['record_kind']='actual'
+        with self.assertRaisesRegex(ValueError,'generation'):
+            validate(self.manifest)

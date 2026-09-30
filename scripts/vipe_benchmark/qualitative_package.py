@@ -69,6 +69,13 @@ def validate(manifest):
         raise ValueError('invalid package identity')
     for key in ('source','config','inputs','amendment'):
         _record(manifest['bindings'][key])
+    if manifest['record_kind'] == 'actual':
+        for key in ('request','generation_result','generation_manifest'):
+            if key not in manifest['bindings']:
+                raise ValueError('actual package requires trusted generation receipts')
+            _record(manifest['bindings'][key])
+        from .qualitative_generation import validate_actual_package
+        validate_actual_package(manifest)
     settings = manifest['settings']
     resolution = settings['resolution']
     if len(resolution) != 2 or any(type(x) is not int or x <= 0 for x in resolution) or settings['fps'] != 25 or not settings['color_handling'].strip():
