@@ -3,6 +3,10 @@
 Prepared 2026-09-30. Status: plan prepared; source reconnaissance complete;
 full literature survey and report pending.
 
+Specification: [issue #36](https://github.com/samaust/Experiments_4DGS/issues/36),
+labeled `ready-for-agent`; [local specification](../docs/specs/depth-model-survey.md).
+The user confirmed review through the completed report and its source evidence.
+
 ## Objective
 
 Find depth estimation models beyond the current D0–D4 candidates and explain
