@@ -1,0 +1,17 @@
+{
+  "status": "failed",
+  "reason": "ValueError: S1 generated source temporary ownership required",
+  "first_result": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration-recovery-008/first-result-qualification.json",
+    "bytes": 2835,
+    "sha256": "a79f26c182dbc45ed5a3a76e0b72cbcf52532737864099b8da141489e22c6552"
+  },
+  "failure_evidence": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration-recovery-008/calibration/camera0/frame50-failure-evidence.json",
+    "bytes": 158351,
+    "sha256": "035473870620dfaac634423bb5a4b857b13ae0ab4c83aa616f82fb203747fac1"
+  },
+  "traceback": "Traceback (most recent call last):\n  File \"/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_worker.py\", line 52, in main\n    operation(request, args.output, config, clock=clock)\n  File \"/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/stages.py\", line 487, in run\n    return segment(request, output, config, clock=clock)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/stages.py\", line 160, in segment\n    return operation(_segment,request,output,config,clock=clock,deadline=clock.work_deadline)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_progress.py\", line 332, in operation\n    value = function(*args, **kwargs)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/stages.py\", line 289, in _segment\n    runtime['loaded_files'] = (loaded_runtime(output / 'loaded-runtime.json', request=request)\n                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_progress.py\", line 1450, in loaded_runtime\n    entry['generated_source']=capture(path,entry['modules'],modules,output,request)\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_generated_source.py\", line 80, in capture\n    raise ValueError('S1 generated source temporary ownership required')\nValueError: S1 generated source temporary ownership required\n",
+  "job_id": "S1-calibration-recovery-008",
+  "requires_permission_review": false
+}
