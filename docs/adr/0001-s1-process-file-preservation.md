@@ -8,3 +8,8 @@ baseline correction, retains hash-pinned amendment 001 as its predecessor, and
 admits only the current process-file bytes. This exception applies to 006 and
 its read-only predecessor preservation; historical authorization documents and
 all scientific evidence remain unchanged.
+
+Recovery 007 reuses the unchanged amendment 002 and its pinned 001 predecessor for
+the same current process bytes, under its separately approved allocation. The
+exception remains a process-file preservation check; it grants no scientific
+change or extra attempt and never rewrites 006 or earlier evidence.

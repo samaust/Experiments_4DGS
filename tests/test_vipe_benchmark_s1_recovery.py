@@ -206,8 +206,11 @@ class S1NextIdentityTests(unittest.TestCase):
         sixth = dict(reservation, job_id='S1-calibration-recovery-006')
         self.assertEqual(ReservationClock.from_reservation(sixth).job_id, 'S1-calibration-recovery-006')
         self.assertEqual(helper_job({'reservation': sixth}), 'S1-calibration-recovery-006')
+        seventh = dict(reservation, job_id='S1-calibration-recovery-007')
+        self.assertEqual(ReservationClock.from_reservation(seventh).job_id, 'S1-calibration-recovery-007')
+        self.assertEqual(helper_job({'reservation': seventh}), 'S1-calibration-recovery-007')
         with self.assertRaises(ValueError):
-            ReservationClock.from_reservation(dict(reservation, job_id='S1-calibration-recovery-007'))
+            ReservationClock.from_reservation(dict(reservation, job_id='S1-calibration-recovery-008'))
 
     def test_third_identity_binds_consumed_live_prefix_without_mutation(self):
         local = ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z'
@@ -3758,5 +3761,111 @@ class S1SixthReviewTests(unittest.TestCase):
         self.fixture_raw = (ROOT / 'docs/research/vipe-alternatives/plan031-execution/e5-recovery-001/outcome/ledger-after.jsonl').read_bytes()
         with self.assertRaisesRegex(ValueError, 'next unconsumed'):
             self.proposal()
+
+class S1SeventhReviewTests(unittest.TestCase):
+    """One fresh request binds the consumed006 outcome; no live writer is used."""
+    def setUp(self):
+        S1SixthReviewTests.setUp(self)
+        self.fixture_raw = (ROOT / 'docs/research/vipe-alternatives/plan031-execution/s1-recovery-006/outcome/ledger-after.jsonl').read_bytes()
+        self.before = self.fixture_raw
+
+    def proposal(self, **changes):
+        changes.setdefault('job_id', 'S1-calibration-recovery-007')
+        return S1SixthReviewTests.proposal(self, **changes)
+
+    def bindings(self):
+        return (patch.object(s1, 'ROOT', self.main),
+                patch.object(s1, 'PROCESS_FILE_AMENDMENT', self.main / 'docs/research/vipe-alternatives/issue3-preparation/s1-process-file-amendment-001.json'),
+                patch.object(s1, 'PROCESS_FILE_AMENDMENT_2', self.process_amendment),
+                patch.object(s1, 'validation_record', return_value=read_json(self.validation['path'])))
+
+    def test_seventh_exact_do_keeps_failed_sixth_and_frozen_request(self):
+        from contextlib import ExitStack
+        proposal = self.proposal()
+        failure = proposal['previous_recovery_failure']
+        self.assertEqual(failure['sequence'], 535)
+        self.assertEqual(failure['event_sha256'], 'ca7f1cc0fbdeb0b065b5bc059b6f9901dd41ada81d1a7172aba819c7fe82f915')
+        self.assertEqual(failure['verified_progress_reference']['counts']['qualified'], 1)
+        self.assertEqual(failure['status'], 'failed')
+        self.assertEqual(proposal['required_rows'], 510)
+        self.assertEqual(proposal['row_metadata_bytes_limit'], 256*1024)
+        self.assertEqual(proposal['resource_sample_seconds'], 2.)
+        self.assertEqual(proposal['seconds_limit'], 3600)
+        self.assertFalse(proposal['reconstruction_authorized'])
+        events = Ledger(self.local / 'ledger.jsonl', load()).events()
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
+            for binding in self.bindings(): stack.enter_context(binding)
+            review = Path(directory) / 'review.json'
+            write_json(review, proposal)
+            approved = dict(proposal, additional_attempt_approved=True, authorization='I approve. Continue $implement',
+                authorization_context=dict(proposal['authorization_context'], stage='DO'), review_proposal=file_record(review))
+            do = Path(directory) / 'do.json'
+            write_json(do, approved)
+            bound, request = s1.validate_binding(self.local, load(), file_record(do), events=events)
+            self.assertEqual(bound['job_id'], 'S1-calibration-recovery-007')
+            self.assertEqual(request['job_id'], 'S1-calibration')
+            with self.assertRaisesRegex(ValueError, 'explicit S1 calibration'):
+                s1.validate_binding(self.local, load(), file_record(review), events=events)
+            bad = Path(directory) / 'bad.json'
+            write_json(bad, dict(approved, required_rows=509))
+            with self.assertRaisesRegex(ValueError, 'REVIEW'):
+                s1.validate_binding(self.local, load(), file_record(bad), events=events)
+        self.assertEqual(self.ledger_path.read_bytes(), self.before)
+
+    def test_seventh_requires_consumed_predecessor_and_rejects_unknown_identity(self):
+        with self.assertRaisesRegex(ValueError, 'next unconsumed'):
+            self.proposal(job_id='S1-calibration-recovery-008')
+        self.fixture_raw = (ROOT / 'docs/research/vipe-alternatives/plan031-execution/s1-recovery-005/outcome/ledger-after.jsonl').read_bytes()
+        with self.assertRaisesRegex(ValueError, 'next unconsumed'):
+            self.proposal()
+
+    def test_seventh_review_cannot_register_but_exact_do_registers_once(self):
+        from contextlib import ExitStack
+        from vipe_benchmark import ledger as ledger_module
+        proposal = self.proposal()
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
+            root = Path(directory)
+            review = root / 'review.json'
+            write_json(review, proposal)
+            approved = dict(proposal, additional_attempt_approved=True, authorization='I approve. Continue $implement',
+                authorization_context=dict(proposal['authorization_context'], stage='DO'), review_proposal=file_record(review))
+            do = root / 'do.json'
+            write_json(do, approved)
+            authorization = file_record(do)
+            evidence = {key: approved[key] for key in ('semantic_amendment', 'configuration',
+                'original_failure', 'e1_qualification', 'e1_assets', 'e1_runtime', 'inputs',
+                'annotations', 'annotation_policy', 'annotation_review', 'baseline_correction')}
+            evidence.update(s1_recovery_authorization=authorization, implementation_validation=approved['repair_validation'])
+            admission_file = root / 'admission.json'
+            write_json(admission_file, dict(status='admitted', evidence=evidence))
+            events = [__import__('json').loads(line) for line in self.before.splitlines()]
+            admission = dict(event='admission', evidence=file_record(admission_file), sequence=len(events),
+                previous_sha256=events[-1]['event_sha256'])
+            admission['event_sha256'] = object_hash(admission)
+            events.append(admission)
+            ledger = Ledger(self.local / 'ledger.jsonl', load())
+            @contextmanager
+            def locked(): yield None, events
+            original_read = ledger_module.read_json
+            def fixture_read(path):
+                if str(path) == self.validation['path']:
+                    return dict(status='passed', sources=[file_record(self.main / 'scripts/basketball_vipe_worker.py')])
+                return original_read(path)
+            for binding in self.bindings(): stack.enter_context(binding)
+            stack.enter_context(patch.object(ledger, 'locked', locked))
+            append = stack.enter_context(patch.object(ledger, '_append', side_effect=lambda stream, rows, event: event))
+            stack.enter_context(patch.object(ledger_module, 'read_json', side_effect=fixture_read))
+            with self.assertRaises(ValueError): ledger.authorize_component_recovery(file_record(review))
+            append.assert_not_called()
+            registered = ledger.authorize_component_recovery(authorization)
+            self.assertEqual(registered['job_id'], 'S1-calibration-recovery-007')
+            self.assertEqual(registered['admission'], file_record(admission_file))
+            self.assertEqual(append.call_count, 1)
+            registered = dict(registered, sequence=len(events), previous_sha256=events[-1]['event_sha256'])
+            registered['event_sha256'] = object_hash(registered)
+            events.append(registered)
+            with self.assertRaises(ValueError): ledger.authorize_component_recovery(authorization)
+            self.assertEqual(append.call_count, 1)
+        self.assertEqual(self.ledger_path.read_bytes(), self.before)
 
 if __name__=='__main__': unittest.main()
