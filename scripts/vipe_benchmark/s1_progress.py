@@ -1408,8 +1408,9 @@ def backend_operation(function, *args, cleanup_deadline=None, **kwargs):
         operation(checksum.update,encoded)
         return operation(checksum.hexdigest)
     import tempfile
-    if function is tempfile.TemporaryDirectory:
-        return owned_temporary_directory(function,args,kwargs,cleanup_deadline)
+    constructor=getattr(tempfile.TemporaryDirectory,'_s1_temporary_constructor',tempfile.TemporaryDirectory)
+    if function is tempfile.TemporaryDirectory or function is constructor:
+        return owned_temporary_directory(constructor,args,kwargs,cleanup_deadline)
     return operation(function,*args,**kwargs)
 
 
@@ -1788,12 +1789,45 @@ class OwnedWorkingDirectory:
             if failure is not None and error is not failure:error.add_note('cwd safety restoration: '+repr(failure))
             if primary is None:raise error
 
-def backend_resource_scope():
-    import contextlib,sys
+def backend_resource_scope(*, request=None, temporary_root=None, cleanup_deadline=None, work_deadline=None):
+    import contextlib,sys,tempfile
+    @contextlib.contextmanager
+    def generated_constructor():
+        if request is None:
+            yield
+            return
+        from .s1_generated_source import GENERATOR
+        previous=tempfile.TemporaryDirectory
+        constructor=getattr(previous,'_s1_temporary_constructor',previous)
+        def temporary(*args,**kwargs):
+            caller=sys._getframe(1)
+            if caller.f_globals.get('__name__')!=GENERATOR:
+                return constructor(*args,**kwargs)
+            inventory_record=operation(checked_verify_record,request['runtime']['inventory'],deadline=work_deadline)
+            inventory=operation(checked_read_json,inventory_record['path'],deadline=work_deadline)
+            suffix='/torch/distributed/nn/jit/instantiator.py'
+            records=[entry for package in inventory['packages'] for entry in package['files']
+                     if entry['path'].endswith(suffix)]
+            if len(records)!=1:raise ValueError('S1 generated constructor admitted identity required')
+            admitted=operation(checked_verify_record,records[0],deadline=work_deadline)
+            if temporary_root is None:raise ValueError('S1 generated constructor supervised temporary root required')
+            root=operation(Path(temporary_root).absolute,deadline=work_deadline)
+            if root.name!=request['job_id']+'-temporary':
+                raise ValueError('S1 generated constructor job temporary binding')
+            if (caller.f_code.co_filename!=admitted['path']
+                    or caller.f_globals.get('__file__')!=admitted['path'] or args or kwargs):
+                raise ValueError('S1 generated constructor caller differs from admission')
+            checked_verify_record(admitted)
+            return owned_temporary_directory(constructor,(),dict(dir=root),cleanup_deadline)
+        temporary._s1_temporary_constructor=constructor
+        tempfile.TemporaryDirectory=temporary
+        try:yield
+        finally:tempfile.TemporaryDirectory=previous
     @contextlib.contextmanager
     def scope():
         resources=[];token=_temporary_scope.set(resources)
-        try:yield resources
+        try:
+            with generated_constructor():yield resources
         finally:
             primary=sys.exception();first=None
             for resource in resources:

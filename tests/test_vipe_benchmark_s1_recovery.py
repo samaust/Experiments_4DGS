@@ -3895,7 +3895,7 @@ class S1GeneratedSourceTests(unittest.TestCase):
         assets, runtime, self.observed = synthetic_assets(self.root, put)
         self.request = dict(runtime=runtime, assets=assets, forbidden_vipe_roots=['/fixture/vipe'])
 
-    def generated_capture(self, *, generated_bytes=None, foreign_owner=False, job='S1-calibration-recovery-007'):
+    def generated_capture(self, *, generated_bytes=None, foreign_owner=False, job='S1-calibration-recovery-007', native_temporary=False, stage_boundary=False, caller_path=None):
         import json
         from vipe_benchmark.s1_evidence import qualify_runtime
         from vipe_benchmark.s1_progress import backend_resource_scope, backend_operation, loaded_runtime
@@ -3906,7 +3906,9 @@ class S1GeneratedSourceTests(unittest.TestCase):
         parent.mkdir()
         generator = self.root / 'packages/torch/distributed/nn/jit/instantiator.py'
         generator.parent.mkdir(parents=True)
-        generator.write_text('def instantiate_non_scriptable_remote_module_template():\n'
+        generator.write_text('import tempfile\n_TEMP_DIR = tempfile.TemporaryDirectory()\n'
+            'INSTANTIATED_TEMPLATE_DIR_PATH = _TEMP_DIR.name\n'
+            'def instantiate_non_scriptable_remote_module_template():\n'
             '    generated_module_name = "_remote_module_non_scriptable"\n'
             '    str_dict = dict(assign_module_interface_cls="module_interface_cls = None", args="*args", '
             'kwargs="**kwargs", arg_types="*args, **kwargs", arrow_and_return_type="", '
@@ -3927,8 +3929,17 @@ class S1GeneratedSourceTests(unittest.TestCase):
         maps = self.root / 'maps'
         maps.write_text(''.join('0 0 0 0 0 ' + entry['path'] + '\n'
                               for entry in manifest['files'] if entry['mapped_native_library']))
-        with backend_resource_scope():
-            owner = backend_operation(tempfile.TemporaryDirectory, dir=parent)
+        original_constructor=tempfile.TemporaryDirectory
+        def first_result():
+            nonlocal generated
+            with tempfile.TemporaryDirectory(dir=parent) as unrelated:
+                self.assertTrue(Path(unrelated).is_dir())
+            if native_temporary:
+                namespace={'__name__':'torch.distributed.nn.jit.instantiator','__file__':str(generator)}
+                exec(compile(generator.read_text(),str(generator) if caller_path is None else caller_path,'exec'),namespace)
+                owner=namespace['_TEMP_DIR']
+            else:
+                owner=backend_operation(tempfile.TemporaryDirectory,dir=parent)
             generated = Path(owner.name) / '_remote_module_non_scriptable.py'
             generated.write_bytes(b'module_interface_cls = None\n# *args **kwargs\n' if generated_bytes is None else generated_bytes)
             modules['torch.distributed.nn.jit.instantiator'] = SimpleNamespace(__file__=str(generator),
@@ -3938,6 +3949,22 @@ class S1GeneratedSourceTests(unittest.TestCase):
             self.observed['loaded_files'] = loaded_runtime(output / 'loaded-runtime.json', modules=modules,
                                                          maps_path=maps, request=self.request)
             qualify_runtime(self.observed, self.request)
+        generated=None
+        if stage_boundary:
+            import os,time
+            from vipe_benchmark import stages
+            from vipe_benchmark.s1_clock import ReservationClock,boot_id
+            self.request['component']='S1'
+            request_path=self.root/'fixture-request.json'
+            write_json(request_path,self.request)
+            clock=ReservationClock.from_reservation(dict(event='reserve',job_id=job,sequence=1,
+                event_sha256='a'*64,boot_id=boot_id(),monotonic_start=time.monotonic(),seconds=60.,
+                evidence=dict(request=file_record(request_path))))
+            with patch.dict(os.environ,TMPDIR=str(parent)),patch.object(stages,'_segment',side_effect=lambda *a,**k:first_result()):
+                stages.run(self.request,output,{},clock=clock)
+        else:
+            with backend_resource_scope(request=self.request,temporary_root=parent):first_result()
+        self.assertIs(tempfile.TemporaryDirectory,original_constructor)
         self.assertFalse(generated.exists())
         return json.loads(Path(self.observed['loaded_files']['path']).read_text())
 
@@ -4008,6 +4035,19 @@ class S1GeneratedSourceTests(unittest.TestCase):
         Path(entry['generated_source']['generators']['torch.distributed.nn.jit.instantiator']['path']).write_bytes(b'changed generator')
         with self.assertRaisesRegex(ValueError, 'progress source bytes changed'):
             qualify_runtime(self.observed, self.request)
+
+    def test_native_import_temporary_constructor_is_captured_before_cleanup(self):
+        from vipe_benchmark.s1_evidence import qualify_runtime
+        manifest = self.generated_capture(native_temporary=True, stage_boundary=True,job='S1-calibration-recovery-008')
+        entry = next(item for item in manifest['files'] if 'generated_source' in item)
+        self.assertEqual(entry['generated_source']['module'], '_remote_module_non_scriptable')
+        qualify_runtime(self.observed, self.request)
+
+    def test_native_constructor_rejects_unadmitted_module_code_path(self):
+        original=tempfile.TemporaryDirectory
+        with self.assertRaisesRegex(ValueError, 'constructor caller differs from admission'):
+            self.generated_capture(native_temporary=True, caller_path='/foreign/instantiator.py')
+        self.assertIs(tempfile.TemporaryDirectory,original)
 
     def test_generated_source_capture_rejects_non_template_bytes(self):
         with self.assertRaisesRegex(ValueError, 'differs from admitted template'):

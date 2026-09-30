@@ -156,7 +156,9 @@ def segment(request, output, config, *, clock=None):
         from .s1_progress import before
         before(clock.work_deadline)
         from .s1_progress import backend_resource_scope
-        with backend_resource_scope():
+        import os
+        with backend_resource_scope(request=request,temporary_root=os.environ.get('TMPDIR'),
+                                    cleanup_deadline=clock.total_deadline,work_deadline=clock.work_deadline):
             return operation(_segment,request,output,config,clock=clock,deadline=clock.work_deadline)
     return _segment(request,output,config,clock=clock)
 
