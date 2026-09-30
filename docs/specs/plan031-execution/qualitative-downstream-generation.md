@@ -1,5 +1,7 @@
 # Qualitative downstream generation proposal
 
+**Current scope:** [Scope amendment 001](qualitative-comparison-scope-amendment-001.md) takes precedence: human comparisons and the active viewer cover segmentation and depth only. Motion and neighbors remain historical engineering groups and require no human review for completion. The motion criterion and clip diagnostics remain available where applicable.
+
 ## Authority and readiness
 
 Continuation of [Plan 067](../../../plans/plan_067.md), the

@@ -1,3 +1,5 @@
+**Current scope:** [Scope amendment 001](qualitative-comparison-scope-amendment-001.md) takes precedence: human comparisons and the active viewer cover segmentation and depth only. Motion and neighbors remain historical engineering groups and require no human review for completion. The motion criterion and clip diagnostics remain available where applicable.
+
 ## Problem Statement
 
 Preparation #3 is complete, while execution has bounded failed outcomes, unresolved runtime/depth work and generated results awaiting visual comparison. The user now wants code-generated frames, motion clips and diagnostics followed by human qualitative judgment.

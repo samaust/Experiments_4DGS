@@ -1,6 +1,8 @@
 # Human qualitative review handoff
 
-This is the review workflow specification. Package/viewer implementation and publication remain open in #30/#31.
+**Current scope:** [Scope amendment 001](../qualitative-comparison-scope-amendment-001.md) takes precedence: human comparisons and the active viewer cover segmentation and depth only. Motion and neighbors remain historical engineering groups and require no human review for completion. The motion criterion and clip diagnostics remain available where applicable.
+
+This is the review workflow specification for the active segmentation and depth packages. Package/viewer implementation and publication are tracked by #30/#31; actual human feedback is tracked separately by #33.
 
 Code generates the matched comparison package. Open its local viewer, compare the same frozen frames and synchronized clips across candidates, and use supporting diagnostics where relevant.
 

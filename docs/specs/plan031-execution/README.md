@@ -1,5 +1,7 @@
 # Plan 031 execution specifications
 
+**Current scope:** [Scope amendment 001](qualitative-comparison-scope-amendment-001.md) takes precedence: human comparisons and the active viewer cover segmentation and depth only. Motion and neighbors remain historical engineering groups and require no human review for completion. The motion criterion and clip diagnostics remain available where applicable.
+
 The active evaluation is human qualitative comparison of code-generated matched frames, synchronized clips and supporting diagnostics. [The amendment](qualitative-comparison-amendment.md) and [Plan 067](../../../plans/plan_067.md) supersede annotation-based comparison requirements. The user does not need to supply an external annotation bundle.
 
 | Spec | GitHub issue |
