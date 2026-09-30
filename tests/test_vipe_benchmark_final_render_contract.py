@@ -167,6 +167,23 @@ class ContractTests(unittest.TestCase):
         path=self.root/'relocated-proposal.md';path.write_bytes(Path(bindings['proposal']['path']).read_bytes())
         changed['proposal']=file_record(path)
         with self.assertRaisesRegex(ValueError,'frozen proposal-001'):validate_scope_bindings(changed)
+    def test_rotated_similarity_transform_and_invalid_matrices(self):
+        import numpy as np
+        from vipe_benchmark.final_render_contract import normalization_matrix,parse_request
+        matrix=[[0,-2,0,3],[2,0,0,4],[0,0,2,5],[0,0,0,1]]
+        normalization=dict(transform=matrix)
+        self.assertTrue(np.array_equal(normalization_matrix(normalization,actual=True),np.asarray(matrix)))
+        request=copy.deepcopy(self.request);request['initializer_contract']['normalization']=normalization
+        self.assertEqual(parse_request(request).payload['initializer_contract']['normalization'],normalization)
+        for altered in (
+            [[0,-2,0,3],[2,0,0,4],[0,0,3,5],[0,0,0,1]],
+            [[0,2,0,3],[2,0,0,4],[0,0,2,5],[0,0,0,1]],
+            [[0,-2,0,3],[2,0,0,4],[0,0,2,5],[0,0,1,1]],
+            [[0,-2,0,3],[2,0,0,4],[0,0,float('inf'),5],[0,0,0,1]],
+        ):
+            with self.assertRaises(ValueError):normalization_matrix(dict(transform=altered),actual=True)
+        with self.assertRaisesRegex(ValueError,'full transform'):
+            normalization_matrix(dict(translate=[0,0,0],radius=1),actual=True)
     def test_actual_result_cannot_be_claimed_and_training_iterations_must_match(self):
         result=dict(schema='plan067-final-render-worker-result/v1',record_kind='fixture',status='complete',arm='QF-B',
             phase='train',allocation_id='qf-001/QF-B/train',elapsed_seconds=1,completed_iterations=5000,

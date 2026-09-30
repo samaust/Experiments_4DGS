@@ -17,6 +17,10 @@ behavior; it does not qualify geometry, training or rendered results.
   snapshot without writing, reserving or executing jobs. Its
   `execution_authorized` is always false and blockers remain explicit.
 - `initializer_arrays_hash(arrays)`: hashes names, shapes, dtypes and values.
+- `normalization_matrix(normalization, actual=False)`: validates a finite affine
+  4×4 transform with positive isotropic scale and proper rotation. Actual
+  contracts require the full bound transform; translate/radius compatibility
+  remains available only to explicitly labeled legacy CPU fixtures.
 - `validate_initializer(request, arm, receipt, arrays)`: validates native arrays
   through the existing `basketball_dense_fusion.validate`, binds their hash,
   composition, prerequisite records, physical normalization, time and velocity
@@ -67,6 +71,13 @@ records for S2, D4 fit/check and that arm's M/N. Native array shape/dtype,
 finite values, static/invalid velocities, durations and allowed times retain
 the audited validation rules. A finite transform declared in a request is not
 evidence that its physical interpretation has been qualified.
+Actual normalization is `{"transform": [[...], [...], [...], [...]]}` so the
+accepted scene's off-diagonal rotation is preserved. If the bound scene manifest
+contains normalization, its complete transform must match exactly; additional
+scene metadata does not replace that matrix. Optional `voxel_basis` and
+`voxel_basis_source` (`archive` and `receipt`) file records are verified and
+bound through the complete initializer receipt; their scientific interpretation
+belongs to the checked initializer adapter.
 
 ## Remaining blockers
 

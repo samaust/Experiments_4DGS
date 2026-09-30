@@ -100,6 +100,27 @@ def validate_scope_bindings(bindings):
     return dict(scope='proposal-001',bindings={name:copy.deepcopy(bindings[name]) for name in FROZEN_SCOPE})
 
 
+def normalization_matrix(normalization, *, actual=False):
+    """Validate the scene's complete similarity transform, including rotation."""
+    import numpy as np
+    if set(normalization)=={'transform'}:
+        matrix=np.asarray(normalization['transform'],dtype=np.float64)
+        _require(matrix.shape==(4,4) and np.isfinite(matrix).all(),'finite 4x4 normalization transform required')
+        _require(np.array_equal(matrix[3],np.array([0.,0.,0.,1.])),'normalization transform must be affine')
+        linear=matrix[:3,:3];gram=linear.T@linear;scale_squared=float(np.trace(gram)/3)
+        _require(scale_squared>0 and np.linalg.det(linear)>0 and
+            np.allclose(gram,np.eye(3)*scale_squared,rtol=1e-6,atol=1e-12),
+            'normalization requires positive isotropic similarity scale and proper rotation')
+        return matrix
+    _require(not actual,'actual initializer normalization requires bound full transform')
+    _require(set(normalization)=={'translate','radius'},'invalid fixture normalization schema')
+    translation=normalization['translate'];radius=normalization['radius']
+    _require(len(translation)==3 and all(type(x) in (int,float) and math.isfinite(x) for x in translation)
+        and type(radius) in (int,float) and math.isfinite(radius) and radius>0,'finite fixture normalization required')
+    matrix=np.eye(4);matrix[:3,:3]/=radius;matrix[:3,3]=np.asarray(translation)/radius
+    return matrix
+
+
 def parse_request(value):
     _require(value.get('schema')=='plan067-final-render-request/v1','wrong QF request schema')
     _require(value.get('record_kind') in ('actual','fixture') and value.get('mode')=='REVIEW','QF contract is REVIEW only; DO adapter is unimplemented')
@@ -118,9 +139,11 @@ def parse_request(value):
     _require(initializer.get('schema')=='plan067-final-render-initializer/v1' and
         initializer.get('velocity_units')=='normalized-scene/normalized-time' and initializer.get('time_formula')=='frame/50',
         'initializer time/velocity units required')
-    normalization=initializer['normalization'];translation=normalization['translate'];radius=normalization['radius']
-    _require(len(translation)==3 and all(type(x) in (int,float) and math.isfinite(x) for x in translation)
-        and type(radius) in (int,float) and math.isfinite(radius) and radius>0,'finite physical-to-normalized transform required')
+    normalization_matrix(initializer['normalization'],actual=value['record_kind']=='actual')
+    if 'voxel_basis' in initializer or 'voxel_basis_source' in initializer:
+        _require('voxel_basis' in initializer and set(initializer.get('voxel_basis_source',{}))=={'archive','receipt'},'complete voxel basis lineage required')
+        _verify(initializer['voxel_basis'])
+        for record in initializer['voxel_basis_source'].values():_verify(record)
     names={'proposal','source','preset','runtime','config','qualification','scene_manifest','inputs',
         'segmentation_decision','depth_decision','S2','D4_fit','D4_check','M0','M1','M2','N0','N1','N2'}
     _require(set(value['bindings'])==names,'complete exact prerequisite bindings required')
@@ -240,7 +263,10 @@ def admit_review(value,ledger,storage):
     _require(scene['frames']['ids']==list(range(50)) and scene['frames']['count']==50 and
         scene['frames']['normalized_time']['formula']=='frame_offset / count' and scene['source']['frame_rate']==25,'scene time normalization mismatch')
     if 'normalization' in scene:
-        _require(scene['normalization']==value['initializer_contract']['normalization'],'initializer normalization differs from bound scene manifest')
+        normalization=value['initializer_contract']['normalization']
+        if 'transform' in normalization:
+            _require(scene['normalization'].get('transform')==normalization['transform'],'initializer full transform differs from bound scene manifest')
+        else:_require(scene['normalization']==normalization,'initializer normalization differs from bound scene manifest')
     # Explicit observation exclusions from any upstream manifest must be united;
     # no exclusion may silently delete one of the frozen directed edges.
     consumed_keys={(str(c),f) for c in TRAINING_CAMERAS for k in KEYFRAMES for f in (k,k+1)}
