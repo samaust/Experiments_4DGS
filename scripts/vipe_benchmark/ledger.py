@@ -237,10 +237,10 @@ class Ledger:
 
     def authorize_component_recovery(self, authorization):
         """One explicit recovery, retaining original failures and all charges."""
-        from .s1_recovery import SCHEMA, SCHEMA_2, SCHEMA_3, SCHEMA_4, validate_binding
+        from .s1_recovery import SCHEMA, SCHEMA_2, SCHEMA_3, SCHEMA_4, SCHEMA_5, validate_binding
         document = read_json(verify_record(authorization)['path'])
         original_id = document.get('original_job_id', '')
-        amended = document.get('schema') in (SCHEMA, SCHEMA_2, SCHEMA_3, SCHEMA_4)
+        amended = document.get('schema') in (SCHEMA, SCHEMA_2, SCHEMA_3, SCHEMA_4, SCHEMA_5)
         if not amended and original_id.startswith('S1-'):
             raise ValueError('S1 requires calibration-only semantic amendment authorization; reconstruction blocked')
         if not re.fullmatch(r'S[0-4]-(calibration|reconstruction)', original_id):
