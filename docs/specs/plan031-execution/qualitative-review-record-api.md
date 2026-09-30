@@ -19,8 +19,9 @@ The `package` is its exact immutable `{path, sha256, bytes}` record. Each of
   available candidates; ties name at least two. Other outcomes name none.
 - `examples`: exact `{candidate_id, selection_id, frame_id}` references or
   `{candidate_id, selection_id, start_time, end_time}` continuous clip intervals.
-  Preferences/ties cite each named candidate. Motion preferences require actual
-  clip evidence for the selected candidates; sparse sequences are insufficient.
+  Preferences/ties cite each named candidate. Motion preferences require
+  an exact continuous clip reference for each selected candidate; sparse
+  sequences or still-frame examples are insufficient.
 
 Missing evidence can be explained with `unjudgeable` and no examples. A blank
 form never satisfies review. Validation cannot independently establish that an
@@ -56,9 +57,13 @@ accuracy, statistical significance and unseen downstream quality.
 
 ## Focused validation
 
-Eleven CPU tests cover blank/synthetic refusal, identity/date, package/media
+Fifteen CPU tests cover blank/synthetic refusal, identity/date, package/media
 substitution, frame/time bounds, sparse motion, not-applicable/unjudgeable
 outcomes, immutable replay, blocked ties, engineering exclusion, explicit human
-choice, altered imported submissions and automatic winner substitution. AST
+choice, altered imported submissions and automatic winner substitution. Temporary
+PNG fixtures also exercise the complete actual-mode package/import/choice/report
+path, reject missing candidate selections and readiness inventories, and verify
+that media changes after import invalidate later decisions/reports. These test
+records never leave their temporary directories or count as actual feedback. AST
 parsing checks the module and tests. Full suite and independent review are
 coordinated by the root implementation agent after combining the worktrees.

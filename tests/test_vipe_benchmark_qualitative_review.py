@@ -99,6 +99,17 @@ class QualitativeReviewTests(unittest.TestCase):
         self.form['record_kind']='human'
         with self.assertRaisesRegex(ValueError, 'fixture package'): review.validate_review(self.form)
 
+    def test_motion_tie_needs_clip_example_for_each_selected_candidate(self):
+        self.package['candidates'][1]['media'].append(copy.deepcopy(self.package['candidates'][0]['media'][1]))
+        write_json(self.root/'clips.json',self.package)
+        self.form['package']=file_record(self.root/'clips.json')
+        self.form['criteria']['motion'].update(preference={'outcome':'tie','candidate_ids':['a','b']}, examples=[
+            {'candidate_id':'a','selection_id':'c','start_time':6.0,'end_time':6.04},
+            {'candidate_id':'b','selection_id':'f','frame_id':150}])
+        with self.assertRaisesRegex(ValueError, 'each selected motion candidate'): self.validate()
+        self.form['criteria']['motion']['examples'][1]={'candidate_id':'b','selection_id':'c','start_time':6.0,'end_time':6.04}
+        self.validate()
+
     def test_sparse_sequences_are_not_motion_evidence(self):
         self.package['candidates'][0]['media'][1]['kind']='sequence'
         write_json(self.root/'sparse.json',self.package)
@@ -116,5 +127,77 @@ class QualitativeReviewTests(unittest.TestCase):
         with self.assertRaises(ValueError): review.build_report(imported,file_record(self.root/'forged.json'),self.root/'report.json',actual=False)
         (self.root/'submission.json').write_text('{}')
         with self.assertRaises(ValueError): review.freeze_decision(imported,eligibility,self.root/'changed.json',actual=False)
+
+class ActualModeReviewIntegrationTests(unittest.TestCase):
+    """Temporary fabricated media/opinions exercise actual-mode validation only.
+
+    They are never published outside this test directory or claimed as a real
+    human review. Marking this test manifest actual exercises the production
+    schema path; production artifacts must truthfully use their origin.
+    """
+    def setUp(self):
+        from PIL import Image
+        from vipe_benchmark.qualitative_package import publish
+        self.tmp=tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root=Path(self.tmp.name)
+        evidence=self.root/'test-only-provenance.json'
+        write_json(evidence,{'test_fixture':True})
+        evidence_record=file_record(evidence)
+        self.image=self.root/'test-only-frame.png'
+        Image.new('RGB',(16,12),color=(255,0,0)).save(self.image)
+        self.manifest={'schema':'plan067-qualitative-package/v1','id':'temporary-test-only',
+            'mode':'qualitative','record_kind':'actual',
+            'bindings':{key:evidence_record for key in ('source','config','inputs','amendment')},
+            'settings':{'fps':25,'resolution':[16,12],'color_handling':'sRGB','crop':[0,0,16,12],'detail_regions':[]},
+            'selections':[{'id':'f150','kind':'frame','role':'selection','camera_id':'0','frame_ids':[150],'timestamps':[6.0]}],
+            'candidates':[{'id':key,'label':key,'is_control':key=='control','stage':'test-only',
+                'output_type':'reference' if key=='control' else 'component','status':'available','reason':'',
+                'provenance':{name:evidence_record for name in ('source_result','ledger_outcome','configuration')},
+                'media':[{'selection_id':'f150','kind':'frame','record':file_record(self.image),
+                    'frame_ids':[150],'timestamps':[6.0],'resolution':[16,12]}]} for key in ('control','candidate')]}
+        published=publish(self.manifest,self.root/'package')
+        self.package_record=published['package']
+        self.form=review.blank_review(self.package_record)
+        self.form.update(reviewer={'name':'Test-only simulated reviewer','reviewed_at':'2026-09-29'},tradeoffs='Simulated tradeoff; not an actual opinion')
+        for key,criterion in self.form['criteria'].items():
+            criterion.update(observation='Simulated test observation; not human feedback',
+                preference={'outcome':'preferred','candidate_ids':['candidate']},
+                examples=[{'candidate_id':'candidate','selection_id':'f150','frame_id':150}])
+        self.form['criteria']['motion'].update(preference={'outcome':'unjudgeable','candidate_ids':[]},examples=[],observation='No clips in this temporary test package')
+
+    def test_actual_mode_full_package_import_choice_and_report(self):
+        write_json(self.root/'test-only-submission.json',self.form)
+        accepted=review.import_review(self.package_record,file_record(self.root/'test-only-submission.json'),self.root/'accepted.json')
+        eligibility={key:{'eligible':True,'reason':'Test-only eligibility'} for key in self.form['candidate_ids']}
+        decision=review.freeze_decision(accepted,eligibility,self.root/'decision.json')
+        self.assertEqual(decision['selected_candidate_ids'],['candidate'])
+        report=review.build_report(accepted,file_record(self.root/'decision.json'),self.root/'report.json')
+        self.assertEqual(report['human_review'],self.form)
+        self.assertTrue(report['actual_human_review'])
+        self.assertFalse(report['measured_accuracy'])
+        self.image.write_bytes(b'changed after import')
+        with self.assertRaises(ValueError): review.freeze_decision(accepted,eligibility,self.root/'changed.json')
+        with self.assertRaises(ValueError): review.build_report(accepted,file_record(self.root/'decision.json'),self.root/'changed-report.json')
+
+    def test_available_candidate_without_selected_media_refused(self):
+        from vipe_benchmark.qualitative_package import publish
+        self.manifest['selections'].append({'id':'f151','kind':'frame','role':'selection','camera_id':'0','frame_ids':[151],'timestamps':[6.04]})
+        self.manifest['candidates'][1]['media'][0].update(selection_id='f151',frame_ids=[151],timestamps=[6.04])
+        # Keep a true comparable pair at f150, and an additional available arm
+        # whose media only covers f151. Availability alone is insufficient.
+        third=copy.deepcopy(self.manifest['candidates'][0]); third.update(id='other',label='other',is_control=False)
+        self.manifest['candidates'].append(third)
+        published=publish(self.manifest,self.root/'package2')
+        self.form['package']=published['package']
+        self.form['candidate_ids'].append('other')
+        with self.assertRaisesRegex(ValueError,'unknown candidate selection'): review.validate_review(self.form)
+
+    def test_readiness_inventory_cannot_count_as_actual_comparison(self):
+        from vipe_benchmark.qualitative_package import publish
+        self.manifest['candidates'][1].update(status='missing',reason='No output',media=[])
+        published=publish(self.manifest,self.root/'inventory')
+        self.form['package']=published['package']
+        with self.assertRaisesRegex(ValueError,'readiness inventory'): review.validate_review(self.form)
 
 if __name__ == '__main__': unittest.main()

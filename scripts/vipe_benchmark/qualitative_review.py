@@ -48,7 +48,8 @@ def _package(record, actual):
     if actual:
         _require(package['record_kind'] == 'actual', 'fixture package is not actual evidence')
         from .qualitative_package import validate_package
-        validate_package(package)
+        summary = validate_package(package)
+        _require(summary['readiness'] == 'ready-for-human-review', 'readiness inventory is not an actual comparison')
     _verify_nested(package)
     return package
 
@@ -125,8 +126,8 @@ def validate_review(value, *, actual=True):
             _require(examples, 'quality preference needs exact visual examples')
             _require(set(selected) <= {example['candidate_id'] for example in examples}, 'each preferred/tied candidate needs an exact example')
             if key == 'motion':
-                _require('clip' in kinds, 'motion preference requires actual clip evidence')
-                _require(all(any(media['kind'] == 'clip' for media in candidates[candidate]['media']) for candidate in selected), 'selected motion candidate has no continuous clip')
+                clip_candidates = {example['candidate_id'] for example, kind in zip(examples, kinds) if kind == 'clip'}
+                _require(set(selected) <= clip_candidates, 'each selected motion candidate requires an exact continuous clip example')
     return value
 
 
