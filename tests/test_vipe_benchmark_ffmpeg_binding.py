@@ -64,7 +64,7 @@ class FFmpegBindingTests(unittest.TestCase):
                 import socket
                 socket.create_connection(('fixture.invalid', 80))
             with self.assertRaisesRegex(RuntimeError, 'model forwards'):
-                self.torch.nn.Module()._call_impl()
+                object.__new__(self.torch.nn.Module)._call_impl()
             return []
         with patch.dict(os.environ, IMAGEIO_FFMPEG_EXE='/untrusted/ffmpeg', FFMPEG_BINARY='/untrusted/override'):
             result = self.qualify(imports)
@@ -73,6 +73,35 @@ class FFmpegBindingTests(unittest.TestCase):
         self.assertEqual(result['forwards'], 0)
         self.assertFalse(result['cuda_context_initialized'])
         self.assertFalse(result['isolation']['subprocesses'])
+
+    def test_import_only_triton_probe_is_disabled_and_model_environment_restored(self):
+        def imports(*args):
+            # Mirrors the pinned xFormers capability probe's supported guards.
+            if os.environ.get('XFORMERS_ENABLE_TRITON', '0') == '1':
+                raise AssertionError('optional Triton probe forced enabled')
+            if os.environ.get('XFORMERS_FORCE_DISABLE_TRITON', '0') != '1':
+                raise AssertionError('optional get_device_capability would initialize CUDA')
+            return []
+        with patch.dict(os.environ, XFORMERS_ENABLE_TRITON='1', XFORMERS_FORCE_DISABLE_TRITON='0'):
+            result = self.qualify(imports)
+            self.assertEqual(os.environ['XFORMERS_ENABLE_TRITON'], '1')
+            self.assertEqual(os.environ['XFORMERS_FORCE_DISABLE_TRITON'], '0')
+        self.assertEqual(result['import_only_environment'],
+            {'XFORMERS_FORCE_DISABLE_TRITON': '1', 'XFORMERS_ENABLE_TRITON': '0'})
+        self.assertFalse(result['cuda_context_initialized'])
+        self.assertFalse(result['native_model_constructors_called'])
+        self.assertEqual(result['forwards'], 0)
+
+    def test_import_qualification_denies_model_constructors(self):
+        def imports(*args):
+            self.torch.nn.Module()
+        with patch.dict(os.environ, XFORMERS_ENABLE_TRITON='1', XFORMERS_FORCE_DISABLE_TRITON='0'):
+            with self.assertRaisesRegex(RuntimeError, 'model constructors'):
+                self.qualify(imports)
+            self.assertEqual(os.environ['XFORMERS_ENABLE_TRITON'], '1')
+            self.assertEqual(os.environ['XFORMERS_FORCE_DISABLE_TRITON'], '0')
+            self.assertIsNone(self.torch.nn.Module()._call_impl())
+        self.assertFalse((self.root / 'imports.json').exists())
 
     def test_changed_missing_or_unmanaged_binary_refuses_imports_and_result(self):
         for variant in ('changed', 'missing', 'unmanaged', 'non-executable', 'version'):

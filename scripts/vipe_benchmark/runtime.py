@@ -16,6 +16,9 @@ import uuid
 from .config import ROOT
 from .files import digest, file_record, read_json, safe_path, verify_record, write_json
 
+# This setting applies solely to API import qualification, never model execution.
+E5_IMPORT_ONLY_ENV = {'XFORMERS_FORCE_DISABLE_TRITON': '1', 'XFORMERS_ENABLE_TRITON': '0'}
+
 TARGETS = {
     'E0': dict(python='3.14', torch='2.13.0+cu130', torchvision='0.28.0+cu130'),
     'E1': dict(python='3.11', torch='2.5.1+cu124', torchvision='0.20.1+cu124', numpy='1.26.4'),
@@ -594,6 +597,7 @@ def qualify_imports(request, output):
     import importlib.metadata
     import socket
     from unittest.mock import patch
+    from contextlib import nullcontext
     import torch
     import torchvision
     import cv2
@@ -611,12 +615,19 @@ def qualify_imports(request, output):
         from .ffmpeg_binding import bind
         ffmpeg = bind()
     isolation = deny_vipe(settings['forbidden_vipe_roots'])
-    with patch.object(socket, 'create_connection', prohibited), patch.object(socket.socket, 'connect', prohibited), \
+    import_only_environment = E5_IMPORT_ONLY_ENV if settings['environment'] == 'E5' else {}
+    def prohibited_constructor(*args, **kwargs):
+        raise RuntimeError('setup import qualification prohibits model constructors')
+    constructor_guard = (patch.object(torch.nn.Module, '__init__', prohibited_constructor)
+                         if settings['environment'] == 'E5' else nullcontext())
+    with constructor_guard, patch.dict(os.environ, import_only_environment), \
+         patch.object(socket, 'create_connection', prohibited), patch.object(socket.socket, 'connect', prohibited), \
          patch.object(socket.socket, 'connect_ex', prohibited), patch.object(torch.nn.Module, '_call_impl', prohibited):
         modules = _native_api_imports(settings['environment'], read_json(verify_record(settings['assets'])['path']))
     write_json(output, dict(status='complete', environment=settings['environment'], modules=modules,
         native_model_constructors_called=False, forwards=0, cuda_context_initialized=bool(torch.cuda.is_initialized()),
         isolation=isolation, offline=True, ffmpeg=ffmpeg,
+        import_only_environment=import_only_environment,
         imported_base=dict(torch=torch.__version__, torchvision=torchvision.__version__,
                            opencv=cv2.__version__, numpy=importlib.metadata.version('numpy'))))
 
@@ -659,6 +670,8 @@ def setup(request, output, config):
         log = output / 'commands' / f'{len(executed):02d}-{label}.log'
         log.parent.mkdir(exist_ok=True)
         env = dict(runtime_env)
+        import_only_environment = E5_IMPORT_ONLY_ENV if environment == 'E5' and label == 'native-imports' else {}
+        env.update(import_only_environment)
         if offline:
             env.update(HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1', UV_OFFLINE='1')
         try:
@@ -683,7 +696,8 @@ def setup(request, output, config):
             receipt = output / 'commands' / f'{len(executed):02d}-{label}.json'
             write_json(receipt, dict(command=command, cwd=str(ROOT), log=file_record(log),
                 wall_seconds=time.monotonic() - start, error=error, offline=offline,
-                automatic_retries=0, package_transfer_proxy=command[0] == request['uv']))
+                automatic_retries=0, package_transfer_proxy=command[0] == request['uv'],
+                import_only_environment=import_only_environment))
             executed.append(command)
             receipts.append(file_record(receipt))
             print(f'[setup {environment}] {label}: {"failed" if error else "complete"}', flush=True)
@@ -736,6 +750,10 @@ def setup(request, output, config):
     if qualification.get('status') != 'complete' or qualification.get('forwards') != 0 or type(qualification.get(
             'cuda_context_initialized')) is not bool:
         raise ValueError('native import qualification was incomplete or performed model forwards')
+    if environment == 'E5' and qualification.get('native_model_constructors_called') is not False:
+        raise ValueError('E5 setup import qualification performed model constructors')
+    if environment == 'E5' and qualification.get('import_only_environment') != E5_IMPORT_ONLY_ENV:
+        raise ValueError('E5 setup import qualification changed the import-only Triton settings')
     if environment == 'E5' and qualification['cuda_context_initialized'] is not False:
         raise ValueError('E5 setup import qualification initialized a CUDA context')
     run([python, str(ROOT / 'scripts/vipe_benchmark/runtime_inventory.py'), '--output', str(output / 'inventory.json')],

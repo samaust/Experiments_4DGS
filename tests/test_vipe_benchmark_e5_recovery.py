@@ -234,7 +234,9 @@ class E5RecoveryTests(unittest.TestCase):
                 self.assertIn('--no-build-isolation', command)
                 (Path(command[-1]) / 'generated.py').write_text('fixture build artifact')
             elif '--qualify-imports' in command:
-                write_json(command[-1], dict(status='complete', forwards=0, cuda_context_initialized=False))
+                write_json(command[-1], dict(status='complete', forwards=0, cuda_context_initialized=False,
+                    native_model_constructors_called=False, import_only_environment={
+                        'XFORMERS_FORCE_DISABLE_TRITON': '1', 'XFORMERS_ENABLE_TRITON': '0'}))
             elif 'runtime_inventory.py' in command[1]:
                 packages = [dict(name=r.split('==')[0], version=r.split('==')[1])
                             for r in request['requirements'] if '==' in r]

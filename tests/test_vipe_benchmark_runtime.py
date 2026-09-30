@@ -393,7 +393,11 @@ runtime.download('https://fixture.invalid/blob', root / 'data.bin', root / 'tran
                 (source / 'generated-native.so').write_bytes(b'fixture compiled artifact')
             elif '--qualify-imports' in command:
                 write_json(command[-1], dict(status='complete', forwards=0,
-                           cuda_context_initialized=bool(request.get('_fixture_cuda_initialized'))))
+                           cuda_context_initialized=bool(request.get('_fixture_cuda_initialized')),
+                           native_model_constructors_called=request.get('_fixture_constructor_called', False),
+                           import_only_environment=request.get('_fixture_import_environment',
+                               {'XFORMERS_FORCE_DISABLE_TRITON': '1', 'XFORMERS_ENABLE_TRITON': '0'}
+                               if request['environment'] == 'E5' else {})))
             elif 'runtime_inventory.py' in command[1]:
                 requirements = request['requirements'] + ([request['native_correlation']] if request['native_correlation'] else [])
                 packages = [dict(name=name, version=version, license='fixture license', files=[])
@@ -479,13 +483,20 @@ runtime.download('https://fixture.invalid/blob', root / 'data.bin', root / 'tran
                 self.assertEqual(kwargs['env']['UV_OFFLINE'], '1')
                 self.assertTrue(any('--require-hashes' in cmd for cmd, _ in events))
             return fake(command, **kwargs)
-        with self.mocked_setup(request, assets, events), \
+        with patch.dict(os.environ, XFORMERS_FORCE_DISABLE_TRITON='0', XFORMERS_ENABLE_TRITON='1'), \
+             self.mocked_setup(request, assets, events), \
              patch.object(runtime.subprocess, 'run', side_effect=package_command):
             runtime.setup(request, self.root / 'E5', self.config)
         result = read_json(self.root / 'E5/result.json')
         self.assertEqual(result['runtime']['versions'], dict(python='3.11', torch='2.5.1+cu124',
             torchvision='0.20.1+cu124', numpy='1.26.4'))
         self.assertEqual(read_json(result['runtime']['imports']['path'])['forwards'], 0)
+        self.assertEqual([env for cmd, env in events if '--qualify-imports' in cmd][0]['XFORMERS_FORCE_DISABLE_TRITON'], '1')
+        self.assertEqual([env for cmd, env in events if '--qualify-imports' in cmd][0]['XFORMERS_ENABLE_TRITON'], '0')
+        for cmd, env in events:
+            if '--qualify-imports' not in cmd:
+                self.assertEqual(env.get('XFORMERS_FORCE_DISABLE_TRITON'), '0')
+                self.assertEqual(env.get('XFORMERS_ENABLE_TRITON'), '1')
 
     def test_e5_import_qualification_cannot_initialize_cuda(self):
         request, assets = self.fixture_request('E5')
@@ -494,6 +505,27 @@ runtime.download('https://fixture.invalid/blob', root / 'data.bin', root / 'tran
             with self.assertRaisesRegex(ValueError, 'CUDA context'):
                 runtime.setup(request, self.root / 'E5-cuda', self.config)
         self.assertFalse((self.root / 'E5-cuda/result.json').exists())
+
+    def test_e5_qualification_refuses_missing_or_altered_import_only_settings(self):
+        base_request, assets = self.fixture_request('E5')
+        for index, settings in enumerate(({}, {'XFORMERS_FORCE_DISABLE_TRITON': '0', 'XFORMERS_ENABLE_TRITON': '0'},
+                {'XFORMERS_FORCE_DISABLE_TRITON': '1', 'XFORMERS_ENABLE_TRITON': '1'})):
+            with self.subTest(settings=settings):
+                request = dict(base_request)
+                request['_fixture_import_environment'] = settings
+                output = self.root / f'E5-altered-{index}'
+                with self.mocked_setup(request, assets, []):
+                    with self.assertRaisesRegex(ValueError, 'import-only Triton settings'):
+                        runtime.setup(request, output, self.config)
+                self.assertFalse((output / 'result.json').exists())
+
+    def test_e5_qualification_refuses_model_constructor_evidence(self):
+        request, assets = self.fixture_request('E5')
+        request['_fixture_constructor_called'] = True
+        with self.mocked_setup(request, assets, []):
+            with self.assertRaisesRegex(ValueError, 'model constructors'):
+                runtime.setup(request, self.root / 'E5-constructor', self.config)
+        self.assertFalse((self.root / 'E5-constructor/result.json').exists())
 
     def test_e2_requires_sam2_extension_flags_and_exact_transformers(self):
         request, assets = self.fixture_request('E2')
