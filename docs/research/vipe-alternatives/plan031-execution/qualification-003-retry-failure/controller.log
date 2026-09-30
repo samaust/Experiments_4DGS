@@ -1,0 +1,15 @@
+Traceback (most recent call last):
+  File "<frozen runpy>", line 203, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_capture.py", line 125, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_capture.py", line 121, in main
+    return capture(args.directory,None if args.no_timeout else (240 if args.timeout is None else args.timeout),args.diagnostic,no_timeout=args.no_timeout)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_validation_capture.py", line 29, in capture
+    directory.mkdir(parents=True, exist_ok=False)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/pathlib/__init__.py", line 1011, in mkdir
+    os.mkdir(self, mode)
+    ~~~~~~~~^^^^^^^^^^^^
+FileExistsError: [Errno 17] File exists: '/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-execution/qualification-003'
