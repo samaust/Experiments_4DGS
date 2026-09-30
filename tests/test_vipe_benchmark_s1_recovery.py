@@ -3694,11 +3694,13 @@ class S1ReviewProposalTests(unittest.TestCase):
 class S1SixthReviewTests(unittest.TestCase):
     """New attempt admission preserves the historical chain without live writes."""
     def setUp(self):
-        current_agents = (ROOT / 'AGENTS.md').read_bytes()
         S1ReviewProposalTests.setUp(self)
         self.fixture_raw = (ROOT / 'docs/research/vipe-alternatives/plan031-execution/s1-recovery-005/outcome/ledger-after.jsonl').read_bytes()
-        self.historical_agents = current_agents
         self.process_amendment = ROOT / 'docs/research/vipe-alternatives/plan031-execution/s1-process-file-amendment-002.json'
+        self.historical_agents = (ROOT / 'docs/research/vipe-alternatives/plan031-execution/s1-proposal-fixture-001/historical-agents-002.md').read_bytes()
+        expected = read_json(self.process_amendment)['new']
+        self.assertEqual(hashlib.sha256(self.historical_agents).hexdigest(), expected['sha256'])
+        self.assertEqual(len(self.historical_agents), expected['bytes'])
         self.before = self.fixture_raw
 
     def proposal(self, **changes):
