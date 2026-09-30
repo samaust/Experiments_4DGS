@@ -1,0 +1,73 @@
+{
+  "schema": "plan067-qualitative-review/v1",
+  "record_kind": "human",
+  "reviewer": {
+    "name": "samaust",
+    "reviewed_at": "2026-09-30"
+  },
+  "package": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/qualitative-packages-001/segmentation/package.json",
+    "sha256": "b75b3dbd9cffec4330010a12680884d6da02b0822223dbd8b7d28ab6902aaac3",
+    "bytes": 105058
+  },
+  "candidate_ids": [
+    "source-rgb",
+    "S0",
+    "S1",
+    "S2",
+    "S3",
+    "S4",
+    "final-render"
+  ],
+  "criteria": {
+    "frozen_frame": {
+      "observation": "S0: missing parts of shoes of two players, incorrectly segmenting an object in front of player.\nS2: players are well segmented, only minimal wrong pixels, player correctly selected through a the basket mesh\nS3: missing a shoe, not selecting through the basket mesh, incorrectly selecting on object in front of a player, missing one shoe\nS4: missing part of the player moving the fastest and most blurry because of this movement, slight wrong selection of pixels near a person, player correctly selected through the basket mesh",
+      "preference": {
+        "outcome": "preferred",
+        "candidate_ids": [
+          "S2"
+        ]
+      },
+      "examples": [
+        {
+          "candidate_id": "S2",
+          "selection_id": "camera1-reconstruction-0",
+          "frame_id": 0
+        }
+      ]
+    },
+    "motion": {
+      "observation": "Could not compare. Playback does not work.",
+      "preference": {
+        "outcome": "unjudgeable",
+        "candidate_ids": []
+      },
+      "examples": []
+    },
+    "artifacts": {
+      "observation": "Artifacts can happen when rendering after learning. The is only a segmentation test so it cannot produce artifacts.",
+      "preference": {
+        "outcome": "unjudgeable",
+        "candidate_ids": []
+      },
+      "examples": []
+    },
+    "sharpness": {
+      "observation": "Sharpness needs to be evaluated on final rendering.",
+      "preference": {
+        "outcome": "unjudgeable",
+        "candidate_ids": []
+      },
+      "examples": []
+    },
+    "overall": {
+      "observation": "The segmentation needs to be the best for the players close to the ball because it's what viewers will focus on. S2 seems the best overall.",
+      "preference": {
+        "outcome": "unjudgeable",
+        "candidate_ids": []
+      },
+      "examples": []
+    }
+  },
+  "tradeoffs": "S3 is better at segmenting the crowd but this does not matter because it's not the focus of the video."
+}
