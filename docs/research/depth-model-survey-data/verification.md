@@ -24,8 +24,8 @@ pages are included, and a logged search may screen multiple leads.
 | **Total** | **141** | **294** | **110** |
 
 Model rows include exact releases, input modes, paper-only comparison identities
-and screened leads; they are not a count of independent model families. After review corrections, there are **166 model/disposition rows and 63
-identity links**.
+and screened leads; they are not a count of independent model families. After
+review corrections, there are **166 model/disposition rows and 63 identity links**.
 
 All eleven supplied discovery entry points have substantive screens in #37:
 arXiv, GitHub, Hugging Face, five community lists and three topics. Each category
@@ -90,7 +90,9 @@ Integration checks cover standard CSV parsing, matching headers, nonempty
 fields, unique scoped IDs, numerical values and metric directions, benchmark
 and license foreign keys, identity-link endpoints, section/consolidated equality,
 local Markdown links and whitespace. These are ordinary one-off checks, not a
-new validation subsystem. Parent report tables were traced back to the records.
+new validation subsystem. Parent report tables were traced back to the records:
+13 numeric groups and 46 local Markdown links passed integration checks. No
+duplicate source observation remained after exact-release equivalence checking.
 
 Independent Spec review additionally spot-checked MoGe-2 known/predicted-camera
 values and alignment, DA3 DTU pose conditions, PRV2 timing exclusions, Marigold
@@ -113,13 +115,24 @@ in #37/#41, and two #40 AbsRel locators named the MFC column. Corrections preser
 the scores, introduce comparison-only identities and fix the two locators.
 No actionable code-smell judgement applied to this documentation-only change.
 All initial findings were rechecked and resolved through `5c7783c7`. Final
-integration review: pending.
+integration review through `c06ccade`: **pass, no remaining findings**. The
+reviewer independently confirmed consolidated equality, counts, joins, identity
+links and the report's qualified conclusions.
 
 ### Spec
 
 Initial review found no actionable missing, incorrect or out-of-scope requirement
 in #37–#42. Explicit unknown upstream facts were accepted as qualified findings.
-Final #43 integration review: pending.
+Final #43 integration review through `c06ccade`: **pass, no findings**. The
+reviewer confirmed all required report sections, numerical/protocol traceability,
+exact shortlisted releases and four license dimensions, reconciliation, coverage
+and justified future-test questions. Metric VDA remains a separate hypothesis;
+MapAnything-Apache does not inherit NC or unspecified-checkpoint measurements.
+
+Both review axes are complete with zero remaining findings. All six prerequisite
+issues were closed after their correction recheck, before final consolidation
+acceptance. The parent can be assessed independently after #43 is closed; this
+report does not authorize or execute its proposed future experiments.
 
 ## Limits
 

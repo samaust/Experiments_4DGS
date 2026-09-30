@@ -1,10 +1,14 @@
 # Depth model survey tickets
 
 Source: [issue #36](https://github.com/samaust/Experiments_4DGS/issues/36), Plan 068.
-Status: **approved and published** on 2026-09-30. The user approved the seven-ticket
-breakdown with “I approve.” All seven issues are open, carry `ready-for-agent`,
-and have verified native parent and blocking relationships. Their published
-bodies match the local ticket documents.
+Status: **research deliverables complete and independently reviewed** on
+2026-09-30. Read the [consolidated report](../../../research/depth-model-survey.md)
+and [verification record](../../../research/depth-model-survey-data/verification.md).
+GitHub records final issue closure states.
+
+The user approved the seven-ticket breakdown with “I approve.” At publication,
+all seven issues were open with `ready-for-agent` and verified native parent and
+blocking relationships. Their published bodies matched the local ticket documents.
 
 ## Published breakdown
 
@@ -65,9 +69,10 @@ licenses, or building a validator.
 | Source traceability, exact variants, availability and four licensing findings | Every research slice; #43 reconciles |
 | Compact report, consolidated evidence, project fit and shortlists | #43 |
 
-Publication verification confirmed that #37–#42 have no blockers and each
-blocks #43; #43 is blocked by exactly those six issues. Issue #36 has exactly
-the seven published children, all incomplete. Its title, body, labels, comments,
-parent, blockers and open state match the snapshot taken before publication.
-Ticket publication completes this planning milestone; the research deliverables
-remain pending.
+Publication verification confirmed that #37–#42 had no blockers and each
+blocked #43; #43 was blocked by exactly those six issues. Issue #36 had exactly
+the seven published children, all initially incomplete. Implementation used one
+research subagent and isolated worktree per prerequisite, then consolidated the
+six accepted sections. Separate Standards and Spec reviews passed after the
+documented identity and source-locator corrections. Published scores and proposed
+future experiments remain separate from local measurements and execution.

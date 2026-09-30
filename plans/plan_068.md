@@ -215,5 +215,13 @@ data as a task-related milestone.
 - The report gives useful next-test candidates without presenting published
   benchmark scores as measured improvements to this project's final renders.
 
-The present planning milestone delivers this plan and the source reconnaissance.
-The report and its evidence files are the subsequent survey deliverables.
+The initial planning milestone delivered this plan and the source reconnaissance.
+
+## Completion record — 2026-09-30
+
+The [research report](../docs/research/depth-model-survey.md) and supporting
+inventories are complete. Six subagents researched #37–#42 in isolated worktrees;
+#43 consolidated the accepted sections. The [verification record](../docs/research/depth-model-survey-data/verification.md)
+documents 294 observations, source checks, reconciliation, and passing independent
+Standards and Spec reviews. Remaining upstream uncertainties are explicit
+findings. Proposed future tests were not executed by this literature survey.

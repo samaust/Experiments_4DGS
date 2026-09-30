@@ -115,10 +115,10 @@ metric, relative, video, multi-view, efficient and high-resolution methods.
 ## Further Notes
 
 This specification implements the research deliverable described by **Plan 068**,
-prepared on 2026-09-30 and committed locally as `70a67fc7`. The plan and initial
-source reconnaissance are complete; the full literature survey, extracted
-comparisons and report remain pending. The user confirmed the review boundary
-before publication of this specification.
+prepared on 2026-09-30 and committed locally as `70a67fc7`. At specification
+publication, the plan and initial source reconnaissance were complete and the
+full survey remained pending. The user confirmed the review boundary before
+publication of this specification.
 
 The existing workflow uses calibrated multi-camera Basketball images at 960×540.
 Current monocular depth supports physical-scale estimation; potential future
@@ -149,3 +149,12 @@ Initial paper leads supplement the existing D0–D4 references: MoGe-2, Marigold
 DepthCrafter, ZoeDepth, PatchFusion and VGGT. These are discovery leads rather
 than predetermined winners; the survey must follow and verify the underlying
 comparison evidence.
+
+## Implementation record — 2026-09-30
+
+The [completed report](../research/depth-model-survey.md), six category sections
+and consolidated evidence inventories implement this specification. Independent
+Standards and Spec reviews passed after the documented corrections. See the
+[verification record](../research/depth-model-survey-data/verification.md) for
+coverage, exact counts, source checks, reconciliation and remaining upstream
+limitations. Proposed future experiments remain outside this completed survey.
