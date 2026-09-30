@@ -1,5 +1,6 @@
 """Disposable CPU admission and evidence fixtures; never touch the live ledger."""
 import copy
+from contextlib import contextmanager
 import hashlib
 import sys
 import tempfile
@@ -82,6 +83,45 @@ class S1NextIdentityTests(unittest.TestCase):
         live = ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z/ledger.jsonl'
         self.assertTrue(live.read_bytes().startswith(prefix))
         self.historical_events = [json.loads(line) for line in prefix.splitlines()]
+        outcome = read_json(ROOT / 'docs/research/vipe-alternatives/issue3-preparation/s1-dispatch-004-outcome/outcome.json')
+        self.main = Path(outcome['authorization']['path']).parents[4]
+        # Historical contracts retain their original canonical path spellings.
+        for mocked in (patch.dict(globals(), ROOT=self.main),
+                patch.object(s1, 'ROOT', self.main),
+                patch.object(s1, 'PROCESS_FILE_AMENDMENT', self.main / 'docs/research/vipe-alternatives/issue3-preparation/s1-process-file-amendment-001.json')):
+            mocked.start(); self.addCleanup(mocked.stop)
+
+    @contextmanager
+    def historical_process_file(self):
+        # Only historical positive admission contexts observe the original
+        # process bytes. Current process-file negative checks remain live.
+        import io
+        import os
+        from vipe_benchmark import s1_progress
+        agents = self.main / 'AGENTS.md'
+        fixture = (ROOT / 'docs/research/vipe-alternatives/plan031-execution/s1-proposal-fixture-001/historical-agents.md').read_bytes()
+        note = read_json(s1.PROCESS_FILE_AMENDMENT)
+        self.assertEqual(hashlib.sha256(fixture).hexdigest(), note['new']['sha256'])
+        self.assertEqual(len(fixture), note['new']['bytes'])
+        original_open, original_stat, original_bytes = Path.open, Path.stat, s1_progress.read_bytes
+        def fixture_open(path, mode='r', *args, **kwargs):
+            if path == agents and mode == 'rb':
+                return io.BytesIO(fixture)
+            return original_open(path, mode, *args, **kwargs)
+        def fixture_stat(path, *args, **kwargs):
+            value = original_stat(path, *args, **kwargs)
+            if path == agents:
+                fields = list(value); fields[6] = len(fixture)
+                return os.stat_result(fields)
+            return value
+        def fixture_bytes(path, limit, *args, **kwargs):
+            if Path(path) == agents:
+                if len(fixture) > limit:
+                    raise ValueError('progress regular file capacity')
+                return fixture
+            return original_bytes(path, limit, *args, **kwargs)
+        with patch.object(Path, 'open', fixture_open), patch.object(Path, 'stat', fixture_stat), patch.object(s1_progress, 'read_bytes', fixture_bytes):
+            yield
 
     def test_fourth_identity_requires_exact_process_file_amendment(self):
         local = ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z'
@@ -89,7 +129,7 @@ class S1NextIdentityTests(unittest.TestCase):
         amendment = ROOT / 'docs/research/vipe-alternatives/issue3-preparation/s1-process-file-amendment-001.json'
         draft = read_json(proposal)
         ledger_before = (local / 'ledger.jsonl').read_bytes()
-        with tempfile.TemporaryDirectory() as directory, patch.object(
+        with self.historical_process_file(), tempfile.TemporaryDirectory() as directory, patch.object(
                 s1, 'validation_record', return_value=read_json(draft['repair_validation']['path'])):
             root = Path(directory)
             candidate = dict(draft, process_file_amendment=file_record(amendment),
@@ -113,6 +153,11 @@ class S1NextIdentityTests(unittest.TestCase):
                 s1.validate_binding(local, load(), file_record(substituted), events=self.historical_events)
             with self.assertRaisesRegex(ValueError, 'explicit S1 calibration'):
                 s1.validate_binding(local, load(), file_record(proposal))
+        with tempfile.TemporaryDirectory() as directory, patch.object(s1, 'validation_record', return_value=read_json(draft['repair_validation']['path'])):
+            current = Path(directory) / 'current-process.json'
+            write_json(current, candidate)
+            with self.assertRaisesRegex(ValueError, 'process-file preservation scope changed'):
+                s1.validate_binding(local, load(), file_record(current), events=self.historical_events)
         self.assertEqual((local / 'ledger.jsonl').read_bytes(), ledger_before)
 
     def test_fourth_identity_binds_consumed_467_event_prefix(self):
@@ -120,7 +165,7 @@ class S1NextIdentityTests(unittest.TestCase):
         path = ROOT / 'docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-calibration-recovery-authorization-004.json'
         draft = read_json(path)
         before = (local / 'ledger.jsonl').read_bytes()
-        with tempfile.TemporaryDirectory() as directory, patch.object(s1, 'validation_record', return_value=read_json(draft['repair_validation']['path'])):
+        with self.historical_process_file(), tempfile.TemporaryDirectory() as directory, patch.object(s1, 'validation_record', return_value=read_json(draft['repair_validation']['path'])):
             approved = dict(draft, additional_attempt_approved=True,
                             process_file_amendment=file_record(ROOT / 'docs/research/vipe-alternatives/issue3-preparation/s1-process-file-amendment-001.json'),
                             authorization='Synthetic CPU validation only',
@@ -170,7 +215,7 @@ class S1NextIdentityTests(unittest.TestCase):
         draft = read_json(path)
         before = (local / 'ledger.jsonl').read_bytes()
         historical_events = self.historical_events[:459]
-        with tempfile.TemporaryDirectory() as directory, patch.object(s1, 'validation_record', return_value=read_json(draft['repair_validation']['path'])):
+        with self.historical_process_file(), tempfile.TemporaryDirectory() as directory, patch.object(s1, 'validation_record', return_value=read_json(draft['repair_validation']['path'])):
             review = dict(draft, additional_attempt_approved=True,
                           process_file_amendment=file_record(ROOT / 'docs/research/vipe-alternatives/issue3-preparation/s1-process-file-amendment-001.json'),
                           authorization='Synthetic CPU validation only',
@@ -206,7 +251,7 @@ class S1NextIdentityTests(unittest.TestCase):
         # Review the historical pre-dispatch snapshot. The live second
         # identity is now consumed, so it cannot serve as a new-attempt gate.
         historical_events = self.historical_events[:453]
-        with tempfile.TemporaryDirectory() as directory, patch.object(s1, 'validation_record', return_value=read_json(document['repair_validation']['path'])):
+        with self.historical_process_file(), tempfile.TemporaryDirectory() as directory, patch.object(s1, 'validation_record', return_value=read_json(document['repair_validation']['path'])):
             path = Path(directory) / 'authorization.json'
             write_json(path, document)
             authorization = file_record(path)
