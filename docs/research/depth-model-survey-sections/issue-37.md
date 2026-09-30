@@ -57,7 +57,9 @@ than proof of the project's selected bytes. [MoGe-2 v1, Tables A.2/B.4](https://
 | Metric3D V2 ViT-L | 11.8 | 88.8 |
 
 These observations favour Metric3D in this particular setting; they do not
-establish exact checkpoint parity or predict results for moving players.
+establish exact checkpoint parity or predict results for moving players. The CSV
+uses source-specific paper identities `i37-unidepth-v2-vitl-moge2` and
+`i37-metric3dv2-vitl-moge2`; neither inherits the selected D1/D3 weight artifacts.
 
 ### Original Metric3D ViT-L zero-shot row
 
@@ -215,7 +217,7 @@ unaligned scale and player/ball boundaries remain stable across synchronized
 Basketball views. None of the extracted image metrics establishes temporal
 stability, moving-person accuracy, occlusion handling or final 4DGS quality.
 
-The package contains **33 model/lead records, 59 numeric observations and five
+The package contains **35 model/lead records, 59 numeric observations and five
 reference license records**. Nineteen inventory entries are explicitly discovery
 leads; the remaining entries separate controls and paper evaluation identities.
 All benchmark and license model IDs resolve. `unknown` means unreported or
