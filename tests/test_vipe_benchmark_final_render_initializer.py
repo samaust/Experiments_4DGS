@@ -155,6 +155,33 @@ class InitializerTests(unittest.TestCase):
             width=self._read(self.width);width['request_sha256']=object_hash(request)
             with self.assertRaises(ValueError):assemble(request,'QF-B',self.base.record('geo-badmanifest-'+str(len(list(self.root.glob('geo-badmanifest-*')))),g),self.base.record('width-badmanifest-'+str(len(list(self.root.glob('width-badmanifest-*')))),width))
 
+    def test_actual_assembly_rejects_consistent_substituted_manifest(self):
+        from sync_timing import common_training_keys
+        from vipe_benchmark import final_render_contract as contract
+        # Real scope/source/preset pins exercise actual parsing. Geometry remains
+        # a mutation fixture; this test establishes no native qualification.
+        request=copy.deepcopy(self.request);request['record_kind']='actual'
+        for name,(relative,_,_) in contract.FROZEN_SCOPE.items():
+            request['bindings'][name]=file_record(contract.ROOT/relative)
+        repository=Path('/home/auss/git_repos/samaust/Experiments_4DGS')
+        request['bindings']['source']=file_record(contract.__file__)
+        request['bindings']['preset']=file_record(repository/'.local/FreeTimeGsVanilla/src/simple_trainer_freetime_4d_pure_relocation.py')
+        request['bindings']['scene_freeze']=self.scene_record
+        manifest=copy.deepcopy(self.manifest)
+        comparison=copy.deepcopy(manifest['timing'])
+        comparison['offset_seconds']['2']=-.04
+        manifest['comparison_timings'].append(comparison)
+        frames=[(str(c),f,f/25) for c in range(34) for f in range(50)]
+        retained,excluded=common_training_keys(frames,manifest['comparison_timings'],manifest['heldout_camera_ids'])
+        manifest['training_keys']=[list(k) for k in retained];manifest['training_exclusions']=excluded
+        request['bindings']['scene_manifest']=self.base.record('substituted-union',manifest)
+        geometry=copy.deepcopy(self.geometry)
+        geometry.update(record_kind='actual',request_sha256=object_hash(request))
+        width=self._read(self.width);width.update(record_kind='actual',request_sha256=object_hash(request))
+        with self.assertRaisesRegex(ValueError,'accepted processed manifest path/hash/size'):
+            assemble(request,'QF-B',self.base.record('substituted-union-geometry',geometry),
+                     self.base.record('substituted-union-width',width))
+
     def test_consistent_but_unapproved_normalization_substitution_rejected(self):
         request=copy.deepcopy(self.request)
         changed=self.transform.copy();changed[:3,:3]*=2

@@ -9,7 +9,8 @@ import math
 import numpy as np
 
 from .files import object_hash, read_json, verify_record
-from .final_render_contract import COMPOSITIONS, KEYFRAMES, TRAINING_CAMERAS, initializer_arrays_hash, parse_request
+from .final_render_contract import (COMPOSITIONS, KEYFRAMES, TRAINING_CAMERAS,
+    initializer_arrays_hash, normalization_matrix, parse_request, validate_processed_manifest_binding)
 
 NATIVE = ('positions', 'colors', 'velocities', 'times', 'durations')
 SIDECARS = ('region', 'velocity_valid')
@@ -42,7 +43,7 @@ def _arrays(record):
 
 def validate_manifest(request):
     """Check accepted zero-offset timing and union training exclusions, CPU only."""
-    manifest = _bound(request['bindings']['scene_manifest'])
+    manifest = validate_processed_manifest_binding(request)
     _require(manifest.get('schema') == 'basketball-processed/v1' and manifest.get('status') == 'prepared' and
         manifest.get('source_fps') == 25 and manifest.get('heldout_camera_ids') == ['0', '10', '20', '30'] and
         manifest.get('temporal_holdout_seconds') == [.8, 1.], 'accepted Basketball manifest required')
@@ -77,14 +78,7 @@ def validate_scene(request, record):
     """Check an exact D4 scene against accepted cameras, time and normalization."""
     scene = _bound(record)
     contract = request['initializer_contract']
-    matrix = np.asarray(contract['normalization']['transform'], np.float64)
-    _require(matrix.shape == (4, 4) and np.isfinite(matrix).all() and
-        np.allclose(matrix[3], [0, 0, 0, 1], atol=0, rtol=0), 'finite affine normalization required')
-    linear = matrix[:3, :3]
-    squared_scale = np.trace(linear.T @ linear) / 3
-    _require(squared_scale > 0 and np.linalg.det(linear) > 0 and
-        np.allclose(linear.T @ linear, np.eye(3) * squared_scale, rtol=1e-5, atol=1e-10),
-        'positive isotropic similarity normalization required')
+    matrix = normalization_matrix(contract['normalization'], actual=request['record_kind'] == 'actual')
     _require(scene.get('schema') == 'vipe-benchmark-diagnostic-scene/v1' and scene.get('status') == 'complete'
         and scene.get('depth_component') == 'D4' and scene.get('normalization') == matrix.tolist(),
         'scene D4 identity/normalization differs')
@@ -207,6 +201,7 @@ def assemble(request, arm, geometry_record, width_record):
     """
     parse_request(request)
     _require(arm in COMPOSITIONS, 'unknown QF arm')
+    validate_processed_manifest_binding(request)
     geometry, matrix, neighbors = _geometry(request, arm, geometry_record)
     width = _bound(width_record)
     _require(width.get('schema') == 'plan067-final-render-voxel-width/v1' and

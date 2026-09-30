@@ -257,15 +257,22 @@ def _processed_scene_validation(value,scene_record):
         transform=matrix.tolist(),native_execution_qualified=False)
 
 
-def validate_scene_bindings(value):
-    """Validate the actual accepted processed manifest through its existing seam."""
-    bindings=value['bindings'];scene=_bound(bindings['scene_manifest'])
+def validate_processed_manifest_binding(value):
+    """Pin actual processed input bytes before applying scientific validation."""
+    record=value['bindings']['scene_manifest']
     if value['record_kind']=='actual':
         relative,sha256,size=PROCESSED_MANIFEST
         expected=dict(path=str((ROOT/relative).resolve()),sha256=sha256,bytes=size)
-        _require(bindings['scene_manifest']==expected,'accepted processed manifest path/hash/size differs')
-        _verify(expected)
+        _require(record==expected,'accepted processed manifest path/hash/size differs')
+    scene=_bound(record)
+    if value['record_kind']=='actual':
         _require(scene.get('schema')=='basketball-processed/v1','actual accepted processed manifest required')
+    return scene
+
+
+def validate_scene_bindings(value):
+    """Validate the actual accepted processed manifest through its existing seam."""
+    bindings=value['bindings'];scene=validate_processed_manifest_binding(value)
     if scene.get('schema')=='basketball-processed/v1':
         _require('scene_freeze' in bindings,'processed manifest requires bound scene_freeze')
         _verify(bindings['scene_freeze'])

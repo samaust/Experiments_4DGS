@@ -36,6 +36,10 @@ normalized coordinate arrays must agree under that matrix.
 The accepted manifest must retain 34 cameras, original 25 fps, frames0–49, held-out
 cameras0/10/20/30, and the union of corrected-time exclusions. Recompute the union
 with the existing `sync_timing` functions and reject missing/unavailable pair keys.
+Actual assembly first pins the accepted processed manifest's exact path, hash and
+size through the same binding validator used by REVIEW admission. A substituted
+comparison timing union is rejected even when its exclusions are recomputed.
+Fixture records retain flexible manifest bindings and confer no execution authority.
 `frame/50` is accepted only with zero offsets, origin0 and duration2seconds; other
 manifest times require a new explicit contract, not implicit conversion.
 
@@ -86,8 +90,11 @@ source identities/neighbors, wrong physical normalization/velocity/time/camera,
 manifest exclusions/offsets and fixture/provenance/voxel substitution are rejected.
 No model, CUDA import, GPU operation, runtime setup or live ledger write is used.
 
-Focused qualification: eight adapter CPU fixtures and twelve contract fixtures
-passed together (20 tests) with the explicit root Roma
-virtual-environment interpreter. The initial red import exposed the absent adapter;
-AST parsing and diff checks supplement the tests. No configured static typechecker
+Focused qualification: nine adapter CPU fixtures and twelve contract fixtures
+passed together (21 tests) with the explicit root `stg-colmap`
+virtual-environment interpreter. The public actual-assembly regression first reached
+later scene checks instead of rejecting a consistently rewritten manifest; the
+shared binding gate now rejects it before geometry validation. Scene normalization
+reuses the contract's similarity validator and tolerance. AST parsing and diff
+checks supplement the tests. No configured static typechecker
 or native/GPU qualification is claimed.
