@@ -19,3 +19,5 @@ The attempted final capture003 failed under sandbox AF_UNIX restrictions. Its on
 The user subsequently authorized corrected CPU qualification. Capture004 is the fresh outside-sandbox run; capture003 and the failed retry are retained intact.
 
 Capture004 completed without timeout but failed four REVIEW fixture cases because their live ledger assumptions became stale after actual recovery005 consumption. The production consumed-identity refusal is correct. A test-only correction must use immutable pre-dispatch state and preserve the actual live refusal; neither capture003 nor004 is passing qualification.
+
+The final fixture correction f31b4323 passed all seven focused proposal tests. Both reviewers checked this test-only correction and again found zero issues. Capture005 then reached its unchanged240-second cap near the end of supervisor tests, with no observed test failure before termination. Its aggregate receipt is incomplete and no passing qualification is claimed. Further host qualification is pending renewed user authorization under AGENTS.md.
