@@ -833,6 +833,20 @@ def qualify_runtime(runtime, request):
     imported = {entry['module']: entry for entry in imports.get('modules', [])}
     if len(imported) != len(imports.get('modules', [])):
         raise ValueError('S1 duplicate E1 import identity')
+    def admitted_source_file(source, record):
+        # Source tree inventories also retain permissions; import/loaded file
+        # receipts deliberately use the strict three-field byte identity.
+        matches = [item for item in request['assets'][source]['files']
+                   if {key: item.get(key) for key in ('path', 'sha256', 'bytes')} == record]
+        if len(matches) != 1:
+            return False
+        mode = matches[0].get('mode')
+        if 'mode' in matches[0]:
+            import stat
+            if (type(mode) is not int or not 0 <= mode <= 0o7777
+                    or stat.S_IMODE(operation(Path.stat, Path(record['path'])).st_mode) != mode):
+                raise ValueError('S1 admitted source mode changed')
+        return True
     required_imports = CORE_IMPORTS['E1']
     for name, source, symbols in required_imports:
         entry = imported.get(name, {})
@@ -840,8 +854,7 @@ def qualify_runtime(runtime, request):
             raise ValueError('S1 required E1 import identity missing')
         operation(strict_record,entry['file'])
         if source:
-            tree = request['assets'][source]
-            if entry['file'] not in tree['files']:
+            if not admitted_source_file(source, entry['file']):
                 raise ValueError('S1 E1 import differs from admitted source tree')
         elif entry['file'] != admitted.get(entry['file']['path']):
             raise ValueError('S1 E1 import differs from installed inventory')
@@ -869,7 +882,7 @@ def qualify_runtime(runtime, request):
                 raise ValueError('S1 duplicate loaded module identity')
             loaded_names[name] = record
             source = {'groundingdino':'grounding_source', 'segment_anything':'sam_source'}.get(name.split('.')[0])
-            if source and record not in request['assets'][source]['files']:
+            if source and not admitted_source_file(source, record):
                 raise ValueError('S1 loaded source differs from admitted asset tree')
         modules.update(n.split('.')[0] for n in names)
         native |= entry.get('mapped_native_library') is True

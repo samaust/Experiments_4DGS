@@ -1290,7 +1290,10 @@ def _build_native(component, bundle, runtime):
         tracker=(_s1_tracker(aot_module,runtime,arguments) if gate is None else
             _s1_tracker(aot_module,runtime,arguments,s1_gate=gate))
         attention = bundle.module('networks.layers.attention', 'aot_source')
-        if not attention.enable_corr:
+        attention_alias = bundle.module('aot.networks.layers.attention', 'aot_source')
+        if run(run(safe_path, attention.__file__).resolve) != run(run(safe_path, attention_alias.__file__).resolve):
+            raise BackendError('AOT attention aliases do not identify the same pinned source file')
+        if not attention.enable_corr or not attention_alias.enable_corr:
             raise BackendError('AOT native correlation extension is unavailable; implicit fallback is prohibited')
         return run(LegacyStandaloneBackend,detector, predictor, tracker, runtime, bundle.provenance)
     if component in ('S2', 'S4'):
