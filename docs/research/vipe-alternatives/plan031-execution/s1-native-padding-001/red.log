@@ -1,0 +1,23 @@
+E
+======================================================================
+ERROR: test_native_masked_caption_padding_preserves_raw_evidence (test_vipe_benchmark_s1_native_padding.NativePaddingTests.test_native_masked_caption_padding_preserves_raw_evidence)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan031-ticket-worktrees/s1-padding/tests/test_vipe_benchmark_s1_native_padding.py", line 36, in test_native_masked_caption_padding_preserves_raw_evidence
+    self.assertTrue(self.qualify(arrays, 'native'))
+                    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan031-ticket-worktrees/s1-padding/tests/test_vipe_benchmark_s1_native_padding.py", line 32, in qualify
+    return qualify_row(row, self.request, first=True)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan031-ticket-worktrees/s1-padding/scripts/vipe_benchmark/s1_progress.py", line 350, in run
+    if effective is None:return function(*args, **kwargs)
+                                ~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan031-ticket-worktrees/s1-padding/scripts/vipe_benchmark/s1_evidence.py", line 598, in qualify_row
+    return _qualify_row(row,request,first=first,loader=loader,memo=memo)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan031-ticket-worktrees/s1-padding/scripts/vipe_benchmark/s1_evidence.py", line 653, in _qualify_row
+    raise ValueError('invalid raw S1 logits/probabilities/boxes')
+ValueError: invalid raw S1 logits/probabilities/boxes
+
+----------------------------------------------------------------------
+Ran 1 test in 0.685s
+
+FAILED (errors=1)

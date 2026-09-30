@@ -646,8 +646,21 @@ def _qualify_row(row, request, *, first=False, loader=None, memo=None):
             raise ValueError('S1 processed RGB differs from frozen native preprocessing')
         scores, logits, boxes = (
             arrays['detector_token_scores'], arrays['detector_raw_token_logits'], arrays['detector_raw_boxes_cxcywh'])
+        ids = arrays['detector_token_ids'].tolist()
+        if ids != [101, 2711, 1012, 3455, 1012, 102]:
+            raise ValueError('S1 frozen caption token layout changed')
+        # Pinned ContrastiveEmbed pads the six-token caption to 256 with -inf.
+        # Keep those native bytes; only inactive slots may contain the sentinel.
+        # Six-column finite evidence remains the compact CPU fixture contract.
+        native_logits = (logits.ndim == 2 and logits.shape[1] == 256
+                and np.isfinite(logits[:, :6]).all()
+                and np.isneginf(logits[:, 6:]).all()
+                and scores.shape == logits.shape and np.all(scores[:, 6:] == 0))
+        compact_logits = (logits.ndim == 2 and logits.shape[1] == 6
+                and np.isfinite(logits).all())
         if (scores.ndim != 2 or logits.shape != scores.shape or boxes.shape != (len(scores), 4)
-                or not all(np.isfinite(x).all() for x in (scores, logits, boxes))
+                or not (native_logits or compact_logits)
+                or not all(np.isfinite(x).all() for x in (scores, boxes))
                 or np.any((scores < 0) | (scores > 1))
                 or not np.allclose(scores, 1 / (1 + np.exp(-logits)), atol=1e-7, rtol=1e-6)):
             raise ValueError('invalid raw S1 logits/probabilities/boxes')
@@ -656,10 +669,7 @@ def _qualify_row(row, request, *, first=False, loader=None, memo=None):
                 or not np.array_equal(boxes[selected], arrays['detector_native_boxes_cxcywh'])
                 or not np.array_equal(scores[selected].max(axis=1), arrays['detector_selected_scores'])):
             raise ValueError('S1 native query selection changed')
-        ids = arrays['detector_token_ids'].tolist()
-        # Frozen BERT uncased caption layout; verify both spans, even with zero detections.
-        if ids != [101, 2711, 1012, 3455, 1012, 102]:
-            raise ValueError('S1 frozen caption token layout changed')
+        # Frozen BERT uncased caption layout was checked before padding.
         class Caption:
             def decode(self, tokens):
                 return {(2711,): 'person', (3455,): 'basketball'}[tuple(tokens)]
