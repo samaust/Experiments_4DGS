@@ -88,7 +88,7 @@ def validate(manifest, *, deadline=None):
                 raise ValueError('actual package requires trusted generation receipts')
             _record(manifest['bindings'][key])
         from .qualitative_generation import validate_actual_package
-        validate_actual_package(manifest)
+        validate_actual_package(manifest, deadline=deadline)
     settings = manifest['settings']
     resolution = settings['resolution']
     if len(resolution) != 2 or any(type(x) is not int or x <= 0 for x in resolution) or settings['fps'] != 25 or not settings['color_handling'].strip():
