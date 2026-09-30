@@ -1,0 +1,17 @@
+{
+  "status": "failed",
+  "reason": "ValueError: S1 E1 import differs from admitted source tree",
+  "first_result": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration-recovery-006/first-result-qualification.json",
+    "bytes": 3442,
+    "sha256": "39e91fc19f3278443e695f4c64d765b78651fa52a37aa6bce308ace43f53cac2"
+  },
+  "failure_evidence": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration-recovery-006/calibration/camera0/frame50-failure-evidence.json",
+    "bytes": 158118,
+    "sha256": "5671b44e1e6a4cc81700312d06b9f0441276a8e52d5e094d959c7d614071f9f3"
+  },
+  "traceback": "Traceback (most recent call last):\n  File \"/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_worker.py\", line 52, in main\n    operation(request, args.output, config, clock=clock)\n  File \"/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/stages.py\", line 486, in run\n    return segment(request, output, config, clock=clock)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/stages.py\", line 160, in segment\n    return operation(_segment,request,output,config,clock=clock,deadline=clock.work_deadline)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_progress.py\", line 332, in operation\n    value = function(*args, **kwargs)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/stages.py\", line 295, in _segment\n    qualify_runtime(runtime, request,deadline=deadline)\n  File \"/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_progress.py\", line 354, in run\n    result = function(*args, **kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_evidence.py\", line 845, in qualify_runtime\n    raise ValueError('S1 E1 import differs from admitted source tree')\nValueError: S1 E1 import differs from admitted source tree\n",
+  "job_id": "S1-calibration-recovery-006",
+  "requires_permission_review": false
+}
