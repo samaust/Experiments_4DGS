@@ -141,7 +141,7 @@ class S1NextIdentityTests(unittest.TestCase):
                 s1.validate_binding(local, load(), file_record(path))
         self.assertEqual((local / 'ledger.jsonl').read_bytes(), before)
 
-    def test_clock_and_helper_paths_accept_four_reviewed_identities(self):
+    def test_clock_and_helper_paths_accept_five_reviewed_identities(self):
         from vipe_benchmark.s1_clock import ReservationClock
         from vipe_benchmark.s1_cpu_helper import helper_job
         outcome = read_json(ROOT / 'docs/continuous-improvement/plan031-s1-recovery-20260919/requalification-066/dispatch-outcome.json')
@@ -155,8 +155,11 @@ class S1NextIdentityTests(unittest.TestCase):
         fourth = dict(reservation, job_id=s1.JOB_4)
         self.assertEqual(ReservationClock.from_reservation(fourth).job_id, s1.JOB_4)
         self.assertEqual(helper_job({'reservation': fourth}), s1.JOB_4)
+        fifth = dict(reservation, job_id=s1.JOB_5)
+        self.assertEqual(ReservationClock.from_reservation(fifth).job_id, s1.JOB_5)
+        self.assertEqual(helper_job({'reservation': fifth}), s1.JOB_5)
         with self.assertRaises(ValueError):
-            ReservationClock.from_reservation(dict(reservation, job_id='S1-calibration-recovery-005'))
+            ReservationClock.from_reservation(dict(reservation, job_id='S1-calibration-recovery-006'))
 
     def test_third_identity_binds_consumed_live_prefix_without_mutation(self):
         local = ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z'
