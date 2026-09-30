@@ -33,6 +33,7 @@ class PackageTests(unittest.TestCase):
         html = Path(result['viewer']['path']).read_text()
         self.assertIn('Original full frame', html)
         self.assertIn('Shared zoom', html)
+        self.assertIn('Add current frame/time', html)
         with self.assertRaises(FileExistsError):
             publish(self.manifest, self.root / 'package')
     def test_matched_hash_metadata_corruption_and_role_substitution_rejected(self):
