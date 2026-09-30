@@ -28,6 +28,8 @@ SCHEMA_7 = 'vipe-benchmark-s1-amendment-calibration-recovery/v7'
 JOB_7 = 'S1-calibration-recovery-007'
 SCHEMA_8 = 'vipe-benchmark-s1-amendment-calibration-recovery/v8'
 JOB_8 = 'S1-calibration-recovery-008'
+SCHEMA_9 = 'vipe-benchmark-s1-amendment-calibration-recovery/v9'
+JOB_9 = 'S1-calibration-recovery-009'
 AMENDMENT = 'plan031-s1-s0-token-sum-v1'
 LIMITS = dict(gpu_concurrency=1, gpu_peak_device_gib_limit=22,
     gpu_total_seconds_limit=93600, cpu_max_workers=8,
@@ -136,7 +138,7 @@ def register_source_requalification(local, config, amendment):
 def validate_fifth_review(document):
     """Exact reviewed proposal plus one explicit approval; no allocation drift."""
     proposal = read_json(strict_record(document.get('review_proposal'))['path'])
-    if (proposal.get('schema') != {JOB_5: SCHEMA_5, JOB_6: SCHEMA_6, JOB_7: SCHEMA_7, JOB_8: SCHEMA_8}.get(document.get('job_id'))
+    if (proposal.get('schema') != {JOB_5: SCHEMA_5, JOB_6: SCHEMA_6, JOB_7: SCHEMA_7, JOB_8: SCHEMA_8, JOB_9: SCHEMA_9}.get(document.get('job_id'))
             or proposal.get('job_id') != document.get('job_id')
             or proposal.get('additional_attempt_approved') is not False
             or proposal.get('authorization_context', {}).get('stage') != 'REVIEW'
@@ -166,6 +168,13 @@ def validate_sixth_predecessor(finish, authorization, *, job=JOB_5):
                 or finish.get('surviving_pids')):
             raise ValueError('eighth requires exact stopped seventh failure without terminal receipt')
         return
+    if job == JOB_8 and (finish.get('sequence') != 558
+            or finish.get('event_sha256') != '518054576325370a9bbfb13ab662f1e0d116a9990cf1a1edc30e6fe83b038514'
+            or finish.get('stop_required') is not False or finish.get('terminal_publication_status') != 'published'
+            or finish.get('result') is not None or finish.get('acceptance') is not None
+            or finish.get('cleanup_confirmed') is not True or finish.get('cleanup_uncertain') is not False
+            or finish.get('surviving_pids')):
+        raise ValueError('ninth requires exact consumed cleaned eighth finish')
     terminal = read_json(strict_record(finish.get('terminal_receipt'))['path'])
     if job == JOB_6 and (finish.get('sequence') != 535
             or finish.get('event_sha256') != 'ca7f1cc0fbdeb0b065b5bc059b6f9901dd41ada81d1a7172aba819c7fe82f915'):
@@ -205,6 +214,19 @@ def validate_operational_stop_resolution(document):
         raise ValueError('exact eighth operational stop resolution and approval required')
 
 
+def ninth_attempt_approval(validation, implementation_review):
+    """Bind the separately approved one-attempt scope and reviewed current correction."""
+    approval = strict_record(file_record(ROOT / 'docs/research/vipe-alternatives/plan067-execution/fresh-runtime-attempts-approval-003.json'))
+    if approval['sha256'] != 'b7374c2bda383a8f823652c1cd208dec3d91c46569c479bccec37a5fc38fad4d':
+        raise ValueError('exact ninth attempt approval required')
+    document = read_json(approval['path'])
+    if (document.get('schema') != 'plan067-fresh-runtime-attempt-approval/v1'
+            or document.get('scope', {}).get('S1') != dict(job_id=JOB_9, branch='calibration', attempts=1, seconds_limit=3600)):
+        raise ValueError('explicit ninth calibration approval required')
+    strict_record(document['approved_proposal']); strict_record(validation); strict_record(implementation_review)
+    return dict(approval=approval, correction_validation=validation, correction_review=implementation_review)
+
+
 def validate_binding(local, config, authorization, *, events=None, consumed=False):
     """Read-only admission; consumed=True is only for terminal resolution."""
     from .ledger import Ledger
@@ -216,9 +238,9 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
     states = ledger.states(events)
     document = read_json(strict_record(authorization)['path'])
     job = document.get('job_id')
-    if job not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5, JOB_6, JOB_7, JOB_8):
+    if job not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5, JOB_6, JOB_7, JOB_8, JOB_9):
         raise ValueError('unrecognized S1 recovery identity')
-    required = dict(schema={JOB: SCHEMA, JOB_2: SCHEMA_2, JOB_3: SCHEMA_3, JOB_4: SCHEMA_4, JOB_5: SCHEMA_5, JOB_6: SCHEMA_6, JOB_7: SCHEMA_7, JOB_8: SCHEMA_8}[job], job_id=job, original_job_id='S1-calibration',
+    required = dict(schema={JOB: SCHEMA, JOB_2: SCHEMA_2, JOB_3: SCHEMA_3, JOB_4: SCHEMA_4, JOB_5: SCHEMA_5, JOB_6: SCHEMA_6, JOB_7: SCHEMA_7, JOB_8: SCHEMA_8, JOB_9: SCHEMA_9}[job], job_id=job, original_job_id='S1-calibration',
         attempts_limit=1, seconds_limit=3600, gpu_total_seconds_limit=93600,
         reset_previous_consumption=False, changes_to_prescribed_configuration=True,
         unrelated_attempts_reopened=False, reconstruction_authorized=False,
@@ -230,10 +252,15 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
             or document['authorization_context']['stage'] != 'DO'
             or document.get('branch', 'calibration') != 'calibration'):
         raise ValueError('exact explicit S1 calibration amendment authorization required')
-    if job in (JOB_5, JOB_6, JOB_7, JOB_8):
+    if job in (JOB_5, JOB_6, JOB_7, JOB_8, JOB_9):
         validate_fifth_review(document)
     if job == JOB_8:
         validate_operational_stop_resolution(document)
+    if job == JOB_9:
+        expected_approval = ninth_attempt_approval(document['repair_validation'], document['implementation_review'])
+        if (document.get('fresh_attempt_approval') != expected_approval
+                or document['authorization'] != read_json(expected_approval['approval']['path'])['user_authorization']):
+            raise ValueError('exact ninth attempt approval required')
     configuration = strict_record(document['configuration'])
     if (configuration != file_record(ROOT / 'configs/vipe-alternatives/benchmark-v1.json')
             or read_json(configuration['path']) != config
@@ -311,10 +338,10 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
             raise ValueError('fourth S1 identity requires exact consumed cleaned-up third attempt')
     else:
         predecessor = strict_record(document['previous_recovery_authorization'])
-        chain = [JOB, JOB_2, JOB_3, JOB_4] + ([JOB_5] if job in (JOB_6, JOB_7, JOB_8) else []) + ([JOB_6] if job in (JOB_7, JOB_8) else []) + ([JOB_7] if job == JOB_8 else [])
+        chain = [JOB, JOB_2, JOB_3, JOB_4] + ([JOB_5] if job in (JOB_6, JOB_7, JOB_8, JOB_9) else []) + ([JOB_6] if job in (JOB_7, JOB_8, JOB_9) else []) + ([JOB_7] if job in (JOB_8, JOB_9) else []) + ([JOB_8] if job == JOB_9 else [])
         finished = states.get(chain[-1], {})
         count = len(chain)
-        if job in (JOB_6, JOB_7, JOB_8) and len(prior) >= count:
+        if job in (JOB_6, JOB_7, JOB_8, JOB_9) and len(prior) >= count:
             linked = predecessor
             for index in range(count - 1, -1, -1):
                 if linked != prior[index]['authorization']:
@@ -334,7 +361,7 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
         raise ValueError('consumed S1 identity or active attempt')
     total = ledger.totals(events)['gpu']
     if not consumed and (total['elapsed_seconds'] + total['reserved_seconds'] >= 93600
-            or (job in (JOB_5, JOB_6, JOB_7, JOB_8) and total['elapsed_seconds'] + total['reserved_seconds'] + 3600 > 93600)):
+            or (job in (JOB_5, JOB_6, JOB_7, JOB_8, JOB_9) and total['elapsed_seconds'] + total['reserved_seconds'] + 3600 > 93600)):
         raise ValueError('cumulative GPU allocation exhausted')
     def artifact(job, field=None):
         state = states.get(job, {})
@@ -424,8 +451,8 @@ def preservation(local, document, events, authorization, *, process_amendment_ov
                 [{k: snap[k] for k in ('path', 'sha256', 'bytes')} ]):
         raise ValueError('exact baseline preservation categories required')
     process_amendment = process_amendment_override or document.get('process_file_amendment')
-    sixth_amendment = document['job_id'] in (JOB_6, JOB_7, JOB_8) or process_amendment_override is not None
-    eighth_amendment = document['job_id'] == JOB_8 or (process_amendment_override is not None
+    sixth_amendment = document['job_id'] in (JOB_6, JOB_7, JOB_8, JOB_9) or process_amendment_override is not None
+    eighth_amendment = document['job_id'] in (JOB_8, JOB_9) or (process_amendment_override is not None
         and process_amendment_override.get('sha256') == PROCESS_FILE_AMENDMENT_3_SHA256)
     amended_record = None
     if process_amendment is not None:
@@ -490,20 +517,23 @@ def preservation(local, document, events, authorization, *, process_amendment_ov
             or actual != prefix or hashlib.sha256(prefix).hexdigest() != snap['sha256']
             or len(prefix) != snap['bytes'] or events[n-1]['event_sha256'] != snap['last_event_sha256']):
         raise ValueError('preserved ledger prefix required')
-    if document['job_id'] in (JOB_5, JOB_6, JOB_7, JOB_8):
-        eighth = document['job_id'] == JOB_8
-        seventh = document['job_id'] in (JOB_7, JOB_8)
-        sixth = document['job_id'] in (JOB_6, JOB_7, JOB_8)
-        count_predecessor = 547 if eighth else 536 if seventh else 520 if sixth else 472
+    if document['job_id'] in (JOB_5, JOB_6, JOB_7, JOB_8, JOB_9):
+        ninth = document['job_id'] == JOB_9
+        eighth = document['job_id'] in (JOB_8, JOB_9)
+        seventh = document['job_id'] in (JOB_7, JOB_8, JOB_9)
+        sixth = document['job_id'] in (JOB_6, JOB_7, JOB_8, JOB_9)
+        count_predecessor = 559 if ninth else 547 if eighth else 536 if seventh else 520 if sixth else 472
         prior = strict_record(document['prior_ledger_snapshot'])
-        expected = ROOT / ('docs/research/vipe-alternatives/plan031-execution/s1-recovery-007/outcome/ledger-after.jsonl' if eighth else 'docs/research/vipe-alternatives/plan031-execution/s1-recovery-006/outcome/ledger-after.jsonl' if seventh else 'docs/research/vipe-alternatives/plan031-execution/s1-recovery-005/outcome/ledger-after.jsonl' if sixth else 'docs/research/vipe-alternatives/issue3-preparation/s1-dispatch-004-outcome/post-dispatch-ledger-004.jsonl')
+        expected = ROOT / ('docs/research/vipe-alternatives/plan031-execution/s1-recovery-008/outcome/ledger-after.jsonl' if ninth else 'docs/research/vipe-alternatives/plan031-execution/s1-recovery-007/outcome/ledger-after.jsonl' if eighth else 'docs/research/vipe-alternatives/plan031-execution/s1-recovery-006/outcome/ledger-after.jsonl' if seventh else 'docs/research/vipe-alternatives/plan031-execution/s1-recovery-005/outcome/ledger-after.jsonl' if sixth else 'docs/research/vipe-alternatives/issue3-preparation/s1-dispatch-004-outcome/post-dispatch-ledger-004.jsonl')
         previous_record = strict_record(document['previous_recovery_authorization'])
         previous = read_json(previous_record['path'])
-        if (prior != file_record(expected) or previous.get('job_id') != (JOB_7 if eighth else JOB_6 if seventh else JOB_5 if sixth else JOB_4)
+        if ninth and document.get('operational_stop_resolution') != previous.get('operational_stop_resolution'):
+            raise ValueError('ninth must preserve historical operational stop resolution')
+        if (prior != file_record(expected) or previous.get('job_id') != (JOB_8 if ninth else JOB_7 if eighth else JOB_6 if seventh else JOB_5 if sixth else JOB_4)
                 or len(events) < count_predecessor or events[count_predecessor-1] != document['previous_recovery_failure']):
             raise ValueError('fifth consumed predecessor snapshot changed')
         if sixth:
-            validate_sixth_predecessor(events[count_predecessor-1], previous_record, job=JOB_7 if eighth else JOB_6 if seventh else JOB_5)
+            validate_sixth_predecessor(events[count_predecessor-1], previous_record, job=JOB_8 if ninth else JOB_7 if eighth else JOB_6 if seventh else JOB_5)
         preservation(local, previous, events[:count_predecessor], previous_record,
                      process_amendment_override=process_amendment if sixth_amendment else None)
         live = document['live_ledger_snapshot']
@@ -601,7 +631,7 @@ def lifecycle(events, authorization, document):
             if not reservation or not event.get('phase') or not event.get('foreign_pids'):
                 raise ValueError('S1 lifecycle ownership diagnostic outside active phase')
         elif kind == 'monitor_gap_recovered':
-            if (not started or job not in (JOB_3, JOB_4, JOB_5, JOB_6, JOB_7, JOB_8) or type(event.get('expired_samples')) is not int
+            if (not started or job not in (JOB_3, JOB_4, JOB_5, JOB_6, JOB_7, JOB_8, JOB_9) or type(event.get('expired_samples')) is not int
                     or event['expired_samples'] < 1 or type(event.get('gap_seconds')) not in (int, float)
                     or not 0 < event['gap_seconds'] <= 15):
                 raise ValueError('S1 recovered monitor gap outside bounded worker phase')
@@ -681,7 +711,7 @@ def active_binding(local, config, captured, command, *, with_reservation=False):
     events = Ledger(Path(local) / 'ledger.jsonl', config).events()
     states = Ledger(Path(local) / 'ledger.jsonl', config).states(events)
     active = states.get(captured['job_id']) if captured is not None else next(
-        (states.get(job) for job in (JOB_8, JOB_7, JOB_6, JOB_5, JOB_4, JOB_3, JOB_2, JOB) if states.get(job, {}).get('event') == 'reserve'), None)
+        (states.get(job) for job in (JOB_9, JOB_8, JOB_7, JOB_6, JOB_5, JOB_4, JOB_3, JOB_2, JOB) if states.get(job, {}).get('event') == 'reserve'), None)
     if not active or active.get('event') != 'reserve':
         raise ValueError('missing active S1 reservation')
     from .s1_clock import typed_equal
@@ -715,7 +745,7 @@ def worker_clock(args, request, config):
     import sys
     from .s1_clock import ReservationClock
     path = args.request.resolve()
-    if request.get('job_id') not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5, JOB_6, JOB_7, JOB_8) or path.name != request['job_id'] + '.json' or path.parent.name != 'requests':
+    if request.get('job_id') not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5, JOB_6, JOB_7, JOB_8, JOB_9) or path.name != request['job_id'] + '.json' or path.parent.name != 'requests':
         raise ValueError('canonical worker request path required')
     local = path.parent.parent
     command = [request['runtime']['python'], str((ROOT / 'scripts/basketball_vipe_worker.py').resolve()),
@@ -762,7 +792,7 @@ def reservation_binding(local, config, events, evidence, command=None):
 
 def resolved_result(local, config, events, finish):
     job = finish.get('job_id')
-    if job not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5, JOB_6, JOB_7, JOB_8): raise ValueError('S1 result identity')
+    if job not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5, JOB_6, JOB_7, JOB_8, JOB_9): raise ValueError('S1 result identity')
     registered = [e for e in events if e['event'] == 'component_recovery_authorized' and e['job_id'] == job]
     if (len(registered) != 1 or finish.get('cleanup_confirmed') is not True
             or finish.get('surviving_pids') or finish.get('deadline_exceeded')
@@ -946,7 +976,7 @@ def terminal_receipt(local, docs, config, authorization, *, error=None,
         pass
     job = reservation['job_id'] if reservation is not None else (
         supplied_document.get('job_id', JOB) if isinstance(supplied_document, dict) else JOB)
-    if job not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5, JOB_6, JOB_7, JOB_8): raise ValueError('S1 terminal identity')
+    if job not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5, JOB_6, JOB_7, JOB_8, JOB_9): raise ValueError('S1 terminal identity')
     if reservation is None:
         if any(e.get('job_id') == job and e['event'] == 'reserve' for e in events):
             raise ValueError('consumed S1 publication belongs to active supervisor')

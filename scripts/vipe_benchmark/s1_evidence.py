@@ -22,8 +22,8 @@ REQUIRED = ('detector_raw_token_logits', 'detector_raw_boxes_cxcywh',
 
 def check_compact_asset_provenance(row, request):
     """Bind compact S1 row provenance to the full frozen request manifest."""
-    from .s1_recovery import JOB_4, JOB_5, JOB_6, JOB_7, JOB_8
-    if request.get('job_id') not in (JOB_4, JOB_5, JOB_6, JOB_7, JOB_8):
+    from .s1_recovery import JOB_4, JOB_5, JOB_6, JOB_7, JOB_8, JOB_9
+    if request.get('job_id') not in (JOB_4, JOB_5, JOB_6, JOB_7, JOB_8, JOB_9):
         return
     from .backends import REQUIRED_ASSETS
     from .files import object_hash

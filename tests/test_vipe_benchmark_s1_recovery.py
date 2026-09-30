@@ -212,8 +212,11 @@ class S1NextIdentityTests(unittest.TestCase):
         eighth = dict(reservation, job_id='S1-calibration-recovery-008')
         self.assertEqual(ReservationClock.from_reservation(eighth).job_id, 'S1-calibration-recovery-008')
         self.assertEqual(helper_job({'reservation': eighth}), 'S1-calibration-recovery-008')
+        ninth = dict(reservation, job_id='S1-calibration-recovery-009')
+        self.assertEqual(ReservationClock.from_reservation(ninth).job_id, ninth['job_id'])
+        self.assertEqual(helper_job({'reservation': ninth}), ninth['job_id'])
         with self.assertRaises(ValueError):
-            ReservationClock.from_reservation(dict(reservation, job_id='S1-calibration-recovery-009'))
+            ReservationClock.from_reservation(dict(reservation, job_id='S1-calibration-recovery-010'))
 
     def test_third_identity_binds_consumed_live_prefix_without_mutation(self):
         local = ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z'
@@ -3979,6 +3982,20 @@ class S1GeneratedSourceTests(unittest.TestCase):
         write_json(path, manifest)
         self.observed['loaded_files'] = file_record(path)
 
+    def test_ninth_generated_source_survives_native_constructor_owned_cleanup(self):
+        from vipe_benchmark.s1_evidence import qualify_runtime
+        self.generated_capture(native_temporary=True, stage_boundary=True, job='S1-calibration-recovery-009')
+        qualify_runtime(self.observed, self.request)
+
+    def test_ninth_first_row_requires_exact_compact_asset_provenance(self):
+        from vipe_benchmark.s1_evidence import check_compact_asset_provenance
+        self.request['job_id'] = 'S1-calibration-recovery-009'
+        row = dict(metadata=dict(assets_sha256=object_hash(self.request['assets'])))
+        check_compact_asset_provenance(row, self.request)
+        row['metadata']['assets_sha256'] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'compact asset provenance changed'):
+            check_compact_asset_provenance(row, self.request)
+
     def test_eighth_generated_source_survives_owned_cleanup(self):
         from vipe_benchmark.s1_evidence import qualify_runtime
         self.generated_capture(job='S1-calibration-recovery-008')
@@ -4148,5 +4165,66 @@ class S1EighthReviewTests(unittest.TestCase):
         self.fixture_raw = (ROOT / 'docs/research/vipe-alternatives/plan031-execution/s1-recovery-006/outcome/ledger-after.jsonl').read_bytes()
         with self.assertRaisesRegex(ValueError, 'next unconsumed'):
             self.proposal()
+
+
+class S1NinthReviewTests(unittest.TestCase):
+    """Exact consumed008 evidence permits one separately approved fresh identity."""
+    def setUp(self):
+        S1EighthReviewTests.setUp(self)
+        self.fixture_raw = (ROOT / 'docs/research/vipe-alternatives/plan031-execution/s1-recovery-008/outcome/ledger-after.jsonl').read_bytes()
+        self.before = self.fixture_raw
+        self.expected_job = 'S1-calibration-recovery-009'
+        self.authorization_text = 'I approve. Continue $implement'
+
+    bindings = S1EighthReviewTests.bindings
+    proposal = S1EighthReviewTests.proposal
+
+    def test_ninth_exact_do_preserves_failed_eighth_and_prior_stop(self):
+        from contextlib import ExitStack
+        proposal = self.proposal()
+        failure = proposal['previous_recovery_failure']
+        self.assertEqual(failure['sequence'], 558)
+        self.assertEqual(failure['event_sha256'], '518054576325370a9bbfb13ab662f1e0d116a9990cf1a1edc30e6fe83b038514')
+        self.assertFalse(failure['stop_required'])
+        self.assertEqual(failure['terminal_publication_status'], 'published')
+        self.assertEqual(failure['verified_progress_reference']['counts']['qualified'], 1)
+        self.assertEqual(failure['verified_progress_reference']['counts']['complete'], 0)
+        self.assertTrue(proposal['operational_stop_resolution']['historical_stop_preserved'])
+        self.assertEqual(proposal['seconds_limit'], 3600)
+        self.assertEqual(proposal['required_rows'], 510)
+        self.assertEqual(proposal['resource_sample_seconds'], 2.)
+        self.assertFalse(proposal['reconstruction_authorized'])
+        events = Ledger(self.local / 'ledger.jsonl', load()).events()
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
+            for binding in self.bindings(): stack.enter_context(binding)
+            review = Path(directory) / 'review.json'; write_json(review, proposal)
+            approved = dict(proposal, additional_attempt_approved=True, authorization=self.authorization_text,
+                authorization_context=dict(proposal['authorization_context'], stage='DO'), review_proposal=file_record(review))
+            do = Path(directory) / 'do.json'; write_json(do, approved)
+            bound, request = s1.validate_binding(self.local, load(), file_record(do), events=events)
+            self.assertEqual(bound['job_id'], self.expected_job)
+            self.assertEqual(request['job_id'], 'S1-calibration')
+            with self.assertRaises(ValueError): s1.validate_binding(self.local, load(), file_record(review), events=events)
+            bad = Path(directory) / 'bad.json'; write_json(bad, dict(approved, authorization='unapproved'))
+            with self.assertRaisesRegex(ValueError, 'ninth.*approval'):
+                s1.validate_binding(self.local, load(), file_record(bad), events=events)
+            altered = copy.deepcopy(proposal)
+            altered['fresh_attempt_approval']['correction_review'] = self.validation
+            bad_review = Path(directory) / 'bad-review.json'; write_json(bad_review, altered)
+            bad = Path(directory) / 'bad-approval.json'
+            write_json(bad, dict(altered, additional_attempt_approved=True, authorization=self.authorization_text,
+                authorization_context=dict(altered['authorization_context'], stage='DO'), review_proposal=file_record(bad_review)))
+            with self.assertRaisesRegex(ValueError, 'ninth.*approval'):
+                s1.validate_binding(self.local, load(), file_record(bad), events=events)
+        self.assertEqual(self.ledger_path.read_bytes(), self.before)
+
+    def test_ninth_review_and_duplicate_cannot_allocate(self):
+        S1SeventhReviewTests.test_seventh_review_cannot_register_but_exact_do_registers_once(self)
+
+    def test_ninth_requires_consumed_eighth_and_rejects_unknown_identity(self):
+        with self.assertRaisesRegex(ValueError, 'next unconsumed'):
+            self.proposal(job_id='S1-calibration-recovery-010')
+        self.fixture_raw = (ROOT / 'docs/research/vipe-alternatives/plan031-execution/s1-recovery-007/outcome/ledger-after.jsonl').read_bytes()
+        with self.assertRaisesRegex(ValueError, 'next unconsumed'): self.proposal()
 
 if __name__=='__main__': unittest.main()
