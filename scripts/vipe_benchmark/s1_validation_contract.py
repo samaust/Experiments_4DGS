@@ -32,6 +32,7 @@ def require(condition, message):
 
 def source_paths():
     return sorted([ROOT / 'scripts/basketball_vipe_benchmark.py', ROOT / 'scripts/basketball_vipe_worker.py',
+                   ROOT / 'scripts/basketball_vipe_qualitative.py',
                    ROOT / 'configs/vipe-alternatives/benchmark-v1.json',
                    *(ROOT / 'scripts/vipe_benchmark').glob('*.py'),
                    *(ROOT / 'tests').glob('test_vipe_benchmark_*.py')])
