@@ -57,13 +57,14 @@ accuracy, statistical significance and unseen downstream quality.
 
 ## Focused validation
 
-Fifteen CPU tests cover blank/synthetic refusal, identity/date, package/media
+Sixteen CPU tests cover blank/synthetic refusal, identity/date, package/media
 substitution, frame/time bounds, sparse motion, not-applicable/unjudgeable
 outcomes, immutable replay, blocked ties, engineering exclusion, explicit human
 choice, altered imported submissions and automatic winner substitution. Temporary
 PNG fixtures also exercise the complete actual-mode package/import/choice/report
 path, reject missing candidate selections and readiness inventories, and verify
-that media changes after import invalidate later decisions/reports. These test
+that media changes after import invalidate later decisions/reports and that
+missing generation charges prevent actual review import. These test
 records never leave their temporary directories or count as actual feedback. AST
 parsing checks the module and tests. Full suite and independent review are
 coordinated by the root implementation agent after combining the worktrees.
