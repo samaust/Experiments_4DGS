@@ -15,7 +15,8 @@ from .ledger import Ledger
 
 HISTORICAL_JOB = 'S1-calibration-recovery-005'
 SIXTH_JOB = 'S1-calibration-recovery-006'
-NEXT_JOB = 'S1-calibration-recovery-007'
+SEVENTH_JOB = 'S1-calibration-recovery-007'
+NEXT_JOB = 'S1-calibration-recovery-008'
 
 
 def _events(raw):
@@ -34,12 +35,12 @@ def _events(raw):
 
 def build_review_proposal(local, config, validation, implementation_review,
                          request_date, *, job_id=HISTORICAL_JOB):
-    """Bind a concrete fifth, sixth or seventh proposal to a stable live snapshot, without writes.
+    """Bind a concrete fifth through eighth proposal to a stable live snapshot, without writes.
 
     Ticket #25 must bind this exact proposal and explicit approval before
     the exact identity can register or dispatch.
     """
-    if job_id not in (HISTORICAL_JOB, SIXTH_JOB, NEXT_JOB):
+    if job_id not in (HISTORICAL_JOB, SIXTH_JOB, SEVENTH_JOB, NEXT_JOB):
         raise ValueError('only a supported next unconsumed REVIEW identity is allowed')
     if not isinstance(request_date, str) or not request_date.strip():
         raise ValueError('REVIEW request date required')
@@ -58,9 +59,10 @@ def build_review_proposal(local, config, validation, implementation_review,
         raise ValueError('active attempt prevents a stable REVIEW proposal')
     prior = [event for event in events if event['event'] == 'component_recovery_authorized'
              and event.get('original_job_id', '').startswith('S1-')]
-    seventh = job_id == NEXT_JOB
-    sixth = job_id in (SIXTH_JOB, NEXT_JOB)
-    identities = [recovery.JOB, recovery.JOB_2, recovery.JOB_3, recovery.JOB_4] + ([recovery.JOB_5] if sixth else []) + ([recovery.JOB_6] if seventh else [])
+    eighth = job_id == NEXT_JOB
+    seventh = job_id in (SEVENTH_JOB, NEXT_JOB)
+    sixth = job_id in (SIXTH_JOB, SEVENTH_JOB, NEXT_JOB)
+    identities = [recovery.JOB, recovery.JOB_2, recovery.JOB_3, recovery.JOB_4] + ([recovery.JOB_5] if sixth else []) + ([recovery.JOB_6] if seventh else []) + ([recovery.JOB_7] if eighth else [])
     if [event['job_id'] for event in prior] != identities:
         raise ValueError('next unconsumed identity requires ordered consumed predecessor recovery chain')
     previous_record = None
@@ -83,19 +85,20 @@ def build_review_proposal(local, config, validation, implementation_review,
             raise ValueError('exact consumed cleaned-up predecessor required')
         previous_record, previous_finish = record, finish
     if sixth:
-        recovery.validate_sixth_predecessor(previous_finish, previous_record, job=recovery.JOB_6 if seventh else recovery.JOB_5)
+        recovery.validate_sixth_predecessor(previous_finish, previous_record, job=recovery.JOB_7 if eighth else recovery.JOB_6 if seventh else recovery.JOB_5)
     predecessor = document
     snapshot = recovery.strict_record(file_record(recovery.ROOT / (
+        'docs/research/vipe-alternatives/plan031-execution/s1-recovery-007/outcome/ledger-after.jsonl' if eighth else
         'docs/research/vipe-alternatives/plan031-execution/s1-recovery-006/outcome/ledger-after.jsonl' if seventh else
         'docs/research/vipe-alternatives/plan031-execution/s1-recovery-005/outcome/ledger-after.jsonl' if sixth else
         'docs/research/vipe-alternatives/issue3-preparation/s1-dispatch-004-outcome/post-dispatch-ledger-004.jsonl')))
-    predecessor_count = 536 if seventh else 520 if sixth else 472
+    predecessor_count = 547 if eighth else 536 if seventh else 520 if sixth else 472
     frozen = Path(snapshot['path']).read_bytes()
     frozen_events = _events(frozen)
     if (not raw.startswith(frozen) or frozen_events[-1] != previous_finish
             or len(frozen_events) != predecessor_count):
         raise ValueError('consumed predecessor immutable finish prefix changed')
-    process_amendment = file_record(recovery.PROCESS_FILE_AMENDMENT_2) if sixth else None
+    process_amendment = file_record(recovery.PROCESS_FILE_AMENDMENT_3) if eighth else file_record(recovery.PROCESS_FILE_AMENDMENT_2) if sixth else None
     recovery.preservation(local, predecessor, frozen_events, previous_record,
                           process_amendment_override=process_amendment)
     configuration = recovery.strict_record(predecessor['configuration'])
@@ -138,7 +141,7 @@ def build_review_proposal(local, config, validation, implementation_review,
     if totals['gpu']['elapsed_seconds'] + totals['gpu']['reserved_seconds'] + 3600 > recovery.LIMITS['gpu_total_seconds_limit']:
         raise ValueError('insufficient cumulative GPU allowance for proposed attempt')
     proposal = copy.deepcopy(predecessor)
-    proposal.update(schema=recovery.SCHEMA_7 if seventh else recovery.SCHEMA_6 if sixth else recovery.SCHEMA_5,
+    proposal.update(schema=recovery.SCHEMA_8 if eighth else recovery.SCHEMA_7 if seventh else recovery.SCHEMA_6 if sixth else recovery.SCHEMA_5,
         job_id=job_id, additional_attempt_approved=False,
         authorization=f'Proposed only: exactly one {job_id} GPU calibration attempt; explicit user approval required before dispatch.',
         authorization_context=dict(request_date=request_date, stage='REVIEW',
@@ -157,6 +160,9 @@ def build_review_proposal(local, config, validation, implementation_review,
         dispatch_supported=True, approval_required=True)
     if sixth:
         proposal['process_file_amendment'] = process_amendment
+    if eighth:
+        proposal['operational_stop_resolution'] = recovery.operational_stop_resolution(
+            previous_finish, validation, implementation_review)
     # Detect a concurrent append while verification was in progress. Callers
     # must still recheck the live state at any later approval/admission boundary.
     if path.read_bytes() != raw:
