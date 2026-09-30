@@ -15,7 +15,7 @@ class GenerationTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         rgb = self.root / 'rgb.png'; Image.new('RGB', (16, 12), 'white').save(rgb)
-        self.identity = dict(branch='reconstruction', camera=1, frame=0, pair_start=0)
+        self.identity = dict(branch='reconstruction', camera=1, frame=0, pair_start=None)
         self.input = dict(identity=self.identity, rgb=file_record(rgb), K=[], grid='fixture')
         depth=dict(self.input,identity=dict(branch='depth',camera=1,frame=175,pair_start=None))
         inputs = self.root / 'inputs.json'; write_json(inputs, dict(rgb=[self.input], depth=[depth]))
@@ -58,7 +58,7 @@ class GenerationTests(unittest.TestCase):
     def test_output_is_bound_to_completed_result_and_matching_rgb(self):
         from PIL import Image
         mask=self.root/'mask.png'; Image.new('L',(16,12),255).save(mask)
-        row=dict(self.input,source_rgb_sha256=self.input['rgb']['sha256'],semantic_static=file_record(mask))
+        row=dict(self.input,identity=dict(self.identity,pair_start=0),source_rgb_sha256=self.input['rgb']['sha256'],semantic_static=file_record(mask))
         source=self.root/'source.json';write_json(source,dict(status='complete',component='S2',rows=[row]))
         event=dict(event='finish',status='complete',result=file_record(source))
         self.ledger.events=lambda:[event]
@@ -68,6 +68,8 @@ class GenerationTests(unittest.TestCase):
         candidate=next(c for c in group['candidates'] if c['id']=='S2')
         self.assertEqual(candidate['status'],'available')
         self.assertEqual(candidate['media'][0]['source_input'],self.input['rgb'])
+        self.assertEqual(candidate['media'][0]['native_identity']['pair_start'],0)
+        self.assertIsNone(candidate['media'][0]['source_identity']['pair_start'])
         self.assertEqual(candidate['provenance']['source_result'],file_record(source))
     def test_changed_input_geometry_fails_and_charges_without_available_package(self):
         source=self.root/'source.json'
@@ -106,6 +108,12 @@ class GenerationTests(unittest.TestCase):
         config=self.root/'config.json';write_json(config,self.ledger.config)
         inputs=self.root/'prepare/inputs.json';write_json(inputs,read_json(self.request['bindings']['inputs']['path']))
         self.request['record_kind']='actual'
+        self.request['max_new_artifact_bytes']=2**20
+        self.request['detail_regions']=[dict(id='center',crop=[4,3,8,6])]
+        from vipe_benchmark.config import ROOT
+        self.request['bindings']['amendment']=file_record(ROOT/'docs/specs/plan031-execution/qualitative-comparison-amendment.md')
+        approval=self.root/'approved.json';write_json(approval,dict(schema='plan067-implementation-approval/v1',record_kind='user-authorization',instruction='fixture authorization',scope=dict(qualitative_preparation='Implement and generate immutable matched diagnostic packages from valid existing results within remaining CPU and artifact ceilings.')))
+        self.request['bindings']['approval']=file_record(approval)
         self.request['bindings']['config']=file_record(config)
         self.request['bindings']['inputs']=file_record(inputs)
         mask=self.root/'mask.png';Image.new('L',(16,12),0).save(mask)
@@ -115,7 +123,7 @@ class GenerationTests(unittest.TestCase):
         events=[dict(event='finish',status='complete',result=file_record(source))]
         self.ledger.events=lambda:events[:]
         self.ledger.charge_cpu_preparation=lambda seconds,evidence:events.append(dict(event='cpu_preparation_charge',evidence=evidence))
-        with patch('vipe_benchmark.qualitative_generation.result_record',side_effect=lambda local,job:file_record(source) if job=='S2-reconstruction' else None):
+        with patch('vipe_benchmark.qualitative_generation.resources',return_value={'artifact_bytes':0}),patch('vipe_benchmark.qualitative_generation.result_record',side_effect=lambda local,job:file_record(source) if job=='S2-reconstruction' else None):
             result=generate(self.request,self.root/'out',ledger=self.ledger)
         manifest_record=result['manifests']['segmentation']
         manifest=read_json(manifest_record['path'])
@@ -127,7 +135,7 @@ class GenerationTests(unittest.TestCase):
     def test_publication_validation_failure_is_charged_and_not_replayed(self):
         with patch('vipe_benchmark.qualitative_generation.result_record',return_value=None):
             result=generate(self.request,self.root/'out',ledger=self.ledger)
-        def failure(manifest,output):raise ValueError('lineage failed')
+        def failure(manifest,output,**kwargs):raise ValueError('lineage failed')
         output=self.root/'package'
         with self.assertRaisesRegex(ValueError,'lineage failed'):
             publish_generation(result['manifests']['segmentation'],output,ledger=self.ledger,publisher=failure)
@@ -135,3 +143,14 @@ class GenerationTests(unittest.TestCase):
         self.assertTrue(hasattr(self.ledger,'charge'))
         with self.assertRaises(FileExistsError):
             publish_generation(result['manifests']['segmentation'],output,ledger=self.ledger,publisher=failure)
+    def test_artifact_admission_and_incremental_headroom_are_enforced(self):
+        self.ledger.config['new_artifact_disk_gib_limit']=.001
+        with self.assertRaisesRegex(ValueError,'artifact storage allocation'):
+            generate(self.request,self.root/'exhausted',ledger=self.ledger)
+        self.assertFalse((self.root/'exhausted').exists())
+        self.ledger.config['new_artifact_disk_gib_limit']=150
+        self.request['max_new_artifact_bytes']=65537
+        with self.assertRaisesRegex(ValueError,'artifact storage budget'):
+            generate(self.request,self.root/'out',ledger=self.ledger)
+        self.assertEqual(read_json(self.root/'out/result.json')['status'],'failed')
+        self.assertTrue(hasattr(self.ledger,'charge'))
