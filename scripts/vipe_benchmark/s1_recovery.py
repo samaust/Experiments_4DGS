@@ -819,7 +819,7 @@ def resolved_result(local, config, events, finish):
             or receipt.get('status') != 'complete' or receipt.get('acceptance') != finish['acceptance']
             or receipt.get('outcome', {}).get('result') != finish['result']):
         raise ValueError('S1 finish acceptance/receipt binding missing')
-    evidence = referenced_evidence([result, request], assets=request['assets'])
+    evidence = referenced_evidence(result, request=request)
     if (acceptance['records'] != evidence['records']
             or acceptance.get('asset_aliases', []) != evidence['asset_aliases']):
         raise ValueError('S1 accepted referenced bytes changed')
@@ -879,31 +879,27 @@ def snapshot_alias(name, tree, record):
                 raise ValueError('S1 snapshot alias parent changed during verification')
         finally:
             retire(os.close, checked)
-        return dict(asset=name, snapshot=str(root), alias=record,
+        identity = dict(device=initial.st_dev, inode=initial.st_ino, size=initial.st_size,
+                        mtime_ns=initial.st_mtime_ns, ctime_ns=initial.st_ctime_ns)
+        return dict(asset=name, snapshot=str(root), alias=record, alias_identity=identity,
                     symlink_target=raw, target=target_record)
     finally:
         retire(os.close, parent)
 
 
-def referenced_evidence(value, *, assets):
+def referenced_evidence(value, *, request=None):
     """Collect regular references and separately bound admitted snapshot aliases."""
     from .backends import SNAPSHOT_PINS
-    snapshots = {}
-    for name, tree in assets.items():
-        if name in SNAPSHOT_PINS or name == 'bert_snapshot':
-            for item in tree.get('files', []):
-                snapshots[id(item)] = (name, tree)
     found, aliases = {}, {}
     def add(record):
         old = found.setdefault(record['path'], record)
         if old != record:
             raise ValueError('conflicting referenced file identities')
-    def visit(value):
+    def visit(value, snapshot=None):
         if isinstance(value, dict):
             if {'path', 'sha256', 'bytes'} <= value.keys():
                 record = {k:value[k] for k in ('path','sha256','bytes')}
-                admitted = snapshots.get(id(value))
-                binding = snapshot_alias(*admitted, record) if admitted else None
+                binding = snapshot_alias(*snapshot, record) if snapshot else None
                 if binding is None:
                     strict_record(record)
                     add(record)
@@ -915,14 +911,31 @@ def referenced_evidence(value, *, assets):
             for item in value.values(): visit(item)
         elif isinstance(value, list):
             for item in value: visit(item)
+    # Result and ordinary evidence traversal never inherits request asset trust,
+    # even if the caller reuses the exact same Python dictionary object.
     visit(value)
+    if request is not None:
+        for key, item in request.items():
+            if key != 'assets':
+                visit(item)
+                continue
+            for name, tree in item.items():
+                if name not in SNAPSHOT_PINS and name != 'bert_snapshot':
+                    visit(tree)
+                    continue
+                for field, data in tree.items():
+                    if field == 'files':
+                        for record in data:
+                            visit(record, snapshot=(name, tree))
+                    else:
+                        visit(data)
     return dict(records=sorted(found.values(), key=lambda r:r['path']),
                 asset_aliases=sorted(aliases.values(), key=lambda r:r['alias']['path']))
 
 
 def referenced_records(value):
     """Collect ordinary exact references; arbitrary aliases remain forbidden."""
-    return referenced_evidence(value, assets={})['records']
+    return referenced_evidence(value)['records']
 
 
 def accept_result(local, config, request, result, output, *, reservation):
@@ -943,7 +956,7 @@ def _accept_result(local, config, request, result, output, *, reservation):
     validate_result(result, request, config, clock=clock,deadline=clock.work_deadline)
     clock.observe()
     result_record = file_record(output / 'result.json')
-    evidence = referenced_evidence([result, request], assets=request['assets'])
+    evidence = referenced_evidence(result, request=request)
     value = dict(schema='plan035-s1-acceptance/v1', status='passed', job_id=request['job_id'],
         authorization=request['recovery_authorization'], baseline_correction=document['baseline_correction'],
         result=result_record, first_result=result['first_result'], reservation_clock=clock.mapping(),

@@ -1,6 +1,7 @@
 """Disposable CPU acceptance fixtures; no native model or live ledger access."""
 import copy
 import hashlib
+import os
 import sys
 import time
 import unittest
@@ -95,6 +96,10 @@ class S1AssetAcceptanceTests(unittest.TestCase):
         self.assertEqual(document['status'], 'passed')
         self.assertEqual(document['count'], 510)
         self.assertNotIn(self.asset_record, document['records'])
+        for binding in self.expected_aliases:
+            info = Path(binding['alias']['path']).lstat()
+            binding['alias_identity'] = dict(device=info.st_dev, inode=info.st_ino, size=info.st_size,
+                mtime_ns=info.st_mtime_ns, ctime_ns=info.st_ctime_ns)
         self.assertEqual(document['asset_aliases'], self.expected_aliases)
         self.assertIn(file_record(self.blob), document['records'])
         self.assertEqual({path: path.read_bytes() for path in unchanged}, unchanged)
@@ -162,6 +167,62 @@ class S1AssetAcceptanceTests(unittest.TestCase):
         with self.assertRaises(OSError):
             recovery.accept_result(fixture.root, fixture.config, request, forged, output, reservation=reservation)
         self.assertFalse((output / 'acceptance.json').exists())
+
+    def test_acceptance_rejects_alias_parent_replaced_after_target_read(self):
+        from vipe_benchmark import s1_progress as progress
+        fixture, request, reservation, output, result = self.admitted_result()
+        original_operation = progress.operation
+        replaced = []
+        def replace_parent(function, *args, **kwargs):
+            value = original_operation(function, *args, **kwargs)
+            if function is os.stat and args and args[0] == self.blob.name and not replaced:
+                # The strict target reader just checked its anchored named blob.
+                replaced.append(True)
+                raw = os.readlink(self.alias)
+                parent = self.alias.parent
+                parent.rename(parent.with_name(parent.name + '-retained'))
+                parent.mkdir()
+                self.alias.symlink_to(raw)
+            return value
+        with patch.object(progress, 'operation', replace_parent):
+            with self.assertRaisesRegex(ValueError, 'alias parent changed during verification'):
+                recovery.accept_result(fixture.root, fixture.config, request, result, output, reservation=reservation)
+        self.assertEqual(replaced, [True])
+        self.assertFalse((output / 'acceptance.json').exists())
+
+    def test_shared_request_asset_object_in_result_remains_ordinary_evidence(self):
+        fixture, request, reservation, output, result = self.admitted_result()
+        result['ordinary_evidence'] = request['assets']['bert_snapshot']['files'][0]
+        (output / 'result.json').unlink()
+        write_json(output / 'result.json', result)
+        with self.assertRaises(OSError):
+            recovery.accept_result(fixture.root, fixture.config, request, result, output, reservation=reservation)
+        self.assertFalse((output / 'acceptance.json').exists())
+
+    def test_historical_resolution_rejects_recreated_identical_alias(self):
+        fixture, request, reservation, output, result = self.admitted_result()
+        # Retain the old inode before acceptance, avoiding immediate inode reuse.
+        os.link(self.alias, self.alias.parent / 'retained-old-alias', follow_symlinks=False)
+        accepted = recovery.accept_result(fixture.root, fixture.config, request, result, output, reservation=reservation)
+        result_record = file_record(output / 'result.json')
+        receipt = fixture.put('synthetic-terminal.json', dict(status='complete', acceptance=accepted,
+            outcome=dict(result=result_record)))
+        finish = dict(job_id=recovery.JOB, status='complete', cleanup_confirmed=True,
+            surviving_pids=[], deadline_exceeded=False, stop_required=False, result=result_record,
+            acceptance=accepted, terminal_receipt=receipt,
+            elapsed_seconds=time.monotonic() - reservation['monotonic_start'],
+            peak=dict(device_bytes=0, artifact_bytes=0, download_bytes=0))
+        events = fixture.ledger.events()
+        self.assertEqual(recovery.resolved_result(fixture.root, fixture.config, events, finish), result_record)
+        original = self.alias.lstat()
+        raw = os.readlink(self.alias)
+        self.alias.unlink()
+        self.alias.symlink_to(raw)
+        self.assertNotEqual(self.alias.lstat().st_ino, original.st_ino)
+        self.assertEqual(os.readlink(self.alias), raw)
+        self.assertEqual(dict(file_record(self.alias), path=str(self.alias)), self.asset_record)
+        with self.assertRaisesRegex(ValueError, 'accepted referenced bytes changed'):
+            recovery.resolved_result(fixture.root, fixture.config, events, finish)
 
     def test_historical_resolution_rejects_alias_retargeted_to_same_bytes(self):
         fixture, request, reservation, output, result = self.admitted_result()

@@ -26,8 +26,8 @@ native Torch runtime is imported by the fixture.
 The fix collects canonical regular target records and records snapshot aliases
 separately in acceptance `asset_aliases`. Each binding contains the admitted
 asset role, snapshot directory, original lexical file record, raw link target,
-and canonical target record. Only file objects within the bound request's known
-snapshot asset roles receive this treatment. Ordinary result and evidence
+and canonical target record. Only records reached through the bound request's known
+snapshot asset file branches receive this treatment. Ordinary result and evidence
 records retain strict `O_NOFOLLOW` reads.
 
 Alias verification anchors parent directories with `O_NOFOLLOW`, checks lexical
@@ -62,3 +62,31 @@ isolated `plan067-s1-symlink-fix` worktree:
 
 The complete qualification and independent review are integration gates owned by
 the root agent; these focused results do not replace those gates.
+
+## Review corrections
+
+Two further public seam regressions were written and run before their fixes.
+Both failed in 37.488 seconds: a result reference reused the exact request asset
+dictionary and received the asset exception; historical resolution accepted a
+recreated alias with the same lexical path, raw link target, and payload bytes.
+
+Acceptance now persists each alias's device, inode, size, modification timestamp,
+and change timestamp. Historical resolution freshly compares that filesystem
+identity as well as its raw link target and payload identity. Evidence collection
+walks result references strictly, then grants the snapshot exception only while
+explicitly traversing the bound request's known snapshot asset file branches.
+Object sharing cannot extend that trust to a result reference.
+
+A further operation-seam fault test replaces the actual snapshot parent directory
+after the strict target reader's anchored named-blob check. Acceptance must reject
+the new parent spelling before publication. The current qualification contract
+collects ten asset acceptance methods across the same ten suites.
+
+The four targeted review-correction checks passed in 75.401 seconds under the
+explicit CPU interpreter with all four numerical thread environment variables
+set to `1`: shared-object result rejection, recreated identical alias rejection,
+parent replacement during verification, and the updated positive acceptance
+case. Strict qualification collection and `git diff --check` also passed.
+Independent Spec and Standards reviewers inspected the follow-up diff and
+reported no additional blocking findings before commit. Root integration still
+owns complete current qualification and the final review audit.
