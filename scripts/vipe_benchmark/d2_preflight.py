@@ -63,6 +63,21 @@ def qualify(proposal, e5_result, output):
              'E5 interpreter must belong to the completed setup')
     for key in ('inventory', 'imports', 'dependency_lock', 'build_inputs'):
         verify_record(runtime[key])
+    installed = read_json(runtime['inventory']['path'])
+    packages = installed.get('packages')
+    _require(installed.get('inventory_only') is True and
+             installed.get('model_imports') is False and
+             installed.get('gpu_operations') is False and
+             installed.get('executable') == runtime['python'] and
+             installed.get('versions') == runtime.get('versions') and
+             isinstance(packages, list) and bool(packages),
+             'E5 installed dependency inventory does not bind the runtime')
+    for package in packages:
+        _require(package.get('name') and package.get('version') and
+                 isinstance(package.get('files'), list) and bool(package['files']),
+                 'E5 dependency inventory has an incomplete distribution')
+        for record in package['files']:
+            verify_record(record)
     imports = read_json(runtime['imports']['path'])
     _require(imports.get('status') == 'complete',
              'native DA3 imports did not qualify')
@@ -73,7 +88,9 @@ def qualify(proposal, e5_result, output):
         source_license=next(row for row in bundle.records['da3_source']['files']
                             if Path(row['path']).name == 'LICENSE'),
         checkpoint=checkpoint, assets=assets_record,
-        runtime=runtime, remaining_gates=[
+        runtime=runtime, installed_distributions=len(packages),
+        installed_files=sum(len(package['files']) for package in packages),
+        remaining_gates=[
             'independent source review', 'installed dependency commercial assessment',
             'GPU runtime smoke', 'fresh ledger-bound admission'])
     output.mkdir(parents=True, exist_ok=False)

@@ -40,10 +40,15 @@ class D2PreflightTest(unittest.TestCase):
         interpreter = self.e5 / 'environment/bin/python'
         interpreter.parent.mkdir(parents=True)
         interpreter.write_bytes(b'fixture interpreter')
-        runtime = dict(python=str(interpreter))
+        runtime = dict(python=str(interpreter), versions=dict(python='3.11'))
         for key in ('inventory', 'imports', 'dependency_lock', 'build_inputs'):
             path = self.e5 / (key + '.json')
-            write_json(path, dict(status='complete'))
+            payload = (dict(inventory_only=True, model_imports=False, gpu_operations=False,
+                            executable=str(interpreter), versions=runtime['versions'],
+                            packages=[dict(name='fixture', version='1',
+                                           files=[file_record(interpreter)])])
+                       if key == 'inventory' else dict(status='complete'))
+            write_json(path, payload)
             runtime[key] = file_record(path)
         result = self.e5 / 'result.json'
         write_json(result, dict(status='complete', environment='E5',

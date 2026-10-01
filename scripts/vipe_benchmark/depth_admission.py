@@ -40,6 +40,8 @@ def local_source_records(candidate):
     """Rehash every local inference and publication source bound by review."""
     records = [file_record(ROOT / 'scripts/vipe_benchmark' / name)
                for name in (*LOCAL_COMMON, *LOCAL_ADAPTERS[candidate])]
+    if candidate == 'D2':
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_d2_maps.py'))
     if candidate == 'D7':
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_setup.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_setup_dispatch.py'))
