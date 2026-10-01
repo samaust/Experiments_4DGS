@@ -24,9 +24,13 @@ def prepare_context(inputs_record, output, config):
     inputs = read_json(inputs_record['path'])
     if inputs.get('schema') != 'vipe-benchmark-inputs/v1' or inputs.get('status') != 'prepared':
         raise ValueError('accepted source input manifest required')
-    calibration = file_record(CALIBRATION)
-    if calibration not in inputs.get('source_files', []):
+    local_calibration = file_record(CALIBRATION)
+    matches = [record for record in inputs.get('source_files', [])
+               if record.get('sha256') == local_calibration['sha256'] and
+               record.get('bytes') == local_calibration['bytes']]
+    if len(matches) != 1:
         raise ValueError('accepted calibration source binding changed')
+    calibration = verify_record(matches[0])
     cameras = set(training_cameras(config))
     calibration_rows = {entry['camera_id']: entry for entry in read_json(CALIBRATION)['cameras']}
     if not cameras <= set(calibration_rows):

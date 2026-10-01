@@ -1,5 +1,6 @@
 """The added temporal context must preserve the frozen scale-grid anchors."""
 from pathlib import Path
+import shutil
 import sys
 import tempfile
 import unittest
@@ -61,10 +62,17 @@ class DepthContextTests(unittest.TestCase):
         self.temporary.cleanup()
 
     def test_context_matches_both_anchors_and_retains_all_frames(self):
+        accepted_calibration = self.root / 'accepted-calibration.json'
+        shutil.copyfile(ROOT / 'docs/experiments/basketball-calibration-alternatives/calibration.json',
+                        accepted_calibration)
+        self.inputs['source_files'][0] = file_record(accepted_calibration)
+        write_json(self.root / 'accepted-inputs.json', self.inputs)
+        self.record = file_record(self.root / 'accepted-inputs.json')
         record = prepare_context(self.record, self.root / 'context', self.config)
         context = read_json(record['path'])
         self.assertEqual(context['schema'], 'plan069-depth-context/v1')
         self.assertEqual(context['inputs'], self.record)
+        self.assertEqual(context['calibration'], file_record(accepted_calibration))
         self.assertEqual(len(context['rows']), 30 * 150)
         self.assertEqual(len(context['anchors']), 60)
         self.assertEqual(context['roles']['fit'], [50, 149])
