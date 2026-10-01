@@ -80,6 +80,43 @@ class IdentityTests(unittest.TestCase):
         # Historical001–003 retain their original expanded-provenance contract.
         check_compact_asset_provenance(dict(metadata={}),dict(request,job_id='S1-calibration-recovery-003'))
 
+    def test_fresh_worker_routes_clock_and_preserves_failure_evidence(self):
+        from unittest.mock import patch
+        import basketball_vipe_worker as worker
+        from vipe_benchmark.config import load
+        from vipe_benchmark.files import file_record, read_json, write_json
+        from vipe_benchmark import s1_evidence, s1_recovery, stages
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);configuration=root/'config.json';write_json(configuration,load())
+            request=dict(job_id='S1-calibration-recovery-010',configuration=file_record(configuration))
+            request_path=root/'request.json';write_json(request_path,request)
+            proof_path=root/'fixture-evidence.json';write_json(proof_path,dict(record_kind='fixture'))
+            proof=file_record(proof_path)
+            # Only worker routing is exercised. Fake operations construct no
+            # model and do not claim a qualified clock, result or native output.
+            clock=object();observed=[]
+            def operation(supplied,output,config,*,clock=None):
+                observed.append((supplied,output,clock))
+                if output.name=='failed':raise ValueError('fixture worker failure')
+            def preserve(supplied,output,identity,error,*,stage,clock=None):
+                self.assertIs(clock,expected_clock)
+                error.s1_failure_record=proof;error.s1_first_result=proof
+            expected_clock=clock
+            for outcome in ('complete','failed'):
+                output=root/outcome
+                argv=['worker','--config',str(configuration),'--request',str(request_path),
+                      '--output',str(output),'--operation','component']
+                with patch.object(sys,'argv',argv),patch.object(s1_recovery,'worker_clock',return_value=clock), \
+                     patch.object(stages,'run',operation),patch.object(s1_evidence,'preserve_failure',preserve):
+                    if outcome=='failed':
+                        with self.assertRaisesRegex(ValueError,'fixture worker failure'):worker.main()
+                        failure=read_json(output/'failure.json')
+                        self.assertEqual(failure['failure_evidence'],proof)
+                        self.assertEqual(failure['first_result'],proof)
+                        self.assertEqual(failure['job_id'],request['job_id'])
+                    else:worker.main()
+                self.assertEqual(observed[-1],(request,output,clock))
+
 
 SUBTEST_CASES = {
     'test_vipe_benchmark_s1_identity.IdentityTests.test_canonical_fresh_identities_continue_beyond_three_digits': [
