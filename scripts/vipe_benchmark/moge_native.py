@@ -4,20 +4,31 @@ import importlib
 from pathlib import Path
 import sys
 
-from .files import verify_record
+from .files import read_json, verify_record
 from .moge_metric import MoGe2Adapter, MoGe3Adapter
+from .moge_setup import source_tree_records
 
 
-def load_adapter(candidate, source_dir, checkpoint_record, *, device='cuda'):
+def load_adapter(candidate, setup_result_record, *, device='cuda'):
     """Require a complete state dict and never fall back to a Hub download."""
     if candidate not in ('D5', 'D6'):
         raise ValueError('MoGe native candidate must be D5 or D6')
-    source = Path(source_dir).resolve()
+    setup = read_json(verify_record(setup_result_record)['path'])
+    if (setup.get('schema') != 'plan069-depth-setup-result/v1' or
+            setup.get('status') != 'complete' or
+            setup.get('candidate') != candidate or
+            setup.get('source_revision') !=
+                '74fbce054ebed49800de42d0ad0e83495065719a'):
+        raise ValueError('verified exact MoGe setup result required')
+    source = Path(setup['source_dir']).resolve()
+    verify_record(setup['source_archive'])
+    if source_tree_records(source) != setup.get('source_tree'):
+        raise ValueError('MoGe extracted source differs from verified setup')
     version = 'v2' if candidate == 'D5' else 'v3'
     expected_module = source / 'moge/model' / (version + '.py')
     if not expected_module.is_file() or not (source / 'LICENSE').is_file():
         raise ValueError('pinned MoGe native source and license required')
-    checkpoint = Path(verify_record(checkpoint_record)['path']).resolve()
+    checkpoint = Path(verify_record(setup['checkpoint'])['path']).resolve()
     if checkpoint.name != 'model.pt':
         raise ValueError('pinned MoGe model.pt required')
     if not source.is_relative_to(checkpoint.parent):
@@ -27,6 +38,11 @@ def load_adapter(candidate, source_dir, checkpoint_record, *, device='cuda'):
     module = importlib.import_module('moge.model.' + version)
     if Path(module.__file__).resolve() != expected_module:
         raise ValueError('loaded MoGe module differs from pinned source')
+    for name, loaded in sys.modules.items():
+        if name == 'moge' or name.startswith('moge.'):
+            location = getattr(loaded, '__file__', None)
+            if location is not None and not Path(location).resolve().is_relative_to(source):
+                raise ValueError('MoGe import closure escaped pinned source')
     import torch
     saved = torch.load(checkpoint, map_location='cpu', weights_only=True)
     if not isinstance(saved, dict) or not {'model_config', 'model'} <= set(saved):

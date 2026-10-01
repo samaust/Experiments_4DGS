@@ -12,8 +12,9 @@ from vipe_benchmark.moge_metric import MoGe2Adapter, supplied_horizontal_fov, re
 
 
 class FakeMoGe2:
-    def __init__(self, *, radial=False):
+    def __init__(self, *, radial=False, predicted_camera=False):
         self.radial = radial
+        self.predicted_camera = predicted_camera
         self.calls = []
 
     def infer(self, image, **options):
@@ -28,7 +29,9 @@ class FakeMoGe2:
         points[0, 0] = torch.inf
         depth[0, 0] = torch.inf
         return dict(points=points, depth=depth, mask=mask,
-                    intrinsics=torch.eye(3))
+                    intrinsics=torch.tensor([
+                        [.7 if self.predicted_camera else 800 / 960, 0, .5],
+                        [0, 800 / 540, .5], [0, 0, 1]], dtype=torch.float32))
 
 
 class MoGe2Tests(unittest.TestCase):
@@ -58,6 +61,11 @@ class MoGe2Tests(unittest.TestCase):
         shifted[0, 2] = 479
         with self.assertRaisesRegex(ValueError, 'centered pinhole'):
             supplied_horizontal_fov(shifted, 960, 540)
+
+    def test_predicted_fov_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'supplied camera'):
+            MoGe2Adapter(FakeMoGe2(predicted_camera=True)).predict(
+                self.image, self.K, self.valid)
 
     def test_resize_rejects_invalid_interpolation_contributors(self):
         points = np.ones((2, 2, 3), np.float32)

@@ -10,7 +10,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from vipe_benchmark.files import file_record, object_hash, read_json, write_json
-from vipe_benchmark.moge_setup import run_moge_setup
+from vipe_benchmark.moge_setup import run_moge_setup, source_tree_records
 
 
 def archive_bytes(revision='abc', unsafe=False):
@@ -136,8 +136,19 @@ class MoGeSetupTests(unittest.TestCase):
         checkpoint = self.root / 'native/model.pt'
         checkpoint.parent.mkdir(exist_ok=True)
         torch.save(dict(model_config=dict(refiner=True), model={}), checkpoint)
+        archive = self.root / 'native/source.tar.gz'
+        archive.write_bytes(b'fixture archive')
+        result_path = self.root / 'native/result.json'
+        write_json(result_path, dict(schema='plan069-depth-setup-result/v1',
+            status='complete', candidate='D6',
+            source_revision='74fbce054ebed49800de42d0ad0e83495065719a',
+            source_dir=str(source), source_archive=file_record(archive),
+            source_tree=source_tree_records(source), checkpoint=file_record(checkpoint)))
         with self.assertRaisesRegex(RuntimeError, 'Missing key'):
-            load_adapter('D6', source, file_record(checkpoint), device='cpu')
+            load_adapter('D6', file_record(result_path), device='cpu')
+        (model_dir / 'v3.py').write_text('changed native code')
+        with self.assertRaisesRegex(ValueError, 'extracted source differs'):
+            load_adapter('D6', file_record(result_path), device='cpu')
 
 
 if __name__ == '__main__':

@@ -87,7 +87,7 @@ class MoGe2Adapter:
             force_projection=True, apply_mask=True, use_fp16=True)
 
     def _validate_native(self, native, K, width, height):
-        pass
+        _supplied_native_intrinsics(native, K, width, height, 'MoGe-2')
 
     def predict(self, rgb, K, image_valid):
         import torch

@@ -78,7 +78,9 @@ class NativeMoGeFixture:
         points[..., 0] = 2
         points[..., 2] = 6
         return dict(points=points, depth=points[..., 2].clone(),
-                    mask=torch.ones((height, width), dtype=torch.bool))
+                    mask=torch.ones((height, width), dtype=torch.bool),
+                    intrinsics=torch.tensor([[800 / 960, 0, .5],
+                        [0, 800 / 540, .5], [0, 0, 1]], dtype=torch.float32))
 
 
 class NativeMoGe3Fixture(NativeMoGeFixture):

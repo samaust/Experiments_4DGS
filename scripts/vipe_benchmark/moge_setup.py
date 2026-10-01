@@ -13,6 +13,25 @@ def _require(condition, message):
         raise ValueError(message)
 
 
+def source_tree_records(source):
+    """Bind every extracted file and reject added files, links or unsafe directories."""
+    source = Path(source).resolve()
+    records = []
+    for parent, directories, files in os.walk(source):
+        for name in directories:
+            path = Path(parent) / name
+            _require(name != 'prompts' and not path.is_symlink(),
+                     'unsafe MoGe source directory')
+        for name in files:
+            path = Path(parent) / name
+            _require(not path.is_symlink() and path.is_file(),
+                     'unsafe MoGe source file')
+            records.append((path.relative_to(source).as_posix(), file_record(path)))
+    _require(bool(records) and len(records) <= 10000,
+             'missing or oversized MoGe source tree')
+    return [dict(relative_path=name, record=record) for name, record in sorted(records)]
+
+
 def _acquire(url, path, *, max_bytes, deadline, run_root,
              download_limit, artifact_limit):
     from .budgets import budget_snapshot
@@ -167,7 +186,8 @@ def run_moge_setup(request, output, *, request_path=None, acquire=_acquire):
             source_revision=model['code']['revision'],
             weight_revision=model['weights']['revision'],
             source_archive=file_record(archive), checkpoint=file_record(checkpoint),
-            source_dir=str(output / 'source'), bytes_received=received,
+            source_dir=str(output / 'source'),
+            source_tree=source_tree_records(output / 'source'), bytes_received=received,
             elapsed_seconds=time.monotonic() - started)
         write_json(output / 'result.json', result)
         return result

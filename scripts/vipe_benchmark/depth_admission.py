@@ -30,7 +30,8 @@ LOCAL_COMMON = ('files.py', 'ledger.py', 'depth_admission.py', 'depth_extension.
     'depth_clips.py', 'scale.py', 'qualitative_package.py')
 LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py',
                           'd2_preflight.py', 'd2_maps.py'),
-    D5=('moge_metric.py',), D6=('moge_metric.py',),
+    D5=('moge_metric.py', 'moge_native.py', 'moge_setup.py'),
+    D6=('moge_metric.py', 'moge_native.py', 'moge_setup.py'),
     D7=('dav2_metric.py', 'depth_setup.py'),
     D8=('moge_metric.py', 'native_d8.py', 'depth_native_packages.py',
         'depth_setup.py', 'depth_setup_other.py'),
@@ -51,6 +52,9 @@ def local_source_records(candidate):
     if candidate in ('D8', 'D11'):
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_setup_other.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_setup_other_dispatch.py'))
+    if candidate in ('D5', 'D6'):
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_moge_setup.py'))
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_moge_setup_dispatch.py'))
     return records
 
 

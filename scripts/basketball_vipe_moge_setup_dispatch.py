@@ -9,6 +9,7 @@ from vipe_benchmark.config import ROOT, load
 from vipe_benchmark.execution import resources
 from vipe_benchmark.files import file_record, read_json, verify_record, write_json
 from vipe_benchmark.ledger import Ledger
+from vipe_benchmark.moge_setup import source_tree_records
 from vipe_benchmark.supervisor import supervise
 
 
@@ -74,6 +75,8 @@ def dispatch(candidate, run_id):
         expected = read_json(proposal['required_assets']['path'])['candidates'][candidate]['files'][0]
         checkpoint = verify_record(result['checkpoint'])
         verify_record(result['source_archive'])
+        if source_tree_records(result['source_dir']) != result.get('source_tree'):
+            raise ValueError(candidate + ' extracted source differs from setup receipt')
         if (result.get('schema') != 'plan069-depth-setup-result/v1' or
                 result.get('status') != 'complete' or
                 result.get('record_kind') != 'actual' or
