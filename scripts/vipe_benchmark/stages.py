@@ -483,7 +483,13 @@ def neighbors(request, output, config):
         all_references_have_three_neighbors=all(r['status'] == 'complete' for r in rows)))
 
 
-def run(request, output, config, *, clock=None):
+def run(request, output, config, *, clock=None, depth_backend=None, depth_ledger=None):
+    if request.get('component') in ('D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11') or \
+            request.get('schema', '').startswith('plan069-depth-extension'):
+        from .depth_extension import REQUEST_SCHEMA, run as run_extension
+        if request.get('schema') != REQUEST_SCHEMA or depth_backend is None or depth_ledger is None:
+            raise ValueError('depth extension needs its versioned request and admitted runtime')
+        return run_extension(request, output, config, backend=depth_backend, ledger=depth_ledger)
     component = request['component']
     if component.startswith('S'):
         return segment(request, output, config, clock=clock)

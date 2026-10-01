@@ -1,0 +1,158 @@
+{
+  "schema": "plan069-depth-extension-config/v1",
+  "accepted_grid": {
+    "width": 960,
+    "height": 540
+  },
+  "training_cameras": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    31,
+    32,
+    33
+  ],
+  "anchor_frames": {
+    "fit": 100,
+    "check": 175
+  },
+  "clip": {
+    "cameras": [
+      1,
+      11,
+      21,
+      31
+    ],
+    "first_frame": 150,
+    "last_frame": 199,
+    "fps": 25
+  },
+  "candidates": {
+    "D5": {
+      "model": "MoGe-2 ViT-L original",
+      "mode": "supplied_horizontal_fov",
+      "domain": "camera_z_metres",
+      "survey_id": "i38-moge2-vitl-fov",
+      "code": {
+        "url": "https://github.com/microsoft/MoGe",
+        "revision": "74fbce054ebed49800de42d0ad0e83495065719a"
+      },
+      "weights": {
+        "url": "https://huggingface.co/Ruicheng/moge-2-vitl",
+        "revision": "39c4d5e957afe587e04eec59dc2bcc3be5ecd968"
+      }
+    },
+    "D6": {
+      "model": "MoGe-3 ViT-L",
+      "mode": "supplied_horizontal_fov_3_refinement_steps",
+      "domain": "camera_z_metres",
+      "survey_id": "i38-moge3-vitl",
+      "code": {
+        "url": "https://github.com/microsoft/MoGe",
+        "revision": "74fbce054ebed49800de42d0ad0e83495065719a"
+      },
+      "weights": {
+        "url": "https://huggingface.co/Ruicheng/moge-3-vitl",
+        "revision": "184008f877d7ad1ad4c2cd2182a9bd1f63d0e5be"
+      }
+    },
+    "D7": {
+      "model": "Depth Anything V2 Metric Hypersim Small",
+      "mode": "native_518_indoor_20_metres",
+      "domain": "camera_z_metres",
+      "survey_id": "i42-dav2-small-hypersim",
+      "code": {
+        "url": "https://github.com/DepthAnything/Depth-Anything-V2",
+        "revision": "a561b849ebae10a6f5ef49e26c83cbbcd36c71bf"
+      },
+      "weights": {
+        "url": "https://huggingface.co/depth-anything/Depth-Anything-V2-Metric-Hypersim-Small",
+        "revision": "3bc65d4e14a6786a61acec16453c50e12bf5f338"
+      }
+    },
+    "D8": {
+      "model": "MetricAnything Student PointMap",
+      "mode": "supplied_horizontal_fov",
+      "domain": "camera_z_metres",
+      "survey_id": "i38-metricanything-pointmap",
+      "code": {
+        "url": "https://github.com/metric-anything/metric-anything",
+        "revision": "616a5e6762f5fc40d1a4ef990fee04c800532f59"
+      },
+      "weights": {
+        "url": "https://huggingface.co/yjh001/metricanything_student_pointmap",
+        "revision": "8f1f08c53c683d4e19864601dfaf78515f29a63b"
+      }
+    },
+    "D9": {
+      "model": "Video Depth Anything Small",
+      "mode": "native_offline_sequence",
+      "domain": "relative_inverse",
+      "survey_id": "i40-vda-small",
+      "code": {
+        "url": "https://github.com/DepthAnything/Video-Depth-Anything",
+        "revision": "4f5ae23172ba60fd7bc11ef671cca678842c7072"
+      },
+      "weights": {
+        "url": "https://huggingface.co/depth-anything/Video-Depth-Anything-Small",
+        "revision": "256875362cff76724b920335dfb4b29dd611f66e"
+      }
+    },
+    "D10": {
+      "model": "Metric Video Depth Anything Small",
+      "mode": "native_offline_sequence_metric_unverified_convention",
+      "domain": "metric_convention_unverified",
+      "survey_id": "i40-vda-metric-small",
+      "code": {
+        "url": "https://github.com/DepthAnything/Video-Depth-Anything",
+        "revision": "4f5ae23172ba60fd7bc11ef671cca678842c7072"
+      },
+      "weights": {
+        "url": "https://huggingface.co/depth-anything/Metric-Video-Depth-Anything-Small",
+        "revision": "273d090f2ce17df50c2872d82c8322c45da5b4dd"
+      }
+    },
+    "D11": {
+      "model": "Marigold V2 Log-stage2",
+      "mode": "single_step_4bit_qwen_base",
+      "domain": "relative_log",
+      "survey_id": "i39-marigold-v2-log-stage2",
+      "code": {
+        "url": "https://github.com/huawei-bayerlab/marigold-v2",
+        "revision": "bf21e4ad9fb0ae1376bbfb2ec79e999802f19a85"
+      },
+      "weights": {
+        "url": "https://huggingface.co/huawei-bayerlab/marigold-v2-0",
+        "revision": "cdf9810fb690886391a63aec012b5f501064fb0d"
+      },
+      "base": {
+        "url": "https://huggingface.co/Qwen/Qwen-Image-Edit-2509",
+        "revision": "d3968ef930e841f4c73640fb8afa3b306a78167e"
+      }
+    }
+  }
+}

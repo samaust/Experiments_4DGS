@@ -1,0 +1,204 @@
+"""Plan 069 depth extension through its worker and package boundary."""
+from pathlib import Path
+from types import SimpleNamespace
+import sys
+import tempfile
+import unittest
+
+import numpy as np
+from PIL import Image
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+from vipe_benchmark.access import Identity
+from vipe_benchmark.config import ROOT, load, training_cameras
+from vipe_benchmark.files import file_record, read_json, write_json
+from vipe_benchmark.ledger import Ledger
+from vipe_benchmark.stages import run as run_worker
+
+
+def run(request, output, config, *, backend, ledger):
+    return run_worker(request, output, config, depth_backend=backend, depth_ledger=ledger)
+
+
+class KnownPlane:
+    def predict(self, rgb, K, image_valid):
+        depth = np.full(image_valid.shape, 6., np.float32)
+        depth[~image_valid] = np.nan
+        return SimpleNamespace(domain='camera_z_metres', values=depth,
+            valid=image_valid.copy(), raw_values=depth.copy(),
+            metadata={'native_depth_type': 'camera-z metres'})
+
+
+class RelativeInverse:
+    def predict(self, rgb, K, image_valid):
+        profile = np.linspace(.2, .8, image_valid.shape[1], dtype=np.float32)
+        values = np.broadcast_to(profile, image_valid.shape).copy()
+        values[~image_valid] = np.nan
+        return SimpleNamespace(domain='relative_inverse', values=values,
+            valid=image_valid.copy(), raw_values=values.copy(),
+            metadata={'native_depth_type': 'relative inverse depth'})
+
+
+class WrongDomain:
+    def predict(self, rgb, K, image_valid):
+        return KnownPlane().predict(rgb, K, image_valid)
+
+
+class OneFailedCamera:
+    def __init__(self):
+        self.calls = 0
+
+    def predict(self, rgb, K, image_valid):
+        self.calls += 1
+        result = KnownPlane().predict(rgb, K, image_valid)
+        if self.calls == 2:
+            result.valid[:] = False
+            result.values[:] = np.nan
+        return result
+
+
+class DepthExtensionTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.root = Path(self.temporary.name)
+        self.config = load()
+        self.K = np.array([[800., 0., 480.], [0., 800., 270.], [0., 0., 1.]])
+        Image.new('RGB', (960, 540), (80, 90, 100)).save(self.root / 'rgb.png')
+        valid = np.ones((540, 960), bool)
+        np.save(self.root / 'valid.npy', valid)
+        y, x = np.meshgrid(np.linspace(20, 520, 10), np.linspace(10, 940, 12), indexing='ij')
+        uv = np.column_stack((x.ravel(), y.ravel()))
+        np.savez(self.root / 'samples.npz', point_ids=np.arange(len(uv)), xyz=np.zeros((len(uv), 3)),
+            uv=uv, K=self.K, camera_z=np.full(len(uv), 2.), valid=valid.astype(np.uint8))
+        rgb = file_record(self.root / 'rgb.png')
+        footprint = file_record(self.root / 'valid.npy')
+        samples = file_record(self.root / 'samples.npz')
+        rows = [dict(identity=Identity('depth', camera, frame).record(), rgb=rgb,
+            valid=footprint, samples=samples, K=self.K.tolist(), grid='accepted-scale-grid')
+            for frame in (100, 175) for camera in training_cameras(self.config)]
+        write_json(self.root / 'inputs.json', dict(schema='vipe-benchmark-inputs/v1', depth=rows))
+        self.ledger = Ledger(self.root / 'ledger.jsonl', self.config)
+        self.request = dict(schema='plan069-depth-extension-request/v1', record_kind='fixture',
+            id='D5-fit-fixture-001', component='D5', role='fit',
+            inputs=file_record(self.root / 'inputs.json'),
+            configuration=file_record(ROOT / 'configs/vipe-alternatives/benchmark-v1.json'),
+            extension_configuration=file_record(ROOT / 'configs/vipe-alternatives/depth-extension-v1.json'),
+            max_seconds=60)
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def test_metric_fit_is_scale_bound_and_reviewable(self):
+        receipt = run(self.request, self.root / 'D5-fit-fixture-001', self.config,
+            backend=KnownPlane(), ledger=self.ledger)
+        self.assertEqual(receipt['status'], 'complete')
+        worker = read_json(receipt['worker']['path'])
+        self.assertEqual(worker['schema'], 'plan069-depth-extension-result/v1')
+        self.assertEqual(len(worker['rows']), 30)
+        self.assertEqual(worker['eligibility'], dict(commercial='unverified',
+            runtime='fixture-only', metric_scale='passed', downstream='blocked'))
+        self.assertEqual(worker['rows'][0]['context'], dict(
+            camera=1, role='fit', source_frames=[100], input_manifest=self.request['inputs']))
+        scale = read_json(worker['scale']['path'])
+        self.assertEqual(scale['status'], 'passed')
+        self.assertAlmostEqual(scale['scale'], 3.)
+        self.assertEqual(scale['provenance']['inputs'], self.request['inputs'])
+        package = read_json(receipt['package']['path'])
+        self.assertEqual(package['record_kind'], 'fixture')
+        self.assertEqual([c['id'] for c in package['candidates']], ['source-rgb', 'D5'])
+        self.assertEqual(package['candidates'][1]['status'], 'available')
+
+    def test_check_reuses_exact_fit_and_rejects_changed_inputs(self):
+        fit = run(self.request, self.root / 'D5-fit-fixture-001', self.config,
+            backend=KnownPlane(), ledger=self.ledger)
+        fitted = read_json(fit['worker']['path'])['scale']
+        check_request = dict(self.request, id='D5-check-fixture-001',
+            role='check', frozen_fit=fitted)
+        check = run(check_request, self.root / 'D5-check-fixture-001',
+            self.config, backend=KnownPlane(), ledger=self.ledger)
+        selected = read_json(read_json(check['worker']['path'])['scale']['path'])
+        self.assertEqual(selected['status'], 'passed')
+        self.assertAlmostEqual(selected['scale'], 3.)
+        self.assertEqual(selected['frozen_fit'], fitted)
+        write_json(self.root / 'substituted-inputs.json', dict(
+            read_json(self.request['inputs']['path']), substituted=True))
+        replaced = dict(check_request, inputs=file_record(self.root / 'substituted-inputs.json'))
+        with self.assertRaisesRegex(ValueError, 'frozen fit candidate/input'):
+            run(replaced, self.root / 'changed' / 'D5-check-fixture-001',
+                self.config, backend=KnownPlane(), ledger=Ledger(
+                    self.root / 'changed-ledger.jsonl', self.config))
+
+    def test_relative_depth_keeps_its_domain_out_of_metric_scale(self):
+        request = dict(self.request, id='D9-fit-fixture-001', component='D9')
+        receipt = run(request, self.root / request['id'], self.config,
+            backend=RelativeInverse(), ledger=self.ledger)
+        worker = read_json(receipt['worker']['path'])
+        self.assertEqual(worker['scale_status'], 'not_metric')
+        self.assertNotIn('scale', worker)
+        self.assertEqual(worker['eligibility']['metric_scale'], 'not_applicable')
+        with np.load(worker['rows'][0]['depth']['path']) as stored:
+            self.assertIn('relative', stored.files)
+            self.assertNotIn('depth', stored.files)
+        package = read_json(receipt['package']['path'])
+        self.assertEqual(package['settings']['depth_display']['domain'], 'relative_inverse')
+        self.assertEqual(package['settings']['depth_display']['direction'], 'larger means nearer')
+
+    def test_wrong_domain_preserves_failure_and_cpu_charge(self):
+        request = dict(self.request, id='D9-fit-fixture-001', component='D9')
+        with self.assertRaisesRegex(ValueError, 'domain'):
+            run(request, self.root / request['id'], self.config,
+                backend=WrongDomain(), ledger=self.ledger)
+        failure = read_json(self.root / request['id'] / 'failure.json')
+        self.assertEqual(failure['status'], 'failed')
+        charged = [event for event in self.ledger.events()
+            if event['event'] == 'cpu_preparation_charge']
+        self.assertEqual(len(charged), 1)
+        self.assertEqual(charged[0]['evidence'], file_record(self.root / request['id'] / 'failure.json'))
+
+    def test_blocked_fit_requires_its_own_bound_qualitative_scope(self):
+        write_json(self.root / 'foreign-fit.json', dict(status='blocked', role='fit',
+            component='D5', provenance=dict(inputs=dict(path='other', sha256='foreign', bytes=1))))
+        write_json(self.root / 'qualitative-admission.json',
+            dict(schema='plan069-depth-qualitative-admission/v1', record_kind='fixture',
+                 component='D5', inputs=self.request['inputs'],
+                 purpose='qualitative-only', status='admitted'))
+        check = dict(self.request, id='D5-check-fixture-001', role='check',
+            frozen_fit=file_record(self.root / 'foreign-fit.json'),
+            qualitative_admission=file_record(self.root / 'qualitative-admission.json'))
+        with self.assertRaisesRegex(ValueError, 'frozen fit candidate/input'):
+            run(check, self.root / check['id'], self.config,
+                backend=KnownPlane(), ledger=self.ledger)
+
+    def test_failed_camera_stays_visible_during_qualitative_only_check(self):
+        fitted = run(self.request, self.root / self.request['id'], self.config,
+            backend=OneFailedCamera(), ledger=self.ledger)
+        failed_fit = read_json(read_json(fitted['worker']['path'])['scale']['path'])
+        self.assertEqual(failed_fit['status'], 'blocked')
+        self.assertEqual(len(failed_fit['cameras']), 30)
+        self.assertEqual(failed_fit['cameras'][1]['points'], 0)
+        write_json(self.root / 'qualitative-admission.json',
+            dict(schema='plan069-depth-qualitative-admission/v1', record_kind='fixture',
+                 component='D5', inputs=self.request['inputs'],
+                 purpose='qualitative-only', status='admitted'))
+        check = dict(self.request, id='D5-check-fixture-001', role='check',
+            frozen_fit=read_json(fitted['worker']['path'])['scale'],
+            qualitative_admission=file_record(self.root / 'qualitative-admission.json'))
+        receipt = run(check, self.root / check['id'], self.config,
+            backend=KnownPlane(), ledger=self.ledger)
+        selected = read_json(read_json(receipt['worker']['path'])['scale']['path'])
+        self.assertEqual(selected['status'], 'blocked')
+        self.assertIsNone(selected['scale'])
+        self.assertEqual(selected['cameras'], failed_fit['cameras'])
+        package = read_json(receipt['package']['path'])
+        self.assertEqual(package['candidates'][1]['status'], 'available')
+
+    def test_reused_identity_is_rejected_by_ledger_even_in_a_new_directory(self):
+        run(self.request, self.root / self.request['id'], self.config,
+            backend=KnownPlane(), ledger=self.ledger)
+        with self.assertRaisesRegex(ValueError, 'already consumed'):
+            run(self.request, self.root / 'another' / self.request['id'], self.config,
+                backend=KnownPlane(), ledger=self.ledger)
+
+
+if __name__ == '__main__':
+    unittest.main()
