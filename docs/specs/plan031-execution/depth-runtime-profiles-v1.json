@@ -1,0 +1,93 @@
+{
+  "schema": "plan069-depth-runtime-profiles/v1",
+  "profiles": {
+    "D2": {
+      "mode": "historical DA3METRIC-LARGE",
+      "input": "960x540 RGB; process_res=504 upper_bound_resize; ImageNet normalization",
+      "precision": "bfloat16",
+      "seed": "native eval, no stochastic sampling",
+      "setting": "`DA3METRIC-LARGE`, `process_res=504`, `process_res_method='upper_bound_resize'`, ImageNet normalization, batch of one image, native bfloat16 inference. No input extrinsics, no pose-scale alignment, `infer_gs=false`, no export that requires predicted cameras. Compute processed-K focal/300 scaling once and restore output grid; retain raw depth and actual processed K.",
+      "dependency_sources": [
+        "pyproject.toml; historical E5 locked runtime"
+      ]
+    },
+    "D5": {
+      "mode": "supplied horizontal FoV",
+      "input": "960x540 RGB float32 CHW /255; resolution_level=9; force_projection=true; apply_mask=true",
+      "precision": "fp16 native infer",
+      "seed": "native eval, no stochastic sampling",
+      "dependency_sources": [
+        "pyproject.toml",
+        "requirements.txt",
+        "native MoGe v2 import closure"
+      ]
+    },
+    "D6": {
+      "mode": "supplied horizontal FoV; three refinements",
+      "input": "960x540 RGB float32 CHW /255; resolution_level=9; force_projection=true; apply_mask=true; refine_steps=3",
+      "precision": "fp32 native infer",
+      "seed": "native eval, no stochastic sampling",
+      "dependency_sources": [
+        "pyproject.toml",
+        "requirements.txt",
+        "native MoGe v3 sparse-convolution import closure"
+      ]
+    },
+    "D7": {
+      "mode": "native Hypersim Small metric",
+      "input": "960x540 RGB to BGR; 518 lower-bound 14-multiple; ImageNet normalization; max_depth=20m",
+      "precision": "float32",
+      "seed": "native eval, no stochastic sampling",
+      "dependency_sources": [
+        "metric_depth/requirements.txt; DINOv2 Small import closure"
+      ]
+    },
+    "D8": {
+      "mode": "PointMap student; supplied horizontal FoV",
+      "input": "960x540 RGB float32 CHW /255; resolution_level=9; force_projection=true; apply_mask=true",
+      "precision": "fp16 native infer",
+      "seed": "native eval, no stochastic sampling",
+      "dependency_sources": [
+        "models/student_pointmap/requirements.txt",
+        "student_pointmap bundled MoGe import closure"
+      ]
+    },
+    "D9": {
+      "mode": "native offline relative video",
+      "input": "30 cameras; fit frames 50-149; check frames 150-199; input_size=518; windows 32/overlap10",
+      "precision": "fp16 autocast",
+      "seed": "native eval, no stochastic sampling",
+      "dependency_sources": [
+        "requirements.txt; native video_depth_anything import closure"
+      ]
+    },
+    "D10": {
+      "mode": "native offline metric video",
+      "input": "30 cameras; fit frames 50-149; check frames 150-199; input_size=518; windows 32/overlap10",
+      "precision": "fp16 autocast",
+      "seed": "native eval, no stochastic sampling",
+      "dependency_sources": [
+        "requirements.txt; native video_depth_anything metric import closure"
+      ]
+    },
+    "D11": {
+      "modality": "depth",
+      "checkpoint": "depth/Log-stage2",
+      "base": "Qwen/Qwen-Image-Edit-2509",
+      "prompt": "qwen_edit_2509_qwen_depth_realimg512",
+      "seed": 2025,
+      "steps": 1,
+      "guidance_scale": 1.0,
+      "timestep": 0.499,
+      "transformer_quantization": "4bit-nf4",
+      "compute_dtype": "bfloat16",
+      "vae_dtype": "bfloat16",
+      "resize": "ReshapeToMultiple(16, Lanczos), then linear restore to original grid",
+      "output": "mean of decoded RGB channels; affine-invariant log depth",
+      "dependency_sources": [
+        "pyproject.toml; setup/setup_env.sh; exact native inference import closure"
+      ]
+    }
+  },
+  "qualification_requirement": "Capture exact installed package versions, hashes, native binaries and applicable notices in an isolated runtime receipt before DO admission; source manifests alone do not certify dependencies."
+}
