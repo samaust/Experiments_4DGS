@@ -13,6 +13,7 @@ from vipe_benchmark.access import Identity
 from vipe_benchmark.config import ROOT, load, training_cameras
 from vipe_benchmark.files import file_record, read_json, write_json
 from vipe_benchmark.ledger import Ledger
+from vipe_benchmark.dav2_metric import DAV2MetricSmallAdapter
 from vipe_benchmark.moge_metric import MoGe2Adapter, MoGe3Adapter
 from vipe_benchmark.stages import run as run_worker
 
@@ -78,6 +79,15 @@ class NativeMoGe3Fixture(NativeMoGeFixture):
         output['intrinsics'] = torch.tensor([[800 / 960, 0, .5],
             [0, 800 / 540, .5], [0, 0, 1]], dtype=torch.float32)
         return output
+
+
+class NativeDAV2Fixture:
+    encoder = 'vits'
+    max_depth = 20.
+    training = False
+
+    def infer_image(self, bgr, input_size=518):
+        return np.full(bgr.shape[:2], 6., np.float32)
 
 
 class OneFailedCamera:
@@ -193,6 +203,15 @@ class DepthExtensionTests(unittest.TestCase):
         self.assertEqual(worker['eligibility']['metric_scale'], 'passed')
         self.assertEqual(worker['rows'][0]['metadata']['native_refine_steps'], 3)
         self.assertEqual(read_json(receipt['package']['path'])['candidates'][1]['id'], 'D6')
+
+    def test_d7_native_518_metric_output_reaches_scale_and_package(self):
+        request = dict(self.request, id='D7-fit-fixture-001', component='D7')
+        receipt = run(request, self.root / request['id'], self.config,
+            backend=DAV2MetricSmallAdapter(NativeDAV2Fixture()), ledger=self.ledger)
+        worker = read_json(receipt['worker']['path'])
+        self.assertEqual(worker['eligibility']['metric_scale'], 'passed')
+        self.assertEqual(worker['rows'][0]['metadata']['native_processed_size'], [924, 518])
+        self.assertEqual(read_json(receipt['package']['path'])['candidates'][1]['id'], 'D7')
 
     def test_relative_depth_keeps_its_domain_out_of_metric_scale(self):
         request = dict(self.request, id='D9-fit-fixture-001', component='D9')
