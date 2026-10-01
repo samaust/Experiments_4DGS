@@ -1,0 +1,387 @@
+{
+  "schema": "vipe-benchmark-s1-standing-calibration-recovery/v1",
+  "job_id": "S1-calibration-recovery-010",
+  "original_job_id": "S1-calibration",
+  "attempts_limit": 1,
+  "seconds_limit": 3600,
+  "gpu_total_seconds_limit": 93600,
+  "reset_previous_consumption": false,
+  "changes_to_prescribed_configuration": true,
+  "unrelated_attempts_reopened": false,
+  "reconstruction_authorized": false,
+  "semantic_amendment_approved": true,
+  "additional_attempt_approved": true,
+  "authorization": "Remove the one-attempt limit introduced by Proposal003. I want you to plan, implement, execute, analyse results, fix and retry until it works.",
+  "authorization_context": {
+    "request_date": "2026-10-01",
+    "stage": "DO",
+    "scope": "Fresh S1 calibration after a reviewed validated correction under standing authority"
+  },
+  "branch": "calibration",
+  "configuration": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/configs/vipe-alternatives/benchmark-v1.json",
+    "sha256": "298e0a3a6c6c30b92dbfd7c8fa55a3dfbca1dff801a67c0830cf47db0bd9f823",
+    "bytes": 2625
+  },
+  "resource_limits": {
+    "gpu_concurrency": 1,
+    "gpu_peak_device_gib_limit": 22,
+    "gpu_total_seconds_limit": 93600,
+    "cpu_max_workers": 8,
+    "cpu_prepare_score_report_seconds_limit": 57600,
+    "setup_wall_seconds_limit": 57600,
+    "new_download_gib_limit": 60,
+    "new_artifact_disk_gib_limit": 150,
+    "new_setup_attempts": 0,
+    "new_downloads": 0,
+    "extra_smoke_jobs": 0,
+    "reconstruction_attempts": 0,
+    "cleanup_reserve_seconds_max": 30
+  },
+  "plan": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/plans/plan_064.md",
+    "sha256": "5e28174c9c504810d0e764ac8c3de1403a5772b54ff6af7b78c788f9ef4b0d73",
+    "bytes": 9447
+  },
+  "baseline": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-baseline-001.json",
+    "sha256": "2426d4c791a11145b505949311502b489785f3a336fda6093b92d428d441760e",
+    "bytes": 26957
+  },
+  "baseline_correction": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/continuous-improvement/plan031-s1-recovery-20260919/s1-recovery-baseline-correction-016.json",
+    "sha256": "43d884c3a97211491e10d4827e2f3bd34bc46f8884bab8cb96022b706236453d",
+    "bytes": 72282
+  },
+  "implementation_review": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan067-execution/s1-standing-controls-review-001.md",
+    "sha256": "7448f0acfa3d96298f03e65561db29b207a69ec8c2b9b8f7f975c7e0bc2c537d",
+    "bytes": 5494
+  },
+  "semantic_amendment": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/s1-semantic-assignment-amendment-001.json",
+    "sha256": "67de90737094ec751d49036be5cef46ee6dea84d40a8ff2475fc79e1623bfb4a",
+    "bytes": 4558
+  },
+  "original_failure": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration/failure.json",
+    "sha256": "80b50f5414245d3e84d9da8dafdcbf323753e00f0675d8702bb990dacfe8c13a",
+    "bytes": 2111
+  },
+  "original_failure_event_sha256": "102e7c7cc33e8a6d2b4107b69fad0ef577b36a901b59c133d99e811f36665d71",
+  "repair_validation": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-execution/qualification-015/validation.json",
+    "sha256": "b56024b654071d82417d35f85c7b1f79e875dca4c27bdb27c1c80b80ea748bc3",
+    "bytes": 25064
+  },
+  "e1_qualification": {
+    "bytes": 9794,
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/result.json",
+    "sha256": "d983f409c56f6d388fc09aab4be59d1257dc0a3a4da02d982d8b9b3b4d03565d"
+  },
+  "e1_assets": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/assets.json",
+    "sha256": "9aa66c929cce4ece69d482022e3aeb02aad389435d379c7dc159b616f79063bf",
+    "bytes": 338844
+  },
+  "e1_runtime": {
+    "python": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/environment/bin/python",
+    "versions": {
+      "python": "3.11",
+      "torch": "2.5.1+cu124",
+      "torchvision": "0.20.1+cu124",
+      "numpy": "1.26.4"
+    },
+    "inventory": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/inventory.json",
+      "sha256": "0fa8d45c523c08092eda80f2aee4e79b1a991980c1f6a8ea984b8fb802980500",
+      "bytes": 8093767
+    },
+    "imports": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/imports.json",
+      "sha256": "0cb759b295dd0b2b11c2571a1919b2d4dd1faab7b2967ca65338696129817ef8",
+      "bytes": 4300
+    },
+    "dependency_lock": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/requirements.lock",
+      "sha256": "c93be23a51ab7a64ad048530d1f89c3d472ecec0916be9e4fef1f15ffb3c29b4",
+      "bytes": 111678
+    },
+    "build_inputs": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E1-setup-recovery-002/build-inputs.json",
+      "sha256": "c409433653c20ae60eab9ff99d8ab0603705a61ea73edf0a410ce69e174dda3d",
+      "bytes": 38576
+    }
+  },
+  "inputs": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/prepare/inputs.json",
+    "sha256": "8bffd5ee620860dff0ded5bc5a5b70d1e424a5bc88d2bd8e937e70a94163466b",
+    "bytes": 11597582
+  },
+  "annotations": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/annotations/annotations.json",
+    "sha256": "ece14f11d7c8f6df584cb6dcd74a600acc874d88ff1a0704b98aca89c98436bc",
+    "bytes": 6088355
+  },
+  "annotation_policy": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-20260913T032700Z/annotation-amendment-001.json",
+    "sha256": "2c4d13ac57a2bed5daa1d15df3094d1bbc9017ce22c0ecf8ab9215684cc1bc30",
+    "bytes": 4256
+  },
+  "annotation_review": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/annotations/review/decision.json",
+    "sha256": "f61f002384b69e7359687d90b6e70dad5b37f3fdb109191bfca7dd3752b054b5",
+    "bytes": 568605
+  },
+  "annotation_amendment_event": {
+    "sequence": 57,
+    "event_sha256": "36b4d8f7df8d5c2626ffed0478202fd530e39ec8e039554c0cfc2efc02148ce4"
+  },
+  "historical_request": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/requests/S1-calibration.json",
+    "sha256": "8b61eccf379984ed083a65b836ce385ba4cf9f61cf34e1aaf52345e2a3ff9317",
+    "bytes": 352819
+  },
+  "original_request_sha256": "d11f35b7023270d1a35cb07bffbafbd1a9b8b0908e4ec0ba751c81aafeca4926",
+  "ledger_baseline": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/ledger.jsonl",
+    "sha256": "2a0f66e38911b0ed029eb9dd0cf4bbd5da4a3b67abb577fbfe9ad67e6a888990",
+    "bytes": 332437,
+    "events": 447,
+    "last_event_sha256": "00cab019d73b6a3205f676b54cfb2f745f492fa5cca5c69b4567087cea62172b",
+    "active_jobs": []
+  },
+  "previous_recovery_authorization": {
+    "bytes": 18834,
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-execution/s1-recovery-009/do.json",
+    "sha256": "957e2df77fe1a05f3922a6edd068d924b3d222fceb285892e5026eef5471fd8c"
+  },
+  "previous_recovery_failure_event_sha256": "db47dacfcb3e35f0e35f677af39390677404e5c361ec50a24d7ad72146470fd4",
+  "prior_ledger_snapshot": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-execution/s1-recovery-009/outcome/ledger-after.jsonl",
+    "sha256": "56709367eb9160c221d6ba51d188623441b2b5c2a4ee33a59704db1ebe16147e",
+    "bytes": 498051
+  },
+  "process_file_amendment": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-execution/s1-process-file-amendment-003.json",
+    "sha256": "b3cc86ef987e7df4a54fcba0036bb95e5aca926f665831158718a1b6c60c00a2",
+    "bytes": 1407
+  },
+  "previous_recovery_failure": {
+    "acceptance": null,
+    "cleanup_confirmed": true,
+    "cleanup_uncertain": false,
+    "deadline_exceeded": false,
+    "elapsed_seconds": 2209.4980646440526,
+    "error": "RuntimeError: helper operation failed: {'error_class': 'OSError', 'message': \"[Errno 40] Too many levels of symbolic links: 'model.safetensors'\", 'record': {'path': '/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration-recovery-009/helper-error-b807c87d770a4e40a559fb317f1e56e6-2.json', 'sha256': '871a18132499d6587a6730e258484f3f061d6034b0da5a89922e1ea0fee96a0d', 'bytes': 4259}}; evidence publication failed: RuntimeError: retained helper unavailable for terminal publication",
+    "event": "finish",
+    "event_sha256": "db47dacfcb3e35f0e35f677af39390677404e5c361ec50a24d7ad72146470fd4",
+    "evidence_summary_record": null,
+    "failure_kind": "result_contract",
+    "helper_cleanup_errors": [],
+    "helper_ownership": [],
+    "job_id": "S1-calibration-recovery-009",
+    "peak": {
+      "artifact_bytes": 104290983936,
+      "device_bytes": 6570377216,
+      "download_bytes": 37864969113
+    },
+    "previous_sha256": "d67db63c8a5b46285aa436d0b411d37048e32c6597438e26f31e7da9767ea9c6",
+    "primary_failure": {
+      "error_class": "RuntimeError",
+      "kind": "result_contract",
+      "message": "helper operation failed: {'error_class': 'OSError', 'message': \"[Errno 40] Too many levels of symbolic links: 'model.safetensors'\", 'record': {'path': '/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration-recovery-009/helper-error-b807c87d770a4e40a559fb317f1e56e6-2.json', 'sha256': '871a18132499d6587a6730e258484f3f061d6034b0da5a89922e1ea0fee96a0d', 'bytes': 4259}}",
+      "observed": 383973.133250232,
+      "phase": "acceptance",
+      "stop_required": false
+    },
+    "recorded_unix": 1790810668.7085123,
+    "reservation": {
+      "event_sha256": "0a5d0b5d7f6c126d96087492727bd3e9bca31d16230aab4f4c837169ca0524ca",
+      "sequence": 575
+    },
+    "resource": "gpu",
+    "result": null,
+    "secondary_failures": [
+      {
+        "error_class": "RuntimeError",
+        "message": "retained helper unavailable for terminal publication",
+        "observed": 383973.198089332,
+        "phase": "evidence_publication"
+      }
+    ],
+    "secondary_outcome_kind": "evidence_publication",
+    "sequence": 578,
+    "status": "failed",
+    "stop_required": true,
+    "surviving_pids": [],
+    "terminal_publication_block_reason": "poisoned_helper",
+    "terminal_publication_status": "unavailable",
+    "terminal_receipt": null,
+    "verified_progress_reference": {
+      "checkpoints": {
+        "worker": {
+          "bytes": 819631,
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-progress-b807c87d770a4e40a559fb317f1e56e6/worker/1021.json",
+          "sha256": "b95059cdb327b426b402b42b5899608953fe8ebd1e30f3f9eff1387dceec3995"
+        }
+      },
+      "context": {
+        "bytes": 1763,
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-progress-b807c87d770a4e40a559fb317f1e56e6/context.json",
+        "sha256": "9dec4c50aa135b045714681f5237685fb920cd562aa0d70d75d4c20598e9fa94"
+      },
+      "counts": {
+        "complete": 0,
+        "expected": 510,
+        "fit_expected": 340,
+        "fit_produced_lower_bound": 340,
+        "fit_qualified": 340,
+        "produced": "unknown",
+        "produced_lower_bound": 510,
+        "qualified": 510,
+        "qualified_total": "unknown",
+        "selection_expected": 170,
+        "selection_produced_lower_bound": 170,
+        "selection_qualified": 170
+      },
+      "frozen": true,
+      "integrity_status": "verified",
+      "newest_status": "unavailable",
+      "observed": 383669.860148059,
+      "provenance": {
+        "worker": {
+          "accepted_head": {
+            "bytes": 889,
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-progress-b807c87d770a4e40a559fb317f1e56e6/worker/head.json",
+            "sha256": "f2b73433fdaa25566f5f0c10f1ea01515c052d4f32f0cf98578f46568dbb6c1d"
+          },
+          "intended_successor": null,
+          "previous_checkpoint": {
+            "bytes": 819632,
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-progress-b807c87d770a4e40a559fb317f1e56e6/worker/1020.json",
+            "sha256": "c0bd703ba8d89bf08ae9e2a41039ebd9761d674471c39aab59057564eee8de38"
+          },
+          "previous_head": {
+            "bytes": 889,
+            "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-progress-b807c87d770a4e40a559fb317f1e56e6/worker/head.json",
+            "sha256": "0a0a84c495669a86246c7fdef9fe0459ef154a52c7d193438b907ba96575de2a"
+          }
+        }
+      },
+      "reservation": {
+        "event_sha256": "0a5d0b5d7f6c126d96087492727bd3e9bca31d16230aab4f4c837169ca0524ca",
+        "sequence": 575
+      },
+      "schema": "s1-progress-reference/v2",
+      "session": "b807c87d770a4e40a559fb317f1e56e6"
+    }
+  },
+  "previous_recovery_primary_failure": {
+    "error_class": "RuntimeError",
+    "kind": "result_contract",
+    "message": "helper operation failed: {'error_class': 'OSError', 'message': \"[Errno 40] Too many levels of symbolic links: 'model.safetensors'\", 'record': {'path': '/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/S1-calibration-recovery-009/helper-error-b807c87d770a4e40a559fb317f1e56e6-2.json', 'sha256': '871a18132499d6587a6730e258484f3f061d6034b0da5a89922e1ea0fee96a0d', 'bytes': 4259}}",
+    "observed": 383973.133250232,
+    "phase": "acceptance",
+    "stop_required": false
+  },
+  "previous_recovery_secondary_failures": [
+    {
+      "error_class": "RuntimeError",
+      "message": "retained helper unavailable for terminal publication",
+      "observed": 383973.198089332,
+      "phase": "evidence_publication"
+    }
+  ],
+  "live_ledger_snapshot": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/ledger.jsonl",
+    "bytes": 498051,
+    "sha256": "56709367eb9160c221d6ba51d188623441b2b5c2a4ee33a59704db1ebe16147e",
+    "events": 579,
+    "last_event_sha256": "db47dacfcb3e35f0e35f677af39390677404e5c361ec50a24d7ad72146470fd4",
+    "active_jobs": []
+  },
+  "cumulative_resource_totals": {
+    "gpu": {
+      "attempts": 45,
+      "elapsed_seconds": 8939.865233584946,
+      "reserved_seconds": 0.0
+    },
+    "cpu": {
+      "attempts": 4,
+      "elapsed_seconds": 13820.217350039009,
+      "reserved_seconds": 0.0
+    },
+    "setup": {
+      "attempts": 21,
+      "elapsed_seconds": 6055.783853152872,
+      "reserved_seconds": 0.0
+    },
+    "motion": {
+      "attempts": 3,
+      "elapsed_seconds": 254.51461822795682,
+      "reserved_seconds": 0.0
+    },
+    "neighbor": {
+      "attempts": 3,
+      "elapsed_seconds": 36.09751573391259,
+      "reserved_seconds": 0.0
+    }
+  },
+  "required_rows": 510,
+  "row_metadata_bytes_limit": 262144,
+  "resource_sample_seconds": 2.0,
+  "dispatch_supported": true,
+  "approval_required": false,
+  "operational_stop_resolution": {
+    "schema": "plan067-s1-standing-stop-resolution/v1",
+    "authority": {
+      "approval": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan067-execution/s1-standing-retry-approval-001.json",
+        "bytes": 1355,
+        "sha256": "9e1ca6be982f0c5230ce8eb3c11d1979bf826040a7efc2afc555c3af01e017e2"
+      },
+      "policy_amendment": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/specs/plan031-execution/s1-retry-policy-amendment-001.md",
+        "bytes": 2311,
+        "sha256": "e8c2e35d53958857e8773ab871113ac7d8018bd9b2b253264f6aba5935f6d664"
+      }
+    },
+    "stopped_finish": {
+      "sequence": 578,
+      "event_sha256": "db47dacfcb3e35f0e35f677af39390677404e5c361ec50a24d7ad72146470fd4"
+    },
+    "correction": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-execution/s1-recovery-010/binding-001/correction.json",
+      "sha256": "5b054e28b44954ab391c343eb1b5191733fd70d64a66a6c4e5b9e9293178848c",
+      "bytes": 10518
+    },
+    "historical_stop_preserved": true,
+    "unavailable_terminal_preserved": true,
+    "previous_result_accepted": false,
+    "scope": "fresh standing S1 calibration identity only"
+  },
+  "total_attempts_limit": null,
+  "standing_retry_authority": {
+    "approval": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan067-execution/s1-standing-retry-approval-001.json",
+      "bytes": 1355,
+      "sha256": "9e1ca6be982f0c5230ce8eb3c11d1979bf826040a7efc2afc555c3af01e017e2"
+    },
+    "policy_amendment": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/specs/plan031-execution/s1-retry-policy-amendment-001.md",
+      "bytes": 2311,
+      "sha256": "e8c2e35d53958857e8773ab871113ac7d8018bd9b2b253264f6aba5935f6d664"
+    }
+  },
+  "retry_correction": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-execution/s1-recovery-010/binding-001/correction.json",
+    "sha256": "5b054e28b44954ab391c343eb1b5191733fd70d64a66a6c4e5b9e9293178848c",
+    "bytes": 10518
+  },
+  "review_proposal": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/docs/research/vipe-alternatives/plan031-execution/s1-recovery-010/binding-001/review.json",
+    "sha256": "4216146902081cbb8a6eb545460dd741e631ac85a57c53e7412b8fbba46a9e20",
+    "bytes": 18116
+  }
+}
