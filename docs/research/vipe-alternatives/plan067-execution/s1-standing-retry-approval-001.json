@@ -1,0 +1,34 @@
+{
+  "schema": "plan067-s1-standing-retry-approval/v1",
+  "user_authorization": "Remove the one-attempt limit introduced by Proposal003. I want you to plan, implement, execute, analyse results, fix and retry until it works.",
+  "scope": {
+    "component": "S1",
+    "branch": "calibration",
+    "attempts_limit": null,
+    "seconds_limit_per_attempt": 3600,
+    "retry_after_validated_fix": true,
+    "stop_on_accepted_complete_calibration": true,
+    "fresh_identity_per_attempt": true,
+    "gpu_concurrency": 1,
+    "gpu_total_seconds_limit": 93600,
+    "cpu_seconds_limit": 57600,
+    "setup_seconds_limit": 57600,
+    "new_setup_allocations": false,
+    "new_download_allocations": false,
+    "reconstruction_authorized": false,
+    "final_render_allocations_authorized": false
+  },
+  "conditions": [
+    "independent review of relevant correction and controls",
+    "passing complete current-source qualification",
+    "immediate live admission checks",
+    "confirmed cleanup and ownership",
+    "preserve all original resource ceilings and scientific contracts",
+    "preserve failed consumed identities and terminal histories",
+    "never repeat unchanged failed execution"
+  ],
+  "supersedes_prospectively": [
+    "fresh-runtime-attempts-proposal-003: one-attempt limit",
+    "fresh-runtime-attempts-proposal-004: one-attempt approval gate"
+  ]
+}
