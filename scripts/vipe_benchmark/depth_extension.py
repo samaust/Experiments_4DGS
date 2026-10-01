@@ -132,7 +132,7 @@ def _prediction(prediction, expected_domain, image_valid):
                  and np.isfinite(values[valid]).all(),
                  'relative depth validity/NaN contract violated')
         if domain == 'relative_inverse':
-            _require((values[valid] > 0).all(), 'relative inverse depth must be positive')
+            _require((values[valid] >= 0).all(), 'relative inverse depth must be nonnegative')
     return values, valid, raw, native_points
 
 

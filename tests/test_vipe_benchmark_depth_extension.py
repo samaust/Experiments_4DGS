@@ -49,6 +49,13 @@ class ConstantRelative(RelativeInverse):
         return result
 
 
+class ZeroRelative(RelativeInverse):
+    def predict(self, rgb, K, image_valid):
+        result = super().predict(rgb, K, image_valid)
+        result.values[image_valid] = 0
+        return result
+
+
 class NoValidPixels(KnownPlane):
     def predict(self, rgb, K, image_valid):
         result = super().predict(rgb, K, image_valid)
@@ -253,6 +260,15 @@ class DepthExtensionTests(unittest.TestCase):
         package = read_json(receipt['package']['path'])
         self.assertEqual(package['settings']['depth_display']['raw_range'], [.5, .5])
         self.assertEqual(package['settings']['depth_display']['constant_value'], .5)
+
+    def test_native_relu_zero_remains_valid_relative_output(self):
+        request = dict(self.request, id='D9-fit-fixture-001', component='D9')
+        receipt = run(request, self.root / request['id'], self.config,
+            backend=ZeroRelative(), ledger=self.ledger)
+        worker = read_json(receipt['worker']['path'])
+        self.assertEqual(worker['scale_status'], 'not_metric')
+        self.assertEqual(read_json(receipt['package']['path'])['settings']
+                         ['depth_display']['constant_value'], 0)
 
     def test_wrong_domain_preserves_failure_and_cpu_charge(self):
         request = dict(self.request, id='D9-fit-fixture-001', component='D9')

@@ -106,6 +106,44 @@ def prepare_context(inputs_record, output, config):
     return file_record(output / 'context.json')
 
 
+def materialize_role(context_record, camera, role):
+    """Decode one immutable camera/role context on the accepted scale grid."""
+    import cv2
+    from basketball_scale import undistortion
+
+    verify_record(context_record)
+    context = read_json(context_record['path'])
+    if context.get('schema') != SCHEMA or role not in ('fit', 'check'):
+        raise ValueError('accepted video context/role required')
+    expected = list(range(50, 150)) if role == 'fit' else list(range(150, 200))
+    rows = [row for row in context['rows'] if row['camera'] == camera and row['role'] == role]
+    if len(rows) != len(expected) or [row['frame'] for row in rows] != expected:
+        raise ValueError('video context camera/role membership changed')
+    calibration = {row['camera_id']: row for row in read_json(
+        verify_record(context['calibration'])['path'])['cameras']}
+    if camera not in calibration:
+        raise ValueError('video context camera calibration missing')
+    K, maps = undistortion(calibration[camera])
+    if any(not np.array_equal(row['K'], K) or row['grid'] != 'scale-opencv-integer'
+           for row in rows):
+        raise ValueError('video context scale grid changed')
+    valid_record = rows[0]['valid']
+    if any(row['valid'] != valid_record for row in rows):
+        raise ValueError('video context footprint changed within a role')
+    valid = np.load(verify_record(valid_record)['path'], allow_pickle=False)
+    if valid.shape != (540, 960) or valid.dtype != np.bool_:
+        raise ValueError('video context footprint grid changed')
+    frames = []
+    for row in rows:
+        image = cv2.imread(verify_record(row['source_rgb'])['path'], cv2.IMREAD_COLOR)
+        if image is None or image.shape != (540, 960, 3):
+            raise ValueError('accepted video source frame invalid')
+        remapped = cv2.remap(image, *maps, cv2.INTER_LINEAR,
+                             borderMode=cv2.BORDER_CONSTANT)
+        frames.append(cv2.cvtColor(remapped, cv2.COLOR_BGR2RGB))
+    return np.stack(frames), valid, rows
+
+
 def _clip_pixels(values, valid, domain, bounds):
     if domain == 'camera_z_metres':
         if not np.isfinite(values[valid]).all() or (values[valid] <= 0).any():
