@@ -1,0 +1,35 @@
+{
+  "schema": "plan069-depth-commercial-assessment/v1",
+  "candidate": "D7",
+  "source_revision": "a561b849ebae10a6f5ef49e26c83cbbcd36c71bf",
+  "weights_revision": "3bc65d4e14a6786a61acec16453c50e12bf5f338",
+  "code": "allowed",
+  "weights": "allowed",
+  "dependencies": "allowed",
+  "inference_outputs": "allowed",
+  "scope": "Commercial inference on this NVIDIA GPU host with the exact installed D7 closure and creation of depth maps and review clips. This assessment does not grant redistribution of runtime wheels or third-party input media.",
+  "dependency_manifest": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/d7-qualification/docs/research/vipe-alternatives/plan031-execution/depth-D7-installed-dependencies-001.json",
+    "sha256": "da2399d3376a3fcc625cb7f4ce8a311c9064b4365d31da613ca943b97721304f",
+    "bytes": 148072
+  },
+  "findings": [
+    "Pinned Depth Anything V2 source and Hypersim Small checkpoint are Apache-2.0; do not substitute larger noncommercial checkpoints.",
+    "The installed PyTorch, torchvision, NumPy, OpenCV and xFormers packages permit commercial use subject to their retained notices; bundled components have their own notices.",
+    "Installed CUDA and cuDNN wheel terms are NVIDIA proprietary SDK licenses granting installation/use on NVIDIA GPU systems. Redistribution has separate conditions and is not covered by this host inference assessment.",
+    "The installed NCCL wheel metadata says proprietary while its bundled License.txt is BSD-style; no distributed/NCCL operation is used by this single-GPU D7 path. Treat its redistribution terms as unresolved.",
+    "The repository invokes host FFmpeg as a separate process for review clips. This host build enables GPL and libx264; commercial use is possible, but redistribution of the FFmpeg binary requires GPL compliance. H.264 patent and input media rights are separate.",
+    "No reviewed model, checkpoint, or installed runtime term was found that restricts ownership or commercial use of the generated depth maps or review images. This is an inference from the reviewed terms, not an affirmative license to third-party input content.",
+    "CPU strict checkpoint load passed with 239 tensors and installed xFormers import. GPU inference and output quality still require the approved actual run."
+  ],
+  "primary_sources": [
+    "https://github.com/DepthAnything/Depth-Anything-V2/blob/a561b849ebae10a6f5ef49e26c83cbbcd36c71bf/LICENSE",
+    "https://huggingface.co/depth-anything/Depth-Anything-V2-Metric-Hypersim-Small/blob/3bc65d4e14a6786a61acec16453c50e12bf5f338/README.md",
+    "https://github.com/pytorch/pytorch/blob/v2.5.1/LICENSE",
+    "https://github.com/pytorch/vision/blob/v0.20.1/LICENSE",
+    "https://github.com/facebookresearch/xformers/blob/main/LICENSE",
+    "https://docs.nvidia.com/cuda/eula/",
+    "https://docs.nvidia.com/deeplearning/cudnn/latest/reference/eula.html",
+    "https://ffmpeg.org/legal.html"
+  ]
+}
