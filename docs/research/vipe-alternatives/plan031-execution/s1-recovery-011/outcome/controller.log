@@ -1,0 +1,38 @@
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py", line 502, in supervise
+    reading = (monitored_call(sampler, min(run_deadline, time.monotonic()+S1_MONITOR_GAP_SECONDS), sampler,
+               ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        ledger.config, peak, worker=process, phase='worker_sample', lifecycle=lifecycle,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        ledger=ledger, job_id=job_id) if is_s1 else sampler())
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py", line 313, in monitored_call
+    responses = session.tick(deadline)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/s1_helper_session.py", line 2447, in tick
+    raise TimeoutError('S1 monitor recovery deadline reached' if self.recover_samples else 'S1 phase deadline reached')
+TimeoutError: S1 monitor recovery deadline reached
+HelperCleanupUncertain: helper cleanup not confirmed
+evidence_publication: RuntimeError: retained helper unavailable for terminal publication
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_benchmark.py", line 310, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_benchmark.py", line 303, in main
+    return execute(args, config)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/basketball_vipe_benchmark.py", line 190, in execute
+    execute_s1_recovery(local, docs, config, authorization)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/execution.py", line 689, in execute_s1_recovery
+    return dispatch(local, docs, config, component_recovery_request(local, config, job))
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/execution.py", line 559, in dispatch
+    result = supervise(ledger, job, command, local / 'jobs' / suffix,
+        evidence=evidence,
+        sample_resources=s1_sampling_operation(local, job) if is_recovery_job(job) else lambda: resources(local, gpu=device_monitored),
+        validate_result=validate, poll_seconds=.1 if is_recovery_job(job) else 2., checkpoint=checkpoint, resume_checkpoint=resume_checkpoint,
+        terminal_publisher=publish if is_recovery_job(job) else None, terminal_docs=docs)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/vipe_benchmark/supervisor.py", line 676, in supervise
+    raise failure from primary_exception
+vipe_benchmark.supervisor.SupervisionFailure: TimeoutError: S1 monitor recovery deadline reached; evidence publication failed: RuntimeError: retained helper unavailable for terminal publication
