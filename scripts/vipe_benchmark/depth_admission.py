@@ -29,7 +29,8 @@ def _require(condition, message):
         raise ValueError(message)
 
 
-def review(proposal, *, config, commercial, assets, runtime, live, approval=None):
+def review(proposal, *, config, commercial, assets, runtime, live,
+           source_review=None, approval=None):
     """Return blocking reasons for one exact candidate/stage and live snapshot.
 
     File records are rehashed at this boundary. ``approval`` is a separate
@@ -75,14 +76,12 @@ def review(proposal, *, config, commercial, assets, runtime, live, approval=None
               native_context_frames=4500 if candidate in ('D9', 'D10') else expected_maps,
               clips=4, clip_frames=50, clip_fps=25),
           'bounded candidate workload or attempt count changed')
-    source_review = evidence(proposal.get('review_receipt'),
+    reviewed = evidence(source_review,
         'plan069-depth-source-review/v1', 'independent source review receipt missing')
-    check(proposal.get('independent_review') == 'passed' and
-          proposal.get('qualification') == 'passed' and
-          source_review.get('candidate') == candidate and
-          source_review.get('status') == 'passed' and
-          source_review.get('source_revision') == candidates[candidate]['code']['revision'] and
-          source_review.get('profile_inventory') == file_record(PROFILES),
+    check(reviewed.get('candidate') == candidate and
+          reviewed.get('status') == 'passed' and
+          reviewed.get('source_revision') == candidates[candidate]['code']['revision'] and
+          reviewed.get('profile_inventory') == file_record(PROFILES),
           'current source review and qualification required')
     scopes = ('code', 'weights', 'dependencies', 'inference_outputs')
     assessment = evidence(commercial.get('assessment'),

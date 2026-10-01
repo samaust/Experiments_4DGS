@@ -29,8 +29,7 @@ class DepthAdmissionTests(unittest.TestCase):
         candidate = read_json(admission.CONFIG)['candidates']['D5']
         self.proposal = dict(schema='plan069-depth-execution-proposal/v1',
             status='REVIEW', candidate='D5', candidate_config=candidate,
-            required_assets=file_record(self.inventory), independent_review='passed',
-            qualification='passed', max_attempts=1,
+            required_assets=file_record(self.inventory), max_attempts=1,
             workload=dict(anchor_maps=60, unique_published_maps=256,
                 native_context_frames=256, clips=4, clip_frames=50, clip_fps=25),
             profile=read_json(admission.PROFILES)['profiles']['D5'],
@@ -42,7 +41,7 @@ class DepthAdmissionTests(unittest.TestCase):
             schema='plan069-depth-source-review/v1', candidate='D5', status='passed',
             source_revision=candidate['code']['revision'],
             profile_inventory=file_record(admission.PROFILES)))
-        self.proposal['review_receipt'] = file_record(self.root / 'review.json')
+        self.source_review = file_record(self.root / 'review.json')
         self.commercial = dict(candidate='D5', code='allowed', weights='allowed',
             dependencies='allowed', inference_outputs='allowed',
             source_revision=candidate['code']['revision'],
@@ -75,7 +74,7 @@ class DepthAdmissionTests(unittest.TestCase):
     def decide(self, **changed):
         state = dict(proposal=self.proposal, config=self.config,
             commercial=self.commercial, assets=self.assets, runtime=self.runtime,
-            live=self.live, approval=self.approval)
+            live=self.live, source_review=self.source_review, approval=self.approval)
         state.update(changed)
         return admission.review(**state)
 
@@ -92,6 +91,8 @@ class DepthAdmissionTests(unittest.TestCase):
             self.decide(runtime=dict(self.runtime, status='stale')))
         self.assertIn('explicit applicable allocation approval missing',
             self.decide(approval=None))
+        self.assertIn('independent source review receipt missing',
+            self.decide(source_review=None))
 
     def test_owned_gpu_and_exhausted_live_cap_block(self):
         self.assertIn('single GPU or reservation already owned',
