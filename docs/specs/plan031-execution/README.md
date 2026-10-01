@@ -35,5 +35,9 @@ publication launches no jobs and grants no new allocations.
 
 The [publication record](depth-extension-publication-001/README.md) records the
 verified native issue relationships and protected historical hashes. The
-[original ticket publication](tickets/README.md) is historical; current scope
+[approved depth-extension tickets](depth-extension-tickets/README.md) publish
+#46–#59 under #44 and #60–#62 under #45, with verified native blocking links.
+Their initial frontier is #46; all parent issues remain open.
+
+The [original ticket publication](tickets/README.md) is historical; current scope
 comes from this index, the linked specs and live issues.
