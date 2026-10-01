@@ -64,3 +64,50 @@ Actual reviewer samaust submitted segmentation observations, confirmedcamera1-re
 Actual segmentation/depth imports and evidence-bound initial S2/D4 research choices passed independent review. Issue33 meets its initial package001 review scope; new D2/package002 remains separately awaiting feedback under34/35. Current navigation is qualitative-packages-003/index.html, segmentation/depth only. The user clarified that motion and neighbor method effects remain required on final renders, with matched method coverage and concrete allocation authority. Their isolated pictures/videos do not supply that evaluation.
 
 S1 source-owner correction a34f325e passed independent Standards/Spec reviews and19 focused CPU tests. Qualification012 passed313 tests/1035 subtests in253.036 seconds. Full integration1134 tests retains six known unrelated errors/five skips; no passing full-suite claim. Recovery008 remains failed and consumed. Fresh proposal003 requests exactly one3600-second S1-calibration-recovery-009 attempt, conditional on explicit approval, reviewed identity controls, their current passing qualification and live admission. No009 allocation or GPU dispatch has occurred. Issues34/35 and parents23/18 remain incomplete.
+
+## S1 recovery009 and final-render CPU checkpoint — 2026-09-30
+
+The user approved proposal003. Reviewed controls and exact REVIEW/DO bindings
+passed qualification013 (318 tests/1035 subtests, 277.249 seconds). Recovery009
+ran once and failed final acceptance after2209.498 seconds. All510 rows were
+individually qualified, but the complete calibration was not accepted: strict
+reference collection rejected an admitted model-cache snapshot symlink. Terminal
+publication then failed because the retained helper was poisoned. Preserve
+finish578, stop_required=true, absent terminal receipt and all unaccepted bytes
+in [the immutable outcome](../docs/research/vipe-alternatives/plan031-execution/s1-recovery-009/outcome/OUTCOME.md).
+Cleanup is confirmed; this was neither a timeout nor a sandbox denial. The
+attempt is consumed and cannot be replayed or retroactively accepted.
+
+CPU alias correction and independent review proceed under AGENTS standing
+approval. [Proposal004](../docs/research/vipe-alternatives/plan067-execution/fresh-runtime-attempts-proposal-004.md)
+requests one fresh3600-second calibration-only recovery010, subject to completed
+correction/review, passing current-source qualification and live admission.
+It grants no execution authority. Historical process/source/result records remain
+unchanged.
+
+Alias corrections d5545396/6cb9840a are now integrated and reviewed with zero
+remaining blocking findings. Qualification014 passed328 tests/1035 subtests in
+429.160 seconds under600 seconds, zero failures/errors/skips and unchanged source
+inventory. Its validation SHA256 is
+b5a9f028562f948ca17f05ac2a8cb38cfbdbf39633af75b1e254535500d3dd54.
+Full integration ran1171 tests in535.669 seconds, zero failures, six known
+unrelated errors and five skips, with no timeout. Exact evidence and independent
+reviews are preserved in alias-final-render-fullsuite-001/ and
+s1-alias-and-final-render-cpu-review-001.md. This is not a passing full-suite
+claim. Seven changed Python files passed AST parsing; no configured static
+typechecker is claimed. Qualification014 covers the correction; any subsequent
+recovery010 control changes require a fresh complete-source qualification.
+
+The final-render REVIEW contract and pure initializer assembly are integrated.
+Their22 focused CPU tests pass; independent Standards/Spec reviews found no
+remaining blocking findings. They bind the actual processed manifest, frozen
+S2/D4 choices, complete similarity transform and verified historical scale and
+normalization contents. Fixture assembly grants no native qualification or
+execution authority. Native geometry, supervised native generation, measured
+viability, actual matched renders and their human comparison remain unfinished.
+The five-arm final-render budget proposal also needs separate allocation authority.
+
+Actual D2 feedback is preserved at camera1-selection-175: worse close-object
+edges than D0/D1 and difficulty capturing a distant player. It supplies no new
+overall preference. Initial issue33 is complete within its original package001
+scope; issues34/35 and parents23/18 remain open.

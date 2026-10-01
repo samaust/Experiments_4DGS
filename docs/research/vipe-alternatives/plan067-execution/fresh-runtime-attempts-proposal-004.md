@@ -8,13 +8,18 @@ ELOOP at the model-cache `model.safetensors` alias and poisoned the helper. Term
 evidence publication then failed because that helper was unavailable. This was
 neither a timeout nor a Codex permission denial.
 
-The model-cache alias correction must receive independent Standards and Spec
-review. It must bind the admitted alias and its verified regular target without
+The model-cache alias correction received independent Standards and Spec
+review with zero remaining blocking findings. It binds the admitted alias and its verified regular target without
 weakening ordinary strict referenced-record checks, source/model/input contracts,
-ownership, cleanup or deadlines. Complete current-source qualification014 is
-required and remains pending; no passing qualification or source hash is claimed
-here. Qualification012/013 and earlier approvals cannot qualify or authorize the
-corrected010 source automatically.
+ownership, cleanup or deadlines. Complete current-source qualification014 passed
+328 tests/1035 subtests in429.160 seconds, zero failures/errors/skips, under600
+seconds. Its validation SHA256 is
+b5a9f028562f948ca17f05ac2a8cb38cfbdbf39633af75b1e254535500d3dd54.
+The source inventory remained unchanged. Full integration ran1171 tests with
+zero failures, six known unrelated errors/five skips and no timeout; this is not
+a passing full-suite claim. See alias-final-render-fullsuite-001/ and
+s1-alias-and-final-render-cpu-review-001.md. Earlier approvals cannot authorize
+fresh010 automatically; new controls require their own current qualification.
 
 ## Requested allocation
 
@@ -63,8 +68,10 @@ authority is created here.
 Recovery010 identity-specific controls, approval and immutable REVIEW/DO bindings
 are not prepared by this proposal. After explicit approval, the controls must bind
 the consumed009 finish and preserved outcome, exact prior histories and fresh010
-identity. Independently review the controls and bind a passing qualification014
-for their complete current source, the explicit approval and exact ledger prefix.
+identity. Independently review the controls and capture a new passing
+qualification for their complete current source, binding the explicit approval
+and exact ledger prefix. Qualification014 covers the CPU correction only;
+later control changes require their own fresh qualification.
 Preserve009's failed stop/absent-terminal/poisoned-helper state in those bindings;
 do not clear, rewrite or reinterpret that history as success.
 
