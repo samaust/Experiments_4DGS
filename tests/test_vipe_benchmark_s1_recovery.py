@@ -215,8 +215,13 @@ class S1NextIdentityTests(unittest.TestCase):
         ninth = dict(reservation, job_id='S1-calibration-recovery-009')
         self.assertEqual(ReservationClock.from_reservation(ninth).job_id, ninth['job_id'])
         self.assertEqual(helper_job({'reservation': ninth}), ninth['job_id'])
+        tenth = dict(reservation, job_id='S1-calibration-recovery-010')
+        self.assertEqual(ReservationClock.from_reservation(tenth).job_id, tenth['job_id'])
+        self.assertEqual(helper_job({'reservation': tenth}), tenth['job_id'])
         with self.assertRaises(ValueError):
-            ReservationClock.from_reservation(dict(reservation, job_id='S1-calibration-recovery-010'))
+            ReservationClock.from_reservation(dict(reservation, job_id='S1-calibration-recovery-000'))
+        with self.assertRaises(ValueError):
+            ReservationClock.from_reservation(dict(reservation, job_id='S1-calibration-recovery-0010'))
 
     def test_third_identity_binds_consumed_live_prefix_without_mutation(self):
         local = ROOT / '.local/vipe-alternatives/plan031-20260913T032700Z'
@@ -276,6 +281,10 @@ class S1NextIdentityTests(unittest.TestCase):
                             worker=file_record(ROOT / 'scripts/basketball_vipe_worker.py'))
             command = s1.canonical_dispatch(document, authorization, evidence, local=planned_local)
             self.assertEqual(command[-1], str((planned_local / 'jobs' / s1.JOB_2).resolve()))
+            historical_worker = outcome['reservation']['evidence']['worker']
+            self.assertNotEqual(historical_worker, evidence['worker'])
+            with self.assertRaisesRegex(ValueError, 'canonical dispatch request/worker'):
+                s1.canonical_dispatch(document, authorization, dict(evidence, worker=historical_worker), local=planned_local)
             with self.assertRaisesRegex(ValueError, 'canonical launch command'):
                 s1.canonical_dispatch(document, authorization, evidence, command=command[:-1] + [str(planned_local / 'jobs' / s1.JOB)], local=planned_local)
             bad = dict(document, previous_recovery_failure_event_sha256='0' * 64)

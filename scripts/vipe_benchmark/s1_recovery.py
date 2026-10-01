@@ -597,6 +597,7 @@ def lifecycle(events, authorization, document):
     """Validate only a caller-owned snapshot; never acquire a ledger lock."""
     admission = registration = reservation = temporary = started = finish = requalification = None
     job = document['job_id']
+    completed_history = any(event.get('event') == 'finish' and event.get('job_id') == job for event in events)
     for event in events:
         kind = event['event']
         if finish is not None:
@@ -628,6 +629,8 @@ def lifecycle(events, authorization, document):
             requalification = event
         elif kind == 'reserve':
             evidence = event.get('evidence', {})
+            worker = (_historical_dispatch_worker(document, requalification) if completed_history
+                      else file_record(ROOT / 'scripts/basketball_vipe_worker.py'))
             if evidence.get('source_requalification') != (event_ref(requalification) if requalification else None):
                 raise ValueError('S1 reservation source requalification binding')
             if (not registration or reservation
@@ -635,9 +638,9 @@ def lifecycle(events, authorization, document):
                     or evidence.get('authorization_event') != event_ref(registration)
                     or evidence.get('admission') != admission['evidence']
                     or any(evidence.get(k) != document[k] for k in BINDINGS if k != 'original_request_sha256')
-                    or evidence.get('worker') != file_record(ROOT / 'scripts/basketball_vipe_worker.py')):
+                    or evidence.get('worker') != worker):
                 raise ValueError('S1 lifecycle reservation binding/order')
-            canonical_dispatch(document, authorization, evidence, command=event.get('command'))
+            _dispatch_comparison(document, authorization, evidence, worker, command=event.get('command'))
             reservation = event
         elif kind == 'temporary_directory':
             if not reservation or temporary or started:
@@ -697,9 +700,34 @@ def admitted_event(events, authorization, document):
     return event['evidence']
 
 
+def _historical_dispatch_worker(document, requalification):
+    """Read immutable qualified worker metadata without reading changed source bytes."""
+    import re
+    qualification = document['repair_validation']
+    if requalification is not None:
+        note = read_json(strict_record(requalification['amendment'])['path'])
+        qualification = note['validation']
+    value = read_json(strict_record(qualification)['path'])
+    path = str(ROOT / 'scripts/basketball_vipe_worker.py')
+    workers = [record for record in value['sources'] if record.get('path') == path]
+    if (len(workers) != 1 or set(workers[0]) != {'path', 'sha256', 'bytes'}
+            or type(workers[0]['bytes']) is not int or workers[0]['bytes'] < 0
+            or type(workers[0]['sha256']) is not str
+            or re.fullmatch('[0-9a-f]{64}', workers[0]['sha256']) is None):
+        raise ValueError('exact historical qualified worker record required')
+    return workers[0]
+
+
 def canonical_dispatch(document, authorization, evidence, *, command=None, reservation=None,
                        captured=None, local=None):
-    """One read-only comparison for reservation, consumed state and launch."""
+    """Verify current worker bytes for every new reservation and active launch."""
+    return _dispatch_comparison(document, authorization, evidence,
+        file_record(ROOT / 'scripts/basketball_vipe_worker.py'), command=command,
+        reservation=reservation, captured=captured, local=local)
+
+
+def _dispatch_comparison(document, authorization, evidence, worker, *, command=None,
+                         reservation=None, captured=None, local=None):
     historical = read_json(strict_record(document['historical_request'])['path'])
     original = {k:v for k,v in historical.items() if k != 'configuration'}
     if object_hash(original) != document['original_request_sha256']:
@@ -708,7 +736,6 @@ def canonical_dispatch(document, authorization, evidence, *, command=None, reser
     expected = dict(original, job_id=job, recovery_authorization=authorization,
                     configuration=document['configuration'])
     request = read_json(strict_record(evidence['request'])['path'])
-    worker = file_record(ROOT / 'scripts/basketball_vipe_worker.py')
     if (request != expected or request.get('branch') != 'calibration'
             or evidence.get('worker') != worker):
         raise ValueError('canonical dispatch request/worker changed')

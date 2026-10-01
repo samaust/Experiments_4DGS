@@ -50,6 +50,11 @@ class S1StandingRetryTests(unittest.TestCase):
             target = current / source.relative_to(ROOT)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
+        # The disposable qualification must name the exact canonical worker
+        # used by the public reservation, including future historical checks.
+        worker = current / 'scripts/basketball_vipe_worker.py'
+        worker.unlink()
+        worker.symlink_to(historical.main / 'scripts/basketball_vipe_worker.py')
         stack.enter_context(patch.object(contract, 'ROOT', current))
         stack.enter_context(patch.object(fixtures, 'ROOT', current))
         stack.enter_context(patch.object(contract, 'ARGV', [sys.executable, '-B', '-']))
