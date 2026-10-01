@@ -76,6 +76,15 @@ class D2PreflightTest(unittest.TestCase):
                 d2_preflight.qualify(self.proposal, self.e5_record, self.root / 'out')
         self.assertFalse((self.root / 'out').exists())
 
+    def test_rejects_changed_installed_file(self):
+        interpreter = self.e5 / 'environment/bin/python'
+        interpreter.write_bytes(b'changed after inventory')
+        with patch.object(d2_preflight, 'INVENTORY', self.inventory), \
+             patch.object(d2_preflight, 'PROFILES', self.profiles):
+            with self.assertRaisesRegex(ValueError, 'changed file'):
+                d2_preflight.qualify(self.proposal, self.e5_record, self.root / 'out')
+        self.assertFalse((self.root / 'out').exists())
+
 
 if __name__ == '__main__':
     unittest.main()
