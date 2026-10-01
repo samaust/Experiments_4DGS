@@ -133,3 +133,34 @@ reviewed controls, current qualification, live admission, confirmed cleanup and 
 unrelated allocation is permitted. Continue until accepted complete calibration
 or a concrete remaining budget/access/input blocker. Finishing a commit does not
 pause the cycle.
+
+### S1-010 standing retry checkpoint
+
+Standing retry controls are integrated and independently reviewed. Qualification015
+passed339 tests/1063 subtests in476.541 seconds, zero failures/errors/skips;
+corrected full integration1182 tests has no failures, six known unrelated errors
+and five skips. CPU evidence is committed as af603858; exact reviewed REVIEW/DO
+and live resource/ledger binding as b1b43c58.
+
+S1-010 consumed one fresh identity under standing authority. It generated and
+individually qualified510 rows and wrote an intermediate passed acceptance,
+then failed accepted-progress publication because the35,338,620-byte aggregate
+result exceeded the32MiB progress metadata limit. No accepted finish result or
+terminal receipt exists. Cleanup is confirmed, survivors empty, stop_required
+true; exact failed/helper/unpublished acceptance evidence is preserved in
+s1-recovery-010/outcome (69f7884d). The prior alias correction reached local
+acceptance; this does not retroactively accept010. It was not a timeout.
+
+Next: correct the finite aggregate result/inventory bounds while preserving
+256KiB row and control/checkpoint caps, validate the actual aggregate-size paths,
+obtain independent reviews and current qualification016, then review/admit a fresh
+S1-011 under standing authority. No reset, duplicate replay or historical result
+promotion. Current GPU charge11141.708 seconds, allocated artifacts115691421696
+bytes, no active allocations; recheck live budgets before dispatch.
+
+Aggregate correction273d80a1 is integrated with both independent reviews clear.
+Full integration015 ran1185 tests, no failures, six known unrelated errors/five
+skips. Qualification016 passed342 tests/1063 subtests in475.427 seconds under600
+seconds with unchanged104-source inventory; wrapper SHA256
+ce21a33039649f2cf6c1727fd8278e756512418699c6af22cbaa52d1cceaba21.
+Fresh011 preparation/review/live admission follows under standing authority.
