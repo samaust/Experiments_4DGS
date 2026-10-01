@@ -26,7 +26,7 @@ LIMIT_KEYS = dict(download_bytes='new_download_gib_limit',
                   gpu_seconds='gpu_total_seconds_limit',
                   cpu_seconds='cpu_prepare_score_report_seconds_limit',
                   setup_seconds='setup_wall_seconds_limit')
-LOCAL_COMMON = ('files.py', 'depth_admission.py', 'depth_extension.py',
+LOCAL_COMMON = ('files.py', 'ledger.py', 'depth_admission.py', 'depth_extension.py',
     'depth_clips.py', 'scale.py', 'qualitative_package.py')
 LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py'),
     D5=('moge_metric.py',), D6=('moge_metric.py',), D7=('dav2_metric.py',),

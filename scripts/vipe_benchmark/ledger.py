@@ -10,7 +10,7 @@ from pathlib import Path
 import time
 
 from .config import jobs
-from .files import canonical, object_hash, read_json, safe_path, verify_record
+from .files import canonical, file_record, object_hash, read_json, safe_path, verify_record
 
 
 class Ledger:
@@ -22,6 +22,14 @@ class Ledger:
     def _jobs(self, events):
         allocated = jobs(self.config)
         for event in events:
+            if event['event'] == 'depth_setup_authorized':
+                verify_record(event['review'])
+                verify_record(event['authorization'])
+                candidate = event['candidate']
+                job_id = f'plan069-{candidate}-setup-001'
+                allocated[job_id] = dict(id=job_id, resource='setup',
+                    seconds=event['seconds'],
+                    scope='approved one-attempt Plan 069 depth setup and exact transfers')
             if event['event'] == 'memory_diagnostic_authorized':
                 verify_record(event['authorization'])
                 allocated[event['job_id']] = dict(allocated['S3-reconstruction'],
@@ -147,6 +155,64 @@ class Ledger:
             return self._append(stream, events, dict(event='reserve', job_id=job_id, resource=resource,
                 seconds=seconds, command=command, evidence=evidence, monotonic_start=time.monotonic(),
                 boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
+
+    def authorize_depth_setup(self, candidate, review, authorization):
+        """Allocate one bounded setup attempt from exact user-approved proposals."""
+        if candidate not in ('D2', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11'):
+            raise ValueError('unknown approved depth setup candidate')
+        from .files import object_hash
+        reviewed = read_json(verify_record(review)['path'])
+        approved = read_json(verify_record(authorization)['path'])
+        proposal = next((row for row in reviewed.get('proposals', [])
+            if row.get('candidate') == candidate), None)
+        grant = next((row for row in approved.get('candidate_approvals', [])
+            if row.get('candidate') == candidate), None)
+        if (reviewed.get('schema') != 'plan069-depth-execution-review/v1' or
+                reviewed.get('status') != 'REVIEW' or
+                approved.get('schema') != 'plan069-depth-user-authorization/v1' or
+                approved.get('status') != 'DO' or approved.get('review') != review or
+                proposal is None or proposal.get('max_attempts') != 1 or
+                grant is None or grant.get('schema') != 'plan069-depth-execution-approval/v1' or
+                grant.get('status') != 'approved' or
+                grant.get('proposal_sha256') != object_hash(proposal)):
+            raise ValueError('exact approved depth setup proposal required')
+        from .depth_admission import BENCHMARK, CAP_AMENDMENT
+        historical = read_json(BENCHMARK)
+        effective = dict(historical, new_download_gib_limit=110,
+                         new_artifact_disk_gib_limit=210)
+        if self.config != historical:
+            amendment = read_json(verify_record(approved['cap_amendment'])['path'])
+            if (self.config != effective or
+                    approved['cap_amendment'] != file_record(CAP_AMENDMENT) or
+                    amendment != dict(schema='plan069-depth-cap-amendment/v1',
+                        status='REVIEW', historical_configuration={
+                            key: file_record(BENCHMARK)[key] for key in ('sha256', 'bytes')},
+                        new_download_gib_limit=110, new_artifact_disk_gib_limit=210) or
+                    approved.get('cap_approval') != dict(
+                        schema='plan069-depth-cap-approval/v1', status='approved',
+                        amendment_sha256=object_hash(amendment))):
+                raise ValueError('exact approved depth cap amendment required')
+        seconds = proposal.get('allocation', {}).get('setup_seconds')
+        if type(seconds) is not int or seconds <= 0:
+            raise ValueError('bounded setup seconds required')
+        with self.locked() as (stream, events):
+            if any(row['event'] == 'reserve' for row in self.states(events).values()):
+                raise ValueError('active attempt prevents depth setup authorization')
+            if any(row['event'] == 'depth_setup_authorized' and row['candidate'] == candidate
+                    for row in events):
+                raise ValueError('depth setup attempt already authorized')
+            if self.totals(events)['setup']['elapsed_seconds'] + seconds > self.config['setup_wall_seconds_limit']:
+                raise ValueError('setup allocation exceeds cumulative cap')
+            from .execution import resources
+            reading = resources(self.path.parent)
+            for key, limit in (('download_bytes', 'new_download_gib_limit'),
+                               ('artifact_bytes', 'new_artifact_disk_gib_limit')):
+                if reading[key] + proposal['allocation'][key] > self.config[limit] * 2**30:
+                    raise ValueError(key + ' setup allocation exceeds live cumulative cap')
+            return self._append(stream, events, dict(event='depth_setup_authorized',
+                candidate=candidate, seconds=seconds,
+                proposal_sha256=object_hash(proposal), review=review,
+                authorization=authorization, resource_snapshot=reading))
 
     def charge_cpu_preparation(self, elapsed_seconds, evidence):
         """Charge separately retriable input acquisition without a model attempt."""
