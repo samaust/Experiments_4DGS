@@ -12,6 +12,8 @@ from .files import file_record, object_hash, read_json, verify_record
 INVENTORY = CONFIG.parents[2] / 'docs/specs/plan031-execution/depth-required-assets-v1.json'
 PROFILES = CONFIG.parents[2] / 'docs/specs/plan031-execution/depth-runtime-profiles-v1.json'
 HISTORICAL = ROOT / 'configs/vipe-alternatives/components-v1.json'
+BENCHMARK = ROOT / 'configs/vipe-alternatives/benchmark-v1.json'
+CAP_AMENDMENT = ROOT / 'docs/specs/plan031-execution/depth-cap-amendment-review-001.json'
 D2_SPEC = dict(model='DA3METRIC-LARGE', mode='historical D2 exact invocation',
     code=dict(url='https://github.com/ByteDance-Seed/Depth-Anything-3',
               revision='3d835ec1a5802d64a8b8b15f817a1ab54809bfe4'),
@@ -30,7 +32,7 @@ def _require(condition, message):
 
 
 def review(proposal, *, config, commercial, assets, runtime, live,
-           source_review=None, approval=None):
+           source_review=None, approval=None, cap_amendment=None, cap_approval=None):
     """Return blocking reasons for one exact candidate/stage and live snapshot.
 
     File records are rehashed at this boundary. ``approval`` is a separate
@@ -50,6 +52,28 @@ def review(proposal, *, config, commercial, assets, runtime, live,
         except (KeyError, TypeError, ValueError, OSError):
             blockers.append(reason)
             return {}
+
+    historical_config = read_json(BENCHMARK)
+    cap_keys = ('new_download_gib_limit', 'new_artifact_disk_gib_limit')
+    if config != historical_config:
+        unchanged = dict(config)
+        for key in cap_keys:
+            unchanged[key] = historical_config[key]
+        check(unchanged == historical_config,
+              'historical resource configuration changed outside amendment')
+        amendment = evidence(cap_amendment, 'plan069-depth-cap-amendment/v1',
+                             'approved versioned cap amendment required')
+        baseline = file_record(BENCHMARK)
+        expected = dict(schema='plan069-depth-cap-amendment/v1', status='REVIEW',
+            historical_configuration={key: baseline[key] for key in ('sha256', 'bytes')},
+            new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
+        check(cap_amendment == file_record(CAP_AMENDMENT) and amendment == expected and
+              all(config.get(key) == amendment.get(key) for key in cap_keys) and
+              cap_approval is not None and
+              cap_approval.get('schema') == 'plan069-depth-cap-approval/v1' and
+              cap_approval.get('status') == 'approved' and
+              cap_approval.get('amendment_sha256') == object_hash(amendment),
+              'approved versioned cap amendment required')
 
     extension = read_json(CONFIG)
     inventory = read_json(INVENTORY)

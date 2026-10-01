@@ -16,6 +16,7 @@ class DepthAdmissionTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.original_inventory = admission.INVENTORY
+        self.original_cap_amendment = admission.CAP_AMENDMENT
         self.asset = self.root / 'model.bin'
         self.asset.write_bytes(b'pinned model')
         self.expected = dict(repository='fixture', path='model.bin',
@@ -69,6 +70,7 @@ class DepthAdmissionTests(unittest.TestCase):
 
     def tearDown(self):
         admission.INVENTORY = self.original_inventory
+        admission.CAP_AMENDMENT = self.original_cap_amendment
         self.temp.cleanup()
 
     def decide(self, **changed):
@@ -110,6 +112,32 @@ class DepthAdmissionTests(unittest.TestCase):
             precision='float16'))
         self.assertIn('frozen native preprocessing, precision or seed profile changed',
             self.decide(proposal=changed))
+
+    def test_cap_increase_needs_exact_separate_approval(self):
+        increased = dict(self.config, new_download_gib_limit=110,
+                         new_artifact_disk_gib_limit=210)
+        self.assertIn('approved versioned cap amendment required',
+                      self.decide(config=increased))
+        amendment = dict(schema='plan069-depth-cap-amendment/v1', status='REVIEW',
+            historical_configuration={key: file_record(admission.BENCHMARK)[key]
+                for key in ('sha256', 'bytes')},
+            new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
+        write_json(self.root / 'amendment.json', amendment)
+        admission.CAP_AMENDMENT = self.root / 'amendment.json'
+        amendment_record = file_record(self.root / 'amendment.json')
+        self.assertIn('approved versioned cap amendment required',
+            self.decide(config=increased, cap_amendment=amendment_record))
+        cap_approval = dict(schema='plan069-depth-cap-approval/v1',
+            status='approved', amendment_sha256=object_hash(amendment))
+        self.assertEqual(self.decide(config=increased,
+            cap_amendment=amendment_record, cap_approval=cap_approval), [])
+        self.assertIn('approved versioned cap amendment required',
+            self.decide(config=increased,
+                cap_amendment=amendment_record,
+                cap_approval=dict(cap_approval, amendment_sha256='0' * 64)))
+        self.assertIn('historical resource configuration changed outside amendment',
+            self.decide(config=dict(increased, gpu_total_seconds_limit=999999),
+                cap_amendment=amendment_record, cap_approval=cap_approval))
 
 
 if __name__ == '__main__':

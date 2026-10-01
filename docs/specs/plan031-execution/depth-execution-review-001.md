@@ -64,6 +64,11 @@ headroom, but only explicit user approval and a versioned admission amendment
 can enact it. If the user declines, D11 remains unstarted and #58/#59/#44 stay
 open; no omitted slot is called complete.
 
+The [versioned cap amendment](depth-cap-amendment-review-001.json) freezes only
+those two proposed limits. Admission continues to use the historical limits
+unless a separate DO approval binds that exact amendment; changes to any other
+historical resource setting are rejected.
+
 The current ledger's GPU/CPU/setup remaining seconds exceed the proposed sums,
 but these figures are snapshots and S1 can consume them. Memory is limited to
 22 GiB device peak; proposals cap model allocation at 21 GiB, subject to live
