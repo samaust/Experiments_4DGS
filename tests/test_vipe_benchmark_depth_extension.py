@@ -16,6 +16,7 @@ from vipe_benchmark.ledger import Ledger
 from vipe_benchmark.dav2_metric import DAV2MetricSmallAdapter
 from vipe_benchmark.moge_metric import (MoGe2Adapter, MoGe3Adapter,
     MetricAnythingPointMapAdapter, POINTMAP_PIN)
+from vipe_benchmark.marigold_relative import MarigoldLogStage2Adapter, PROFILE
 from vipe_benchmark.stages import run as run_worker
 
 
@@ -96,6 +97,19 @@ class NativeDAV2Fixture:
 
     def infer_image(self, bgr, input_size=518):
         return np.full(bgr.shape[:2], 6., np.float32)
+
+
+class NativeMarigoldFixture:
+    profile = PROFILE
+    training = False
+
+    def __init__(self):
+        self.calls = []
+
+    def infer_image(self, rgb, *, seed):
+        self.calls.append((rgb.shape, seed))
+        return np.broadcast_to(np.linspace(-.8, .6, rgb.shape[1], dtype=np.float32),
+                               rgb.shape[:2]).copy()
 
 
 class OneFailedCamera:
@@ -252,6 +266,40 @@ class DepthExtensionTests(unittest.TestCase):
         package = read_json(receipt['package']['path'])
         self.assertEqual(package['settings']['depth_display']['domain'], 'relative_inverse')
         self.assertEqual(package['settings']['depth_display']['direction'], 'larger means nearer')
+
+    def test_d11_pinned_log_adapter_crosses_worker_and_review_boundary(self):
+        request = dict(self.request, id='D11-fit-fixture-001', component='D11')
+        native = NativeMarigoldFixture()
+        receipt = run(request, self.root / request['id'], self.config,
+            backend=MarigoldLogStage2Adapter(native), ledger=self.ledger)
+        worker = read_json(receipt['worker']['path'])
+        self.assertEqual(len(native.calls), 30)
+        self.assertTrue(all(shape == (540, 960, 3) and seed == 2025
+                            for shape, seed in native.calls))
+        self.assertEqual(worker['scale_status'], 'not_metric')
+        self.assertEqual(worker['eligibility']['downstream'], 'blocked')
+        self.assertEqual(worker['rows'][0]['metadata']['profile'], PROFILE)
+        with np.load(worker['rows'][0]['depth']['path']) as stored:
+            self.assertIn('relative', stored.files)
+            self.assertNotIn('depth', stored.files)
+            self.assertAlmostEqual(float(stored['raw_values'][0, 0]), -.8)
+            self.assertEqual(stored['relative'].shape, (540, 960))
+        package = read_json(receipt['package']['path'])
+        self.assertEqual(package['settings']['depth_display']['domain'], 'relative_log')
+        self.assertEqual(package['settings']['depth_display']['direction'], 'larger means farther')
+        self.assertEqual(package['candidates'][1]['id'], 'D11')
+
+    def test_d11_rejects_unapproved_runtime_substitution(self):
+        native = NativeMarigoldFixture()
+        native.profile = dict(PROFILE, transformer_quantization='8bit')
+        with self.assertRaisesRegex(ValueError, 'pinned Log-stage2'):
+            MarigoldLogStage2Adapter(native)
+        native.profile = PROFILE
+        native.infer_image = lambda rgb, seed: np.ones((270, 480), np.float32)
+        with self.assertRaisesRegex(ValueError, 'accepted grid'):
+            MarigoldLogStage2Adapter(native).predict(
+                np.zeros((540, 960, 3), np.uint8), self.K,
+                np.ones((540, 960), np.bool_))
 
     def test_constant_relative_map_has_a_neutral_labeled_display(self):
         request = dict(self.request, id='D9-fit-fixture-001', component='D9')
