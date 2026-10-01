@@ -190,3 +190,23 @@ zero failures/errors/skips, matching104-source inventories. Wrapper SHA256
 63a97643fe11679451c21bf8f40ba60e7316bb66635c7baa56cea2139ad045a3.
 Full integration016 ran1,186 tests with no failures, six known unrelated errors
 and five skips in544.791 seconds. Fresh012 review/live admission follows.
+
+### Accepted S1 calibration — recovery012
+
+S1-012 completed in 2,195.635 seconds (36.6 minutes). Supervised finish603
+accepts all 510 calibration rows with a passed acceptance and complete terminal
+receipt. The original S1-calibration result resolver passed strict lineage,
+scientific, evidence and cleanup verification. Cleanup is confirmed, no survivors,
+stop_required=false and no deadline overrun. Host GPU compute PID list is empty;
+no active allocation remains. Outcome is preserved in s1-recovery-012/outcome.
+
+The standing S1 calibration fix/retry objective is complete; no additional
+calibration retry is needed or permitted by the successful-predecessor guard.
+Historical failed attempts, evidence and charges remain immutable. GPU total
+14,315.268 seconds and allocated artifacts 132,898,312,192 bytes remain within
+original ceilings. Qualification017 passed343 tests/1063 subtests; full integration
+retains the six known unrelated errors/five skips.
+
+Execution parent18 remains open for its unfinished children, including prospective
+depth extension and final-render/human-report work. No new depth, setup, download,
+reconstruction or final-render allocation follows from this calibration success.
