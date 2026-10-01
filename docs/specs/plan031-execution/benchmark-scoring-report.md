@@ -1,4 +1,23 @@
-**Current scope:** [Scope amendment 001](qualitative-comparison-scope-amendment-001.md) takes precedence: isolated packages and initial review (#33) cover segmentation and depth only. Motion and neighbor method effects remain required comparisons on actual final renders (#34/#35); isolated M/N diagnostics are excluded from the current viewer. Applicable motion criteria and clip controls remain.
+## Current depth extension — Plan 069
+
+Add extended-depth review #45 as a new child of #23, blocked by generation #44 under #18. Preserve closed #32/#33 and their accepted infrastructure/initial-review scopes; the earlier instruction to reopen #32 is historical.
+
+- Review the new D5–D11 package, historical D0–D4 frozen-frame references, and matched motion clips for all seven additions plus D2.
+- Bind real human observations to exact media and examples. Preserve visual preference separately from a justified commercially eligible metric choice D* from D2/D5/D6/D7/D8/D10 after runtime and scale gates pass.
+- #34 may continue reusable preparation; new depth-dependent execution waits for #45's ready decision and a fresh downstream proposal. Keep the historical S2/D4 decision and D4 proposal intact.
+- #34 still owns actual final renders exposing M/N effects and their follow-up human review; depth-map motion does not satisfy that requirement. #35 reports both comparison stages and all candidate dispositions.
+- Missing human evidence, unresolved eligibility or a tie without explicit choice remains blocked. No synthetic review, automatic D4 fallback or annotation bundle replaces actual feedback.
+- Keep #23 open until all children, including #45, are complete. S1 authority and resource ceilings remain separate; publication grants no new attempt.
+
+The new review specification #45 takes precedence for the extended depth choice. The prior initial review remains complete for its original scope.
+
+## Earlier issue scope and checkpoints (preserved)
+
+## Current comparison scope — user correction, 2026-09-30
+
+The initial isolated viewer comparison covers **segmentation and depth**. Motion (M0–M2) and neighbors (N0–N2) are excluded from that isolated pictures/videos comparison. Their effects **must still be compared on final renders**, under downstream #34/#35. The user explicitly clarified that their effects can only be evaluated on the final render.
+
+See `docs/specs/plan031-execution/qualitative-comparison-scope-amendment-001.md` and Plan067. Preserve the original hash-pinned amendment, packages, scientific/runtime/ledger records and historical completion. Applicable motion criteria/segmentation clips remain supported. Downstream acceptance must include matched final renders exposing motion and neighbor method effects, with real human feedback bound to those outputs. Engineering prerequisites and explicit allocations still apply; no new M/N winner, experiment, training or rendering is authorized. Parent closure still requires every child complete.
 
 ## Problem Statement
 
@@ -39,4 +58,4 @@ Pixel/instance/temporal human annotation bundles, required annotation accuracy m
 
 The user explicitly replaced independent annotation-based scoring with human qualitative comparison of generated results, and confirmed frames, clips and diagnostics. This changes the comparison protocol prospectively. Existing results, annotations, metrics, model settings, source pins, accepted inputs and ledger charges remain historical evidence. This specification update launches no model, setup, training or rendering job and grants no new allocation.
 
-The active comparison is defined by [the qualitative amendment](qualitative-comparison-amendment.md) and [Plan 067](../../../plans/plan_067.md). One host GPU remains exclusive; current execution, qualification, cleanup and resource-budget gates apply. Synthetic reviews are test fixtures, never human judgments. The external annotation bundle, contributor attestations, blind annotation review, adjudication, masks and 232-image labeling workload are no longer completion requirements.
+The active comparison is defined by `docs/specs/plan031-execution/qualitative-comparison-amendment.md` and `plans/plan_067.md`. One host GPU remains exclusive; current execution, qualification, cleanup and resource-budget gates apply. Synthetic reviews are test fixtures, never human judgments. The external annotation bundle, contributor attestations, blind annotation review, adjudication, masks and 232-image labeling workload are no longer completion requirements.

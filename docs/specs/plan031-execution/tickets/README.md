@@ -1,5 +1,14 @@
 # Plan 031 execution tickets
 
+**Historical publication snapshot:** the table and original frontier below
+describe the earlier 12-ticket publication. Current work uses the
+[execution index](../README.md) and [Plan 069](../../../../plans/plan_069.md).
+#24–#33 retain their completed scopes; #34/#35 remain open with updated local
+copies and GitHub acceptance criteria. New generation #44 and review #45 extend
+the comparison, with #45 blocking #34. Annotation bundles are no longer required.
+S1 follows its separately recorded standing fix-and-retry authority; the old
+attempt/approval language below does not override that amendment.
+
 The user approved this 12-ticket breakdown before publication. All tickets are open and carry `ready-for-agent`, with native parent and blocking links verified against their local copies. Existing spec bodies and parent states were not edited.
 
 | Ticket | What it delivers | Parent | Blocked by |

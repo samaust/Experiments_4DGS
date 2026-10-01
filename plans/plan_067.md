@@ -1,5 +1,12 @@
 # Plan 067 — Qualitative comparison of Plan 031 generated results
 
+**Current depth extension:** [Plan 069](plan_069.md), [generation #44](../docs/specs/plan031-execution/depth-comparison-extension.md)
+and [review #45](../docs/specs/plan031-execution/depth-comparison-review.md) add D5–D11
+and require the new commercially eligible metric-depth choice before further
+depth-dependent #34 runs. Reusable #34 preparation continues. The original S2/D4
+review and proposal remain historical; #35 includes the expanded comparison.
+The standing S1 retry authority below remains separate and unchanged.
+
 **Current scope:** [Scope amendment 001](../docs/specs/plan031-execution/qualitative-comparison-scope-amendment-001.md) takes precedence: isolated packages and initial review (#33) cover segmentation and depth only. Motion and neighbor method effects remain required comparisons on actual final renders (#34/#35); isolated M/N diagnostics are excluded from the current viewer. Applicable motion criteria and clip controls remain.
 
 ## Authority and objective

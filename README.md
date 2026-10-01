@@ -8,6 +8,14 @@ Use the settings from **arm D** of the latest crossing-repair experiment. Includ
 
 For a step-by-step code walkthrough with function arguments, data types, file handoffs, and app-design implications, see the [multi-camera FreeTimeGS workflow](docs/multicamera-freetimegs-workflow.md).
 
+The prospective [depth comparison extension (Plan 069)](plans/plan_069.md) adds
+seven models to the component experiments. [Generation #44](https://github.com/samaust/Experiments_4DGS/issues/44)
+and [human review #45](https://github.com/samaust/Experiments_4DGS/issues/45) precede
+the next depth-dependent final-render runs. The
+[execution index](docs/specs/plan031-execution/README.md) records current scope
+and dependencies; these planned comparisons do not replace the validated
+workflow results described below.
+
 ```mermaid
 flowchart TB
     A[Multi-camera videos] --> B[Estimate and validate camera calibration]
