@@ -270,6 +270,12 @@ class DepthExtensionTests(unittest.TestCase):
         self.assertEqual(read_json(receipt['package']['path'])['settings']
                          ['depth_display']['constant_value'], 0)
 
+    def test_d10_anchor_only_worker_cannot_bypass_video_context(self):
+        request = dict(self.request, id='D10-fit-fixture-001', component='D10')
+        with self.assertRaisesRegex(ValueError, 'offline sequence path'):
+            run(request, self.root / request['id'], self.config,
+                backend=KnownPlane(), ledger=self.ledger)
+
     def test_wrong_domain_preserves_failure_and_cpu_charge(self):
         request = dict(self.request, id='D9-fit-fixture-001', component='D9')
         with self.assertRaisesRegex(ValueError, 'domain'):

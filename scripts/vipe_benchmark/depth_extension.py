@@ -19,7 +19,7 @@ CONFIG = ROOT / 'configs/vipe-alternatives/depth-extension-v1.json'
 DOMAINS = {
     'D5': 'camera_z_metres', 'D6': 'camera_z_metres',
     'D7': 'camera_z_metres', 'D8': 'camera_z_metres',
-    'D9': 'relative_inverse', 'D10': 'metric_convention_unverified',
+    'D9': 'relative_inverse', 'D10': 'camera_z_metres',
     'D11': 'relative_log',
 }
 
@@ -53,8 +53,8 @@ def _admit(request, output, config, ledger):
              all(extension['candidates'][key]['domain'] == domain
                  for key, domain in DOMAINS.items()), 'extension identity/domain inventory changed')
     domain = extension['candidates'][request['component']]['domain']
-    _require(domain != 'metric_convention_unverified',
-             'D10 camera-z/ray convention requires exact-release qualification')
+    _require(request['component'] != 'D10',
+             'D10 metric admission requires the offline sequence path')
     _require(request['record_kind'] == 'fixture',
              'actual inference requires separately authorized depth allocation')
     _require(ledger.config == config, 'ledger configuration differs')

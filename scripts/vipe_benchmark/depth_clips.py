@@ -205,8 +205,13 @@ def publish_fixture_clips(context_record, candidate, domain, map_rows, anchor_re
         raise ValueError('accepted depth context/candidate required')
     expected_domain = ('relative_inverse' if candidate == 'D9' else
                        'relative_log' if candidate == 'D11' else 'camera_z_metres')
-    if domain != expected_domain or candidate == 'D10':
-        raise ValueError('candidate domain or D10 convention unverified')
+    if domain != expected_domain:
+        raise ValueError('candidate domain changed')
+    if candidate == 'D10':
+        release = read_json(ROOT / 'configs/vipe-alternatives/depth-extension-v1.json')
+        convention = release['candidates']['D10'].get('convention', {})
+        if convention.get('kind') != 'camera_z' or convention.get('conversion_count') != 0:
+            raise ValueError('D10 camera-z convention unverified')
     for key in ('source_result', 'ledger_outcome', 'configuration'):
         verify_record(provenance[key])
     cameras = (1, 11, 21, 31)

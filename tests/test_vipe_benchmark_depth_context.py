@@ -13,7 +13,7 @@ from vipe_benchmark.config import ROOT, load, training_cameras
 from vipe_benchmark.files import file_record, read_json, write_json
 from vipe_benchmark.depth_clips import prepare_context, publish_fixture_clips, materialize_role
 from vipe_benchmark.ledger import Ledger
-from vipe_benchmark.video_depth import VideoDepthAdapter, run_video_fixture
+from vipe_benchmark.video_depth import VideoDepthAdapter, MetricVideoDepthAdapter, run_video_fixture
 
 
 class DepthContextTests(unittest.TestCase):
@@ -33,6 +33,14 @@ class DepthContextTests(unittest.TestCase):
             K, maps = undistortion(cameras[camera])
             remapped = cv2.remap(image, *maps, cv2.INTER_LINEAR,
                                  borderMode=cv2.BORDER_CONSTANT)
+            valid_grid = cv2.remap(np.ones((540, 960), np.uint8), *maps,
+                cv2.INTER_NEAREST, borderMode=cv2.BORDER_CONSTANT)
+            y, x = np.meshgrid(np.linspace(20, 520, 10),
+                               np.linspace(10, 940, 12), indexing='ij')
+            uv = np.column_stack((x.ravel(), y.ravel()))
+            samples = self.root / f'camera{camera}-samples.npz'
+            np.savez(samples, point_ids=np.arange(len(uv)), xyz=np.zeros((len(uv), 3)),
+                uv=uv, K=K, camera_z=np.full(len(uv), 2.), valid=valid_grid)
             anchor = self.root / f'camera{camera}-anchor.png'
             cv2.imwrite(str(anchor), remapped)
             for frame in range(50, 200):
@@ -41,7 +49,8 @@ class DepthContextTests(unittest.TestCase):
                     grid='distorted-opencv-integer'))
             for frame in (100, 175):
                 depth.append(dict(identity=dict(branch='depth', camera=camera, frame=frame),
-                    rgb=file_record(anchor), K=K.tolist(), grid='scale-opencv-integer'))
+                    rgb=file_record(anchor), samples=file_record(samples),
+                    K=K.tolist(), grid='scale-opencv-integer'))
         self.rows = rgb
         self.inputs = dict(schema='vipe-benchmark-inputs/v1', status='prepared',
             rgb=rgb, depth=depth, source_files=[file_record(calibration), video])
@@ -197,6 +206,70 @@ class DepthContextTests(unittest.TestCase):
         self.assertEqual(len(worker['sequences'][1]['window_plan']['windows']), 3)
         self.assertEqual(len([e for e in ledger.events()
             if e['event'] == 'cpu_preparation_charge']), 2)
+
+    def test_d10_all_camera_context_uses_frozen_metric_fit_and_clips(self):
+        class NativeMetricFixture:
+            encoder = 'vits'
+            metric = True
+            training = False
+
+            def infer_video_depth(self, frames, target_fps, **options):
+                return np.broadcast_to(np.float32(6.), frames.shape[:3]), target_fps
+
+        context = prepare_context(self.record, self.root / 'context', self.config)
+        request = dict(schema='plan069-video-depth-request/v1', record_kind='fixture',
+            id='D10-video-fixture-001', component='D10', context=context,
+            configuration=file_record(ROOT / 'configs/vipe-alternatives/benchmark-v1.json'),
+            extension_configuration=file_record(ROOT / 'configs/vipe-alternatives/depth-extension-v1.json'),
+            cameras=training_cameras(self.config), max_seconds=600)
+        ledger = Ledger(self.root / 'ledger.jsonl', self.config)
+        receipt = run_video_fixture(request, self.root / request['id'], self.config,
+            backend=MetricVideoDepthAdapter(NativeMetricFixture(), device='cpu'), ledger=ledger)
+        worker = read_json(receipt['worker']['path'])
+        self.assertEqual(len(worker['sequences']), 60)
+        self.assertEqual(len(worker['rows']), 256)
+        self.assertEqual(worker['eligibility']['metric_scale'], 'passed')
+        fit = read_json(worker['scale']['fit']['path'])
+        check = read_json(worker['scale']['check']['path'])
+        self.assertAlmostEqual(fit['scale'], 3.)
+        self.assertEqual(check['frozen_fit'], worker['scale']['fit'])
+        self.assertEqual(check['status'], 'passed')
+        self.assertEqual(len(read_json(receipt['package']['path'])['candidates'][1]['media']), 4)
+
+    def test_d10_failed_fit_stays_blocked_without_qualitative_admission(self):
+        class NativeMetricFixture:
+            encoder = 'vits'
+            metric = True
+            training = False
+
+            def infer_video_depth(self, frames, target_fps, **options):
+                return np.broadcast_to(np.float32(6.), frames.shape[:3]), target_fps
+
+        source = self.inputs['depth'][0]['samples']['path']
+        with np.load(source) as samples:
+            changed = {key: samples[key].copy() for key in samples.files}
+        changed['camera_z'][:] = np.nan
+        np.savez(self.root / 'unusable-samples.npz', **changed)
+        invalid = file_record(self.root / 'unusable-samples.npz')
+        depth_rows = [dict(row, samples=invalid) if row['identity']['camera'] == 1 else row
+                      for row in self.inputs['depth']]
+        write_json(self.root / 'unusable-inputs.json', dict(self.inputs, depth=depth_rows))
+        context = prepare_context(file_record(self.root / 'unusable-inputs.json'),
+                                  self.root / 'context', self.config)
+        request = dict(schema='plan069-video-depth-request/v1', record_kind='fixture',
+            id='D10-video-fixture-001', component='D10', context=context,
+            configuration=file_record(ROOT / 'configs/vipe-alternatives/benchmark-v1.json'),
+            extension_configuration=file_record(ROOT / 'configs/vipe-alternatives/depth-extension-v1.json'),
+            cameras=training_cameras(self.config), max_seconds=600)
+        with self.assertRaisesRegex(ValueError, 'separate qualitative admission'):
+            run_video_fixture(request, self.root / request['id'], self.config,
+                backend=MetricVideoDepthAdapter(NativeMetricFixture(), device='cpu'),
+                ledger=Ledger(self.root / 'ledger.jsonl', self.config))
+        fit = read_json(self.root / request['id'] / 'scale-fit.json')
+        self.assertEqual(fit['status'], 'blocked')
+        self.assertIn('camera 1', str(fit['blockers']))
+        self.assertFalse((self.root / request['id'] / 'scale-check.json').exists())
+        self.assertTrue((self.root / request['id'] / 'failure.json').is_file())
 
 
 if __name__ == '__main__':
