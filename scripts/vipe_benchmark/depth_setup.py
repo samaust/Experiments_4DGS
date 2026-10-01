@@ -29,7 +29,7 @@ def _acquire(url, path, *, max_bytes, deadline, run_root,
 
 
 def _unpack_source(archive, output, revision, *, deadline, max_bytes=2**30,
-                   max_files=10000):
+                   max_files=10000, required='metric_depth/depth_anything_v2/dpt.py'):
     """Extract regular pinned source files without links or path traversal."""
     output.mkdir(exist_ok=False)
     with tarfile.open(archive, 'r:gz') as stream:
@@ -61,8 +61,7 @@ def _unpack_source(archive, output, revision, *, deadline, max_bytes=2**30,
                         _require(time.monotonic() < deadline,
                                  'source extraction deadline')
                         target.write(chunk)
-    _require((output / 'metric_depth/depth_anything_v2/dpt.py').is_file(),
-             'pinned D7 inference source absent')
+    _require((output / required).is_file(), 'pinned inference source absent')
 
 
 def _active_reservation(request, request_path, output):

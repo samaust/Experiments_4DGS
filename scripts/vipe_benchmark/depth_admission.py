@@ -32,8 +32,11 @@ LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py',
                           'd2_preflight.py', 'd2_maps.py'),
     D5=('moge_metric.py',), D6=('moge_metric.py',),
     D7=('dav2_metric.py', 'depth_setup.py'),
-    D8=('moge_metric.py',), D9=('video_depth.py',), D10=('video_depth.py',),
-    D11=('marigold_relative.py',))
+    D8=('moge_metric.py', 'native_d8.py', 'depth_native_packages.py',
+        'depth_setup.py', 'depth_setup_other.py'),
+    D9=('video_depth.py',), D10=('video_depth.py',),
+    D11=('marigold_relative.py', 'native_d11.py', 'depth_native_packages.py',
+         'depth_setup.py', 'depth_setup_other.py'))
 
 
 def local_source_records(candidate):
@@ -45,6 +48,9 @@ def local_source_records(candidate):
     if candidate == 'D7':
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_setup.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_setup_dispatch.py'))
+    if candidate in ('D8', 'D11'):
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_setup_other.py'))
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_setup_other_dispatch.py'))
     return records
 
 
