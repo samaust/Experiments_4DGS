@@ -3,6 +3,7 @@
 from pathlib import Path
 import sys
 import tempfile
+import time
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
@@ -41,7 +42,9 @@ class DepthAdmissionTests(unittest.TestCase):
         write_json(self.root / 'review.json', dict(
             schema='plan069-depth-source-review/v1', candidate='D5', status='passed',
             source_revision=candidate['code']['revision'],
-            profile_inventory=file_record(admission.PROFILES)))
+            profile_inventory=file_record(admission.PROFILES),
+            reviewer='independent reviewer',
+            local_sources=admission.local_source_records('D5')))
         self.source_review = file_record(self.root / 'review.json')
         self.commercial = dict(candidate='D5', code='allowed', weights='allowed',
             dependencies='allowed', inference_outputs='allowed',
@@ -54,14 +57,29 @@ class DepthAdmissionTests(unittest.TestCase):
         self.commercial['assessment'] = file_record(self.root / 'assessment.json')
         self.assets = [dict(repository='fixture', path='model.bin',
                             record=file_record(self.asset))]
+        self.dependency = self.root / 'dependency.bin'
+        self.dependency.write_bytes(b'installed inference dependency')
+        write_json(self.root / 'dependencies.json', dict(
+            schema='plan069-depth-installed-dependencies/v1', candidate='D5',
+            source_revision=candidate['code']['revision'],
+            files=[file_record(self.dependency)]))
+        self.dependencies = file_record(self.root / 'dependencies.json')
+        assessment = read_json(self.root / 'assessment.json')
+        assessment['dependency_manifest'] = self.dependencies
+        (self.root / 'assessment.json').unlink()
+        write_json(self.root / 'assessment.json', assessment)
+        self.commercial['assessment'] = file_record(self.root / 'assessment.json')
         self.runtime = dict(candidate='D5', status='passed',
             source_revision=candidate['code']['revision'],
             config=file_record(admission.CONFIG))
         write_json(self.root / 'qualification.json', dict(
             schema='plan069-depth-runtime-qualification/v1', **self.runtime,
-            assets=self.assets, profile=self.proposal['profile']))
+            assets=self.assets, profile=self.proposal['profile'],
+            local_sources=admission.local_source_records('D5'),
+            dependency_manifest=self.dependencies))
         self.runtime['receipt'] = file_record(self.root / 'qualification.json')
         self.live = dict(fresh=True, active_gpu_owner=None, active_reservations=[],
+            sampled_unix=time.time(), ledger_head_sha256='a' * 64,
             device_peak_bytes=0, used={key: 0 for key in admission.LIMIT_KEYS},
             reserved={key: 0 for key in admission.LIMIT_KEYS})
         self.approval = dict(schema='plan069-depth-execution-approval/v1',
@@ -76,7 +94,8 @@ class DepthAdmissionTests(unittest.TestCase):
     def decide(self, **changed):
         state = dict(proposal=self.proposal, config=self.config,
             commercial=self.commercial, assets=self.assets, runtime=self.runtime,
-            live=self.live, source_review=self.source_review, approval=self.approval)
+            live=self.live, source_review=self.source_review, approval=self.approval,
+            ledger_head_sha256='a' * 64)
         state.update(changed)
         return admission.review(**state)
 
@@ -102,6 +121,21 @@ class DepthAdmissionTests(unittest.TestCase):
         used = dict(self.live['used'], download_bytes=self.config['new_download_gib_limit'] * 2**30)
         self.assertTrue(any('download_bytes allocation' in reason for reason in
             self.decide(live=dict(self.live, used=used))))
+        self.assertIn('fresh ledger-bound live-state snapshot required',
+            self.decide(live=dict(self.live, sampled_unix=time.time() - 60)))
+        self.assertIn('fresh ledger-bound live-state snapshot required',
+            self.decide(live=dict(self.live, ledger_head_sha256='b' * 64)))
+
+    def test_changed_local_source_or_installed_dependency_blocks(self):
+        reviewed = read_json(self.root / 'review.json')
+        reviewed['local_sources'] = []
+        (self.root / 'review.json').unlink()
+        write_json(self.root / 'review.json', reviewed)
+        self.source_review = file_record(self.root / 'review.json')
+        self.assertIn('current local source review required', self.decide())
+        self.dependency.write_bytes(b'changed installed dependency')
+        self.assertIn('installed dependency closure changed or unverified',
+                      self.decide())
 
     def test_workload_and_profile_substitution_block(self):
         changed = dict(self.proposal, workload=dict(self.proposal['workload'],

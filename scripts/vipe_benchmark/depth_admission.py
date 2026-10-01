@@ -3,6 +3,8 @@
 This is a read-only decision. A passing decision is not a reservation or launch;
 the owner must recheck live state and atomically reserve the exact approved slot.
 """
+import math
+import time
 
 from .depth_extension import CONFIG
 from .config import ROOT
@@ -24,6 +26,18 @@ LIMIT_KEYS = dict(download_bytes='new_download_gib_limit',
                   gpu_seconds='gpu_total_seconds_limit',
                   cpu_seconds='cpu_prepare_score_report_seconds_limit',
                   setup_seconds='setup_wall_seconds_limit')
+LOCAL_COMMON = ('files.py', 'depth_admission.py', 'depth_extension.py',
+    'depth_clips.py', 'scale.py', 'qualitative_package.py')
+LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py'),
+    D5=('moge_metric.py',), D6=('moge_metric.py',), D7=('dav2_metric.py',),
+    D8=('moge_metric.py',), D9=('video_depth.py',), D10=('video_depth.py',),
+    D11=('marigold_relative.py',))
+
+
+def local_source_records(candidate):
+    """Rehash every local inference and publication source bound by review."""
+    return [file_record(ROOT / 'scripts/vipe_benchmark' / name)
+            for name in (*LOCAL_COMMON, *LOCAL_ADAPTERS[candidate])]
 
 
 def _require(condition, message):
@@ -32,7 +46,8 @@ def _require(condition, message):
 
 
 def review(proposal, *, config, commercial, assets, runtime, live,
-           source_review=None, approval=None, cap_amendment=None, cap_approval=None):
+           source_review=None, approval=None, cap_amendment=None, cap_approval=None,
+           ledger_head_sha256=None, now_unix=None):
     """Return blocking reasons for one exact candidate/stage and live snapshot.
 
     File records are rehashed at this boundary. ``approval`` is a separate
@@ -107,9 +122,29 @@ def review(proposal, *, config, commercial, assets, runtime, live,
           reviewed.get('source_revision') == candidates[candidate]['code']['revision'] and
           reviewed.get('profile_inventory') == file_record(PROFILES),
           'current source review and qualification required')
+    current_sources = local_source_records(candidate)
+    check(bool(reviewed.get('reviewer')) and
+          reviewed.get('local_sources') == current_sources,
+          'current local source review required')
     scopes = ('code', 'weights', 'dependencies', 'inference_outputs')
     assessment = evidence(commercial.get('assessment'),
         'plan069-depth-commercial-assessment/v1', 'commercial assessment receipt missing')
+    dependency_record = assessment.get('dependency_manifest')
+    dependencies = evidence(dependency_record,
+        'plan069-depth-installed-dependencies/v1',
+        'installed dependency closure changed or unverified')
+    dependency_files = dependencies.get('files')
+    dependency_ok = (dependencies.get('candidate') == candidate and
+        dependencies.get('source_revision') == candidates[candidate]['code']['revision'] and
+        isinstance(dependency_files, list) and bool(dependency_files))
+    if dependency_ok:
+        try:
+            for record in dependency_files:
+                verify_record(record)
+        except (KeyError, TypeError, ValueError, OSError):
+            dependency_ok = False
+    check(dependency_ok,
+          'installed dependency closure changed or unverified')
     check(all(commercial.get(scope) == 'allowed' for scope in scopes) and
           commercial.get('candidate') == candidate and
           commercial.get('source_revision') == candidates[candidate]['code']['revision'] and
@@ -147,7 +182,9 @@ def review(proposal, *, config, commercial, assets, runtime, live,
     check(all(qualification.get(key) == runtime.get(key) for key in
               ('candidate', 'source_revision', 'status', 'config')) and
           qualification.get('assets') == assets and
-          qualification.get('profile') == proposal.get('profile'),
+          qualification.get('profile') == proposal.get('profile') and
+          qualification.get('local_sources') == current_sources and
+          qualification.get('dependency_manifest') == dependency_record,
           'runtime qualification does not bind exact assets and profile')
     check(approval is not None and
           approval.get('schema') == 'plan069-depth-execution-approval/v1' and
@@ -157,7 +194,15 @@ def review(proposal, *, config, commercial, assets, runtime, live,
           'explicit applicable allocation approval missing')
     check(live.get('active_gpu_owner') is None and
           live.get('active_reservations') == [], 'single GPU or reservation already owned')
-    check(live.get('fresh') is True, 'fresh live-state snapshot required')
+    sampled = live.get('sampled_unix')
+    now = time.time() if now_unix is None else now_unix
+    check(live.get('fresh') is True and
+          type(sampled) in (int, float) and math.isfinite(sampled) and
+          type(now) in (int, float) and math.isfinite(now) and
+          0 <= now - sampled <= 5 and
+          isinstance(ledger_head_sha256, str) and len(ledger_head_sha256) == 64 and
+          live.get('ledger_head_sha256') == ledger_head_sha256,
+          'fresh ledger-bound live-state snapshot required')
     allocation = proposal.get('allocation', {})
     for key, config_key in LIMIT_KEYS.items():
         amount = allocation.get(key)
