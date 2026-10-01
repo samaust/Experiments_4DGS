@@ -8,6 +8,8 @@ re-enter a ledger lock or derive a request through recovered-result lookup.
 from pathlib import Path
 
 from .config import ROOT
+from .s1_identity import is_recovery_job, is_standing_retry_job
+from .s1_retry import SCHEMA as STANDING_SCHEMA
 from .files import file_record, object_hash, read_json, safe_path, verify_record
 from .s1_progress import (checked_file_record as file_record,
     checked_verify_record as verify_record,checked_read_json as read_json)
@@ -238,9 +240,14 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
     states = ledger.states(events)
     document = read_json(strict_record(authorization)['path'])
     job = document.get('job_id')
-    if job not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5, JOB_6, JOB_7, JOB_8, JOB_9):
+    standing = is_standing_retry_job(job)
+    if not is_recovery_job(job):
         raise ValueError('unrecognized S1 recovery identity')
-    required = dict(schema={JOB: SCHEMA, JOB_2: SCHEMA_2, JOB_3: SCHEMA_3, JOB_4: SCHEMA_4, JOB_5: SCHEMA_5, JOB_6: SCHEMA_6, JOB_7: SCHEMA_7, JOB_8: SCHEMA_8, JOB_9: SCHEMA_9}[job], job_id=job, original_job_id='S1-calibration',
+    if standing:
+        from .s1_retry import validate_authority, validate_review
+        validate_authority(document)
+        validate_review(document)
+    required = dict(schema=STANDING_SCHEMA if standing else {JOB: SCHEMA, JOB_2: SCHEMA_2, JOB_3: SCHEMA_3, JOB_4: SCHEMA_4, JOB_5: SCHEMA_5, JOB_6: SCHEMA_6, JOB_7: SCHEMA_7, JOB_8: SCHEMA_8, JOB_9: SCHEMA_9}[job], job_id=job, original_job_id='S1-calibration',
         attempts_limit=1, seconds_limit=3600, gpu_total_seconds_limit=93600,
         reset_previous_consumption=False, changes_to_prescribed_configuration=True,
         unrelated_attempts_reopened=False, reconstruction_authorized=False,
@@ -299,7 +306,13 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
         raise ValueError('validation baseline/plan mismatch')
     prior = [e for e in events if e['event'] == 'component_recovery_authorized'
              and e['original_job_id'].startswith('S1-')]
-    if job == JOB:
+    if standing:
+        from .s1_retry import validate_chain, validate_correction, stop_resolution
+        previous, finished = validate_chain(document, authorization, events, states)
+        validate_correction(document, finished, previous)
+        if document.get('operational_stop_resolution') != stop_resolution(document, finished):
+            raise ValueError('standing retry operational stop resolution changed')
+    elif job == JOB:
         if prior and (len(prior) != 1 or prior[0]['job_id'] != JOB or prior[0]['authorization'] != authorization):
             raise ValueError('different or second S1 allocation')
     elif job == JOB_2:
@@ -361,8 +374,12 @@ def validate_binding(local, config, authorization, *, events=None, consumed=Fals
         raise ValueError('consumed S1 identity or active attempt')
     total = ledger.totals(events)['gpu']
     if not consumed and (total['elapsed_seconds'] + total['reserved_seconds'] >= 93600
-            or (job in (JOB_5, JOB_6, JOB_7, JOB_8, JOB_9) and total['elapsed_seconds'] + total['reserved_seconds'] + 3600 > 93600)):
+            or ((standing or job in (JOB_5, JOB_6, JOB_7, JOB_8, JOB_9)) and total['elapsed_seconds'] + total['reserved_seconds'] + 3600 > 93600)):
         raise ValueError('cumulative GPU allocation exhausted')
+    if standing and not consumed and any(ledger.totals(events)[resource]['elapsed_seconds']
+            + ledger.totals(events)[resource]['reserved_seconds'] >= limit
+            for resource, limit in [('cpu', 57600), ('setup', 57600)]):
+        raise ValueError('standing retry preparation budget exhausted')
     def artifact(job, field=None):
         state = states.get(job, {})
         if state.get('event') != 'finish' or state.get('status') != 'complete':
@@ -451,8 +468,8 @@ def preservation(local, document, events, authorization, *, process_amendment_ov
                 [{k: snap[k] for k in ('path', 'sha256', 'bytes')} ]):
         raise ValueError('exact baseline preservation categories required')
     process_amendment = process_amendment_override or document.get('process_file_amendment')
-    sixth_amendment = document['job_id'] in (JOB_6, JOB_7, JOB_8, JOB_9) or process_amendment_override is not None
-    eighth_amendment = document['job_id'] in (JOB_8, JOB_9) or (process_amendment_override is not None
+    sixth_amendment = is_standing_retry_job(document['job_id']) or document['job_id'] in (JOB_6, JOB_7, JOB_8, JOB_9) or process_amendment_override is not None
+    eighth_amendment = is_standing_retry_job(document['job_id']) or document['job_id'] in (JOB_8, JOB_9) or (process_amendment_override is not None
         and process_amendment_override.get('sha256') == PROCESS_FILE_AMENDMENT_3_SHA256)
     amended_record = None
     if process_amendment is not None:
@@ -517,7 +534,10 @@ def preservation(local, document, events, authorization, *, process_amendment_ov
             or actual != prefix or hashlib.sha256(prefix).hexdigest() != snap['sha256']
             or len(prefix) != snap['bytes'] or events[n-1]['event_sha256'] != snap['last_event_sha256']):
         raise ValueError('preserved ledger prefix required')
-    if document['job_id'] in (JOB_5, JOB_6, JOB_7, JOB_8, JOB_9):
+    if is_standing_retry_job(document['job_id']):
+        from .s1_retry import preserve_predecessor
+        preserve_predecessor(local, document, events, authorization, process_amendment)
+    elif document['job_id'] in (JOB_5, JOB_6, JOB_7, JOB_8, JOB_9):
         ninth = document['job_id'] == JOB_9
         eighth = document['job_id'] in (JOB_8, JOB_9)
         seventh = document['job_id'] in (JOB_7, JOB_8, JOB_9)
@@ -631,7 +651,7 @@ def lifecycle(events, authorization, document):
             if not reservation or not event.get('phase') or not event.get('foreign_pids'):
                 raise ValueError('S1 lifecycle ownership diagnostic outside active phase')
         elif kind == 'monitor_gap_recovered':
-            if (not started or job not in (JOB_3, JOB_4, JOB_5, JOB_6, JOB_7, JOB_8, JOB_9) or type(event.get('expired_samples')) is not int
+            if (not started or (not is_standing_retry_job(job) and job not in (JOB_3, JOB_4, JOB_5, JOB_6, JOB_7, JOB_8, JOB_9)) or type(event.get('expired_samples')) is not int
                     or event['expired_samples'] < 1 or type(event.get('gap_seconds')) not in (int, float)
                     or not 0 < event['gap_seconds'] <= 15):
                 raise ValueError('S1 recovered monitor gap outside bounded worker phase')
@@ -711,7 +731,7 @@ def active_binding(local, config, captured, command, *, with_reservation=False):
     events = Ledger(Path(local) / 'ledger.jsonl', config).events()
     states = Ledger(Path(local) / 'ledger.jsonl', config).states(events)
     active = states.get(captured['job_id']) if captured is not None else next(
-        (states.get(job) for job in (JOB_9, JOB_8, JOB_7, JOB_6, JOB_5, JOB_4, JOB_3, JOB_2, JOB) if states.get(job, {}).get('event') == 'reserve'), None)
+        (state for job, state in states.items() if is_recovery_job(job) and state.get('event') == 'reserve'), None)
     if not active or active.get('event') != 'reserve':
         raise ValueError('missing active S1 reservation')
     from .s1_clock import typed_equal
@@ -745,7 +765,7 @@ def worker_clock(args, request, config):
     import sys
     from .s1_clock import ReservationClock
     path = args.request.resolve()
-    if request.get('job_id') not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5, JOB_6, JOB_7, JOB_8, JOB_9) or path.name != request['job_id'] + '.json' or path.parent.name != 'requests':
+    if not is_recovery_job(request.get('job_id')) or path.name != request['job_id'] + '.json' or path.parent.name != 'requests':
         raise ValueError('canonical worker request path required')
     local = path.parent.parent
     command = [request['runtime']['python'], str((ROOT / 'scripts/basketball_vipe_worker.py').resolve()),
@@ -792,7 +812,7 @@ def reservation_binding(local, config, events, evidence, command=None):
 
 def resolved_result(local, config, events, finish):
     job = finish.get('job_id')
-    if job not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5, JOB_6, JOB_7, JOB_8, JOB_9): raise ValueError('S1 result identity')
+    if not is_recovery_job(job): raise ValueError('S1 result identity')
     registered = [e for e in events if e['event'] == 'component_recovery_authorized' and e['job_id'] == job]
     if (len(registered) != 1 or finish.get('cleanup_confirmed') is not True
             or finish.get('surviving_pids') or finish.get('deadline_exceeded')
@@ -1060,7 +1080,7 @@ def terminal_receipt(local, docs, config, authorization, *, error=None,
         pass
     job = reservation['job_id'] if reservation is not None else (
         supplied_document.get('job_id', JOB) if isinstance(supplied_document, dict) else JOB)
-    if job not in (JOB, JOB_2, JOB_3, JOB_4, JOB_5, JOB_6, JOB_7, JOB_8, JOB_9): raise ValueError('S1 terminal identity')
+    if not is_recovery_job(job): raise ValueError('S1 terminal identity')
     if reservation is None:
         if any(e.get('job_id') == job and e['event'] == 'reserve' for e in events):
             raise ValueError('consumed S1 publication belongs to active supervisor')

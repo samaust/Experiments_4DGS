@@ -13,7 +13,7 @@ import sys
 from .config import ROOT
 from .files import file_record, read_json
 
-SUITES = ('s1_semantics', 's1_recovery', 's1_asset_acceptance', 'backends', 'contracts', 'component_recovery',
+SUITES = ('s1_semantics', 's1_recovery', 's1_asset_acceptance', 's1_standing_retry', 's1_identity', 'backends', 'contracts', 'component_recovery',
           'execution', 'budgets', 'supervisor', 'review_annotations')
 STDIN = ('import runpy\nimport sys\nsys.path.insert(0, "scripts")\n'
          'runpy.run_module("vipe_benchmark.s1_validation_runner", run_name="__main__", alter_sys=True, init_globals={"STDIN_PYTHON_ARGV": tuple(sys.argv)})\n')
