@@ -29,6 +29,8 @@ _LOCK_STATE = threading.local()
 
 
 def _footprint(files):
+    if isinstance(files, _Inventory):
+        return files.artifact_bytes
     sizes = {}
     for info in files.values():
         key = info.st_dev, info.st_ino
@@ -41,16 +43,19 @@ def _root(path):
 
 
 class _Inventory(dict):
-    """Fresh stat records, indexed during the single non-following traversal."""
+    """Fresh lengths and accounting-scope stats from one no-follow traversal."""
     def __init__(self):
         super().__init__()
         self.scopes = {name: {} for name in
                        ('assets', 'transfers', 'uv-transfers', 'setup-cache', 'managed-python')}
         self.partials = {}
+        self.artifact_bytes = self.logical_artifact_bytes = 0
 
 
 def _scan_once(root):
     files = _Inventory()
+    sizes = {}
+    logical = 0
     pending = [(str(root), '')]
     while pending:
         base, scope = pending.pop()
@@ -66,11 +71,20 @@ def _scan_once(root):
                     continue
                 info = entry.stat(follow_symlinks=False)
                 if stat.S_ISREG(info.st_mode):
-                    files[path] = info
+                    # Every alias gets its own fresh no-follow stat. Retain the
+                    # greatest physical observation per inode during this scan.
+                    logical += info.st_size
+                    key = info.st_dev, info.st_ino
+                    size = max(info.st_size, getattr(info, 'st_blocks', 0) * 512)
+                    if size > sizes.get(key, 0):
+                        sizes[key] = size
+                    files[path] = info.st_size
                     if entry_scope in files.scopes:
                         files.scopes[entry_scope][path] = info
                     if name.endswith('.partial'):
                         files.partials[path] = (info, entry_scope)
+    files.artifact_bytes = sum(sizes.values())
+    files.logical_artifact_bytes = logical
     return files
 
 
@@ -254,7 +268,7 @@ def _snapshot_once(root):
             continue
         # Both names may coexist while a writer publishes a hardlink. This is
         # one transfer, so count its payload once, including after rename.
-        size = max((files[str(p)].st_size for p in (partial, output) if str(p) in files), default=0)
+        size = max((files[str(p)] for p in (partial, output) if str(p) in files), default=0)
         recorded_charge = recorded['charge'] if recorded is not None else 0
         total += max(0, size - recorded_charge)
         progress[output] = max(progress.get(output, 0), size, recorded_charge)
@@ -296,7 +310,7 @@ def _snapshot_once(root):
                       for path, info in files.scopes[scope].items() if path not in direct_paths)
     uv_bytes = sum(uv_sessions.values())
     return dict(download_bytes=total + max(uv_bytes, cache_bytes),
-                artifact_bytes=_footprint(files), logical_artifact_bytes=sum(info.st_size for info in files.values()),
+                artifact_bytes=_footprint(files), logical_artifact_bytes=files.logical_artifact_bytes,
                 direct_download_bytes=total, uv_metered_bytes=uv_bytes,
                 retained_package_bytes=cache_bytes, active_progress=progress, uv_progress=uv_sessions)
 
