@@ -13,6 +13,7 @@ from vipe_benchmark.access import Identity
 from vipe_benchmark.config import ROOT, load, training_cameras
 from vipe_benchmark.files import file_record, read_json, write_json
 from vipe_benchmark.ledger import Ledger
+from vipe_benchmark.moge_metric import MoGe2Adapter
 from vipe_benchmark.stages import run as run_worker
 
 
@@ -57,6 +58,17 @@ class NoValidPixels(KnownPlane):
 class WrongDomain:
     def predict(self, rgb, K, image_valid):
         return KnownPlane().predict(rgb, K, image_valid)
+
+
+class NativeMoGeFixture:
+    def infer(self, image, **options):
+        import torch
+        height, width = image.shape[-2:]
+        points = torch.zeros((height, width, 3), dtype=torch.float32)
+        points[..., 0] = 2
+        points[..., 2] = 6
+        return dict(points=points, depth=points[..., 2].clone(),
+                    mask=torch.ones((height, width), dtype=torch.bool))
 
 
 class OneFailedCamera:
@@ -146,6 +158,20 @@ class DepthExtensionTests(unittest.TestCase):
             run(replaced, self.root / 'changed' / 'D5-check-fixture-001',
                 self.config, backend=KnownPlane(), ledger=Ledger(
                     self.root / 'changed-ledger.jsonl', self.config))
+
+    def test_d5_native_adapter_crosses_worker_scale_and_package_boundary(self):
+        receipt = run(self.request, self.root / self.request['id'], self.config,
+            backend=MoGe2Adapter(NativeMoGeFixture()), ledger=self.ledger)
+        worker = read_json(receipt['worker']['path'])
+        self.assertEqual(worker['eligibility']['metric_scale'], 'passed')
+        self.assertAlmostEqual(worker['rows'][0]['metadata']['fov_x_degrees'],
+            2 * np.degrees(np.arctan(960 / 1600)))
+        with np.load(worker['rows'][0]['depth']['path']) as stored:
+            self.assertEqual(stored['native_points'].shape, (540, 960, 3))
+            self.assertEqual(stored['raw_values'][270, 480], 6.)
+            self.assertEqual(stored['depth'][270, 480], 6.)
+        package = read_json(receipt['package']['path'])
+        self.assertEqual(package['candidates'][1]['status'], 'available')
 
     def test_relative_depth_keeps_its_domain_out_of_metric_scale(self):
         request = dict(self.request, id='D9-fit-fixture-001', component='D9')

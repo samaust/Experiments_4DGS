@@ -111,11 +111,17 @@ def _prediction(prediction, expected_domain, image_valid):
     values = np.asarray(prediction.values)
     valid = np.asarray(prediction.valid)
     raw = np.asarray(prediction.raw_values)
+    native_points = getattr(prediction, 'native_points', None)
     _require(values.shape == image_valid.shape and values.dtype == np.float32 and
              valid.shape == image_valid.shape and valid.dtype == np.bool_ and
              raw.shape == image_valid.shape and raw.dtype.kind in 'fiu',
              'native depth arrays have wrong grid or dtype')
     _require(isinstance(prediction.metadata, dict), 'native metadata required')
+    if native_points is not None:
+        native_points = np.asarray(native_points)
+        _require(native_points.shape == (*image_valid.shape, 3) and
+                 native_points.dtype == np.float32 and domain == 'camera_z_metres',
+                 'native point map grid/domain differs')
     if domain == 'camera_z_metres':
         _require(prediction.metadata.get('native_depth_type') == 'camera-z metres'
                  and prediction.metadata.get('conversion_count', 0) <= 1,
@@ -127,7 +133,7 @@ def _prediction(prediction, expected_domain, image_valid):
                  'relative depth validity/NaN contract violated')
         if domain == 'relative_inverse':
             _require((values[valid] > 0).all(), 'relative inverse depth must be positive')
-    return values, valid, raw
+    return values, valid, raw, native_points
 
 
 def _preview_frame(values, valid, domain, path):
@@ -166,7 +172,7 @@ def _package(request, output, rows, predictions, worker, ledger_outcome):
     with Image.open(verify_record(source)['path']) as image:
         image.load()
         _require(image.size == (960, 540), 'accepted RGB grid differs')
-    values, valid, _ = predictions[camera]
+    values, valid, _, _ = predictions[camera]
     preview = output / 'preview.png'
     display = (_preview_frame(values, valid, worker['domain'], preview) if visible else
                dict(domain=worker['domain'], status='no-valid-pixels'))
@@ -225,14 +231,15 @@ def run(request, output, config, *, backend, ledger):
             image_valid = load_array(row['valid'])
             footprint(image_valid)
             prediction = backend.predict(rgb, np.asarray(row['K'], np.float64), image_valid)
-            values, valid, raw = _prediction(prediction, domain, image_valid)
+            values, valid, raw, native_points = _prediction(prediction, domain, image_valid)
             path = output / f'camera{camera}-frame{row["identity"]["frame"]}.npz'
             with path.open('xb') as stream:
                 np.savez_compressed(stream, **({'depth': values} if domain == 'camera_z_metres'
-                    else {'relative': values}), valid=valid, raw_values=raw)
+                    else {'relative': values}), valid=valid, raw_values=raw,
+                    **({'native_points': native_points} if native_points is not None else {}))
             record = file_record(path)
             predictions[camera] = record
-            arrays[camera] = (values, valid, raw)
+            arrays[camera] = (values, valid, raw, native_points)
             result_rows.append(dict(identity=row['identity'], source_rgb=row['rgb'],
                 source_rgb_sha256=row['rgb']['sha256'], K=row['K'], grid=row['grid'],
                 context=dict(camera=camera, role=request['role'],
