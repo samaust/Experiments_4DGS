@@ -25,6 +25,7 @@ class Ledger:
             if event['event'] == 'depth_setup_authorized':
                 verify_record(event['review'])
                 verify_record(event['authorization'])
+                verify_record(event['source_review'])
                 candidate = event['candidate']
                 job_id = f'plan069-{candidate}-setup-001'
                 allocated[job_id] = dict(id=job_id, resource='setup',
@@ -156,7 +157,7 @@ class Ledger:
                 seconds=seconds, command=command, evidence=evidence, monotonic_start=time.monotonic(),
                 boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
 
-    def authorize_depth_setup(self, candidate, review, authorization):
+    def authorize_depth_setup(self, candidate, review, authorization, source_review):
         """Allocate one bounded setup attempt from exact user-approved proposals."""
         if candidate not in ('D2', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11'):
             raise ValueError('unknown approved depth setup candidate')
@@ -176,7 +177,16 @@ class Ledger:
                 grant.get('status') != 'approved' or
                 grant.get('proposal_sha256') != object_hash(proposal)):
             raise ValueError('exact approved depth setup proposal required')
-        from .depth_admission import BENCHMARK, CAP_AMENDMENT
+        from .depth_admission import BENCHMARK, CAP_AMENDMENT, local_source_records
+        source = read_json(verify_record(source_review)['path'])
+        if (source.get('schema') != 'plan069-depth-source-review/v1' or
+                source.get('status') != 'passed' or
+                source.get('candidate') != candidate or
+                source.get('source_revision') != proposal['candidate_config']['code']['revision'] or
+                source.get('profile_inventory') != proposal['profile_inventory'] or
+                source.get('local_sources') != local_source_records(candidate) or
+                not source.get('reviewer')):
+            raise ValueError('current independent depth source review required')
         historical = read_json(BENCHMARK)
         effective = dict(historical, new_download_gib_limit=110,
                          new_artifact_disk_gib_limit=210)
@@ -196,11 +206,16 @@ class Ledger:
         if type(seconds) is not int or seconds <= 0:
             raise ValueError('bounded setup seconds required')
         with self.locked() as (stream, events):
-            if any(row['event'] == 'reserve' for row in self.states(events).values()):
+            states = self.states(events)
+            if any(row['event'] == 'reserve' for row in states.values()):
                 raise ValueError('active attempt prevents depth setup authorization')
             if any(row['event'] == 'depth_setup_authorized' and row['candidate'] == candidate
                     for row in events):
                 raise ValueError('depth setup attempt already authorized')
+            if any(row['event'] == 'depth_setup_authorized' and
+                    f"plan069-{row['candidate']}-setup-001" not in states
+                    for row in events):
+                raise ValueError('unstarted depth setup authorization prevents another allocation')
             if self.totals(events)['setup']['elapsed_seconds'] + seconds > self.config['setup_wall_seconds_limit']:
                 raise ValueError('setup allocation exceeds cumulative cap')
             from .execution import resources
@@ -212,7 +227,8 @@ class Ledger:
             return self._append(stream, events, dict(event='depth_setup_authorized',
                 candidate=candidate, seconds=seconds,
                 proposal_sha256=object_hash(proposal), review=review,
-                authorization=authorization, resource_snapshot=reading))
+                authorization=authorization, source_review=source_review,
+                resource_snapshot=reading))
 
     def charge_cpu_preparation(self, elapsed_seconds, evidence):
         """Charge separately retriable input acquisition without a model attempt."""

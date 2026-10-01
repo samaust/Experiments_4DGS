@@ -29,15 +29,20 @@ LIMIT_KEYS = dict(download_bytes='new_download_gib_limit',
 LOCAL_COMMON = ('files.py', 'ledger.py', 'depth_admission.py', 'depth_extension.py',
     'depth_clips.py', 'scale.py', 'qualitative_package.py')
 LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py'),
-    D5=('moge_metric.py',), D6=('moge_metric.py',), D7=('dav2_metric.py',),
+    D5=('moge_metric.py',), D6=('moge_metric.py',),
+    D7=('dav2_metric.py', 'depth_setup.py'),
     D8=('moge_metric.py',), D9=('video_depth.py',), D10=('video_depth.py',),
     D11=('marigold_relative.py',))
 
 
 def local_source_records(candidate):
     """Rehash every local inference and publication source bound by review."""
-    return [file_record(ROOT / 'scripts/vipe_benchmark' / name)
-            for name in (*LOCAL_COMMON, *LOCAL_ADAPTERS[candidate])]
+    records = [file_record(ROOT / 'scripts/vipe_benchmark' / name)
+               for name in (*LOCAL_COMMON, *LOCAL_ADAPTERS[candidate])]
+    if candidate == 'D7':
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_setup.py'))
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_setup_dispatch.py'))
+    return records
 
 
 def _require(condition, message):
