@@ -1190,12 +1190,15 @@ class HelperSessionTests(unittest.TestCase):
                 def finish(self, job, status, elapsed, **evidence):
                     outcome.update(status=status, elapsed=elapsed, **evidence)
             phases = []
+            monitor_snapshot=dict(schema='s1-monitor-failure-diagnostic/v1',diagnostic_only=True,
+                                  phase='prelaunch',pending_sample=dict(stage='wire',id=1))
             def monitor(*args, **kwargs):
                 phase = kwargs['phase']
                 phases.append(phase)
                 if phase == 'initial_sample': return self.reading
                 if phase == 'prelaunch':
                     error = TimeoutError('S1 resource sample timeout')
+                    error.s1_monitor_failure=monitor_snapshot
                     sup.record_progress_failure(life, error, phase)
                     raise error
                 raise AssertionError('poisoned helper was reused: ' + phase)
@@ -1207,6 +1210,7 @@ class HelperSessionTests(unittest.TestCase):
             self.assertEqual(phases, ['initial_sample', 'prelaunch'])
             self.assertEqual(outcome['primary_failure']['error_class'], 'TimeoutError')
             self.assertEqual(outcome['primary_failure']['phase'], 'prelaunch')
+            self.assertEqual(outcome['primary_failure']['monitor_diagnostic'],monitor_snapshot)
             self.assertEqual(outcome['failure_kind'], 'job_deadline')
             self.assertEqual(outcome['secondary_failures'][0]['phase'], 'evidence_publication')
             self.assertEqual(outcome['terminal_publication_block_reason'], 'poisoned_helper')
@@ -1284,9 +1288,28 @@ class HelperSessionTests(unittest.TestCase):
             session.cleanup_deadline = self.time.monotonic()+4.
             lifecycle = HelperLifecycle(retain=True)
             lifecycle.helpers.append(session)
-            with self.assertRaisesRegex(TimeoutError, 'deadline'):
+            with self.assertRaisesRegex(TimeoutError, 'deadline') as caught:
                 monitored_call(self.sampler, self.time.monotonic()+2.3, self.sampler,
                                load(), {}, lifecycle=lifecycle, phase='worker_sample')
+            diagnostic=caught.exception.s1_monitor_failure
+            self.assertTrue(diagnostic['diagnostic_only'])
+            self.assertEqual(diagnostic['phase'],'worker_sample')
+            self.assertFalse(diagnostic['poisoned'])
+            self.assertGreaterEqual(diagnostic['sample_expiry_count'],1)
+            self.assertEqual(diagnostic['pending_sample']['stage'],'wire')
+            self.assertGreaterEqual(diagnostic['pending_sample']['id'],2)
+            self.assertEqual(diagnostic['last_expired_sample']['id'],1)
+            self.assertIsNotNone(diagnostic['last_expired_sample']['candidate']['acquisition_end'])
+            self.assertIsNotNone(diagnostic['pending_sample']['pre']['completed'])
+            self.assertIn('sample_expired',[event['event'] for event in diagnostic['events']])
+            self.assertIn('sample_discarded',[event['event'] for event in diagnostic['events']])
+            self.assertIsNotNone(diagnostic['transport']['sample']['turn_started'])
+            self.assertIsNotNone(diagnostic['progress_io']['monitor']['attempted'])
+            import json
+            encoded=json.dumps(diagnostic,allow_nan=False)
+            self.assertLess(len(encoded),32768)
+            self.assertNotIn('operation_payload',encoded)
+            self.assertNotIn('gpu_pids',encoded)
             self.assertIsNone(session.last_sample)
             self.assertGreaterEqual(session.sample_expiry_count, 1)
             self.assertFalse(session.recover_samples)

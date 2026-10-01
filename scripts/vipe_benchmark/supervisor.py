@@ -302,6 +302,7 @@ def monitored_call(function, deadline, sampler, config, peak, *, worker=None,
         if session.recover_samples:
             session.sample_expiry_count = 0
             session.first_sample_expired_at = None
+            session.last_expired_sample = None
         if phase == 'initial_sample':
             deadline = min(deadline, session.setup_deadline)
         sample_only = function is sampler or function == sampler
@@ -343,16 +344,25 @@ def monitored_call(function, deadline, sampler, config, peak, *, worker=None,
                 session.submit('sample', sampler, deadline)
             time.sleep(min(.005, max(0., deadline-time.monotonic())))
     except BaseException as exc:
+        if session is not None and not hasattr(exc,'s1_monitor_failure'):
+            try:exc.s1_monitor_failure=session.failure_snapshot(phase,deadline)
+            except BaseException:
+                # Diagnostics may be unavailable, but cannot replace the first
+                # exception, delay teardown or reacquire poisoned helper I/O.
+                exc.s1_monitor_failure=dict(schema='s1-monitor-failure-diagnostic/v1',
+                    diagnostic_only=True,phase=phase,status='unavailable')
         record_progress_failure(lifecycle,exc,phase)
         primary = exc
         if isinstance(exc, GPUOwnershipError):
             primary = HelperFailure(dict(error_class='GPUOwnershipError', message=str(exc), phase=phase))
+            primary.s1_monitor_failure=getattr(exc,'s1_monitor_failure',None)
             primary.verified_progress_reference = lifecycle.progress.reference()
             raise primary from exc
         if (isinstance(exc, (EOFError, OSError)) and not isinstance(exc, TimeoutError)) or (session is not None and not session.ready and not isinstance(exc, TimeoutError)):
             primary = HelperFailure(dict(error_class=type(exc).__name__, message=str(exc),
                 phase='startup' if session is None or len(session.ready) != 2 else 'transport',
                 ownership=dict(pid=getattr(exc, 'helper_pid', None))))
+            primary.s1_monitor_failure=getattr(exc,'s1_monitor_failure',None)
             primary.verified_progress_reference = lifecycle.progress.reference()
             raise primary from exc
         raise
@@ -579,6 +589,8 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
         primary_failure=dict(error_class=type(exc).__name__,message=str(exc),kind=failure_kind,
             phase=getattr(exc,'failure',{}).get('phase',getattr(exc,'s1_phase','supervisor')),
             observed=getattr(exc,'s1_first_observed',time.monotonic()),stop_required=stop_required)
+        if getattr(exc,'s1_monitor_failure',None) is not None:
+            primary_failure['monitor_diagnostic']=exc.s1_monitor_failure
     finally:
         evidence_summary=None;cleanup_uncertain=False;helper_errors=[]
         def final_step(phase,operation,default=None):

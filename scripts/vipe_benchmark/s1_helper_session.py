@@ -2123,9 +2123,14 @@ class Owner:
 
     def maintain_progress(self):
         if self.cancelled or self.session.progress_cache.frozen: return
-        if not self.session.progress_io_turn.acquire(False):return
+        timing=self.session.progress_io_observations['owner']
+        timing['attempted']=time.monotonic()
+        if not self.session.progress_io_turn.acquire(False):
+            timing['busy']=True;return
+        timing.update(acquired=time.monotonic(),busy=False)
         try:self._maintain_progress()
-        finally:self.session.progress_io_turn.release()
+        finally:
+            timing['released']=time.monotonic();self.session.progress_io_turn.release()
 
     def _maintain_progress(self):
         if self.cancelled or self.session.progress_cache.frozen:return
@@ -2168,6 +2173,8 @@ class Owner:
     def maintain(self):
         request = self.census_request
         started = time.monotonic()
+        if request:
+            self.census_timing=dict(generation=request['generation'],request_id=request['request_id'],acquisition_start=started,completed=None)
         try:
             exited = None; exit_observed = None
             if request and request['worker_pid'] is not None:
@@ -2175,6 +2182,7 @@ class Owner:
                 exited = os.waitid(os.P_PID,request['worker_pid'],os.WEXITED|os.WNOHANG|os.WNOWAIT)
                 exit_observed = time.monotonic() if exited is not None else None
             started = time.monotonic()
+            if request:self.census_timing['acquisition_start']=started
             rows = self.observe()
             leaders = {r['pid'] for r in self.records.values() if r.get('pid') and r['state']!='reaped'}
             self.members = self.lineage(rows,leaders,self.members)
@@ -2208,6 +2216,7 @@ class Owner:
                     None if exited is None else (exited.si_status if exited.si_code==os.CLD_EXITED else -exited.si_status),exit_observed,
                     helper_rows=tuple(process_identity(row) for _,row in sorted(self.members.items())))
                 self.last_success = snapshot
+                self.census_timing['completed']=snapshot.completed
                 self.census_reply = snapshot
                 self.census_request = None
             if not self.cancelled: return
@@ -2233,6 +2242,7 @@ class Owner:
             self.census_ok=False
             self.census_failures.add()
             if request:
+                self.census_timing['completed']=time.monotonic()
                 self.census_reply=Census(self.session.token,self.boot_id,request['generation'],request['request_id'],
                     request['worker_generation'],started,time.monotonic(),'failed',(),None,(),error=str(exc)[:1024])
                 self.census_request=None
@@ -2241,6 +2251,39 @@ class Owner:
 
 class NativeNotStarted(RuntimeError):
     """Native adapter explicitly guarantees that no ownership thread started."""
+
+
+def diagnostic_fields(value, names):
+    """Copy only fixed scalar metadata; never traverse a helper value/payload."""
+    if type(value) is not dict:return {}
+    result={}
+    for name in names:
+        item=value.get(name)
+        if type(item) is str:item=item[:64]
+        elif type(item) is bool or item is None:pass
+        elif type(item) is int:item=item if -UINT64_MAX<=item<=UINT64_MAX else None
+        elif type(item) is float:item=item if math.isfinite(item) else None
+        else:item=None
+        result[name]=item
+    return result
+
+
+def diagnostic_census(snap):
+    if type(snap) is not Census:return None
+    return diagnostic_fields({name:getattr(snap,name) for name in (
+        'generation','request_id','worker_generation','acquisition_start','completed','status','exit_observed')},
+        ('generation','request_id','worker_generation','acquisition_start','completed','status','exit_observed'))
+
+
+def diagnostic_sample(request):
+    if type(request) is not dict:return None
+    result=diagnostic_fields(request,('id','operation','stage','state','dispatch','deadline','expired',
+        'census_generation','first_send_entered','final_send_entered','transmitted_observed',
+        'response_observed','early_observed','early_bytes'))
+    result['pre']=diagnostic_census(request.get('pre'))
+    result['candidate']=diagnostic_fields(request.get('candidate',request.get('diagnostic_response')),
+        ('operation','ok','acquisition_start','acquisition_end'))
+    return result
 
 
 class Session:
@@ -2262,6 +2305,8 @@ class Session:
         self.last_sample = None; self.accepted_initial = False
         self.recover_samples = False
         self.sample_expiry_count = 0; self.first_sample_expired_at = None
+        self.last_expired_sample = None
+        self.progress_io_observations = {'owner':{},'monitor':{}}
         self.decision_clock = time.monotonic
         self.fixture_action_end = self.fixture_safety_end = None
         from .s1_progress import RetainedProgress
@@ -2318,6 +2363,40 @@ class Session:
     def resume(self):
         now=time.monotonic(); self.last_tick=now; self.ticks.append(now)
         self.events.append(dict(event='monitor_resume',monotonic=now))
+
+    def failure_snapshot(self, phase, deadline):
+        """Neutral bounded metadata before teardown; no I/O, waits or authority."""
+        request=self.requests.get('sample')
+        owner=self.owner
+        fields=('attempted','acquired','released','busy')
+        transport={}
+        for role in ('work','sample'):
+            wire=self.wires.get(role)
+            if wire is None:continue
+            names=('turn_started','sent_bytes','received_bytes','blocked_writes',
+                'turn_sent','turn_received','turn_peek','length')
+            transport[role]=diagnostic_fields({name:getattr(wire,name,None) for name in names},names)
+            transport[role].update(encoder_pending=wire.encoder is not None,
+                outgoing_bytes=len(wire.out),incoming_bytes=len(wire.body))
+            transport[role]['last_frame']=diagnostic_fields(wire.last_frame,('bytes','sha256','complete_observed'))
+        events=tuple(self.events)[-16:]
+        return dict(schema='s1-monitor-failure-diagnostic/v1',diagnostic_only=True,
+            phase=phase,observed=time.monotonic(),phase_deadline=deadline,
+            state=self.state,poisoned=self.poisoned,recover_samples=self.recover_samples,
+            sample_expiry_count=self.sample_expiry_count,first_sample_expired_at=self.first_sample_expired_at,
+            max_tick_gap=self.max_gap,max_control_turn=self.max_turn,
+            pending_sample=diagnostic_sample(request),last_expired_sample=self.last_expired_sample,
+            census_pending=diagnostic_fields(getattr(owner,'census_request',None),
+                ('generation','request_id','worker_generation','worker_pid')),
+            census_observation=diagnostic_fields(getattr(owner,'census_timing',None),
+                ('generation','request_id','acquisition_start','completed')),
+            census_reply=diagnostic_census(getattr(owner,'census_reply',None)),
+            last_census=diagnostic_census(getattr(owner,'last_success',None)),
+            progress_io=dict(locked=self.progress_io_turn.locked(),
+                **{role:diagnostic_fields(self.progress_io_observations[role],fields) for role in ('owner','monitor')}),
+            transport=transport,events=[diagnostic_fields(event,('event','role','request_id','stage',
+                'observed','monotonic','dispatch','received','deadline','acquisition_start','acquisition_end',
+                'pre_generation','post_generation')) for event in events])
 
     def set_worker(self, worker):
         pid=None if worker is None else worker.pid
@@ -2459,6 +2538,7 @@ class Session:
                         self.sample_expiry_count+=1
                         if self.first_sample_expired_at is None:self.first_sample_expired_at=now
                         self.events.append(dict(event='sample_expired',request_id=request['id'],deadline=request['deadline'],observed=now))
+                        self.last_expired_sample=diagnostic_sample(request)
                 if role=='sample' and request and request.get('stage') in ('pre','post'):
                     snap=self.owner.census_reply
                     if snap is not None:
@@ -2474,6 +2554,7 @@ class Session:
                                 self.wires[role].queue(self.envelope(role,request['id'],'request',request['operation_payload']))
                             else:
                                 self.sample_authority(request,snap,decision)
+                                self.last_expired_sample=diagnostic_sample(request)
                                 self.requests[role]=None
                                 self.events.append(dict(event='sample_discarded',request_id=request['id'],stage='post'))
                                 found.append(('late_sample',request['candidate']['value'],time.monotonic(),request['dispatch']))
@@ -2506,9 +2587,14 @@ class Session:
                     # Never wait for owner I/O: keep cancellation/deadline ticks
                     # active, but do not overlap a final send/peek turn with a
                     # large metadata validation that can release/reacquire GIL.
-                    if not self.progress_io_turn.acquire(False):continue
+                    timing=self.progress_io_observations['monitor']
+                    timing['attempted']=time.monotonic()
+                    if not self.progress_io_turn.acquire(False):
+                        timing['busy']=True;continue
+                    timing.update(acquired=time.monotonic(),busy=False)
                     try:message=self.wires[role].tick(context)
-                    finally:self.progress_io_turn.release()
+                    finally:
+                        timing['released']=time.monotonic();self.progress_io_turn.release()
                 real_received=time.monotonic(); self.max_turn=max(self.max_turn,real_received-now)
                 if self.max_turn>.1: raise TimeoutError('S1 control tick overrun')
                 received=self.decision_clock() if message is not None else real_received
@@ -2522,6 +2608,7 @@ class Session:
                         self.sample_expiry_count+=1
                         if self.first_sample_expired_at is None:self.first_sample_expired_at=received
                         self.events.append(dict(event='sample_expired',request_id=request['id'],deadline=request['deadline'],observed=received))
+                        self.last_expired_sample=diagnostic_sample(request)
                 if message is None: continue
                 if role not in self.ready:
                     if received>=self.ready_deadline: raise TimeoutError('S1 ready deadline reached')
@@ -2536,6 +2623,9 @@ class Session:
                     if request is None: raise ValueError('unsolicited helper response')
                     if request.get('transmitted_observed') is None: raise ValueError('premature helper response without transmission')
                     payload=self.correlate(role,message,'response',request['id'])
+                    if role=='sample':
+                        request['response_observed']=received
+                        request['diagnostic_response']=diagnostic_fields(payload,('operation','ok','acquisition_start','acquisition_end'))
                     if type(payload) is not dict or set(payload)!={'operation','ok','value','acquisition_start','acquisition_end'} or payload['operation']!=request['operation'] or type(payload['ok']) is not bool:
                         raise ValueError('invalid helper response payload')
                     if not payload['ok']:
@@ -2550,6 +2640,7 @@ class Session:
                             owned={row.pid for row in request['pre'].rows}
                             if type(pids) is list and any(pid not in owned for pid in pids):
                                 raise GPUOwnershipError('exclusive GPU access lost: late sample PID absent from pre-census')
+                            self.last_expired_sample=diagnostic_sample(request)
                             self.requests[role]=None
                             self.events.append(dict(event='sample_discarded',request_id=request['id'],stage='wire'))
                             found.append(('late_sample',value,received,request['dispatch']))
