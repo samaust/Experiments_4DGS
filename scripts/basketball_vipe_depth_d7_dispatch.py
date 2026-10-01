@@ -16,6 +16,9 @@ from vipe_benchmark.supervisor import supervise
 
 DO = ROOT / 'docs/research/vipe-alternatives/plan031-execution/depth-approval-001.json'
 SOURCE_REVIEW = ROOT / 'docs/research/vipe-alternatives/plan031-execution/depth-D7-source-review-002.json'
+CONTEXT_JOB = 'plan069-depth-context-002'
+CONTEXT_RECEIPT = (ROOT / 'docs/research/vipe-alternatives' /
+                   'plan031-20260913T032700Z' / (CONTEXT_JOB + '.json'))
 
 
 def shared_run_root():
@@ -74,6 +77,26 @@ def dispatch(context, qualification, setup, *, run_id='plan031-20260913T032700Z'
     if qualified.get('schema') != 'plan069-depth-D7-qualification/v1':
         raise ValueError('exact D7 qualification bundle required')
     context_record = file_record(context)
+    if Path(context).resolve() != (local / 'jobs' / CONTEXT_JOB / 'context.json').resolve():
+        raise ValueError('exact accepted depth context 002 path required')
+    context_receipt = read_json(verify_record(file_record(CONTEXT_RECEIPT))['path'])
+    accepted_inputs = file_record(local / 'prepare/inputs.json')
+    charge_record = file_record(CONTEXT_RECEIPT.with_name(CONTEXT_JOB + '-charge.json'))
+    charge = read_json(charge_record['path'])
+    charge_events = [event for event in ledger.events()
+                     if event['event'] == 'cpu_preparation_charge' and
+                     event['evidence'] == charge_record]
+    if (context_receipt.get('schema') != 'plan069-depth-context-preparation/v1' or
+            context_receipt.get('status') != 'complete' or
+            context_receipt.get('context') != context_record or
+            context_receipt.get('inputs') != accepted_inputs or
+            charge.get('schema') != 'plan069-depth-context-charge/v1' or
+            charge.get('status') != 'prepared' or
+            charge.get('context') != context_record or
+            charge.get('inputs') != accepted_inputs or
+            len(charge_events) != 1 or
+            context_receipt.get('charge_event_sha256') != charge_events[0]['event_sha256']):
+        raise ValueError('ledger-charged accepted depth context 002 receipt required')
     setup_record = file_record(setup)
     setup_result = read_json(setup_record['path'])
     if (setup_result.get('candidate') != 'D7' or
