@@ -1,0 +1,86 @@
+..............Running reload-a
+Failed command: ['/tmp/tmpoub8jcnc/env-python', '/home/auss/git_repos/samaust/Experiments_4DGS/scripts/render-atgs-manifest.py', '--checkout', '/home/auss/git_repos/samaust/Experiments_4DGS/.local/ATGS', '--manifest', '/tmp/tmpoub8jcnc/manifest.json', '--checkpoint', '/tmp/tmpoub8jcnc/checkpoint', '--training-config', '/tmp/tmpoub8jcnc/config.json', '--provenance', '/tmp/tmpoub8jcnc/provenance.json', '--output', '/tmp/tmpoub8jcnc/evaluation/reload-a', '--benchmark']
+synthetic launch failure
+...........................................................................................E..................................E./usr/lib/python3.14/json/decoder.py:361: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x737d5db05e40>
+  obj, end = self.scan_once(s, idx)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/usr/lib/python3.14/json/decoder.py:361: ResourceWarning: unclosed database in <sqlite3.Connection object at 0x737d3d6aa980>
+  obj, end = self.scan_once(s, idx)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+...................E...................................................appearance edge 1 2 1
+appearance edge 2 3 1
+appearance edge 1 3 1
+appearance edge 0 1 1
+appearance edge 1 2 1
+....................................................................................prepare blocked budget_exhaustion
+...prepare blocked budget_exhaustion
+.....prepare blocked budget_exhaustion
+.recover blocked provenance_failure
+.....................baseline blocked computational_or_provenance_failure
+......................................................s.s.........s......E...ss........................................usage: python -m unittest [-h] --checkout CHECKOUT --manifest MANIFEST
+                          --checkpoint CHECKPOINT --crops CROPS
+                          --torch-cache TORCH_CACHE --output OUTPUT
+python -m unittest: error: choose a new output directory
+.Running reload-a
+Failed command: ['/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python', '/home/auss/git_repos/samaust/Experiments_4DGS/scripts/offline-python.py', '/home/auss/git_repos/samaust/Experiments_4DGS/scripts/render-stg-manifest.py', '--checkout', '/tmp/tmph56ojrte/checkout', '--manifest', '/tmp/tmph56ojrte/manifest.json', '--checkpoint', '/tmp/tmph56ojrte/checkpoint.pt', '--output', '/tmp/tmph56ojrte/output/reload-a', '--benchmark']
+synthetic launch error
+.usage: python -m unittest [-h] --checkout CHECKOUT --manifest MANIFEST
+                          --checkpoint CHECKPOINT --crops CROPS
+                          --torch-cache TORCH_CACHE --output OUTPUT
+python -m unittest: error: cached AlexNet weights required before offline evaluation
+.Running reload-a
+Failed command: ['/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python', '/home/auss/git_repos/samaust/Experiments_4DGS/scripts/offline-python.py', '/home/auss/git_repos/samaust/Experiments_4DGS/scripts/render-stg-manifest.py', '--checkout', '/tmp/tmptktivdue/checkout', '--manifest', '/tmp/tmptktivdue/manifest.json', '--checkpoint', '/tmp/tmptktivdue/checkpoint.pt', '--output', '/tmp/tmptktivdue/output/reload-a', '--benchmark']
+
+........EE.............Traceback (most recent call last):
+  File "<frozen runpy>", line 203, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/usr/lib/python3.14/unittest/__main__.py", line 18, in <module>
+    main(module=None)
+    ~~~~^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/main.py", line 104, in __init__
+    self.runTests()
+    ~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/unittest/main.py", line 270, in runTests
+    self.result = testRunner.run(self.test)
+                  ~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/runner.py", line 257, in run
+    test(result)
+    ~~~~^^^^^^^^
+  File "/usr/lib/python3.14/unittest/suite.py", line 84, in __call__
+    return self.run(*args, **kwds)
+           ~~~~~~~~^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/suite.py", line 122, in run
+    test(result)
+    ~~~~^^^^^^^^
+  File "/usr/lib/python3.14/unittest/suite.py", line 84, in __call__
+    return self.run(*args, **kwds)
+           ~~~~~~~~^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/suite.py", line 122, in run
+    test(result)
+    ~~~~^^^^^^^^
+  File "/usr/lib/python3.14/unittest/suite.py", line 84, in __call__
+    return self.run(*args, **kwds)
+           ~~~~~~~~^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/suite.py", line 122, in run
+    test(result)
+    ~~~~^^^^^^^^
+  File "/usr/lib/python3.14/unittest/case.py", line 725, in __call__
+    return self.run(*args, **kwds)
+           ~~~~~~~~^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/case.py", line 669, in run
+    self._callTestMethod(testMethod)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/case.py", line 615, in _callTestMethod
+    result = method()
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_training_supervisor.py", line 38, in test_uncooperative_worker_is_killed
+    result, _ = self.run_worker(
+                ~~~~~~~~~~~~~~~^
+        'import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); time.sleep(10)')
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/tests/test_training_supervisor.py", line 17, in run_worker
+    result = module.supervise([sys.executable, '-c', source], cwd='.', log=log,
+                             seconds=1.5, checkpoint_margin=.7, kill_margin=.3)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/scripts/training_supervisor.py", line 55, in supervise
+    time.sleep(min(.05, max(0., kill_at-now)))
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
