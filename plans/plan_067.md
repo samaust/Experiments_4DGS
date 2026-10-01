@@ -164,3 +164,29 @@ skips. Qualification016 passed342 tests/1063 subtests in475.427 seconds under600
 seconds with unchanged104-source inventory; wrapper SHA256
 ce21a33039649f2cf6c1727fd8278e756512418699c6af22cbaa52d1cceaba21.
 Fresh011 preparation/review/live admission follows under standing authority.
+
+### S1-011 monitor correction checkpoint
+
+Fresh011 followed qualified aggregate correction and exact reviewed authority,
+then failed after977.926 seconds at211 qualified rows when the15-second monitor
+recovery window expired. The3600-second allocation deadline was not reached.
+Cleanup is confirmed, no accepted result or terminal receipt; stopped helper and
+consumed charges are preserved in outcome92fb54bf. Exactfailedsample timing was
+not retained, so active-load cause remains unproven.
+
+Fresh accounting optimizer29325ff3 and bounded diagnostic capturea838d39d are
+integrated. Everyalias still receives a fresh non-following stat; no cross-call
+cache or deadline/ceiling/ownership change. Production helper benchmarks improved
+from1.69–1.76 seconds to1.59–1.69 seconds with exactunchangedtotals, zeroexpiries
+and confirmedcleanup.33 budget tests and8 focusedmonitoring/failuretests pass;
+both independent audits report no blocking findings. Diagnostics retainneutral
+bounded pending-stage/timing/transport observations beforepoison/cleanup, without
+authority or first-error replacement. They do not prove retrospectively why011
+failed. Full integration016 and currentqualification017 precede reviewedfresh012
+understandingauthority; keep2-secondfreshness and15-secondrecovery bounds.
+
+Current qualification017 passed 343 tests / 1,063 subtests in449.188 seconds,
+zero failures/errors/skips, matching104-source inventories. Wrapper SHA256
+63a97643fe11679451c21bf8f40ba60e7316bb66635c7baa56cea2139ad045a3.
+Full integration016 ran1,186 tests with no failures, six known unrelated errors
+and five skips in544.791 seconds. Fresh012 review/live admission follows.
