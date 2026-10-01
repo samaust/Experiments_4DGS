@@ -14,7 +14,8 @@ from vipe_benchmark.config import ROOT, load, training_cameras
 from vipe_benchmark.files import file_record, read_json, write_json
 from vipe_benchmark.ledger import Ledger
 from vipe_benchmark.dav2_metric import DAV2MetricSmallAdapter
-from vipe_benchmark.moge_metric import MoGe2Adapter, MoGe3Adapter
+from vipe_benchmark.moge_metric import (MoGe2Adapter, MoGe3Adapter,
+    MetricAnythingPointMapAdapter, POINTMAP_PIN)
 from vipe_benchmark.stages import run as run_worker
 
 
@@ -212,6 +213,23 @@ class DepthExtensionTests(unittest.TestCase):
         self.assertEqual(worker['eligibility']['metric_scale'], 'passed')
         self.assertEqual(worker['rows'][0]['metadata']['native_processed_size'], [924, 518])
         self.assertEqual(read_json(receipt['package']['path'])['candidates'][1]['id'], 'D7')
+
+    def test_d8_pointmap_student_reuses_frozen_fit_at_check(self):
+        fit_request = dict(self.request, id='D8-fit-fixture-001', component='D8')
+        fit = run(fit_request, self.root / fit_request['id'], self.config,
+            backend=MetricAnythingPointMapAdapter(NativeMoGe3Fixture(), POINTMAP_PIN),
+            ledger=self.ledger)
+        fit_scale = read_json(fit['worker']['path'])['scale']
+        self.assertEqual(read_json(fit_scale['path'])['status'], 'passed')
+        check_request = dict(fit_request, id='D8-check-fixture-001', role='check',
+            frozen_fit=fit_scale)
+        check = run(check_request, self.root / check_request['id'], self.config,
+            backend=MetricAnythingPointMapAdapter(NativeMoGe3Fixture(), POINTMAP_PIN),
+            ledger=self.ledger)
+        check_worker = read_json(check['worker']['path'])
+        self.assertEqual(read_json(check_worker['scale']['path'])['status'], 'passed')
+        self.assertEqual(check_worker['rows'][0]['metadata']['checkpoint_identity'], POINTMAP_PIN)
+        self.assertEqual(read_json(check['package']['path'])['candidates'][1]['id'], 'D8')
 
     def test_relative_depth_keeps_its_domain_out_of_metric_scale(self):
         request = dict(self.request, id='D9-fit-fixture-001', component='D9')

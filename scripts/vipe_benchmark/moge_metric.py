@@ -63,6 +63,17 @@ def _array(value):
     return np.asarray(value)
 
 
+def _supplied_native_intrinsics(native, K, width, height, label):
+    if 'intrinsics' not in native:
+        raise ValueError(f'{label} supplied camera intrinsics missing')
+    observed = _array(native['intrinsics'])
+    expected = np.array([[K[0, 0] / width, 0, .5],
+                         [0, K[1, 1] / height, .5], [0, 0, 1]], np.float32)
+    if observed.shape != (3, 3) or not np.allclose(observed, expected,
+                                                   rtol=1e-4, atol=1e-5):
+        raise ValueError(f'{label} returned a predicted camera instead of supplied camera')
+
+
 class MoGe2Adapter:
     """Call the pinned v2 native `infer` once per accepted scale-grid RGB frame."""
     def __init__(self, runtime):
@@ -120,14 +131,7 @@ class MoGe3Adapter(MoGe2Adapter):
             return_per_step=False, use_fp16=False)
 
     def _validate_native(self, native, K, width, height):
-        if 'intrinsics' not in native:
-            raise ValueError('MoGe-3 supplied camera intrinsics missing')
-        observed = _array(native['intrinsics'])
-        expected = np.array([[K[0, 0] / width, 0, .5],
-                             [0, K[1, 1] / height, .5], [0, 0, 1]], np.float32)
-        if observed.shape != (3, 3) or not np.allclose(observed, expected,
-                                                       rtol=1e-4, atol=1e-5):
-            raise ValueError('MoGe-3 returned a predicted camera instead of supplied camera')
+        _supplied_native_intrinsics(native, K, width, height, 'MoGe-3')
 
     def predict(self, rgb, K, image_valid):
         output = super().predict(rgb, K, image_valid)
@@ -135,4 +139,27 @@ class MoGe3Adapter(MoGe2Adapter):
             raise ValueError('MoGe-3 returned no valid metric depth')
         output.metadata.update(native_refine_steps=3, native_return_per_step=False,
                                native_use_fp16=False, component='D6')
+        return output
+
+
+POINTMAP_PIN = ('yjh001/metricanything_student_pointmap@'
+                '8f1f08c53c683d4e19864601dfaf78515f29a63b')
+
+
+class MetricAnythingPointMapAdapter(MoGe2Adapter):
+    """MetricAnything's bundled MoGe-2 student and exact PointMap weights."""
+    def __init__(self, runtime, checkpoint_identity):
+        if checkpoint_identity != POINTMAP_PIN:
+            raise ValueError('D8 requires exact MetricAnything Student PointMap checkpoint')
+        super().__init__(runtime)
+        self.component = 'D8'
+        self.checkpoint_identity = checkpoint_identity
+
+    def _validate_native(self, native, K, width, height):
+        _supplied_native_intrinsics(native, K, width, height, 'MetricAnything PointMap')
+
+    def predict(self, rgb, K, image_valid):
+        output = super().predict(rgb, K, image_valid)
+        output.metadata.update(component='D8', checkpoint_identity=self.checkpoint_identity,
+            bundled_runtime='MetricAnything student_pointmap/moge/model/v2.py')
         return output
