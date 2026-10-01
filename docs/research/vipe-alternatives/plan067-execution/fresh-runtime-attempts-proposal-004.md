@@ -1,5 +1,12 @@
 # Fresh S1 calibration attempt — scope REVIEW only
 
+**Superseded prospectively:** the user's
+[standing retry authority](s1-standing-retry-approval-001.json) and
+[policy amendment](../../../specs/plan031-execution/s1-retry-policy-amendment-001.md)
+remove this proposal's single-attempt/pending-approval restriction. Continue
+fresh S1 calibration attempts after relevant validated fixes within the original
+budgets; historical records and finite per-attempt deadlines remain intact.
+
 ## Correction and qualification required
 
 Recovery009 reached final acceptance after all510 calibration rows individually

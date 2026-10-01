@@ -111,3 +111,18 @@ Actual D2 feedback is preserved at camera1-selection-175: worse close-object
 edges than D0/D1 and difficulty capturing a distant player. It supplies no new
 overall preference. Initial issue33 is complete within its original package001
 scope; issues34/35 and parents23/18 remain open.
+
+## Standing S1 retry authority — user correction
+
+The user removes Proposal003's one-attempt limit and requests planning,
+implementation, execution, analysis, correction and retries until S1 calibration
+works. [Retry policy amendment001](../docs/specs/plan031-execution/s1-retry-policy-amendment-001.md)
+and s1-standing-retry-approval-001.json supersede the numerical attempt cap and
+Proposal004's pending approval prospectively. No additional user approval is
+required for relevant validated corrections and subsequent fresh calibration
+identities within the original resource ceilings. Every new attempt still has
+reviewed controls, current qualification, live admission, confirmed cleanup and a
+3600-second deadline. No unchanged failed replay, historical overwrite or
+unrelated allocation is permitted. Continue until accepted complete calibration
+or a concrete remaining budget/access/input blocker. Finishing a commit does not
+pause the cycle.
