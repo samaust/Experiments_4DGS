@@ -22,6 +22,14 @@ class Ledger:
     def _jobs(self, events):
         allocated = jobs(self.config)
         for event in events:
+            if event['event'] == 'depth_attempt_authorized':
+                for key in ('review', 'authorization', 'source_review', 'admission'):
+                    verify_record(event[key])
+                candidate = event['candidate']
+                job_id = f'plan069-{candidate}-maps-001'
+                allocated[job_id] = dict(id=job_id, resource='gpu',
+                    seconds=event['seconds'],
+                    scope='approved one-attempt Plan 069 native depth inference')
             if event['event'] == 'depth_setup_authorized':
                 verify_record(event['review'])
                 verify_record(event['authorization'])
@@ -132,6 +140,25 @@ class Ledger:
                 raise ValueError('job already consumed or accounted for; no automatic retry')
             if any(r['event'] == 'reserve' for r in states.values()):
                 raise ValueError('unreconciled active attempt; refusing concurrent dispatch')
+            if re.fullmatch(r'plan069-(D2|D5|D6|D7|D8|D9|D10|D11)-maps-001', job_id):
+                candidate = job_id.split('-')[1]
+                authorized = [row for row in events if
+                    row['event'] == 'depth_attempt_authorized' and
+                    row['candidate'] == candidate]
+                if len(authorized) != 1 or events[-1] != authorized[0] or \
+                        time.time() - authorized[0]['recorded_unix'] > 30:
+                    raise ValueError('fresh exact depth authorization required')
+                bound = authorized[0]
+                from .depth_admission import local_source_records
+                source = read_json(verify_record(bound['source_review'])['path'])
+                if source.get('local_sources') != local_source_records(candidate):
+                    raise ValueError('depth sources changed after review')
+                if not isinstance(evidence, dict) or any(
+                        evidence.get(key) != bound[key] for key in
+                        ('review', 'authorization', 'source_review', 'admission')):
+                    raise ValueError('depth reservation evidence differs from authorization')
+                verify_record(evidence['request'])
+                verify_record(evidence['worker'])
             if is_recovery_job(job_id):
                 from .s1_recovery import reservation_binding
                 reservation_binding(self.path.parent, self.config, events, evidence, command=command)
@@ -229,6 +256,83 @@ class Ledger:
                 proposal_sha256=object_hash(proposal), review=review,
                 authorization=authorization, source_review=source_review,
                 resource_snapshot=reading))
+
+    def authorize_depth_attempt(self, candidate, review, authorization,
+                                source_review, admission):
+        """Allocate one native GPU slot only from current reviewed live evidence."""
+        from .depth_admission import review as decide
+        from .execution import resources
+        if candidate not in ('D2', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11'):
+            raise ValueError('unknown approved depth candidate')
+        reviewed = read_json(verify_record(review)['path'])
+        approved = read_json(verify_record(authorization)['path'])
+        evidence = read_json(verify_record(admission)['path'])
+        proposal = next((row for row in reviewed.get('proposals', [])
+            if row.get('candidate') == candidate), None)
+        grant = next((row for row in approved.get('candidate_approvals', [])
+            if row.get('candidate') == candidate), None)
+        if (reviewed.get('schema') != 'plan069-depth-execution-review/v1' or
+                approved.get('schema') != 'plan069-depth-user-authorization/v1' or
+                approved.get('review') != review or proposal is None or
+                proposal.get('max_attempts') != 1 or grant is None or
+                grant.get('proposal_sha256') != object_hash(proposal) or
+                grant.get('status') != 'approved' or
+                evidence.get('schema') != 'plan069-depth-admission-result/v1' or
+                evidence.get('status') != 'passed' or
+                evidence.get('candidate') != candidate or
+                evidence.get('proposal_sha256') != object_hash(proposal) or
+                evidence.get('review') != review or
+                evidence.get('authorization') != authorization or
+                evidence.get('source_review') != source_review):
+            raise ValueError('exact approved depth attempt and admission required')
+        seconds = proposal.get('allocation', {}).get('gpu_seconds')
+        if type(seconds) is not int or seconds <= 0:
+            raise ValueError('bounded depth GPU seconds required')
+        with self.locked() as (stream, events):
+            states = self.states(events)
+            job_id = f'plan069-{candidate}-maps-001'
+            if job_id in states or any(row['event'] == 'depth_attempt_authorized' and
+                                       row['candidate'] == candidate for row in events):
+                raise ValueError('depth model attempt already authorized or consumed')
+            if any(row['event'] == 'reserve' for row in states.values()):
+                raise ValueError('active attempt prevents depth GPU allocation')
+            if any(row['event'] == 'depth_attempt_authorized' and
+                   f"plan069-{row['candidate']}-maps-001" not in states for row in events):
+                raise ValueError('unstarted depth GPU allocation prevents another')
+            head = events[-1]['event_sha256'] if events else '0' * 64
+            live = evidence.get('live', {})
+            if live.get('ledger_head_sha256') != head:
+                raise ValueError('depth admission ledger head is stale')
+            from .depth_admission import BENCHMARK, CAP_AMENDMENT
+            historical = read_json(BENCHMARK)
+            cap_amendment = file_record(CAP_AMENDMENT) if self.config != historical else None
+            blockers = decide(proposal, config=self.config,
+                commercial=evidence['commercial'], assets=evidence['assets'],
+                runtime=evidence['runtime'], live=live,
+                source_review=source_review, approval=grant,
+                cap_amendment=cap_amendment,
+                cap_approval=approved.get('cap_approval'),
+                ledger_head_sha256=head)
+            if blockers:
+                raise ValueError('depth admission failed: ' + '; '.join(blockers))
+            reading = resources(self.path.parent, gpu=True)
+            if reading['gpu_pids']:
+                raise ValueError('GPU owner active before depth allocation')
+            total = self.totals(events)['gpu']['elapsed_seconds']
+            if total + seconds > self.config['gpu_total_seconds_limit']:
+                raise ValueError('depth GPU cumulative allowance exhausted')
+            allocation = proposal['allocation']
+            for key, cap in (('download_bytes', 'new_download_gib_limit'),
+                             ('artifact_bytes', 'new_artifact_disk_gib_limit')):
+                if reading[key] + allocation[key] > self.config[cap] * 2**30:
+                    raise ValueError(key + ' depth allocation exceeds live cap')
+            if reading['device_bytes'] + allocation['device_bytes'] > self.config['gpu_peak_device_gib_limit'] * 2**30:
+                raise ValueError('depth allocation exceeds device ceiling')
+            return self._append(stream, events, dict(event='depth_attempt_authorized',
+                candidate=candidate, seconds=seconds,
+                proposal_sha256=object_hash(proposal), review=review,
+                authorization=authorization, source_review=source_review,
+                admission=admission, resource_snapshot=reading))
 
     def charge_cpu_preparation(self, elapsed_seconds, evidence):
         """Charge separately retriable input acquisition without a model attempt."""

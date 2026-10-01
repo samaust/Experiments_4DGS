@@ -15,6 +15,7 @@ from vipe_benchmark.files import file_record, read_json, write_json
 from vipe_benchmark.depth_clips import prepare_context, publish_fixture_clips, materialize_role
 from vipe_benchmark.ledger import Ledger
 from vipe_benchmark.video_depth import VideoDepthAdapter, MetricVideoDepthAdapter, run_video_fixture
+from vipe_benchmark.depth_d7_run import run_d7_maps
 
 
 class DepthContextTests(unittest.TestCase):
@@ -113,6 +114,33 @@ class DepthContextTests(unittest.TestCase):
         frames, _, _ = materialize_role(context_record, 1, 'check')
         np.testing.assert_array_equal(frames[25], cv2.cvtColor(
             cv2.imread(accepted['rgb']['path']), cv2.COLOR_BGR2RGB))
+
+    def test_d7_map_worker_publishes_exact_anchor_and_clip_membership(self):
+        from types import SimpleNamespace
+        class FlatD7:
+            component = 'D7'
+            def predict(self, rgb, K, valid):
+                values = np.full(valid.shape, 6., np.float32)
+                values[~valid] = np.nan
+                return SimpleNamespace(domain='camera_z_metres', values=values,
+                    valid=valid.copy(), raw_values=np.full(valid.shape, 6., np.float32),
+                    metadata=dict(native_depth_type='camera-z metres', conversion_count=0))
+        context = prepare_context(self.record, self.root / 'context', self.config)
+        request = dict(schema='plan069-D7-maps-request/v1', record_kind='fixture',
+            candidate='D7', job_id='plan069-D7-maps-fixture-001', context=context,
+            inputs=self.record)
+        result = run_d7_maps(request, self.root / 'plan069-D7-maps-fixture-001',
+                             backend=FlatD7())
+        self.assertEqual(result['status'], 'complete')
+        self.assertEqual(len(result['rows']), 256)
+        self.assertEqual(len({(r['camera'], r['frame']) for r in result['rows']}), 256)
+        self.assertEqual(sum(r['kind'] == 'anchor' for r in result['rows']), 60)
+        self.assertEqual(sum(r['kind'] == 'clip-extra' for r in result['rows']), 196)
+        self.assertEqual(sum(r['frame'] == 175 for r in result['rows']), 30)
+        self.assertEqual(result['rows'][0]['domain'], 'camera_z_metres')
+        with self.assertRaisesRegex(ValueError, 'immutable'):
+            run_d7_maps(request, self.root / 'plan069-D7-maps-fixture-001',
+                        backend=FlatD7())
 
     def test_missing_context_and_changed_anchor_are_rejected(self):
         missing = dict(self.inputs, rgb=self.rows[:-1])
