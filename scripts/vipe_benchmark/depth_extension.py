@@ -208,6 +208,8 @@ def run(request, output, config, *, backend, ledger):
     """Execute one CPU fixture through worker, scale, ledger and review package."""
     output = Path(output)
     candidate, rows, events = _admit(request, output, config, ledger)
+    _require(getattr(backend, 'component', request['component']) == request['component'],
+             'native adapter candidate differs from request')
     _require(not output.exists(), 'immutable depth output already exists')
     start = time.monotonic()
     output.mkdir(parents=True, exist_ok=False)

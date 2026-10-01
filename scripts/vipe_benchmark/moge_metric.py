@@ -69,6 +69,14 @@ class MoGe2Adapter:
         if getattr(runtime, 'training', False):
             raise ValueError('MoGe-2 native runtime must be in eval mode')
         self.runtime = runtime
+        self.component = 'D5'
+
+    def _infer(self, image, fov):
+        return self.runtime.infer(image, fov_x=fov, resolution_level=9,
+            force_projection=True, apply_mask=True, use_fp16=True)
+
+    def _validate_native(self, native, K, width, height):
+        pass
 
     def predict(self, rgb, K, image_valid):
         import torch
@@ -76,10 +84,10 @@ class MoGe2Adapter:
             raise ValueError('D5 requires accepted 960x540 uint8 RGB')
         fov = supplied_horizontal_fov(K, rgb.shape[1], rgb.shape[0])
         image = torch.from_numpy(np.ascontiguousarray(rgb)).permute(2, 0, 1).float().div(255)
-        native = self.runtime.infer(image, fov_x=fov, resolution_level=9,
-            force_projection=True, apply_mask=True, use_fp16=True)
+        native = self._infer(image, fov)
         if not {'points', 'depth', 'mask'} <= set(native):
             raise ValueError('native MoGe-2 point/depth/mask outputs required')
+        self._validate_native(native, K, rgb.shape[1], rgb.shape[0])
         points = _array(native['points']).astype(np.float32)
         depth = _array(native['depth']).astype(np.float32)
         mask = _array(native['mask'])
@@ -98,3 +106,33 @@ class MoGe2Adapter:
                 native_apply_mask=True, native_use_fp16=True,
                 native_resize='internal interpolation to input grid; no adapter pad/crop',
                 seed_policy='eval inference; no stochastic sampling'))
+
+
+class MoGe3Adapter(MoGe2Adapter):
+    """Pinned v3 model with supplied FoV and exactly three sparse refinements."""
+    def __init__(self, runtime):
+        super().__init__(runtime)
+        self.component = 'D6'
+
+    def _infer(self, image, fov):
+        return self.runtime.infer(image, fov_x=fov, resolution_level=9,
+            force_projection=True, apply_mask=True, refine_steps=3,
+            return_per_step=False, use_fp16=False)
+
+    def _validate_native(self, native, K, width, height):
+        if 'intrinsics' not in native:
+            raise ValueError('MoGe-3 supplied camera intrinsics missing')
+        observed = _array(native['intrinsics'])
+        expected = np.array([[K[0, 0] / width, 0, .5],
+                             [0, K[1, 1] / height, .5], [0, 0, 1]], np.float32)
+        if observed.shape != (3, 3) or not np.allclose(observed, expected,
+                                                       rtol=1e-4, atol=1e-5):
+            raise ValueError('MoGe-3 returned a predicted camera instead of supplied camera')
+
+    def predict(self, rgb, K, image_valid):
+        output = super().predict(rgb, K, image_valid)
+        if not output.valid.any():
+            raise ValueError('MoGe-3 returned no valid metric depth')
+        output.metadata.update(native_refine_steps=3, native_return_per_step=False,
+                               native_use_fp16=False, component='D6')
+        return output

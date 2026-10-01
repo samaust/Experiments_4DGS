@@ -13,7 +13,7 @@ from vipe_benchmark.access import Identity
 from vipe_benchmark.config import ROOT, load, training_cameras
 from vipe_benchmark.files import file_record, read_json, write_json
 from vipe_benchmark.ledger import Ledger
-from vipe_benchmark.moge_metric import MoGe2Adapter
+from vipe_benchmark.moge_metric import MoGe2Adapter, MoGe3Adapter
 from vipe_benchmark.stages import run as run_worker
 
 
@@ -69,6 +69,15 @@ class NativeMoGeFixture:
         points[..., 2] = 6
         return dict(points=points, depth=points[..., 2].clone(),
                     mask=torch.ones((height, width), dtype=torch.bool))
+
+
+class NativeMoGe3Fixture(NativeMoGeFixture):
+    def infer(self, image, **options):
+        import torch
+        output = super().infer(image, **options)
+        output['intrinsics'] = torch.tensor([[800 / 960, 0, .5],
+            [0, 800 / 540, .5], [0, 0, 1]], dtype=torch.float32)
+        return output
 
 
 class OneFailedCamera:
@@ -172,6 +181,18 @@ class DepthExtensionTests(unittest.TestCase):
             self.assertEqual(stored['depth'][270, 480], 6.)
         package = read_json(receipt['package']['path'])
         self.assertEqual(package['candidates'][1]['status'], 'available')
+
+    def test_d6_three_step_adapter_uses_same_worker_scale_and_package_path(self):
+        request = dict(self.request, id='D6-fit-fixture-001', component='D6')
+        with self.assertRaisesRegex(ValueError, 'adapter candidate'):
+            run(request, self.root / request['id'], self.config,
+                backend=MoGe2Adapter(NativeMoGeFixture()), ledger=self.ledger)
+        receipt = run(request, self.root / request['id'], self.config,
+            backend=MoGe3Adapter(NativeMoGe3Fixture()), ledger=self.ledger)
+        worker = read_json(receipt['worker']['path'])
+        self.assertEqual(worker['eligibility']['metric_scale'], 'passed')
+        self.assertEqual(worker['rows'][0]['metadata']['native_refine_steps'], 3)
+        self.assertEqual(read_json(receipt['package']['path'])['candidates'][1]['id'], 'D6')
 
     def test_relative_depth_keeps_its_domain_out_of_metric_scale(self):
         request = dict(self.request, id='D9-fit-fixture-001', component='D9')
