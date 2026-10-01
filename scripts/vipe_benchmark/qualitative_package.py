@@ -83,11 +83,15 @@ def validate(manifest, *, deadline=None):
     for key in ('source','config','inputs','amendment'):
         _record(manifest['bindings'][key])
     if manifest['record_kind'] == 'actual':
-        for key in ('request','generation_result','generation_manifest'):
-            if key not in manifest['bindings']:
-                raise ValueError('actual package requires trusted generation receipts')
-            _record(manifest['bindings'][key])
-        from .qualitative_generation import validate_actual_package
+        if 'depth_aggregate_request' in manifest['bindings']:
+            _record(manifest['bindings']['depth_aggregate_request'])
+            from .depth_aggregate import validate_actual_package
+        else:
+            for key in ('request','generation_result','generation_manifest'):
+                if key not in manifest['bindings']:
+                    raise ValueError('actual package requires trusted generation receipts')
+                _record(manifest['bindings'][key])
+            from .qualitative_generation import validate_actual_package
         validate_actual_package(manifest, deadline=deadline)
     settings = manifest['settings']
     resolution = settings['resolution']
