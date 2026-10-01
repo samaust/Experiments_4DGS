@@ -4,9 +4,9 @@ import os
 
 
 def helper_job(args):
-    from .s1_progress import S1_RECOVERY_JOBS
+    from .s1_identity import is_recovery_job
     job = args.get('reservation', {}).get('job_id', args.get('job_id', 'S1-calibration-recovery-001'))
-    if job not in S1_RECOVERY_JOBS:
+    if not is_recovery_job(job):
         raise ValueError('S1 helper job identity')
     return job
 

@@ -1,5 +1,5 @@
 """Admission and dependency-aware dispatch of immutable matrix requests."""
-from .s1_progress import S1_RECOVERY_JOBS
+from .s1_identity import is_recovery_job, job_from_attempt
 from pathlib import Path
 import platform
 import shutil
@@ -28,7 +28,7 @@ def result_record(local, job):
                       and e['original_job_id'] == job]
         if job == 'S1-calibration':
             identities = [event['job_id'] for event in recoveries]
-            if identities != sorted(S1_RECOVERY_JOBS)[:len(identities)]:
+            if identities != [job_from_attempt(index) for index in range(1, len(identities) + 1)]:
                 raise ValueError('S1 recovery differs from the reviewed identities')
         if recoveries:
             record = result_record(local, recoveries[-1]['job_id'])
@@ -49,7 +49,7 @@ def result_record(local, job):
                         raise ValueError('recovery result differs from S3 reconstruction contract')
                     return record
         return None
-    if job in S1_RECOVERY_JOBS:
+    if is_recovery_job(job):
         from .s1_recovery import resolved_result
         # Validate the completed attempt through its finish; later allocations
         # belong to subsequent work. The entire live hash chain was checked above.
@@ -519,7 +519,7 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
             raise ValueError('saved unstarted request differs from the explicit dispatch')
     else:
         write_json(request_path, request)
-    if job in S1_RECOVERY_JOBS:
+    if is_recovery_job(job):
         from .s1_progress import read_request_record
         read_request_record(file_record(request_path), request)
     python = request.get('runtime', {}).get('python', str(ROOT / '.local/envs/stg-colmap/bin/python'))
@@ -530,7 +530,7 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
         result = read_json(output / 'result.json')
         if result.get('status') != 'complete':
             raise ValueError('worker did not complete its explicit result contract')
-        if job in S1_RECOVERY_JOBS:
+        if is_recovery_job(job):
             from .s1_recovery import accept_result
             return accept_result(local, config, request, result, output)
         if operation == 'component' and request['component'].startswith(('S', 'D')):
@@ -543,7 +543,7 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
                     if field in row:
                         verify_record(row[field])
     evidence = dict(request=file_record(request_path), worker=file_record(ROOT / 'scripts/basketball_vipe_worker.py'))
-    if job in S1_RECOVERY_JOBS:
+    if is_recovery_job(job):
         from .s1_recovery import event_ref
         event = next(e for e in ledger.events() if e['event'] == 'component_recovery_authorized' and e['job_id'] == job)
         evidence.update({k: event[k] for k in ('authorization', 'admission', 'semantic_amendment', 'repair_validation', 'configuration', 'baseline_correction')})
@@ -558,10 +558,10 @@ def dispatch(local, docs, config, request, *, operation='component', checkpoint=
                                 reservation=reservation, outcome=outcome)
     result = supervise(ledger, job, command, local / 'jobs' / suffix,
         evidence=evidence,
-        sample_resources=s1_sampling_operation(local, job) if job in S1_RECOVERY_JOBS else lambda: resources(local, gpu=device_monitored),
-        validate_result=validate, poll_seconds=.1 if job in S1_RECOVERY_JOBS else 2., checkpoint=checkpoint, resume_checkpoint=resume_checkpoint,
-        terminal_publisher=publish if job in S1_RECOVERY_JOBS else None, terminal_docs=docs)
-    if job not in S1_RECOVERY_JOBS:
+        sample_resources=s1_sampling_operation(local, job) if is_recovery_job(job) else lambda: resources(local, gpu=device_monitored),
+        validate_result=validate, poll_seconds=.1 if is_recovery_job(job) else 2., checkpoint=checkpoint, resume_checkpoint=resume_checkpoint,
+        terminal_publisher=publish if is_recovery_job(job) else None, terminal_docs=docs)
+    if not is_recovery_job(job):
         write_json(docs / (suffix + '.json'), dict(status='complete', result=file_record(local / 'jobs' / suffix / 'result.json')))
     return result
 

@@ -9,7 +9,8 @@ import numpy as np
 
 from .s1_progress import checked_write_json as write_json, checked_mkdir
 from .s1_recovery import AMENDMENT
-from .s1_progress import S1_RECOVERY_JOBS, read_request_record
+from .s1_progress import read_request_record
+from .s1_identity import is_recovery_job, is_standing_retry_job
 from .s1_progress import operation, with_deadline, DeadlineSink, before
 from .s1_progress import (checked_file_record as file_record,
     checked_verify_record as verify_record, checked_read_json as read_json)
@@ -23,7 +24,8 @@ REQUIRED = ('detector_raw_token_logits', 'detector_raw_boxes_cxcywh',
 def check_compact_asset_provenance(row, request):
     """Bind compact S1 row provenance to the full frozen request manifest."""
     from .s1_recovery import JOB_4, JOB_5, JOB_6, JOB_7, JOB_8, JOB_9
-    if request.get('job_id') not in (JOB_4, JOB_5, JOB_6, JOB_7, JOB_8, JOB_9):
+    if (request.get('job_id') not in (JOB_4, JOB_5, JOB_6, JOB_7, JOB_8, JOB_9)
+            and not is_standing_retry_job(request.get('job_id'))):
         return
     from .backends import REQUIRED_ASSETS
     from .files import object_hash
@@ -279,7 +281,7 @@ def preserve_failure(request, output, identity, error, *, adapter=None, predicti
         known=first_result_handoff.known(clock,request)
         if known is not None:error.s1_first_result=known
     # Raw preservation stops at W. Only bounded diagnostic metadata may then use C.
-    if request.get('job_id') in S1_RECOVERY_JOBS and clock is not None:
+    if is_recovery_job(request.get('job_id')) and clock is not None:
         now=time.monotonic()
         if now>=clock.total_deadline:
             error.s1_progress_unavailable='original total deadline reached; diagnostic publication unavailable'
@@ -296,7 +298,7 @@ def _preserve_failure(request, output, identity, error, *, adapter=None, predict
                      stage='adapter', parent=None, runtime=None, clock=None):
     """Best effort publication; caller always re-raises the original exception."""
     output = Path(output)
-    if request.get('job_id') in S1_RECOVERY_JOBS and clock is not None and time.monotonic() >= clock.work_deadline:
+    if is_recovery_job(request.get('job_id')) and clock is not None and time.monotonic() >= clock.work_deadline:
         from .s1_progress import read_bytes, record
         from .s1_clock import diagnostic
         error.s1_progress_unavailable='work deadline reached; raw bytes retained without new qualification'
@@ -353,7 +355,7 @@ def _preserve_failure(request, output, identity, error, *, adapter=None, predict
     except Exception:
         amendment = None
     clock_fields = {}
-    if request['job_id'] in S1_RECOVERY_JOBS:
+    if is_recovery_job(request['job_id']):
         from .s1_clock import diagnostic
         from .s1_progress import checked_require_clock as require_clock
         try:
@@ -374,7 +376,7 @@ def _preserve_failure(request, output, identity, error, *, adapter=None, predict
     write_json(path, value)
     record = file_record(path)
     error.s1_failure_record = record
-    if request['job_id'] in S1_RECOVERY_JOBS:
+    if is_recovery_job(request['job_id']):
         error.s1_first_result = first_record(request, output,
             'failed' if evidence.get('forward_count', 0) else 'not_reached',
             clock=clock, runtime=runtime, error=f'{type(error).__name__}: {error}', stage=value['failure_stage'], raw=[record])
@@ -606,7 +608,7 @@ def _qualify_row(row, request, *, first=False, loader=None, memo=None):
     from .contracts import instances, validate_static
     from .backends import s1_class_assignments
     from .access import Identity, RGBLoader
-    if request.get('job_id') not in S1_RECOVERY_JOBS:raise ValueError('S1 row request binding changed')
+    if not is_recovery_job(request.get('job_id')):raise ValueError('S1 row request binding changed')
     check_compact_asset_provenance(row, request)
     validate_row_numerics(row)
     identity = Identity(**row['identity'])

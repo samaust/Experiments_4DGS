@@ -1,6 +1,6 @@
 from .s1_progress import checked_clock_reservation
 """Serial process-group supervisor with deadlines that include cleanup."""
-from .s1_progress import S1_RECOVERY_JOBS
+from .s1_identity import is_recovery_job
 import os
 from pathlib import Path
 import signal
@@ -390,7 +390,7 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
     if spec['resource'] == 'gpu' and sample_resources is None:
         raise ValueError('GPU dispatch requires exclusive-device and resource readings')
     sampler = sample_resources or (lambda: {})
-    is_s1 = job_id in S1_RECOVERY_JOBS
+    is_s1 = is_recovery_job(job_id)
     lifecycle = HelperLifecycle(retain=is_s1)
     peak = dict(device_bytes=0, artifact_bytes=0, download_bytes=0)
     try:

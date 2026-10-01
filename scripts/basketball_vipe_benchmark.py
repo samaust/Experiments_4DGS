@@ -9,6 +9,7 @@ import sys
 from vipe_benchmark.config import PLAN, PROTOCOL, ROOT, SOURCE_HASHES, counts, jobs, load
 from vipe_benchmark.files import digest, file_record, read_json, verify_record, write_json
 from vipe_benchmark.ledger import Ledger
+from vipe_benchmark.s1_identity import is_recovery_job
 
 CONFIG = ROOT / 'configs/vipe-alternatives/benchmark-v1.json'
 
@@ -165,8 +166,7 @@ def execute(args, config):
     elif args.command == 'component-recovery':
         from vipe_benchmark.execution import common_admission, component_recovery_request
         from vipe_benchmark.s1_recovery import terminal_receipt
-        from vipe_benchmark.s1_progress import S1_RECOVERY_JOBS
-        if getattr(args, 'job', None) in S1_RECOVERY_JOBS:
+        if is_recovery_job(getattr(args, 'job', None)):
             from vipe_benchmark.execution import execute_s1_recovery
             return execute_s1_recovery(local, docs, config, args.authorization)
         try:
@@ -242,7 +242,13 @@ def resume(args, config):
     print('Recorded explicit resume for unstarted slots only; no jobs launched.')
 
 
-def main():
+def s1_recovery_job(value):
+    if not is_recovery_job(value):
+        raise argparse.ArgumentTypeError('canonical S1 calibration recovery identity required')
+    return value
+
+
+def argument_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run-id', required=True)
     sub = parser.add_subparsers(dest='command', required=True)
@@ -265,7 +271,7 @@ def main():
     p = sub.add_parser('setup-recovery')
     p.add_argument('--authorization', type=Path, required=True)
     p = sub.add_parser('component-recovery')
-    p.add_argument('--job', choices=['S1-calibration-recovery-001', 'S1-calibration-recovery-002', 'S1-calibration-recovery-003'])
+    p.add_argument('--job', type=s1_recovery_job)
     p.add_argument('--authorization', type=Path, required=True)
     p = sub.add_parser('reconstruction-recovery')
     p.add_argument('--authorization', type=Path, required=True)
@@ -279,7 +285,11 @@ def main():
     p = sub.add_parser('resume')
     p.add_argument('--authorization', required=True, help='Exact explicit user resume instruction')
     p.add_argument('--jobs', nargs='+', required=True)
-    args = parser.parse_args()
+    return parser
+
+
+def main():
+    args = argument_parser().parse_args()
     config = load()
     if args.command == 'init':
         return init_run(args, config)

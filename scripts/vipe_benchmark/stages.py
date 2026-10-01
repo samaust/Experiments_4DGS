@@ -1,5 +1,5 @@
 """Explicit component workers for the frozen Plan 031 matrix."""
-from .s1_progress import S1_RECOVERY_JOBS
+from .s1_identity import is_recovery_job
 from pathlib import Path
 import random
 import time
@@ -66,7 +66,7 @@ def cpu_runtime(request, output):
 
 def _model_runtime(request):
     from .s1_progress import operation,before
-    gated=request.get('job_id')in S1_RECOVERY_JOBS
+    gated=is_recovery_job(request.get('job_id'))
     run=operation if gated else lambda function,*args,**kwargs:function(*args,**kwargs)
     if gated:before()
     import torch
@@ -148,7 +148,7 @@ def _s1_deny_vipe(source_roots,native_helpers=None):
 
 def segment(request, output, config, *, clock=None):
     from .s1_progress import operation,checked_require_clock
-    if request.get('job_id')in S1_RECOVERY_JOBS:
+    if is_recovery_job(request.get('job_id')):
         # F1: the trusted clock is required before any derivation from it;
         # a malformed or untrusted clock must raise its original guard error,
         # never a deadline side effect from an earlier dereference.
@@ -166,12 +166,12 @@ def segment(request, output, config, *, clock=None):
 def _segment(request, output, config, *, clock=None):
     from .files import file_record,load_array,read_json,verify_record,write_json
     from .access import RGBLoader
-    if request.get('job_id')in S1_RECOVERY_JOBS:
+    if is_recovery_job(request.get('job_id')):
         from .s1_progress import checked_file_record as file_record,checked_read_json as read_json,checked_verify_record as verify_record,checked_write_json as write_json
         from .s1_evidence import load_array,S1RGBLoader as RGBLoader
     from .s1_progress import operation, DeadlineSink
     deadline = None
-    if request.get('job_id') in S1_RECOVERY_JOBS:
+    if is_recovery_job(request.get('job_id')):
         from .s1_progress import checked_require_clock as require_clock
         require_clock(clock).observe()
         deadline = clock.work_deadline
@@ -206,7 +206,7 @@ def _segment(request, output, config, *, clock=None):
         if component != 'S3' or branch != 'reconstruction' or request['memory_cleanup'] != CLEANUP:
             raise ValueError('unadmitted memory cleanup recipe')
         observer = MemoryObserver(torch, output, diagnostic=diagnostic)
-    if request['job_id'] in S1_RECOVERY_JOBS:
+    if is_recovery_job(request['job_id']):
         write_json(output / 'initial-runtime.json', runtime)
     if deadline is None:
         adapter = build_backend(component, request['assets'], device='cuda')
@@ -228,7 +228,7 @@ def _segment(request, output, config, *, clock=None):
         if component == 'S1' and hasattr(getattr(adapter, 'detector', None), 'reset_capture'):
             adapter.detector.reset_capture()
         try:
-            if request['job_id'] in S1_RECOVERY_JOBS:
+            if is_recovery_job(request['job_id']):
                 clock.observe()  # Every input, including a delayed loop transition.
             rgbs = [operation(loader.load,i,deadline=deadline) for i in group]
             footprints = [operation(load_array,loader.row(i)['valid'],deadline=deadline) for i in group]
@@ -239,7 +239,7 @@ def _segment(request, output, config, *, clock=None):
                 observer.phase('before_pair')
             failure_stage = 'adapter'
             predictions = adapter.segment(rgbs, footprints, frame_ids=[i.frame for i in group])
-            if request['job_id'] in S1_RECOVERY_JOBS:
+            if is_recovery_job(request['job_id']):
                 clock.observe()  # No new serialization after native return at W.
             if observer:
                 observer.cleanup()
@@ -258,7 +258,7 @@ def _segment(request, output, config, *, clock=None):
                 stem = output / identity.key()
                 row = source_row(identity, parent)
                 failure_stage = 'serialization'
-                if request['job_id'] in S1_RECOVERY_JOBS:clock.observe()
+                if is_recovery_job(request['job_id']):clock.observe()
                 row.update(instances=array_file(stem.with_suffix('.npy'), prediction.labels,deadline=deadline),
                     semantics=prediction.semantics, semantic_static=png_file(stem.with_suffix('.png'), usable,deadline=deadline),
                     metadata=prediction.metadata, final_static='assembled once in mask aggregation with M0',
@@ -268,7 +268,7 @@ def _segment(request, output, config, *, clock=None):
                     arrays = prediction.diagnostics
                     if any(np.asarray(v).dtype.hasobject for v in arrays.values()):
                         raise ValueError('native intermediates must be non-pickled numeric arrays')
-                    if request['job_id'] in S1_RECOVERY_JOBS:clock.observe()
+                    if is_recovery_job(request['job_id']):clock.observe()
                     if deadline is not None:
                         from .s1_evidence import numeric_file
                         row['diagnostics']=numeric_file(path,arrays,deadline=deadline)
@@ -276,7 +276,7 @@ def _segment(request, output, config, *, clock=None):
                         with path.open('xb',buffering=0) as stream:
                             operation(np.savez_compressed,DeadlineSink(stream,deadline),deadline=deadline,**arrays)
                         row['diagnostics']=operation(file_record,path,deadline=deadline)
-                if request['job_id'] in S1_RECOVERY_JOBS:
+                if is_recovery_job(request['job_id']):
                     from .s1_progress import publish_segment_row
                     failure_stage = 'first_result' if offset == 0 else 'output_qualification'
                     checks = publish_segment_row(row,request,loader,clock,progress,
@@ -291,7 +291,7 @@ def _segment(request, output, config, *, clock=None):
                     runtime['loaded_files'] = (loaded_runtime(output / 'loaded-runtime.json', request=request)
                         if deadline is not None else loaded_runtime(output / 'loaded-runtime.json'))
                     runtime['installed_inventory'] = verify_record(request['runtime']['inventory'])
-                if request['job_id'] in S1_RECOVERY_JOBS:
+                if is_recovery_job(request['job_id']):
                     from .s1_evidence import first_record, qualify_runtime
                     failure_stage = 'runtime_qualification'
                     write_json(output / 'partial-runtime.json', runtime)
@@ -317,7 +317,7 @@ def _segment(request, output, config, *, clock=None):
                                      parent=loader.row(group[0]), runtime=runtime, clock=clock,first_result_handoff=first_result_handoff)
                 except BaseException as persistence_error:
                     exc.add_note(f'S1 evidence publication failed: {persistence_error}')
-                if request['job_id'] in S1_RECOVERY_JOBS: progress.close()
+                if is_recovery_job(request['job_id']): progress.close()
             raise
         print(f'{request["job_id"]}: {len(rows)}/{len(identities)} outputs', flush=True)
     validate_membership(rows, identities)
@@ -326,7 +326,7 @@ def _segment(request, output, config, *, clock=None):
     result = dict(status='complete', component=component, branch=branch, job_id=request['job_id'], rows=rows,
         configuration=file_record(output / 'config.json'), runtime=runtime, native_wall_seconds=native_seconds,
         peak_allocated_bytes=torch.cuda.max_memory_allocated(), peak_reserved_bytes=torch.cuda.max_memory_reserved())
-    if request['job_id'] in S1_RECOVERY_JOBS:
+    if is_recovery_job(request['job_id']):
         result['first_result'] = file_record(output / 'first-result-qualification.json')
         from .s1_evidence import validate_result
         result['reservation_clock'] = clock.mapping()
@@ -344,7 +344,7 @@ def _segment(request, output, config, *, clock=None):
             for r in rows]
         result['baseline'] = request['baseline']
     write_json(output / 'result.json', result)
-    if request['job_id'] in S1_RECOVERY_JOBS: progress.close()
+    if is_recovery_job(request['job_id']): progress.close()
 
 
 def predict_depth(request, output, config):
@@ -365,7 +365,7 @@ def predict_depth(request, output, config):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=False)
     write_json(output / 'config.json', request)
-    if request['job_id'] in S1_RECOVERY_JOBS:
+    if is_recovery_job(request['job_id']):
         write_json(output / 'initial-runtime.json', runtime)
     adapter = build_backend(component, request['assets'], device='cuda')
     predictions, result_rows = {}, []

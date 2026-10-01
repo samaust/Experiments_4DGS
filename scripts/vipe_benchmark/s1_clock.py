@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import math
 from pathlib import Path
 import time
-from .s1_progress import S1_RECOVERY_JOBS
+from .s1_identity import is_recovery_job
 
 SCHEMA = 'plan041-s1-reservation-clock/v1'
 
@@ -70,7 +70,7 @@ class ReservationClock:
                 'boot_id', 'monotonic_start', 'effective_seconds', 'cleanup_reserve_seconds',
                 'total_deadline', 'work_deadline'} or value.get('schema') != SCHEMA:
             raise ValueError('invalid reservation clock mapping/schema')
-        if type(value['job_id']) is not str or value['job_id'] not in S1_RECOVERY_JOBS:
+        if type(value['job_id']) is not str or not is_recovery_job(value['job_id']):
             raise ValueError('invalid reservation clock job_id')
         record = strict_record(value['request'])
         ref = value['reservation']

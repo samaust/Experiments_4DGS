@@ -1,5 +1,5 @@
 """Locked, append-only, hash-chained attempt and resource ledger."""
-from .s1_progress import S1_RECOVERY_JOBS
+from .s1_identity import is_recovery_job, is_standing_retry_job
 from contextlib import contextmanager
 import fcntl
 import json
@@ -123,7 +123,7 @@ class Ledger:
                 raise ValueError('job already consumed or accounted for; no automatic retry')
             if any(r['event'] == 'reserve' for r in states.values()):
                 raise ValueError('unreconciled active attempt; refusing concurrent dispatch')
-            if job_id in S1_RECOVERY_JOBS:
+            if is_recovery_job(job_id):
                 from .s1_recovery import reservation_binding
                 reservation_binding(self.path.parent, self.config, events, evidence, command=command)
             if job_id in ('E5-setup-recovery-001', 'E5-setup-recovery-002', 'E5-setup-recovery-003', 'E5-setup-recovery-004'):
@@ -240,6 +240,9 @@ class Ledger:
         document = read_json(verify_record(authorization)['path'])
         original_id = document.get('original_job_id', '')
         amended = document.get('schema') in (SCHEMA, SCHEMA_2, SCHEMA_3, SCHEMA_4, SCHEMA_5, SCHEMA_6, SCHEMA_7, SCHEMA_8, SCHEMA_9)
+        if is_standing_retry_job(document.get('job_id')):
+            from .s1_recovery import STANDING_SCHEMA
+            amended = document.get('schema') == STANDING_SCHEMA
         if not amended and original_id.startswith('S1-'):
             raise ValueError('S1 requires calibration-only semantic amendment authorization; reconstruction blocked')
         if not re.fullmatch(r'S[0-4]-(calibration|reconstruction)', original_id):
