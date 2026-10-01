@@ -121,12 +121,8 @@ def run_video_fixture(request, output, config, *, backend, ledger):
     if type(seconds) not in (int, float) or not math.isfinite(seconds) or not 0 < seconds <= 600:
         raise ValueError('bounded CPU video fixture deadline required')
     cameras = request.get('cameras')
-    if (not isinstance(cameras, list) or cameras != sorted(set(cameras)) or
-            not set(cameras) <= set(training_cameras(config)) or
-            not {1, 11, 21, 31} <= set(cameras)):
-        raise ValueError('video fixture must include the four clip cameras')
-    if component == 'D10' and set(cameras) != set(training_cameras(config)):
-        raise ValueError('D10 metric scale requires every training camera')
+    if (not isinstance(cameras, list) or cameras != training_cameras(config)):
+        raise ValueError('video fixture requires every training camera')
     for key in ('context', 'configuration', 'extension_configuration'):
         verify_record(request[key])
     context = read_json(request['context']['path'])
@@ -172,6 +168,15 @@ def run_video_fixture(request, output, config, *, backend, ledger):
                     if component == 'D10' else
                     [(camera, role) for camera in cameras for role in ('fit', 'check')])
         fit_predictions, check_predictions = {}, {}
+        fit = None
+        if component == 'D10':
+            from .scale import evaluate
+            source_inputs = read_json(context['inputs']['path'])
+            depth_rows = source_inputs['depth']
+            provenance = dict(inputs=context['inputs'], component_sha256=settings,
+                              component='D10')
+            fit_rows = [row for row in depth_rows if row['identity']['frame'] == 100]
+            check_rows = [row for row in depth_rows if row['identity']['frame'] == 175]
         for camera, role in schedule:
             if time.monotonic() - start >= seconds:
                 raise TimeoutError('video fixture deadline exceeded')
@@ -207,36 +212,38 @@ def run_video_fixture(request, output, config, *, backend, ledger):
                         grid='scale-opencv-integer', domain=domain,
                         prediction=record, settings=settings,
                         reused_anchor=frame == 175))
+            if component == 'D10' and role == 'fit' and camera == cameras[-1]:
+                fit = evaluate(fit_rows, fit_predictions, config, provenance=provenance)
+                fit['component'] = 'D10'
+                write_json(output / 'scale-fit.json', fit)
+                if fit['status'] != 'passed':
+                    admission = request.get('qualitative_admission')
+                    if not isinstance(admission, dict):
+                        raise ValueError('failed D10 scale fit requires separate qualitative admission')
+                    verify_record(admission)
+                    proof = read_json(admission['path'])
+                    if proof != dict(schema='plan069-depth-qualitative-admission/v1',
+                            record_kind='fixture', component='D10', inputs=context['inputs'],
+                            purpose='qualitative-only', status='admitted'):
+                        raise ValueError('D10 qualitative admission binding changed')
         scales = {}
         if component == 'D10':
-            from .scale import evaluate
-            source_inputs = read_json(context['inputs']['path'])
-            depth_rows = source_inputs['depth']
-            provenance = dict(inputs=context['inputs'], component_sha256=settings,
-                              component='D10')
-            fit_rows = [row for row in depth_rows if row['identity']['frame'] == 100]
-            check_rows = [row for row in depth_rows if row['identity']['frame'] == 175]
-            fit = evaluate(fit_rows, fit_predictions, config, provenance=provenance)
-            fit['component'] = 'D10'
-            write_json(output / 'scale-fit.json', fit)
+            if fit is None:
+                raise ValueError('complete D10 metric fit required before check')
             scales['fit'] = file_record(output / 'scale-fit.json')
             if fit['status'] == 'passed':
                 check = evaluate(check_rows, check_predictions, config,
                     provenance=provenance, frozen_fit=scales['fit'])
             else:
-                admission = request.get('qualitative_admission')
-                if not isinstance(admission, dict):
-                    raise ValueError('failed D10 scale fit requires separate qualitative admission')
-                verify_record(admission)
-                proof = read_json(admission['path'])
-                if proof != dict(schema='plan069-depth-qualitative-admission/v1',
-                        record_kind='fixture', component='D10', inputs=context['inputs'],
-                        purpose='qualitative-only', status='admitted'):
-                    raise ValueError('D10 qualitative admission binding changed')
+                diagnostics = evaluate(check_rows, check_predictions,
+                    dict(config, scale_fit_frame=config['scale_check_frame']),
+                    provenance=provenance)
                 check = dict(status='blocked', role='selection', scale=None,
                     blockers=['No passing frozen fit; qualitative-only admission'],
                     fit_blockers=fit.get('blockers', []), frozen_fit=scales['fit'],
-                    provenance=provenance, cameras=[])
+                    fit_cameras=fit.get('cameras', []),
+                    check_blockers=diagnostics.get('blockers', []),
+                    provenance=provenance, cameras=diagnostics['cameras'])
             check['component'] = 'D10'
             write_json(output / 'scale-check.json', check)
             scales['check'] = file_record(output / 'scale-check.json')
