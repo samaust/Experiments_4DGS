@@ -2386,7 +2386,7 @@ class HelperSessionTests(unittest.TestCase):
                     elif kind=='sources':
                         with patch.object(p,'MAX_SOURCES',1),self.assertRaises(ValueError):p.candidate_inventory(output,None,None)
                     elif kind=='bytes':
-                        with patch.object(p,'MAX_METADATA',1),self.assertRaises(ValueError):p.candidate_inventory(output,None,None)
+                        with patch.object(p,'MAX_INVENTORY_METADATA',1),self.assertRaises(ValueError):p.candidate_inventory(output,None,None)
                     elif kind=='traversal':
                         with self.assertRaises(ValueError):p.read_bytes(str(root)+'/output/../output/one-produced-row.json',1024)
                     elif kind=='write':
@@ -2850,10 +2850,14 @@ class HelperSessionTests(unittest.TestCase):
         self.control_record('plan047-recovery',evidence)
     def test_progress_plan047_limits(self):
         import copy
+        from contextlib import ExitStack
         from vipe_benchmark import s1_progress as p,s1_evidence as e
         from vipe_benchmark.files import write_json
         from test_vipe_benchmark_s1_helper_fixtures import progress_fixture,plan047_state
         evidence=[]
+        self.assertEqual(p.MAX_RESULT_BYTES,510*256*1024+p.MAX_METADATA)
+        self.assertEqual(p.MAX_INVENTORY_METADATA,p.MAX_RESULT_BYTES+p.MAX_CANDIDATES*256*1024)
+        self.assertEqual(p.MAX_RESULT_NODES,510*65536+1048576)
         limits={'inventory_depth':4,'variants':4,'identities':510,'candidates':2048,'inventory_sources':2048,'directory_entries':4096,'embedded_refs':4096,'metadata_bytes':33554432,'row_bytes':262144,'path_utf8_bytes':2048,'checkpoint_bytes':1048576,'checkpoint_depth':12,'checkpoint_nodes':65536,'producer_generations':1024,'total_generations':2048,'committed_bytes':2147483648,'tree_entries':2057,'retained_bytes':4194304,'context_bytes':8192,'head_bytes':8192,'reference_bytes':8192,'control_bytes':4096,'result_bytes':33554432,'result_depth':64,'result_nodes':1048576,'error_count':32,'error_utf8_bytes':1024,'socket_address_bytes':96}
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);fixture=progress_fixture(root/'fixture')
@@ -2960,7 +2964,12 @@ class HelperSessionTests(unittest.TestCase):
                         def counter(counter_name,observed_value,maximum):
                             counters[counter_name]=max(counters.get(counter_name,0),observed_value)
                             return actual_counter(counter_name,observed_value,maximum)
-                        with patch.object(p,'inventory_capacity',side_effect=counter):
+                        # Exercise exact capacity endpoints with a smaller injected
+                        # budget; the real aggregate regression covers defaults.
+                        with ExitStack() as capacity_scope:
+                            capacity_scope.enter_context(patch.object(p,'inventory_capacity',side_effect=counter))
+                            if name=='metadata_bytes':capacity_scope.enter_context(patch.object(p,'MAX_INVENTORY_METADATA',limit))
+                            if name=='result_bytes':capacity_scope.enter_context(patch.object(p,'MAX_RESULT_BYTES',limit))
                             if value>limit:
                                 with self.assertRaises((ValueError,OverflowError)) as caught:action()
                                 observed=type(caught.exception).__name__
