@@ -39,6 +39,21 @@ class RelativeInverse:
             metadata={'native_depth_type': 'relative inverse depth'})
 
 
+class ConstantRelative(RelativeInverse):
+    def predict(self, rgb, K, image_valid):
+        result = super().predict(rgb, K, image_valid)
+        result.values[image_valid] = .5
+        return result
+
+
+class NoValidPixels(KnownPlane):
+    def predict(self, rgb, K, image_valid):
+        result = super().predict(rgb, K, image_valid)
+        result.valid[:] = False
+        result.values[:] = np.nan
+        return result
+
+
 class WrongDomain:
     def predict(self, rgb, K, image_valid):
         return KnownPlane().predict(rgb, K, image_valid)
@@ -107,6 +122,10 @@ class DepthExtensionTests(unittest.TestCase):
         self.assertEqual(package['record_kind'], 'fixture')
         self.assertEqual([c['id'] for c in package['candidates']], ['source-rgb', 'D5'])
         self.assertEqual(package['candidates'][1]['status'], 'available')
+        outcome = read_json(package['candidates'][1]['provenance']['ledger_outcome']['path'])
+        self.assertEqual(outcome['event'], 'cpu_preparation_charge')
+        self.assertEqual(outcome['evidence'], file_record(self.root / self.request['id'] / 'result.json'))
+        self.assertIn(outcome, self.ledger.events())
 
     def test_check_reuses_exact_fit_and_rejects_changed_inputs(self):
         fit = run(self.request, self.root / 'D5-fit-fixture-001', self.config,
@@ -142,6 +161,14 @@ class DepthExtensionTests(unittest.TestCase):
         package = read_json(receipt['package']['path'])
         self.assertEqual(package['settings']['depth_display']['domain'], 'relative_inverse')
         self.assertEqual(package['settings']['depth_display']['direction'], 'larger means nearer')
+
+    def test_constant_relative_map_has_a_neutral_labeled_display(self):
+        request = dict(self.request, id='D9-fit-fixture-001', component='D9')
+        receipt = run(request, self.root / request['id'], self.config,
+            backend=ConstantRelative(), ledger=self.ledger)
+        package = read_json(receipt['package']['path'])
+        self.assertEqual(package['settings']['depth_display']['raw_range'], [.5, .5])
+        self.assertEqual(package['settings']['depth_display']['constant_value'], .5)
 
     def test_wrong_domain_preserves_failure_and_cpu_charge(self):
         request = dict(self.request, id='D9-fit-fixture-001', component='D9')
@@ -188,9 +215,26 @@ class DepthExtensionTests(unittest.TestCase):
         selected = read_json(read_json(receipt['worker']['path'])['scale']['path'])
         self.assertEqual(selected['status'], 'blocked')
         self.assertIsNone(selected['scale'])
-        self.assertEqual(selected['cameras'], failed_fit['cameras'])
+        self.assertEqual(selected['fit_cameras'], failed_fit['cameras'])
+        self.assertEqual(selected['cameras'][1]['points'], 120)
         package = read_json(receipt['package']['path'])
         self.assertEqual(package['candidates'][1]['status'], 'available')
+
+    def test_qualitative_check_with_no_valid_map_is_unavailable(self):
+        fitted = run(self.request, self.root / self.request['id'], self.config,
+            backend=NoValidPixels(), ledger=self.ledger)
+        write_json(self.root / 'qualitative-admission.json',
+            dict(schema='plan069-depth-qualitative-admission/v1', record_kind='fixture',
+                 component='D5', inputs=self.request['inputs'],
+                 purpose='qualitative-only', status='admitted'))
+        check = dict(self.request, id='D5-check-fixture-001', role='check',
+            frozen_fit=read_json(fitted['worker']['path'])['scale'],
+            qualitative_admission=file_record(self.root / 'qualitative-admission.json'))
+        receipt = run(check, self.root / check['id'], self.config,
+            backend=NoValidPixels(), ledger=self.ledger)
+        package = read_json(receipt['package']['path'])
+        self.assertEqual(package['candidates'][1]['status'], 'unavailable')
+        self.assertEqual(package['candidates'][1]['media'], [])
 
     def test_reused_identity_is_rejected_by_ledger_even_in_a_new_directory(self):
         run(self.request, self.root / self.request['id'], self.config,

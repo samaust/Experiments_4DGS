@@ -138,12 +138,14 @@ def _preview_frame(values, valid, domain, path):
     else:
         observed = values[valid]
         low, high = float(observed.min()), float(observed.max())
-        _require(high > low, 'relative display requires a nonconstant valid range')
-        normalized = np.clip((values - low) / (high - low), 0, 1)
+        normalized = (np.full(values.shape, .5, np.float32) if high == low else
+                      np.clip((values - low) / (high - low), 0, 1))
         display = dict(domain=domain, normalization_scope='frozen-frame fixture',
                        raw_range=[low, high],
                        direction='larger means nearer' if domain == 'relative_inverse'
                            else 'larger means farther')
+        if high == low:
+            display['constant_value'] = low
     grey = np.nan_to_num(normalized, nan=0)
     pixels = np.repeat((grey * 255).astype(np.uint8)[..., None], 3, axis=2)
     pixels[~valid] = [255, 0, 255]
@@ -151,9 +153,11 @@ def _preview_frame(values, valid, domain, path):
     return display
 
 
-def _package(request, output, rows, predictions, worker, ledger_prefix):
+def _package(request, output, rows, predictions, worker, ledger_outcome):
     component = request['component']
-    first = sorted(rows, key=lambda row: row['identity']['camera'])[0]
+    visible = [row for row in sorted(rows, key=lambda row: row['identity']['camera'])
+               if predictions[row['identity']['camera']][1].any()]
+    first = visible[0] if visible else sorted(rows, key=lambda row: row['identity']['camera'])[0]
     camera, frame = first['identity']['camera'], first['identity']['frame']
     role = 'calibration' if frame == 100 else 'selection'
     selection = dict(id=f'camera{camera}-{role}-{frame}', kind='frame', role=role,
@@ -164,12 +168,13 @@ def _package(request, output, rows, predictions, worker, ledger_prefix):
         _require(image.size == (960, 540), 'accepted RGB grid differs')
     values, valid, _ = predictions[camera]
     preview = output / 'preview.png'
-    display = _preview_frame(values, valid, worker['domain'], preview)
+    display = (_preview_frame(values, valid, worker['domain'], preview) if visible else
+               dict(domain=worker['domain'], status='no-valid-pixels'))
     media = lambda record: dict(selection_id=selection['id'], kind='frame',
         frame_ids=[frame], timestamps=[frame / 25], camera_id=str(camera),
         resolution=[960, 540], record=record, source_input=source)
     origin = dict(source_result=file_record(output / 'result.json'),
-                  ledger_outcome=ledger_prefix,
+                  ledger_outcome=ledger_outcome,
                   configuration=file_record(output / 'request.json'))
     manifest = dict(schema='plan067-qualitative-package/v1',
         id=request['id'] + '-preview', mode='qualitative', record_kind='fixture',
@@ -185,8 +190,9 @@ def _package(request, output, rows, predictions, worker, ledger_prefix):
                  reason='', provenance=dict(origin), media=[media(source)]),
             dict(id=component, label=f'{component} {worker["domain"]}',
                  is_control=False, stage='depth component diagnostic',
-                 output_type='component', status='available', reason='',
-                 provenance=origin, media=[media(file_record(preview))]),
+                 output_type='component', status='available' if visible else 'unavailable',
+                 reason='' if visible else 'No valid depth pixels in any training camera',
+                 provenance=origin, media=[media(file_record(preview))] if visible else []),
         ])
     published = publish_package(manifest, output / 'package')
     return published['package']
@@ -203,7 +209,7 @@ def run(request, output, config, *, backend, ledger):
     with (output / 'source.py').open('xb') as stream:
         stream.write(Path(__file__).read_bytes())
     write_json(output / 'ledger-prefix.json', dict(events=events))
-    prefix = file_record(output / 'ledger-prefix.json')
+    charged_elapsed = 0.
     try:
         import cv2
         predictions, result_rows, arrays = {}, [], {}
@@ -242,9 +248,16 @@ def run(request, output, config, *, backend, ledger):
             from .scale import evaluate
             fit = read_json(request['frozen_fit']['path']) if 'frozen_fit' in request else None
             if fit is not None and fit.get('status') != 'passed':
+                check_diagnostics = evaluate(rows, predictions,
+                    dict(config, scale_fit_frame=config['scale_check_frame']),
+                    provenance=dict(inputs=request['inputs'],
+                        component_sha256=component_hash, component=request['component']))
                 scale = dict(status='blocked', role='selection', scale=None,
                     blockers=['No passing frozen fit; qualitative-only admission'],
-                    fit_blockers=fit.get('blockers', []), cameras=fit.get('cameras', []),
+                    fit_blockers=fit.get('blockers', []),
+                    fit_cameras=fit.get('cameras', []),
+                    check_blockers=check_diagnostics.get('blockers', []),
+                    cameras=check_diagnostics['cameras'],
                     frozen_fit=request['frozen_fit'], provenance=dict(inputs=request['inputs'],
                         component_sha256=component_hash))
             else:
@@ -261,7 +274,14 @@ def run(request, output, config, *, backend, ledger):
             metric_scale=scale['status'] if domain == 'camera_z_metres' else 'not_applicable',
             downstream='blocked')
         write_json(output / 'result.json', result)
-        package = _package(request, output, rows, arrays, result, prefix)
+        inference_elapsed = time.monotonic() - start
+        _require(inference_elapsed <= request['max_seconds'], 'depth fixture deadline exceeded')
+        charge = ledger.charge_cpu_preparation(inference_elapsed,
+            file_record(output / 'result.json'))
+        charged_elapsed = inference_elapsed
+        write_json(output / 'ledger-outcome.json', charge)
+        package = _package(request, output, rows, arrays, result,
+            file_record(output / 'ledger-outcome.json'))
         elapsed = time.monotonic() - start
         _require(elapsed <= request['max_seconds'], 'depth fixture deadline exceeded')
         receipt = dict(schema='plan069-depth-extension-transaction/v1',
@@ -269,12 +289,14 @@ def run(request, output, config, *, backend, ledger):
             worker=file_record(output / 'result.json'), package=package,
             elapsed_seconds=elapsed)
         write_json(output / 'transaction.json', receipt)
-        ledger.charge_cpu_preparation(elapsed, file_record(output / 'transaction.json'))
+        ledger.charge_cpu_preparation(elapsed - charged_elapsed,
+            file_record(output / 'transaction.json'))
         return receipt
     except BaseException as error:
         elapsed = time.monotonic() - start
         write_json(output / 'failure.json', dict(schema='plan069-depth-extension-failure/v1',
             status='failed', id=request['id'], error=f'{type(error).__name__}: {error}',
             elapsed_seconds=elapsed))
-        ledger.charge_cpu_preparation(elapsed, file_record(output / 'failure.json'))
+        ledger.charge_cpu_preparation(max(0., elapsed - charged_elapsed),
+            file_record(output / 'failure.json'))
         raise
