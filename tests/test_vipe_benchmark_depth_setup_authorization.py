@@ -47,6 +47,17 @@ class DepthSetupAuthorizationTests(unittest.TestCase):
                     commercial={}, assets=[], runtime={},
                     live=dict(ledger_head_sha256=head)))
                 return file_record(path)
+            def binding(admission):
+                request_path = root / 'requests/plan069-D7-maps-001.json'
+                request_path.unlink(missing_ok=True)
+                write_json(request_path, dict(candidate='D7', job_id='plan069-D7-maps-001',
+                    record_kind='actual', review=review, authorization=approved,
+                    source_review=source, admission=admission))
+                worker = file_record(ROOT / 'scripts/basketball_vipe_depth_d7_maps.py')
+                executable = file_record(sys.executable)
+                return dict(command=[sys.executable, worker['path'], '--request',
+                    str(request_path), '--output', str(root / 'jobs/plan069-D7-maps-001')],
+                    request=file_record(request_path), worker=worker, executable=executable)
             stale = admit('f' * 64, root / 'stale.json')
             current = admit('0' * 64, root / 'current.json')
             reading = dict(gpu_pids=[], download_bytes=0, artifact_bytes=0,
@@ -54,15 +65,35 @@ class DepthSetupAuthorizationTests(unittest.TestCase):
             with patch('vipe_benchmark.depth_admission.review', return_value=[]), \
                  patch('vipe_benchmark.execution.resources', return_value=reading):
                 with self.assertRaisesRegex(ValueError, 'ledger head is stale'):
-                    ledger.authorize_depth_attempt('D7', review, approved, source, stale)
+                    ledger.authorize_depth_attempt('D7', review, approved, source, stale, **binding(stale))
                 self.assertEqual(ledger.events(), [])
-                ledger.authorize_depth_attempt('D7', review, approved, source, current)
+                bad_command = binding(current)
+                bad_command['command'] = ['unreviewed-worker']
+                with self.assertRaisesRegex(ValueError, 'command binding'):
+                    ledger.authorize_depth_attempt('D7', review, approved, source,
+                        current, **bad_command)
+                for field, record in [('review', review), ('authorization', approved)]:
+                    changed = read_json(record['path'])
+                    changed['status'] = 'passed'
+                    path = root / (field + '-invalid-status.json')
+                    write_json(path, changed)
+                    with self.assertRaisesRegex(ValueError, 'exact approved depth attempt'):
+                        ledger.authorize_depth_attempt('D7',
+                            file_record(path) if field == 'review' else review,
+                            file_record(path) if field == 'authorization' else approved,
+                            source, current, **binding(current))
+                self.assertEqual(ledger.events(), [])
+                ledger.authorize_depth_attempt('D7', review, approved, source, current, **binding(current))
                 self.assertEqual(ledger.jobs['plan069-D7-maps-001']['seconds'], 3600)
                 with self.assertRaisesRegex(ValueError, 'already authorized'):
-                    ledger.authorize_depth_attempt('D7', review, approved, source, current)
-                ledger.reserve('plan069-D7-maps-001', ['fixture'], dict(
-                    request=current, worker=current, admission=current,
-                    review=review, authorization=approved, source_review=source))
+                    ledger.authorize_depth_attempt('D7', review, approved, source, current, **binding(current))
+                exact = binding(current)
+                evidence = dict(exact, admission=current, review=review,
+                    authorization=approved, source_review=source)
+                evidence.pop('command')
+                with self.assertRaisesRegex(ValueError, 'command differs'):
+                    ledger.reserve('plan069-D7-maps-001', ['fixture'], evidence)
+                ledger.reserve('plan069-D7-maps-001', exact['command'], evidence)
                 ledger.finish('plan069-D7-maps-001', 'failed', 1)
                 with self.assertRaisesRegex(ValueError, 'already consumed'):
                     ledger.reserve('plan069-D7-maps-001', ['no-retry'], current)
@@ -104,7 +135,12 @@ class DepthSetupAuthorizationTests(unittest.TestCase):
             config = dict(load(), new_download_gib_limit=110,
                           new_artifact_disk_gib_limit=210)
             ledger = Ledger(root / 'ledger.jsonl', config)
-            review, approved = file_record(REVIEW), file_record(DO)
+            review = file_record(REVIEW)
+            approval = read_json(DO)
+            from vipe_benchmark.depth_admission import CAP_AMENDMENT
+            approval['cap_amendment'] = file_record(CAP_AMENDMENT)
+            write_json(root / 'approved.json', approval)
+            approved = file_record(root / 'approved.json')
             d7_review = source_review(root, 'D7')
             altered = read_json(DO)
             altered['cap_approval']['amendment_sha256'] = '0' * 64

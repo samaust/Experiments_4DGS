@@ -138,9 +138,51 @@ class DepthContextTests(unittest.TestCase):
         self.assertEqual(sum(r['kind'] == 'clip-extra' for r in result['rows']), 196)
         self.assertEqual(sum(r['frame'] == 175 for r in result['rows']), 30)
         self.assertEqual(result['rows'][0]['domain'], 'camera_z_metres')
+        fit = read_json(result['scales']['fit']['path'])
+        check = read_json(result['scales']['check']['path'])
+        self.assertEqual(fit['role'], 'fit')
+        self.assertEqual(check['role'], 'selection')
+        self.assertEqual(check['frozen_fit'], result['scales']['fit'])
+        self.assertEqual(check['scale'], fit['scale'])
         with self.assertRaisesRegex(ValueError, 'immutable'):
             run_d7_maps(request, self.root / 'plan069-D7-maps-fixture-001',
                         backend=FlatD7())
+
+    def test_failed_d7_fit_stops_before_check_without_qualitative_admission(self):
+        from types import SimpleNamespace
+        calls = []
+        class EmptyD7:
+            component = 'D7'
+            def predict(self, rgb, K, valid):
+                calls.append(True)
+                values = np.full(valid.shape, np.nan, np.float32)
+                return SimpleNamespace(domain='camera_z_metres', values=values,
+                    valid=np.zeros(valid.shape, bool), raw_values=values.copy(),
+                    metadata=dict(native_depth_type='camera-z metres', conversion_count=0))
+        context = prepare_context(self.record, self.root / 'context', self.config)
+        request = dict(schema='plan069-D7-maps-request/v1', record_kind='fixture',
+            candidate='D7', job_id='plan069-D7-maps-fixture-001', context=context,
+            inputs=self.record)
+        output = self.root / request['job_id']
+        with self.assertRaisesRegex(ValueError, 'separate qualitative admission'):
+            run_d7_maps(request, output, backend=EmptyD7())
+        self.assertEqual(len(calls), 30)
+        fit = read_json(output / 'scale-fit.json')
+        self.assertEqual(fit['status'], 'blocked')
+        self.assertFalse((output / 'scale-check.json').exists())
+        proof = self.root / 'qualitative-admission.json'
+        write_json(proof, dict(schema='plan069-depth-qualitative-admission/v1',
+            record_kind='fixture', component='D7', inputs=self.record,
+            purpose='qualitative-only', status='admitted'))
+        admitted = dict(request, qualitative_admission=file_record(proof))
+        result = run_d7_maps(admitted, self.root / 'admitted' / request['job_id'],
+                             backend=EmptyD7())
+        self.assertEqual(result['engineering_eligibility'], 'blocked')
+        check = read_json(result['scales']['check']['path'])
+        self.assertIsNone(check['scale'])
+        self.assertEqual(check['frozen_fit'], result['scales']['fit'])
+        self.assertEqual(len(check['cameras']), 30)
+        self.assertTrue(all(row['sampled_valid_points'] == 0 for row in check['cameras']))
 
     def test_missing_context_and_changed_anchor_are_rejected(self):
         missing = dict(self.inputs, rgb=self.rows[:-1])

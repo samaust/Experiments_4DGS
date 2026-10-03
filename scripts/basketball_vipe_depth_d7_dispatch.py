@@ -16,7 +16,7 @@ from vipe_benchmark.supervisor import supervise
 
 DO = ROOT / 'docs/research/vipe-alternatives/plan031-execution/depth-approval-001.json'
 SOURCE_REVIEW = ROOT / 'docs/research/vipe-alternatives/plan031-execution/depth-D7-source-review-002.json'
-CONTEXT_JOB = 'plan069-depth-context-002'
+CONTEXT_JOB = 'plan069-depth-context-003'
 CONTEXT_RECEIPT = (ROOT / 'docs/research/vipe-alternatives' /
                    'plan031-20260913T032700Z' / (CONTEXT_JOB + '.json'))
 
@@ -55,7 +55,7 @@ def _live(ledger, local):
         device_peak_bytes=reading['device_bytes'])
 
 
-def dispatch(context, qualification, setup, *, run_id='plan031-20260913T032700Z'):
+def dispatch(context, qualification, setup, *, qualitative_admission=None, run_id='plan031-20260913T032700Z'):
     if run_id != 'plan031-20260913T032700Z':
         raise ValueError('D7 depth attempt is bound to the accepted run')
     if Path('/proc/1/comm').read_text().strip() != 'systemd':
@@ -78,7 +78,7 @@ def dispatch(context, qualification, setup, *, run_id='plan031-20260913T032700Z'
         raise ValueError('exact D7 qualification bundle required')
     context_record = file_record(context)
     if Path(context).resolve() != (local / 'jobs' / CONTEXT_JOB / 'context.json').resolve():
-        raise ValueError('exact accepted depth context 002 path required')
+        raise ValueError('exact accepted depth context 003 path required')
     context_receipt = read_json(verify_record(file_record(CONTEXT_RECEIPT))['path'])
     accepted_inputs = file_record(local / 'prepare/inputs.json')
     charge_record = file_record(CONTEXT_RECEIPT.with_name(CONTEXT_JOB + '-charge.json'))
@@ -96,7 +96,7 @@ def dispatch(context, qualification, setup, *, run_id='plan031-20260913T032700Z'
             charge.get('inputs') != accepted_inputs or
             len(charge_events) != 1 or
             context_receipt.get('charge_event_sha256') != charge_events[0]['event_sha256']):
-        raise ValueError('ledger-charged accepted depth context 002 receipt required')
+        raise ValueError('ledger-charged accepted depth context 003 receipt required')
     setup_record = file_record(setup)
     setup_result = read_json(setup_record['path'])
     if (setup_result.get('candidate') != 'D7' or
@@ -111,6 +111,9 @@ def dispatch(context, qualification, setup, *, run_id='plan031-20260913T032700Z'
         raise ValueError('successful D7 setup receipt required')
     verify_record(setup_result['source_archive'])
     verify_record(setup_result['checkpoint'])
+    if (qualified.get('setup') != setup_record or
+            not any(row.get('record') == setup_result['checkpoint'] for row in qualified.get('assets', []))):
+        raise ValueError('D7 setup checkpoint differs from exact qualification asset')
     output = local / 'jobs' / JOB
     request_path = local / 'requests' / (JOB + '.json')
     admission_path = local / 'requests' / (JOB + '-admission.json')
@@ -139,11 +142,15 @@ def dispatch(context, qualification, setup, *, run_id='plan031-20260913T032700Z'
         context=context_record, setup=setup_record,
         review=review, authorization=approved, source_review=source_review,
         qualification=qualification_record, admission=admission_record)
+    if qualitative_admission is not None:
+        request['qualitative_admission'] = file_record(qualitative_admission)
     write_json(request_path, request)
-    ledger.authorize_depth_attempt('D7', review, approved, source_review,
-                                   admission_record)
     command = [sys.executable, str(ROOT / 'scripts/basketball_vipe_depth_d7_maps.py'),
         '--request', str(request_path), '--output', str(output)]
+    ledger.authorize_depth_attempt('D7', review, approved, source_review, admission_record,
+        command=command, request=file_record(request_path),
+        worker=file_record(ROOT / 'scripts/basketball_vipe_depth_d7_maps.py'),
+        executable=file_record(sys.executable))
     def validate(out):
         result = read_json(verify_record(file_record(out / 'result.json'))['path'])
         rows = result.get('rows', [])
@@ -162,7 +169,31 @@ def dispatch(context, qualification, setup, *, run_id='plan031-20260913T032700Z'
                 sum(row['kind'] == 'anchor' for row in rows) != 60 or
                 sum(row['kind'] == 'clip-extra' for row in rows) != 196):
             raise ValueError('D7 map result membership/provenance differs')
+        fit = read_json(verify_record(result['scales']['fit'])['path'])
+        check = read_json(verify_record(result['scales']['check'])['path'])
+        if (fit.get('role') != 'fit' or check.get('role') != 'selection' or
+                fit.get('component') != 'D7' or check.get('component') != 'D7' or
+                fit.get('provenance', {}).get('inputs') != request['inputs'] or
+                check.get('provenance') != fit.get('provenance') or
+                check.get('frozen_fit') != result['scales']['fit'] or
+                (fit.get('status') == 'passed' and check.get('scale') != fit.get('scale')) or
+                result.get('engineering_eligibility') != ('passed' if
+                    fit.get('status') == check.get('status') == 'passed' else 'blocked')):
+            raise ValueError('D7 frozen scale fit/check provenance differs')
+        if fit.get('status') != 'passed':
+            proof = read_json(verify_record(request['qualitative_admission'])['path'])
+            if proof != dict(schema='plan069-depth-qualitative-admission/v1',
+                    record_kind='actual', component='D7', inputs=request['inputs'],
+                    purpose='qualitative-only', status='admitted'):
+                raise ValueError('D7 failed fit qualitative admission differs')
+        accepted_context = read_json(verify_record(context_record)['path'])
+        by_context = {(row['camera'], row['frame']): row for row in accepted_context['rows']}
         for row in rows:
+            source = by_context[row['camera'], row['frame']]
+            if (row.get('source_rgb') != source.get('source_rgb') or
+                    row.get('source_rgb_grid') != source.get('source_rgb_grid') or
+                    row.get('accepted_anchor') != source.get('accepted_anchor')):
+                raise ValueError('D7 exact accepted context pixels differ')
             if (row.get('kind') != ('anchor' if (row['camera'], row['frame']) in expected_anchors
                                    else 'clip-extra') or
                     row.get('domain') != 'camera_z_metres' or
@@ -175,7 +206,8 @@ def dispatch(context, qualification, setup, *, run_id='plan031-20260913T032700Z'
         evidence=dict(request=file_record(request_path),
                       admission=admission_record, review=review,
                       authorization=approved, source_review=source_review,
-                      worker=file_record(ROOT / 'scripts/basketball_vipe_depth_d7_maps.py')),
+                      worker=file_record(ROOT / 'scripts/basketball_vipe_depth_d7_maps.py'),
+                      executable=file_record(sys.executable)),
         sample_resources=lambda: resources(local, gpu=True),
         validate_result=validate, poll_seconds=2.)
 
@@ -185,9 +217,11 @@ def main():
     parser.add_argument('--context', required=True)
     parser.add_argument('--qualification', required=True)
     parser.add_argument('--setup', required=True)
+    parser.add_argument('--qualitative-admission')
     parser.add_argument('--run-id', default='plan031-20260913T032700Z')
     args = parser.parse_args()
-    dispatch(args.context, args.qualification, args.setup, run_id=args.run_id)
+    dispatch(args.context, args.qualification, args.setup,
+        qualitative_admission=args.qualitative_admission, run_id=args.run_id)
 
 
 if __name__ == '__main__':

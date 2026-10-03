@@ -8,7 +8,7 @@ import numpy as np
 
 from .config import load, training_cameras
 from .depth_clips import SCHEMA as CONTEXT_SCHEMA
-from .files import file_record, load_array, read_json, verify_record, write_json
+from .files import object_hash, file_record, load_array, read_json, verify_record, write_json
 from .ledger import Ledger
 
 
@@ -38,8 +38,9 @@ def _membership(context, inputs):
     _require(len(anchors) == 60 and set(anchors) ==
              {(camera, frame) for camera in cameras for frame in (100, 175)},
              'D7 anchor membership changed')
-    keys = sorted(set(anchors) | {(camera, frame) for camera in CLIP_CAMERAS
-                                 for frame in range(150, 200)})
+    keys = sorted(anchors, key=lambda key: (key[1], key[0])) + sorted(
+        {(camera, frame) for camera in CLIP_CAMERAS for frame in range(150, 200)}
+        - set(anchors))
     _require(len(keys) == 256, 'D7 published map workload changed')
     return rows, anchors, keys
 
@@ -64,7 +65,21 @@ def _active_reservation(request, request_path, output):
     return state
 
 
-def _native_backend(setup, output, deadline):
+def pinned_source_manifest(source):
+    """Bind every regular source file with paths relative to a pristine archive."""
+    source = Path(source)
+    rows = []
+    for path in sorted(source.rglob('*')):
+        _require(not path.is_symlink(), 'D7 pinned source symlink forbidden')
+        if path.is_file():
+            record = file_record(path)
+            rows.append(dict(path=path.relative_to(source).as_posix(),
+                sha256=record['sha256'], bytes=record['bytes']))
+    _require(bool(rows), 'D7 pinned source manifest empty')
+    return rows
+
+
+def _native_backend(setup, qualification, output, deadline):
     """Load only the pinned Hypersim Small source and strict checkpoint."""
     import torch
     from .dav2_metric import DAV2MetricSmallAdapter
@@ -73,12 +88,19 @@ def _native_backend(setup, output, deadline):
     extracted = output / 'verified-source'
     _unpack_source(source_archive, extracted, setup['source_revision'],
                    deadline=deadline)
+    _require(qualification.get('source_archive') == setup['source_archive'] and
+             qualification.get('source_files') == pinned_source_manifest(extracted),
+             'D7 qualification source differs from pristine pinned archive')
     source = extracted / 'metric_depth'
     _require(source.is_dir() and (source / 'depth_anything_v2/dpt.py').is_file(),
              'pinned D7 source tree missing')
+    sys.dont_write_bytecode = True
     sys.path.insert(0, str(source))
     try:
-        from depth_anything_v2.dpt import DepthAnythingV2
+        from depth_anything_v2 import dpt
+        _require(Path(dpt.__file__).resolve() == (source / 'depth_anything_v2/dpt.py').resolve(),
+                 'D7 native module origin differs from pinned source')
+        DepthAnythingV2 = dpt.DepthAnythingV2
         model = DepthAnythingV2(encoder='vits', features=64,
             out_channels=[48, 96, 192, 384], max_depth=20)
         weights = torch.load(verify_record(setup['checkpoint'])['path'],
@@ -95,7 +117,7 @@ def run_d7_maps(request, output, *, backend=None, request_path=None):
     """Publish 60 anchors and 196 clip extras, each with immutable raw depth."""
     import cv2
     from basketball_scale import undistortion
-    from .depth_extension import _prediction
+    from .depth_extension import CONFIG, _prediction
 
     _require(request.get('schema') == SCHEMA and request.get('candidate') == 'D7' and
              request.get('record_kind') in ('fixture', 'actual'),
@@ -104,15 +126,31 @@ def run_d7_maps(request, output, *, backend=None, request_path=None):
     _require(output.name == request.get('job_id') and not output.exists(),
              'immutable D7 map output identity changed or exists')
     verify_record(request['inputs'])
+    inputs = read_json(request['inputs']['path'])
     context = read_json(verify_record(request['context'])['path'])
     rows, anchors, keys = _membership(context, request['inputs'])
+    depth_rows = inputs.get('depth', [])
+    accepted_anchors = {(row['identity']['camera'], row['identity']['frame']): row
+        for row in depth_rows
+        if row.get('identity', {}).get('branch') == 'depth'}
+    _require(len(depth_rows) == len(accepted_anchors) == 60 and
+             set(accepted_anchors) == set(anchors),
+             'accepted D7 depth anchors changed')
     if request['record_kind'] == 'actual':
+        _require(all(row.get('source_rgb_grid') == ('scale-opencv-integer' if
+                     (row['camera'], row['frame']) in anchors else 'distorted-opencv-integer') and
+                     row.get('accepted_anchor') is ((row['camera'], row['frame']) in anchors)
+                     for row in rows.values()), 'D7 exact accepted anchor context required')
         state = _active_reservation(request, request_path, output)
         deadline = state['monotonic_start'] + state['seconds'] - 30
         setup = read_json(verify_record(request['setup'])['path'])
         _require(setup.get('schema') == 'plan069-depth-setup-result/v1' and
                  setup.get('status') == 'complete' and setup.get('candidate') == 'D7',
                  'successful pinned D7 setup required')
+        qualification = read_json(verify_record(request['qualification'])['path'])
+        _require(qualification.get('setup') == request['setup'] and
+                 any(row.get('record') == setup['checkpoint'] for row in qualification.get('assets', [])),
+                 'D7 setup checkpoint differs from exact qualification asset')
         _require(backend is None, 'actual D7 cannot inject a fixture backend')
     else:
         _require(backend is not None and request.get('job_id') ==
@@ -125,12 +163,22 @@ def run_d7_maps(request, output, *, backend=None, request_path=None):
     started = time.monotonic()
     try:
         if request['record_kind'] == 'actual':
-            backend = _native_backend(setup, output, deadline)
+            backend = _native_backend(setup, qualification, output, deadline)
         calibration = {row['camera_id']: row for row in read_json(
             verify_record(context['calibration'])['path'])['cameras']}
         remaps = {camera: undistortion(calibration[camera])
                   for camera in {camera for camera, _ in keys}}
         result_rows = []
+        from .scale import evaluate
+        config = load()
+        provenance = dict(inputs=request['inputs'], component='D7',
+            component_sha256=object_hash(dict(candidate='D7', setup=request.get('setup'),
+                configuration=file_record(CONFIG))))
+        fit_predictions, check_predictions = {}, {}
+        fit_rows = [accepted_anchors[camera, 100] for camera in training_cameras(config)]
+        check_rows = [accepted_anchors[camera, 175] for camera in training_cameras(config)]
+        fit = None
+        scales = {}
         for camera, frame in keys:
             _require(time.monotonic() < deadline, 'D7 GPU map deadline exceeded')
             source = rows[camera, frame]
@@ -142,8 +190,10 @@ def run_d7_maps(request, output, *, backend=None, request_path=None):
             _require(np.array_equal(K, source['K']), 'D7 camera intrinsics changed')
             if (camera, frame) in anchors:
                 anchor = anchors[camera, frame]
-                _require(anchor['source_rgb'] == source['source_rgb'] and
-                         anchor['accepted_rgb']['sha256'] == anchor['remapped_sha256'],
+                _require(anchor['accepted_rgb' if source.get('accepted_anchor') else 'source_rgb'] == source['source_rgb'] and
+                         anchor['accepted_rgb'] == accepted_anchors[camera, frame]['rgb'] and
+                         np.array_equal(accepted_anchors[camera, frame]['K'], K) and
+                         accepted_anchors[camera, frame]['grid'] == 'scale-opencv-integer',
                          'D7 frozen anchor binding changed')
                 image = cv2.imread(verify_record(anchor['accepted_rgb'])['path'],
                                    cv2.IMREAD_COLOR)
@@ -168,16 +218,48 @@ def run_d7_maps(request, output, *, backend=None, request_path=None):
                 np.savez_compressed(stream, depth=values, valid=accepted,
                                     raw_values=raw)
             result_rows.append(dict(camera=camera, frame=frame, kind=kind,
-                role=source['role'], timestamp=source['timestamp'],
-                source_rgb=source['source_rgb'], inference_rgb=input_record,
+                role=source['role'], timestamp=source['timestamp'], accepted_anchor=(kind == 'anchor'),
+                source_rgb=input_record if kind == 'anchor' else source['source_rgb'], inference_rgb=input_record,
                 context=request['context'], inputs=request['inputs'],
+                source_rgb_grid=source.get('source_rgb_grid',
+                    'scale-opencv-integer' if kind == 'anchor' else 'distorted-opencv-integer'),
                 grid='scale-opencv-integer', K=source['K'], domain='camera_z_metres',
                 prediction=file_record(path), metadata=prediction.metadata))
+            if frame in (100, 175):
+                (fit_predictions if frame == 100 else check_predictions)[camera] = file_record(path)
+            if len(fit_predictions) == 30 and fit is None:
+                fit = evaluate(fit_rows, fit_predictions, config, provenance=provenance)
+                fit['component'] = 'D7'
+                write_json(output / 'scale-fit.json', fit)
+                scales['fit'] = file_record(output / 'scale-fit.json')
+                if fit['status'] != 'passed':
+                    proof = request.get('qualitative_admission')
+                    _require(isinstance(proof, dict),
+                        'failed D7 scale fit requires separate qualitative admission')
+                    document = read_json(verify_record(proof)['path'])
+                    _require(document == dict(schema='plan069-depth-qualitative-admission/v1',
+                        record_kind=request['record_kind'], component='D7',
+                        inputs=request['inputs'], purpose='qualitative-only', status='admitted'),
+                        'D7 qualitative admission binding changed')
+            if len(check_predictions) == 30 and 'check' not in scales:
+                if fit['status'] == 'passed':
+                    check = evaluate(check_rows, check_predictions, config,
+                        provenance=provenance, frozen_fit=scales['fit'])
+                else:
+                    from .depth_metric_scale import selection_support
+                    check = selection_support(check_rows, check_predictions, config,
+                        provenance=provenance, frozen_fit=scales['fit'])
+                check['component'] = 'D7'
+                write_json(output / 'scale-check.json', check)
+                scales['check'] = file_record(output / 'scale-check.json')
         _require(len(result_rows) == 256, 'incomplete D7 published map count')
         result = dict(schema=RESULT, status='complete',
             record_kind=request['record_kind'], candidate='D7', job_id=request['job_id'],
             context=request['context'], inputs=request['inputs'],
-            setup=request.get('setup'), rows=result_rows,
+            setup=request.get('setup'), rows=result_rows, scales=scales,
+            engineering_eligibility=('passed' if fit['status'] == 'passed' and
+                read_json(scales['check']['path'])['status'] == 'passed' else 'blocked'),
+            qualitative_admission=request.get('qualitative_admission'),
             anchor_maps=60, clip_extra_maps=196, unique_published_maps=256,
             elapsed_seconds=time.monotonic() - started)
         write_json(output / 'result.json', result)

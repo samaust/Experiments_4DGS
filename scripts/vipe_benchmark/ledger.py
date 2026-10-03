@@ -8,6 +8,7 @@ import os
 import re
 from pathlib import Path
 import time
+import sys
 
 from .config import jobs
 from .files import canonical, file_record, object_hash, read_json, safe_path, verify_record
@@ -157,8 +158,10 @@ class Ledger:
                         evidence.get(key) != bound[key] for key in
                         ('review', 'authorization', 'source_review', 'admission')):
                     raise ValueError('depth reservation evidence differs from authorization')
-                verify_record(evidence['request'])
-                verify_record(evidence['worker'])
+                if command != bound.get('command') or any(evidence.get(key) != bound.get(key)
+                        for key in ('request', 'worker', 'executable')):
+                    raise ValueError('depth command differs from authorization')
+                self._depth_command(candidate, bound, source, evidence, command)
             if is_recovery_job(job_id):
                 from .s1_recovery import reservation_binding
                 reservation_binding(self.path.parent, self.config, events, evidence, command=command)
@@ -257,8 +260,30 @@ class Ledger:
                 authorization=authorization, source_review=source_review,
                 resource_snapshot=reading))
 
+    def _depth_command(self, candidate, bound, source, evidence, command):
+        """Rehash the exact authorized worker, interpreter and immutable request."""
+        job_id = f'plan069-{candidate}-maps-001'
+        if not all(isinstance(evidence.get(key), dict) for key in
+                   ('request', 'worker', 'executable')):
+            raise ValueError('exact executable worker request command binding required')
+        request_record = verify_record(evidence['request'])
+        worker = verify_record(evidence['worker'])
+        executable = verify_record(evidence['executable'])
+        expected_command = [sys.executable, worker['path'], '--request',
+            request_record['path'], '--output', str(self.path.parent / 'jobs' / job_id)]
+        request = read_json(request_record['path'])
+        if (command != expected_command or executable != file_record(sys.executable) or
+                worker not in source.get('local_sources', []) or
+                Path(worker['path']).name != f'basketball_vipe_depth_{candidate.lower()}_maps.py' or
+                request_record['path'] != str(self.path.parent / 'requests' / (job_id + '.json')) or
+                request.get('candidate') != candidate or request.get('job_id') != job_id or
+                request.get('record_kind') != 'actual' or
+                any(request.get(key) != bound[key] for key in
+                    ('review', 'authorization', 'source_review', 'admission'))):
+            raise ValueError('exact executable worker request command binding required')
+
     def authorize_depth_attempt(self, candidate, review, authorization,
-                                source_review, admission):
+                                source_review, admission, *, command, request, worker, executable):
         """Allocate one native GPU slot only from current reviewed live evidence."""
         from .depth_admission import review as decide
         from .execution import resources
@@ -272,6 +297,8 @@ class Ledger:
         grant = next((row for row in approved.get('candidate_approvals', [])
             if row.get('candidate') == candidate), None)
         if (reviewed.get('schema') != 'plan069-depth-execution-review/v1' or
+                reviewed.get('status') != 'REVIEW' or
+                approved.get('status') != 'DO' or
                 approved.get('schema') != 'plan069-depth-user-authorization/v1' or
                 approved.get('review') != review or proposal is None or
                 proposal.get('max_attempts') != 1 or grant is None or
@@ -285,6 +312,10 @@ class Ledger:
                 evidence.get('authorization') != authorization or
                 evidence.get('source_review') != source_review):
             raise ValueError('exact approved depth attempt and admission required')
+        binding = dict(request=request, worker=worker, executable=executable)
+        source = read_json(verify_record(source_review)['path'])
+        self._depth_command(candidate, dict(review=review, authorization=authorization,
+            source_review=source_review, admission=admission), source, binding, command)
         seconds = proposal.get('allocation', {}).get('gpu_seconds')
         if type(seconds) is not int or seconds <= 0:
             raise ValueError('bounded depth GPU seconds required')
@@ -332,7 +363,7 @@ class Ledger:
                 candidate=candidate, seconds=seconds,
                 proposal_sha256=object_hash(proposal), review=review,
                 authorization=authorization, source_review=source_review,
-                admission=admission, resource_snapshot=reading))
+                admission=admission, resource_snapshot=reading, command=command, **binding))
 
     def charge_cpu_preparation(self, elapsed_seconds, evidence):
         """Charge separately retriable input acquisition without a model attempt."""

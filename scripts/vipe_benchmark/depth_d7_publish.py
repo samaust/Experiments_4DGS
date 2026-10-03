@@ -33,7 +33,10 @@ def publish_d7_after_gpu(map_result_record, output):
     ledger = Ledger(local / 'ledger.jsonl', config)
     state = ledger.states().get(JOB, {})
     _require(state.get('event') == 'finish' and state.get('status') == 'complete' and
-             state.get('result') == map_result_record,
+             state.get('result') == map_result_record and
+             state.get('cleanup_confirmed') is True and
+             not state.get('cleanup_uncertain') and not state.get('surviving_pids') and
+             not state.get('deadline_exceeded') and not state.get('error'),
              'successful supervised D7 GPU result required')
     outcome_path = local / 'receipts' / (JOB + '-finish.json')
     if outcome_path.exists():
@@ -49,7 +52,15 @@ def publish_d7_after_gpu(map_result_record, output):
              'complete actual D7 maps required')
     request_record = file_record(map_path.parent / 'request.json')
     request = read_json(request_record['path'])
-    _require(request.get('admission') == state.get('evidence', {}).get('admission') and
+    reservations = [event for event in ledger.events()
+        if event['event'] == 'reserve' and event.get('job_id') == JOB]
+    original_request = file_record(local / 'requests' / (JOB + '.json'))
+    _require(original_request['sha256'] == request_record['sha256'] and
+             original_request['bytes'] == request_record['bytes'],
+             'D7 copied request differs from reserved request')
+    _require(len(reservations) == 1 and
+             reservations[0].get('evidence', {}).get('request') == original_request and
+             request.get('admission') == reservations[0].get('evidence', {}).get('admission') and
              request.get('context') == result['context'] and
              request.get('inputs') == result['inputs'],
              'D7 map request/result admission binding changed')
@@ -60,6 +71,18 @@ def publish_d7_after_gpu(map_result_record, output):
              proposal['workload']['clip_frames'] == 50 and
              proposal['workload']['clip_fps'] == 25,
              'reviewed D7 clip workload changed')
+    fit = read_json(verify_record(result['scales']['fit'])['path'])
+    check = read_json(verify_record(result['scales']['check'])['path'])
+    _require(fit.get('role') == 'fit' and check.get('role') == 'selection' and
+             check.get('frozen_fit') == result['scales']['fit'],
+             'D7 scale fit/check binding changed')
+    if fit.get('status') != 'passed':
+        proof = read_json(verify_record(request['qualitative_admission'])['path'])
+        _require(proof == dict(schema='plan069-depth-qualitative-admission/v1',
+            record_kind='actual', component='D7', inputs=request['inputs'],
+            purpose='qualitative-only', status='admitted') and
+            result.get('engineering_eligibility') == 'blocked',
+            'failed D7 fit requires separate qualitative admission')
     rows = result['rows']
     keys = [(row['camera'], row['frame']) for row in rows]
     if len(set(keys)) != 256:
@@ -83,6 +106,7 @@ def publish_d7_after_gpu(map_result_record, output):
         verify_record(row['prediction'])
         clip_rows.append(dict(camera=camera, frame=frame,
             source_rgb=row['source_rgb'], inputs=row['inputs'],
+            source_rgb_grid=row.get('source_rgb_grid', 'scale-opencv-integer' if frame == 175 else 'distorted-opencv-integer'),
             grid=row['grid'], domain=row['domain'],
             prediction=row['prediction'], settings=setting,
             reused_anchor=(frame == 175)))
