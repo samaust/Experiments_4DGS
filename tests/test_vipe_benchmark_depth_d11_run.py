@@ -49,13 +49,13 @@ class D11MapsTests(unittest.TestCase):
         self.assertNotIn('scales', result)
         self.assertFalse((self.root / self.request['job_id'] / 'scale-fit.json').exists())
         with np.load(result['rows'][0]['prediction']['path']) as data:
-            self.assertEqual(set(data.files), {'depth', 'valid', 'raw_values'})
-            self.assertEqual(float(data['depth'][0, 0]), -2.5)
+            self.assertEqual(set(data.files), {'relative', 'valid', 'raw_values'})
+            self.assertEqual(float(data['relative'][0, 0]), -2.5)
             self.assertEqual(float(data['raw_values'][0, 0]), -2.5)
         validate_result(result, self.request)
         changed = self.root / 'changed-native-map.npz'
         with np.load(result['rows'][0]['prediction']['path']) as data:
-            np.savez_compressed(changed, depth=data['depth'], valid=data['valid'],
+            np.savez_compressed(changed, relative=data['relative'], valid=data['valid'],
                                 raw_values=data['raw_values'] + np.float32(1))
         altered = dict(result, rows=[dict(result['rows'][0], prediction=file_record(changed))] + result['rows'][1:])
         with self.assertRaisesRegex(ValueError, 'saved native relative-log array'):

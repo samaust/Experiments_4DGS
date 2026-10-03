@@ -113,7 +113,7 @@ def run_maps(request, output, *, backend=None, request_path=None):
                      'D11 native relative-log profile changed')
             path = output / f'camera{key[0]}-frame{key[1]}.npz'
             with path.open('xb') as stream:
-                np.savez_compressed(stream, depth=values, valid=supported, raw_values=raw)
+                np.savez_compressed(stream, relative=values, valid=supported, raw_values=raw)
             result_rows.append(dict(camera=key[0], frame=key[1],
                 kind='anchor' if key in anchors else 'clip-extra',
                 role=source['role'], timestamp=source['timestamp'], source_rgb=source['source_rgb'],
@@ -172,13 +172,13 @@ def validate_result(result, request):
                  row.get('metadata', {}).get('profile') == PROFILE,
                  'D11 frozen row source or native profile changed')
         with load_array(row['prediction']) as data:
-            _require(set(data.files) == {'depth', 'valid', 'raw_values'} and
-                     data['depth'].shape == data['valid'].shape == data['raw_values'].shape == (540, 960) and
-                     data['depth'].dtype == data['raw_values'].dtype == np.float32 and
-                     data['valid'].dtype == np.bool_ and np.isnan(data['depth'][~data['valid']]).all() and
-                     np.isfinite(data['depth'][data['valid']]).all() and
+            _require(set(data.files) == {'relative', 'valid', 'raw_values'} and
+                     data['relative'].shape == data['valid'].shape == data['raw_values'].shape == (540, 960) and
+                     data['relative'].dtype == data['raw_values'].dtype == np.float32 and
+                     data['valid'].dtype == np.bool_ and np.isnan(data['relative'][~data['valid']]).all() and
+                     np.isfinite(data['relative'][data['valid']]).all() and
                      np.array_equal(data['valid'], load_array(source['valid']) & np.isfinite(data['raw_values'])) and
-                     np.array_equal(data['depth'][data['valid']], data['raw_values'][data['valid']]),
+                     np.array_equal(data['relative'][data['valid']], data['raw_values'][data['valid']]),
                      'D11 saved native relative-log array changed')
     if request['record_kind'] == 'actual':
         native = read_json(verify_record(result['native_result'])['path'])

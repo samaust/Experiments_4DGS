@@ -76,3 +76,45 @@ class D11PublishTests(unittest.TestCase):
         self.assertEqual(publication['domain'], 'relative_log')
         self.assertEqual(publication['engineering_eligibility'], 'not_applicable')
         self.assertIsNone(publication['scales'])
+
+    def test_native_relative_npz_reaches_real_shared_clip_package(self):
+        import test_vipe_benchmark_depth_context as contexts
+        from vipe_benchmark.depth_clips import prepare_context, publish_fixture_clips
+        fixture = contexts.DepthContextTests()
+        fixture.setUp()
+        self.addCleanup(fixture.tearDown)
+        accepted = read_json(fixture.record['path'])
+        for row in accepted['depth']:
+            path = fixture.root / f"camera{row['identity']['camera']}-accepted-valid.npy"
+            with np.load(row['samples']['path']) as samples:
+                np.save(path, samples['valid'] > 0)
+            row['valid'] = file_record(path)
+        accepted_path = fixture.root / 'accepted-inputs.json'
+        write_json(accepted_path, accepted)
+        fixture.record = file_record(accepted_path)
+        context = prepare_context(fixture.record, fixture.root / 'context', fixture.config)
+        request = dict(schema='plan069-D11-maps-request/v1', record_kind='fixture', candidate='D11',
+            job_id='plan069-D11-maps-fixture-001', inputs=fixture.record, context=context)
+        result = run_maps(request, fixture.root / request['job_id'], backend=fixtures.RelativePlane())
+        selected = [r for r in result['rows'] if r['camera'] in (1, 11, 21, 31) and r['frame'] >= 150]
+        rows = [dict(r, settings=result['component_sha256'], reused_anchor=r['frame'] == 175) for r in selected]
+        anchors = {r['camera']: r['prediction'] for r in selected if r['frame'] == 175}
+        configuration = fixture.root / 'configuration.json'
+        outcome = fixture.root / 'outcome.json'
+        write_json(configuration, request)
+        write_json(outcome, dict(record_kind='fixture', status='complete'))
+        origin = dict(source_result=file_record(fixture.root / request['job_id'] / 'result.json'),
+            configuration=file_record(configuration), ledger_outcome=file_record(outcome))
+        receipt = publish_fixture_clips(context, 'D11', 'relative_log', rows, anchors,
+            fixture.root / 'clips', origin, max_seconds=120)
+        package = read_json(receipt['package']['path'])
+        display = package['settings']['depth_display']
+        self.assertEqual(display['domain'], 'relative_log')
+        self.assertEqual(display['normalization_scope'], 'whole 50-frame clip')
+        self.assertEqual(display['direction'], 'larger means farther')
+        self.assertEqual((receipt['clips'], receipt['new_map_identities']), (4, 196))
+        for candidate in package['candidates']:
+            self.assertEqual(len(candidate['media']), 4)
+            self.assertTrue(all(Path(row['record']['path']).stat().st_size > 0 for row in candidate['media']))
+        with np.load(selected[0]['prediction']['path']) as data:
+            self.assertEqual(set(data.files), {'relative', 'valid', 'raw_values'})
