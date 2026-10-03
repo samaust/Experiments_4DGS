@@ -16,7 +16,7 @@ these are not GPU, optimizer, checkpoint or total storage estimates.
 Historical `plan067-final-render-request/v1` uses its unchanged S2/D4 validator.
 New `plan069-final-render-request/v1` routes through
 `extended_final_render_contract.validate_initializer` from #61; it cannot silently
-fall back to the historical validator. Unsupported schemas, extra fields,
+fall back to the historical validator. Unsupported schemas, arbitrary extra fields,
 substituted arrays, incorrect arms and modified units are rejected.
 
 The returned `plan069-final-render-native-input/v1` receipt binds the request,
@@ -29,6 +29,11 @@ It always reports `execution_authorized: false` and
 `native_adapter_qualified: false`. Preparation creates no files or ledger events,
 loads no model, imports no Torch and makes no network/GPU calls. A prepared data
 payload is not an execution authorization.
+
+The subsequent [extended preparation](extended-final-render-preparation.md)
+also accepts the assembler's paired static/foreground provenance ID arrays. Their
+bytes and the original full initializer hash remain bound; the model still receives
+only its five native arrays.
 
 ## Remaining native work
 

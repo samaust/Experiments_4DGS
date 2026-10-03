@@ -41,6 +41,13 @@ def _arrays(record):
         return {key: archive[key].copy() for key in archive.files}
 
 
+def _prerequisites(request, arm):
+    composition = request['compositions'][arm]
+    depth = {'D_fit', 'D_check', 'depth_decision'} if request['schema'] == 'plan069-final-render-request/v1' else {'D4_fit', 'D4_check'}
+    names = depth | {'S2', composition['motion'], composition['neighbors']}
+    return {name: request['bindings'][name] for name in names}
+
+
 def validate_manifest(request):
     """Check accepted zero-offset timing and union training exclusions, CPU only."""
     manifest = validate_processed_manifest_binding(request)
@@ -77,6 +84,11 @@ def validate_manifest(request):
 def validate_scene(request, record):
     """Check an exact D4 scene against accepted cameras, time and normalization."""
     scene = _bound(record)
+    if request.get('schema') == 'plan069-final-render-request/v1':
+        from .extended_final_render_contract import validate_scene_bindings
+        _require(record == request['bindings']['scene_freeze'], 'geometry scene differs from bound D* scene')
+        checked = validate_scene_bindings(request)
+        return scene, np.asarray(checked['transform'], np.float64)
     contract = request['initializer_contract']
     matrix = normalization_matrix(contract['normalization'], actual=request['record_kind'] == 'actual')
     _require(scene.get('schema') == 'vipe-benchmark-diagnostic-scene/v1' and scene.get('status') == 'complete'
@@ -126,12 +138,12 @@ def validate_scene(request, record):
 
 
 def _geometry(request, arm, record):
-    value = _bound(record); composition = COMPOSITIONS[arm]
-    names = {'S2', 'D4_fit', 'D4_check', composition['motion'], composition['neighbors']}
-    _require(value.get('schema') == 'plan067-final-render-geometry/v1' and value.get('status') == 'complete' and
+    value = _bound(record); composition = request['compositions'][arm]
+    version = 'plan069' if request['schema'] == 'plan069-final-render-request/v1' else 'plan067'
+    _require(value.get('schema') == version+'-final-render-geometry/v1' and value.get('status') == 'complete' and
         value.get('arm') == arm and value.get('record_kind') == request['record_kind'] and
         value.get('request_sha256') == object_hash(request) and value.get('composition') == composition and
-        value.get('prerequisites') == {k: request['bindings'][k] for k in names}, 'full-rig QF geometry provenance differs')
+        value.get('prerequisites') == _prerequisites(request, arm), 'full-rig QF geometry provenance differs')
     if request['record_kind'] == 'actual' or 'scene_freeze' in request['bindings']:
         _require(value['scene'] == request['bindings'].get('scene_freeze'), 'geometry scene differs from admitted bound scene')
     scene, matrix = validate_scene(request, value['scene'])
@@ -202,12 +214,18 @@ def assemble(request, arm, geometry_record, width_record):
     This pure worker boundary creates no output directory or ledger event. The
     separately authorized caller owns CPU allocation, publication and cleanup.
     """
-    parse_request(request)
+    extended = request.get('schema') == 'plan069-final-render-request/v1'
+    if extended:
+        from .extended_final_render_contract import parse_request as parse_extended
+        request = parse_extended(request)
+    else:
+        parse_request(request)
     _require(arm in COMPOSITIONS, 'unknown QF arm')
     validate_processed_manifest_binding(request)
     geometry, matrix, neighbors = _geometry(request, arm, geometry_record)
     width = _bound(width_record)
-    _require(width.get('schema') == 'plan067-final-render-voxel-width/v1' and
+    version = 'plan069' if extended else 'plan067'
+    _require(width.get('schema') == version+'-final-render-voxel-width/v1' and
         width.get('record_kind') == request['record_kind'] and width.get('rule') == 'half median positive nearest-neighbor distance' and
         width.get('request_sha256') == object_hash(request) and width.get('scene') == geometry.provenance['scene'] and
         width.get('basis') == request['initializer_contract'].get('voxel_basis') and
@@ -235,7 +253,7 @@ def assemble(request, arm, geometry_record, width_record):
             row['sha256'] == source_frames[key]['sha256'], 'static prior source camera/time differs')
         seen_prior.add(key)
     normalized = (positions*(geometry.scene['scale']/reference['scale']) @ matrix[:3,:3].T + matrix[:3,3]).astype(np.float32)
-    scene_scale = reference['normalization']['scene_scale']
+    scene_scale = reference['normalization'].get('scene_scale')
     _require(type(scene_scale) in (int,float) and math.isfinite(scene_scale) and scene_scale > 0, 'positive historical scene scale required')
     normalized = normalized[np.linalg.norm(normalized,axis=1) < 5*scene_scale]
     _require(basis['normalized_positions'].shape == normalized.shape and
@@ -277,13 +295,15 @@ def assemble(request, arm, geometry_record, width_record):
     arrays['physical_static_id'] = np.concatenate([np.tile(np.arange(n), 9), np.full((~static).sum(), -1)])
     arrays['foreground_observation_id'] = np.concatenate([np.full(n*9, -1), np.flatnonzero(~static)])
     validate(arrays)
-    composition = COMPOSITIONS[arm]
-    names = {'S2','D4_fit','D4_check',composition['motion'],composition['neighbors']}
+    composition = request['compositions'][arm]
     initializer_receipt = dict(request['initializer_contract'], arm=arm,composition=composition,
-        arrays_sha256=initializer_arrays_hash(arrays), prerequisites={name:request['bindings'][name] for name in names},
+        arrays_sha256=initializer_arrays_hash(arrays), prerequisites=_prerequisites(request, arm),
         scene_manifest=request['bindings']['scene_manifest'])
-    receipt = dict(schema='plan067-final-render-assembly-result/v1', status='complete', record_kind=request['record_kind'],
-        arm=arm, composition=COMPOSITIONS[arm], request_sha256=object_hash(request), geometry=geometry_record,
+    if extended:
+        from .extended_final_render_contract import validate_initializer
+        validate_initializer(request, arm, initializer_receipt, arrays)
+    receipt = dict(schema=version+'-final-render-assembly-result/v1', status='complete', record_kind=request['record_kind'],
+        arm=arm, composition=composition, request_sha256=object_hash(request), geometry=geometry_record,
         scene=geometry.provenance['scene'], scene_manifest=request['bindings']['scene_manifest'], voxel_width=width_record,
         normalization=request['initializer_contract']['normalization'], velocity_units='normalized-scene/normalized-time',
         time_formula='frame/50', coverage_edges=len(geometry.rows), physical_static_points=n, temporal_static_copies=9*n,

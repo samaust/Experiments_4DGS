@@ -12,6 +12,7 @@ from .final_render_contract import initializer_arrays_hash, validate_initializer
 
 NATIVE_FIELDS = ('positions', 'colors', 'velocities', 'times', 'durations')
 SIDECAR_FIELDS = ('region', 'velocity_valid')
+ASSEMBLY_IDS = ('physical_static_id', 'foreground_observation_id')
 
 
 def prepare_model_input(request, arm, initializer_receipt, arrays):
@@ -25,7 +26,10 @@ def prepare_model_input(request, arm, initializer_receipt, arrays):
     """
     request = copy.deepcopy(request)
     initializer_receipt = copy.deepcopy(initializer_receipt)
-    if set(arrays) != set(NATIVE_FIELDS + SIDECAR_FIELDS):
+    sidecars = SIDECAR_FIELDS
+    if set(arrays) == set(NATIVE_FIELDS + SIDECAR_FIELDS + ASSEMBLY_IDS):
+        sidecars += ASSEMBLY_IDS
+    elif set(arrays) != set(NATIVE_FIELDS + SIDECAR_FIELDS):
         raise ValueError('exact native initialization and provenance sidecars required')
     snapshot = {name: np.array(value, copy=True, order='C') for name, value in arrays.items()}
     schema = request.get('schema')
@@ -36,6 +40,18 @@ def prepare_model_input(request, arm, initializer_receipt, arrays):
         checked = validate_extended(request, arm, initializer_receipt, snapshot)
     else:
         raise ValueError('unsupported final render request schema')
+    if ASSEMBLY_IDS[0] in snapshot:
+        count = len(snapshot['positions'])
+        for name in ASSEMBLY_IDS:
+            if snapshot[name].shape != (count,) or snapshot[name].dtype.kind != 'i':
+                raise ValueError('signed per-point assembly provenance IDs required')
+        static = snapshot['region'] == 0
+        physical = snapshot[ASSEMBLY_IDS[0]]
+        foreground = snapshot[ASSEMBLY_IDS[1]]
+        if (np.any(physical[static] < 0) or np.any(physical[~static] != -1) or
+                np.any(foreground[static] != -1) or np.any(foreground[~static] < 0) or
+                len(np.unique(foreground[~static])) != int((~static).sum())):
+            raise ValueError('assembly provenance IDs disagree with static/foreground regions')
     data = {name: snapshot[name] for name in NATIVE_FIELDS}
     receipt = dict(schema='plan069-final-render-native-input/v1', status='prepared',
         record_kind=request['record_kind'], arm=arm, composition=request['compositions'][arm],
@@ -43,7 +59,7 @@ def prepare_model_input(request, arm, initializer_receipt, arrays):
         initializer_validation=checked, point_count=len(data['positions']),
         arrays_sha256=initializer_arrays_hash(snapshot), native_arrays_sha256=initializer_arrays_hash(data),
         native_fields=list(NATIVE_FIELDS), native_array_bytes=sum(data[name].nbytes for name in NATIVE_FIELDS),
-        sidecar_array_bytes=sum(snapshot[name].nbytes for name in SIDECAR_FIELDS),
+        sidecar_fields=list(sidecars), sidecar_array_bytes=sum(snapshot[name].nbytes for name in sidecars),
         execution_authorized=False, native_adapter_qualified=False)
     return data, receipt
 

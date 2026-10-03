@@ -49,7 +49,7 @@ class AdmissionTests(unittest.TestCase):
             normalization=dict(transform=[[0,-2,0,1],[2,0,0,2],[0,0,2,3],[0,0,0,1]]))
         bindings = self.request['bindings']
         inputs = self.read(bindings['inputs'])
-        normalization = self.request['initializer_contract']['normalization']
+        normalization = dict(self.request['initializer_contract']['normalization'],scene_scale=10.)
         for row in inputs['rgb']:
             row['K'] = [[2,0,1],[0,2,1],[0,0,1]]
         for name in ('S2','M0','M1','M2'):
