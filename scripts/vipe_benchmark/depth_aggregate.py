@@ -114,6 +114,7 @@ def _anchor_previews(slot, candidate, context, inputs, config):
              'anchor preview config record bytes/path mismatch')
     _require(receipt.get('schema') == 'plan069-depth-anchor-preview-result/v1' and
              receipt.get('record_kind') == 'actual' and receipt.get('status') == 'complete' and
+             receipt.get('preview_revision') == '002' and
              receipt.get('candidate') == candidate and receipt.get('context') == context and
              receipt.get('inputs') == inputs and
              all(preview_config[key] == aggregate_config[key] for key in ('sha256', 'bytes')) and

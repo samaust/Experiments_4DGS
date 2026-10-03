@@ -10,7 +10,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 
 from vipe_benchmark.depth_aggregate import CANDIDATES, assemble, validate_actual_package
-from vipe_benchmark.files import file_record, write_json
+from vipe_benchmark.files import file_record, read_json, write_json
 
 
 class AggregateTests(unittest.TestCase):
@@ -67,7 +67,8 @@ class AggregateTests(unittest.TestCase):
         slot = self.request['candidates'][candidate]
         receipt = self.record(candidate + '-previews', dict(
             schema='plan069-depth-anchor-preview-result/v1', record_kind='actual', status='complete',
-            candidate=candidate, context=self.context, inputs=self.inputs, config=self.config,
+            candidate=candidate, preview_revision='002',
+            context=self.context, inputs=self.inputs, config=self.config,
             anchors=slot['anchors'], rendered_frames=60, slot=deepcopy(slot), sources=dict(
                 builder=file_record(Path(__file__).resolve().parents[1] / 'scripts/vipe_benchmark/depth_anchor_previews.py'),
                 renderer=file_record(Path(__file__).resolve().parents[1] / 'scripts/vipe_benchmark/depth_extension.py'))))
@@ -325,6 +326,18 @@ class AggregateTests(unittest.TestCase):
             assemble(self.request)
         different = self.record('different-config', {'training': 'different configuration'})
         self.request['bindings']['config'] = different
+        with self.assertRaisesRegex(ValueError, 'charged anchor preview receipt'):
+            assemble(self.request)
+
+    def test_historical_preview_revision_cannot_enter_corrected_aggregate(self):
+        self.clip_arm('D7')
+        slot = self.request['candidates']['D7']
+        historical = read_json(slot['anchor_previews']['path'])
+        historical['preview_revision'] = '001'
+        slot['anchor_previews'] = self.record('historical-preview', historical)
+        slot['evidence']['anchor_preview_accounting'] = self.record('historical-accounting', dict(
+            schema='plan069-depth-anchor-preview-accounting/v1', status='complete',
+            candidate='D7', result=slot['anchor_previews']))
         with self.assertRaisesRegex(ValueError, 'charged anchor preview receipt'):
             assemble(self.request)
 

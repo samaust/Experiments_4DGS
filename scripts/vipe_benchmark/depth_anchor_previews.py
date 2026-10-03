@@ -17,6 +17,7 @@ from .budgets import budget_snapshot, directory_bytes
 REQUEST = 'plan069-depth-anchor-preview-request/v1'
 RESULT = 'plan069-depth-anchor-preview-result/v1'
 ACCOUNTING = 'plan069-depth-anchor-preview-accounting/v1'
+PREVIEW_REVISION = '002'
 
 
 def _historical_rows(slot, candidate, accepted, ledger=None):
@@ -47,6 +48,8 @@ def render(request, output, *, ledger=None):
     """Render 60 immutable PNGs; charge admitted work or expose elapsed CPU on errors."""
     _require(request.get('schema') == REQUEST and request.get('record_kind') in ('actual', 'fixture'),
              'anchor preview request origin required')
+    _require(request.get('preview_revision') == PREVIEW_REVISION,
+             'current anchor preview revision 002 required')
     candidate = request['candidate']
     _require(candidate in CANDIDATES, 'unknown anchor preview candidate')
     output = Path(output)
@@ -88,7 +91,7 @@ def render(request, output, *, ledger=None):
                 display = _preview_frame(values, valid, DOMAINS[candidate], path)
                 if DOMAINS[candidate] == 'camera_z_metres':
                     display.update(normalization_scope='one frozen anchor frame',
-                                   invalid_color='magenta', above_20_metres_color='white')
+                                   invalid_color='magenta', above_20_metres_color='red')
                 else:
                     display['normalization_scope'] = 'one frozen anchor frame'
                     display['units'] = 'relative arbitrary values'
@@ -98,6 +101,7 @@ def render(request, output, *, ledger=None):
                          'anchor preview CPU/disk bound exceeded')
                 anchors.append(dict(row, record=preview, display=display))
         result = dict(schema=RESULT, status='complete', record_kind=request['record_kind'], candidate=candidate,
+                      preview_revision=PREVIEW_REVISION,
                       context=request['context'], inputs=request['inputs'], config=request['config'],
                       slot=request['slot'], anchors=anchors, source_rgb=[row['source_rgb'] for row in anchors],
                       rendered_frames=60, elapsed_seconds=time.monotonic() - started,
@@ -152,7 +156,7 @@ def _prepare(request, output, ledger, candidate, seconds, maximum):
         _require(ledger is not None and config == load() and
                  ledger.config == dict(config, new_download_gib_limit=110, new_artifact_disk_gib_limit=210) and
                  output.parent == ledger.path.parent / 'jobs' and
-                 output.name == f'plan069-{candidate}-anchor-previews-001',
+                 output.name == f'plan069-{candidate}-anchor-previews-{PREVIEW_REVISION}',
                  'actual anchor previews require shared ledger output/configuration')
         _require(not any(row.get('event') == 'reserve' for row in ledger.states().values()),
                  'active attempt prevents anchor CPU rendering')
@@ -188,7 +192,8 @@ def aggregate_request(template, preview_records):
         receipt = _record(record)
         slot = request['candidates'][candidate]
         _require(receipt.get('schema') == RESULT and receipt.get('status') == 'complete' and
-                 receipt.get('record_kind') == 'actual' and receipt.get('candidate') == candidate and
+                 receipt.get('record_kind') == 'actual' and
+                 receipt.get('preview_revision') == PREVIEW_REVISION and receipt.get('candidate') == candidate and
                  receipt.get('context') == request['bindings']['context'] and
                  receipt.get('inputs') == request['bindings']['inputs'] and
                  receipt.get('slot') == slot and receipt.get('rendered_frames') == 60,

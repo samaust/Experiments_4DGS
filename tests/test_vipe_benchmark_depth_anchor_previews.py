@@ -46,7 +46,9 @@ class AnchorPreviewTests(unittest.TestCase):
         valid = np.ones(values.shape, np.bool_)
         valid[0, 0] = False
         values[0, 0] = np.nan
-        values[0, 1] = 25
+        values[0, 1] = 21
+        values[0, 2] = 20
+        values[0, 3] = 19
         self.raw_path = self.root / 'depth.npz'
         np.savez_compressed(self.raw_path, depth=values, valid=valid)
         self.raw = file_record(self.raw_path)
@@ -81,7 +83,7 @@ class AnchorPreviewTests(unittest.TestCase):
         slot = dict(status='available', reason='', clips=clips, evidence={},
                     provenance=dict(source_result=native, ledger_outcome=self.inputs, configuration=self.config))
         return dict(schema='plan069-depth-anchor-preview-request/v1', record_kind=kind,
-                    candidate=candidate, config=self.config, context=self.context, inputs=self.inputs,
+                    candidate=candidate, preview_revision='002', config=self.config, context=self.context, inputs=self.inputs,
                     slot=slot, max_seconds=30, max_artifact_bytes=32 * 2**20)
 
     def test_sixty_metric_previews_preserve_raw_maps_and_source_frames(self):
@@ -96,9 +98,11 @@ class AnchorPreviewTests(unittest.TestCase):
         with Image.open(result['anchors'][0]['record']['path']) as image:
             self.assertEqual(image.size, (960, 540))
             self.assertEqual(image.getpixel((0, 0)), (255, 0, 255))
-            self.assertEqual(image.getpixel((1, 0)), (255, 255, 255))
+            self.assertEqual(image.getpixel((1, 0)), (255, 0, 0))
+            self.assertEqual(image.getpixel((2, 0)), (255, 255, 255))
+            self.assertEqual(image.getpixel((3, 0)), (242, 242, 242))
         self.assertEqual(result['anchors'][0]['display']['range_metres'], [0, 20])
-        self.assertEqual(result['anchors'][0]['display']['above_20_metres_color'], 'white')
+        self.assertEqual(result['anchors'][0]['display']['above_20_metres_color'], 'red')
         self.assertEqual(result['anchors'][0]['display']['invalid_color'], 'magenta')
         self.assertEqual(file_record(self.raw_path), self.raw)
         with self.assertRaisesRegex(ValueError, 'immutable'):
@@ -115,6 +119,14 @@ class AnchorPreviewTests(unittest.TestCase):
         self.assertEqual(result['physical_accuracy'], 'unverified')
         self.assertEqual(result['human_review'], 'pending')
 
+    def test_actual_revision_001_cannot_be_overwritten_or_reused(self):
+        request = self.request()
+        request['preview_revision'] = '001'
+        output = self.root / 'old-preview'
+        with self.assertRaisesRegex(ValueError, 'revision 002'):
+            render(request, output)
+        self.assertFalse(output.exists())
+
     def test_video_relative_npz_uses_native_key(self):
         request = self.request('D9')
         result = render(request, self.root / 'video-relative')
@@ -125,7 +137,7 @@ class AnchorPreviewTests(unittest.TestCase):
     def test_proof_verification_counts_toward_deadline_before_writes(self):
         request = self.request(kind='actual')
         ledger = FakeLedger(self.root, load())
-        output = self.root / 'jobs/plan069-D7-anchor-previews-001'
+        output = self.root / 'jobs/plan069-D7-anchor-previews-002'
         clock = [100.0]
         def slow_proof(*args):
             clock[0] += 31
@@ -165,7 +177,7 @@ class AnchorPreviewTests(unittest.TestCase):
 
     def test_actual_shaped_cpu_render_charges_success_and_failure_to_fake_ledger(self):
         ledger = FakeLedger(self.root, load())
-        output = self.root / 'jobs/plan069-D7-anchor-previews-001'
+        output = self.root / 'jobs/plan069-D7-anchor-previews-002'
         request = self.request(kind='actual')
         clock = [100.0]
         def slow_proof(*args):
@@ -197,7 +209,7 @@ class AnchorPreviewTests(unittest.TestCase):
              patch('vipe_benchmark.depth_anchor_previews._clips'), \
              patch('vipe_benchmark.budgets.budget_snapshot', return_value=dict(artifact_bytes=0)):
             with self.assertRaisesRegex(ValueError, 'CPU/disk bound'):
-                render(request, failed_root / 'jobs/plan069-D7-anchor-previews-001', ledger=failed_ledger)
+                render(request, failed_root / 'jobs/plan069-D7-anchor-previews-002', ledger=failed_ledger)
         self.assertEqual(len(failed_ledger.charges), 1)
         self.assertEqual(read_json(failed_ledger.charges[0][1]['path'])['status'], 'failed')
 
@@ -215,7 +227,7 @@ class AnchorPreviewTests(unittest.TestCase):
     def test_unadmitted_native_evidence_stops_before_actual_rendering(self):
         request = self.request(kind='actual')
         ledger = FakeLedger(self.root, load())
-        output = self.root / 'jobs/plan069-D7-anchor-previews-001'
+        output = self.root / 'jobs/plan069-D7-anchor-previews-002'
         with patch('vipe_benchmark.budgets.budget_snapshot', return_value=dict(artifact_bytes=0)):
             with self.assertRaisesRegex(ValueError, 'generation/ledger provenance'):
                 render(request, output, ledger=ledger)

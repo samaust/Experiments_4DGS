@@ -140,7 +140,8 @@ def _preview_frame(values, valid, domain, path):
     if domain == 'camera_z_metres':
         normalized = np.clip(values / 20, 0, 1)
         display = dict(domain=domain, range_metres=[0, 20],
-                       direction='larger means farther', clipped_above_metres=20)
+                       direction='larger means farther', clipped_above_metres=20,
+                       invalid_color='magenta', above_20_metres_color='red')
     else:
         observed = values[valid]
         low, high = float(observed.min()), float(observed.max())
@@ -154,6 +155,8 @@ def _preview_frame(values, valid, domain, path):
             display['constant_value'] = low
     grey = np.nan_to_num(normalized, nan=0)
     pixels = np.repeat((grey * 255).astype(np.uint8)[..., None], 3, axis=2)
+    if domain == 'camera_z_metres':
+        pixels[valid & (values > 20)] = [255, 0, 0]
     pixels[~valid] = [255, 0, 255]
     Image.fromarray(pixels, 'RGB').save(path)
     return display

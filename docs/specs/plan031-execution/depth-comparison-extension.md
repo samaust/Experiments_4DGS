@@ -111,6 +111,23 @@ See [the runtime audit](../../research/vipe-alternatives/plan069-D8-cu130-runtim
 - **Resources and authority:** produce concrete, reviewed fresh allocations for setup, transfers, inference including video context and D11 first-load quantization, CPU packaging and retention. Reconcile the live ledger, existing cumulative limits and concurrent reservations before approval/admission. One GPU process group, the 22 GiB device ceiling and existing CPU limits apply. This specification grants no numerical allocation, reset or resource increase. Apply AGENTS retry rules within the actual approved scope, budgets and attempt limits; S1's standing calibration retry authority does not authorize new depth attempts.
 - **Handoff and completion:** complete CPU qualification and independent review, execute only admitted allocations, and publish an immutable package plus per-candidate runtime/license/scale/resource dispositions. Every required slot needs actual accepted results or an authorized terminal disposition; an unstarted blocked slot is not silently dropped to complete the workstream. Deliver the package to the extended-depth review child of #23. Its new choice is required before new depth-dependent #34 execution.
 
+### Corrected frozen-frame preview revision
+
+Metric frozen frames use grayscale for 0–20 m: exactly 20 m is white,
+valid values above 20 m are red, and invalid pixels are magenta, matching clip
+out-of-range diagnostics. Relative maps retain their existing normalization.
+
+Preserve completed `plan069-{candidate}-anchor-previews-001` directories,
+receipts and CPU charges. They are historical evidence, not the current corrected
+aggregate inputs. Prepare a fresh bounded CPU request with `preview_revision:
+"002"`, reusing its original native/historical maps, accepted context, clips and
+provenance. Write only to `plan069-{candidate}-anchor-previews-002`; retain new
+request, result, builder/renderer hashes and CPU accounting. No new model or GPU
+attempt is implied. The current aggregate requires revision 002 receipts and their
+matching live ledger charges. Other missing candidates remain pending. All
+existing candidate and cumulative publication budgets still apply; historical
+D2/D7 records do not acquire unrelated later candidates' resource consumption.
+
 ## Testing Decisions
 
 - **Confirmed seams:** the user selected “Use these existing seams.” Test the existing worker request/result boundary, including admission and ledger checks, and the existing package/review handoff. Prefer complete externally observable transactions over new lower-level test APIs.
