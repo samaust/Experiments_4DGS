@@ -80,6 +80,16 @@ class VideoSetupTests(unittest.TestCase):
             transfer_id=path.name, output=str(path), bytes_received=len(payload)))
         return file_record(path)
 
+    def test_setup_cli_can_select_a_new_immutable_source_review(self):
+        import basketball_vipe_video_setup_dispatch as setup_dispatch
+        review = str(self.root / 'source-review-002.json')
+        with patch.object(sys, 'argv', ['video-setup', '--candidate', 'D9',
+                                       '--source-review', review]), patch.object(
+                setup_dispatch, 'dispatch') as launch:
+            setup_dispatch.main()
+        launch.assert_called_once_with('D9', 'plan031-20260913T032700Z',
+                                       source_review_path=review)
+
     def test_setup_source_review_binds_transfer_and_reservation_helper(self):
         from vipe_benchmark.depth_admission import local_source_records
         for candidate in ('D9', 'D10'):

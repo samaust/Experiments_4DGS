@@ -28,7 +28,7 @@ def shared_run_root():
     return repository
 
 
-def dispatch(candidate, run_id='plan031-20260913T032700Z'):
+def dispatch(candidate, run_id='plan031-20260913T032700Z', *, source_review_path=None):
     if candidate not in ('D9', 'D10') or run_id != 'plan031-20260913T032700Z':
         raise ValueError('only approved D9/D10 setup in accepted run')
     if Path('/proc/1/comm').read_text().strip() != 'systemd':
@@ -41,7 +41,8 @@ def dispatch(candidate, run_id='plan031-20260913T032700Z'):
     authorization = file_record(DO)
     review = read_json(DO)['review']
     verify_record(review)
-    source_review_path = (ROOT / 'docs/research/vipe-alternatives/'
+    source_review_path = (Path(source_review_path) if source_review_path is not None else
+        ROOT / 'docs/research/vipe-alternatives/'
         f'plan031-execution/depth-{candidate}-source-review-001.json')
     source_review = file_record(source_review_path)
     proposal = next(row for row in read_json(review['path'])['proposals']
@@ -112,8 +113,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--candidate', required=True, choices=('D9', 'D10'))
     parser.add_argument('--run-id', default='plan031-20260913T032700Z')
+    parser.add_argument('--source-review', help='Exact immutable independently reviewed source receipt')
     args = parser.parse_args()
-    dispatch(args.candidate, args.run_id)
+    dispatch(args.candidate, args.run_id, source_review_path=args.source_review)
 
 
 if __name__ == '__main__':
