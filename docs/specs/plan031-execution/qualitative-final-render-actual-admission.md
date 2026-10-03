@@ -73,7 +73,9 @@ separately authorized under its own existing allocation; this module grants none
 
 Commercial assessment (`plan069-final-render-commercial-assessment/v1`) binds
 actual allowed code, weights, dependencies and inference-output permissions,
-current runtime/sources, named reviewer and immutable primary-source receipts.
+current runtime/sources, named reviewer and immutable primary-source file records.
+Primary-source contents are opaque bytes (for example LICENSE text, HTML or PDF);
+only their exact path/hash/size is verified, without requiring JSON content.
 Independent source review (`plan069-final-render-source-review/v1`) binds actual
 passed status, reviewer, request and current sources. Native and matcher inventory
 validators rehash their complete existing preparation contracts without model
@@ -86,7 +88,10 @@ Its exact snapshot fields are `artifact_bytes`, `download_bytes`,
 `free_disk_bytes`, `device_bytes`, `gpu_pids`, `cpu_workers_used`,
 `cleanup_confirmed`, and `observed_unix`. Readings are nonnegative typed integers;
 GPU PID list must be empty, cleanup confirmed and observation age at most 30s.
-All phase reservations are serial. No consumed identity or failed predecessor
+Actual dispatch requires at least two CPU workers to retain control-helper
+capacity. All phase reservations are serial. Any finished ledger state explicitly
+reporting uncertain or unconfirmed cleanup blocks another reservation; finishing
+a failed phase does not prove that its process group has gone away. No consumed identity or failed predecessor
 can advance. A predecessor must be the exact same-arm previous phase's cleaned,
 successful ledger result; bytes are rehashed.
 

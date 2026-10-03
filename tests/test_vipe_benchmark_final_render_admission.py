@@ -116,3 +116,14 @@ class AdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'predecessor'):
             reserve_fixture(envelope,ledger,'QF-B','initializer',['fixture-worker'],probe=lambda:live,parent_result=result)
         self.assertEqual(ledger.events(),before)
+
+    def test_uncertain_finished_cleanup_blocks_another_arm(self):
+        from vipe_benchmark.final_render_admission import reserve_fixture
+        envelope,ledger,live=self.simulate()
+        event=reserve_fixture(envelope,ledger,'QF-B','geometry',['fixture-worker'],probe=lambda:live)
+        ledger.finish(event['job_id'],'failed',3.,cleanup_confirmed=False,cleanup_uncertain=True)
+        before=ledger.events()
+        with self.assertRaisesRegex(ValueError,'cleanup'):
+            reserve_fixture(envelope,ledger,'QF-M1','geometry',['fixture-worker'],probe=lambda:live)
+        self.assertEqual(ledger.events(),before)
+        self.assertEqual(ledger.totals()['cpu']['elapsed_seconds'],3.)

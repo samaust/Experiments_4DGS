@@ -19,10 +19,14 @@ def _require(condition, message):
         raise ValueError(message)
 
 
-def _bound(record):
+def _verified(record):
     _require(type(record) is dict and set(record) == {'path','sha256','bytes'} and
         verify_record(record) == record, 'exact unchanged admission evidence required')
-    return read_json(record['path'])
+    return record
+
+
+def _bound(record):
+    return read_json(_verified(record)['path'])
 
 
 class _Snapshot:
@@ -145,7 +149,7 @@ def _actual_evidence(envelope, request, events):
         type(commercial.get('primary_sources')) is list and bool(commercial['primary_sources']),
         'exact native commercial permissions required')
     for source in commercial['primary_sources']:
-        _bound(source)
+        _verified(source)
     return qualification
 
 
@@ -222,6 +226,8 @@ def _reserve(envelope_record, ledger, arm, phase, command, probe, parent_result,
             'literal nonempty command required')
         head = events[-1]['event_sha256'] if events else None
         if actual:
+            _require(request['cpu_workers_limit'] >= 2,
+                'actual dispatch requires CPU capacity for worker and control helper')
             grants = [e for e in events if e.get('event') == 'final_render_do_authorized' and
                 e.get('request') == envelope['request']]
             _require(len(grants) <= 1 and (grants[0]['envelope'] == envelope_record if grants else
@@ -252,6 +258,9 @@ def _reserve(envelope_record, ledger, arm, phase, command, probe, parent_result,
                 snapshot.credit[resource_credit] = snapshot.credit.get(resource_credit,0) + a['seconds']
         admit_review(request,snapshot,storage)
         states = ledger.states(events)
+        _require(not any(e.get('event') == 'finish' and
+            (e.get('cleanup_uncertain') is True or e.get('cleanup_confirmed') is False)
+            for e in states.values()), 'known uncertain cleanup blocks further dispatch')
         _require(not any(e['event'] == 'reserve' for e in states.values()), 'unreconciled active attempt')
         _require(job not in states, 'phase identity consumed; no automatic retry')
         phases = tuple(PHASES)
