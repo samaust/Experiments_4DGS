@@ -136,6 +136,9 @@ def dispatch(context, qualification, setup, *, qualitative_admission=None, run_i
         ledger_head_sha256=live['ledger_head_sha256'])
     if blockers:
         raise ValueError('D7 admission failed: ' + '; '.join(blockers))
+    # Evidence hashing can outlast the live snapshot window. The locked
+    # allocator rechecks all evidence against this freshly sampled state.
+    live = _live(ledger, local)
     admission = dict(schema='plan069-depth-admission-result/v1', status='passed',
         candidate='D7', proposal_sha256=object_hash(proposal), review=review,
         authorization=approved, source_review=source_review,
