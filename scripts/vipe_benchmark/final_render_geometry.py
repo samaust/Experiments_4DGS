@@ -83,16 +83,22 @@ def _matching_helpers():
     return namespace['balanced_samples'],namespace['query_warp'],pins['ROMA_PIN'],pins['ROMA_WEIGHTS']
 
 
-def run(request, arm, output, backend, observation_loader, *, tracker=None, clock=time.monotonic):
+def run(request, arm, output, backend, observation_loader=None, *, tracker=None, clock=time.monotonic):
     """Compute 810 fixture edges, publish immutable NPZs and a bound result.
 
     Backend supplies match/crop/triangulate, sample_thresh and record_kind=fixture.
     observation_loader(source, S2_row, M_row) returns rgb/valid/labels/changing
-    arrays; semantic classes come from the exact S2 row. The default temporal
-    tracker is unchanged OpenCV LK; CPU fixtures may inject known endpoints.
+    arrays; semantic classes come from the exact S2 row. The default loader
+    verifies frozen file bytes and native array contracts without preprocessing.
+    The default temporal tracker is unchanged OpenCV LK; CPU fixtures may
+    inject known endpoints.
     """
     _require(request.get('record_kind') == 'fixture', 'actual geometry requires supervised native qualification')
     _require(getattr(backend,'record_kind',None) == 'fixture', 'explicit fixture backend required')
+    verified_loader = observation_loader is None
+    if verified_loader:
+        from .final_render_loaders import load_observation
+        observation_loader = load_observation
     request = parse_request(request)
     _require(arm in request['compositions'], 'unknown final-render arm')
     balanced_samples,query_warp,ROMA_PIN,ROMA_WEIGHTS = _matching_helpers()
@@ -248,8 +254,11 @@ def run(request, arm, output, backend, observation_loader, *, tracker=None, cloc
         recipe = dict(mode='person-cropped',seed=0,samples_per_edge=5000,reprojection_pixels=2,parallax_degrees=1,
             minimum_foreground_support_cameras=3,lk_forward_backward_pixels=1,frame_seconds=.04,
             roma_revision=ROMA_PIN,expected_roma_weights=ROMA_WEIGHTS,native_model_verified=False,
+            observation_loader='verified-native-files' if verified_loader else 'injected-fixture',
             sources=[file_record(path) for path in (Path(__file__),script_root/'basketball_temporal_cloud.py',
                 script_root/'basketball_temporal_geometry.py',script_root/'vipe_benchmark/diagnostics.py',script_root/'edgs_source.py')])
+        if verified_loader:
+            recipe['sources'].append(file_record(script_root/'vipe_benchmark/final_render_loaders.py'))
         geometry = dict(schema='plan069-final-render-geometry/v1',status='complete',record_kind='fixture',arm=arm,
             request_sha256=object_hash(request),composition=composition,scene=bindings['scene_freeze'],rows=rows,
             prerequisites={name:bindings[name] for name in names},recipe=recipe,execution_authorized=False,native_adapter_qualified=False)
