@@ -31,9 +31,11 @@ LOCAL_COMMON = ('files.py', 'ledger.py', 'depth_admission.py', 'depth_extension.
 LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py',
                           'd2_preflight.py', 'd2_maps.py', 'd2_actual.py'),
     D5=('moge_metric.py', 'moge_native.py', 'moge_setup.py',
-        'depth_metric_scale.py', 'depth_single_run.py', 'depth_single_publish.py'),
+        'depth_metric_scale.py', 'depth_single_run.py', 'depth_single_publish.py',
+        'moge_environment.py', 'depth_environment.py', 'runtime_inventory.py'),
     D6=('moge_metric.py', 'moge_native.py', 'moge_setup.py',
-        'depth_metric_scale.py', 'depth_single_run.py', 'depth_single_publish.py'),
+        'depth_metric_scale.py', 'depth_single_run.py', 'depth_single_publish.py',
+        'moge_environment.py', 'depth_environment.py', 'runtime_inventory.py'),
     D7=('dav2_metric.py', 'moge_metric.py', 'depth_setup.py', 'depth_metric_scale.py', 'depth_d7_run.py', 'depth_d7_publish.py'),
     D8=('moge_metric.py', 'depth_metric_scale.py', 'depth_single_run.py', 'depth_single_publish.py', 'native_d8.py', 'depth_native_packages.py', 'depth_source_integrity.py',
         'depth_native_runtime.py', 'depth_environment.py', 'runtime_inventory.py',
@@ -66,6 +68,7 @@ def local_source_records(candidate):
         records.append(file_record(ROOT / 'scripts/basketball_vipe_moge_setup.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_moge_setup_dispatch.py'))
     if candidate in ('D5', 'D6', 'D8'):
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_single_dispatch.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_single_maps.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_single_publish.py'))
     if candidate in ('D9', 'D10'):
