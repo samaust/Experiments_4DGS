@@ -12,7 +12,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from vipe_benchmark.config import load
 from vipe_benchmark.depth_anchor_previews import aggregate_request, render
-from vipe_benchmark.depth_aggregate import CANDIDATES
+from vipe_benchmark.depth_aggregate import CANDIDATES, DOMAINS
 from vipe_benchmark.files import file_record, read_json, write_json
 
 
@@ -66,8 +66,14 @@ class AnchorPreviewTests(unittest.TestCase):
         return file_record(path)
 
     def request(self, candidate='D7', kind='fixture'):
+        if DOMAINS[candidate] != 'camera_z_metres':
+            with np.load(self.raw_path) as data:
+                values, valid = data['depth'], data['valid']
+            relative = self.root / (candidate + '-relative.npz')
+            np.savez_compressed(relative, relative=values, valid=valid)
+            self.raw = file_record(relative)
         rows = [dict(camera=camera, frame=frame, prediction=self.raw, source_rgb=self.rgb,
-                     domain='camera_z_metres' if candidate != 'D11' else 'relative_log')
+                     domain=DOMAINS[candidate])
                 for camera in self.cameras for frame in (100, 175)]
         native = self.record(candidate + '-native', dict(rows=rows))
         package = self.record(candidate + '-package', dict(synthetic=True))
@@ -92,6 +98,8 @@ class AnchorPreviewTests(unittest.TestCase):
             self.assertEqual(image.getpixel((0, 0)), (255, 0, 255))
             self.assertEqual(image.getpixel((1, 0)), (255, 255, 255))
         self.assertEqual(result['anchors'][0]['display']['range_metres'], [0, 20])
+        self.assertEqual(result['anchors'][0]['display']['above_20_metres_color'], 'white')
+        self.assertEqual(result['anchors'][0]['display']['invalid_color'], 'magenta')
         self.assertEqual(file_record(self.raw_path), self.raw)
         with self.assertRaisesRegex(ValueError, 'immutable'):
             render(request, self.root / 'previews')
@@ -99,12 +107,54 @@ class AnchorPreviewTests(unittest.TestCase):
     def test_relative_previews_declare_frame_scope_and_preserve_native_values(self):
         request = self.request('D11')
         result = render(request, self.root / 'relative')
+        self.assertEqual(file_record(self.raw['path']), self.raw)
         display = result['anchors'][0]['display']
         self.assertEqual(display['normalization_scope'], 'one frozen anchor frame')
         self.assertEqual(display['units'], 'relative arbitrary values')
         self.assertNotIn('range_metres', display)
         self.assertEqual(result['physical_accuracy'], 'unverified')
         self.assertEqual(result['human_review'], 'pending')
+
+    def test_video_relative_npz_uses_native_key(self):
+        request = self.request('D9')
+        result = render(request, self.root / 'video-relative')
+        self.assertEqual(result['anchors'][0]['display']['domain'], 'relative_inverse')
+        self.assertEqual(result['anchors'][0]['display']['direction'], 'larger means nearer')
+        self.assertEqual(file_record(self.raw['path']), self.raw)
+
+    def test_proof_verification_counts_toward_deadline_before_writes(self):
+        request = self.request(kind='actual')
+        ledger = FakeLedger(self.root, load())
+        output = self.root / 'jobs/plan069-D7-anchor-previews-001'
+        clock = [100.0]
+        def slow_proof(*args):
+            clock[0] += 31
+            return None, None, None
+        with patch('vipe_benchmark.depth_anchor_previews.time.monotonic', side_effect=lambda: clock[0]), \
+             patch('vipe_benchmark.depth_anchor_previews._native_result', side_effect=slow_proof), \
+             patch('vipe_benchmark.depth_anchor_previews._clips'), \
+             patch('vipe_benchmark.budgets.budget_snapshot', return_value=dict(artifact_bytes=0)):
+            with self.assertRaisesRegex(ValueError, 'deadline during proof') as caught:
+                render(request, output, ledger=ledger)
+        self.assertEqual(caught.exception.anchor_preview_elapsed_seconds, 31)
+        self.assertFalse(output.exists())
+        self.assertEqual(ledger.charges, [])
+
+    def test_output_creation_failure_exposes_measured_cpu_for_caller(self):
+        request = self.request()
+        clock = [100.0]
+        from vipe_benchmark.depth_anchor_previews import _prepare
+        def slow_proof(*args):
+            prepared = _prepare(*args)
+            clock[0] += 5
+            return prepared
+        with patch('vipe_benchmark.depth_anchor_previews.time.monotonic', side_effect=lambda: clock[0]), \
+             patch('vipe_benchmark.depth_anchor_previews._prepare', side_effect=slow_proof), \
+             patch('pathlib.Path.mkdir', side_effect=PermissionError('read only')):
+            with self.assertRaisesRegex(PermissionError, 'read only') as caught:
+                render(request, self.root / 'unwritable')
+        self.assertEqual(caught.exception.anchor_preview_elapsed_seconds, 5)
+        self.assertFalse((self.root / 'unwritable').exists())
 
     def test_failed_render_preserves_failure_and_respects_artifact_bound(self):
         request = self.request()
@@ -117,11 +167,18 @@ class AnchorPreviewTests(unittest.TestCase):
         ledger = FakeLedger(self.root, load())
         output = self.root / 'jobs/plan069-D7-anchor-previews-001'
         request = self.request(kind='actual')
-        with patch('vipe_benchmark.depth_anchor_previews._native_result', return_value=(None, None, None)), \
+        clock = [100.0]
+        def slow_proof(*args):
+            clock[0] += 5
+            return None, None, None
+        with patch('vipe_benchmark.depth_anchor_previews.time.monotonic', side_effect=lambda: clock[0]), \
+             patch('vipe_benchmark.depth_anchor_previews._native_result', side_effect=slow_proof), \
              patch('vipe_benchmark.depth_anchor_previews._clips'), \
              patch('vipe_benchmark.budgets.budget_snapshot', return_value=dict(artifact_bytes=0)):
-            render(request, output, ledger=ledger)
+            result = render(request, output, ledger=ledger)
         self.assertEqual(len(ledger.charges), 1)
+        self.assertEqual(ledger.charges[0][0], 5)
+        self.assertEqual(result['elapsed_seconds'], 5)
         accounting = read_json(ledger.charges[0][1]['path'])
         self.assertEqual(accounting['result'], file_record(output / 'result.json'))
         template = dict(schema='plan069-depth-aggregate-request/v1', record_kind='actual',

@@ -11,7 +11,7 @@ from .depth_aggregate import (ANCHOR_FRAMES, CANDIDATES, CLIP_CANDIDATES, DOMAIN
                               _clips, _native_result, _record, _require)
 from .depth_extension import _preview_frame
 from .files import file_record, read_json, verify_record, write_json
-from .budgets import directory_bytes
+from .budgets import budget_snapshot, directory_bytes
 
 
 REQUEST = 'plan069-depth-anchor-preview-request/v1'
@@ -44,7 +44,7 @@ def _historical_rows(slot, candidate, accepted, ledger=None):
 
 
 def render(request, output, *, ledger=None):
-    """Render one immutable set of 60 PNGs; actual work is charged on all exits."""
+    """Render 60 immutable PNGs; charge admitted work or expose elapsed CPU on errors."""
     _require(request.get('schema') == REQUEST and request.get('record_kind') in ('actual', 'fixture'),
              'anchor preview request origin required')
     candidate = request['candidate']
@@ -56,53 +56,19 @@ def render(request, output, *, ledger=None):
     _require(type(seconds) in (int, float) and np.isfinite(seconds) and 0 < seconds <= 600 and
              type(maximum) is int and 0 < maximum <= 256 * 2**20,
              'bounded anchor preview CPU/disk allocation required')
-    config = read_json(verify_record(request['config'])['path'])
-    context = _record(request['context'])
-    cameras = sorted(training_cameras(config))
-    accepted = {(row['camera'], row['frame']): row['accepted_rgb'] for row in context['anchors']}
-    _require(context.get('schema') == 'plan069-depth-context/v1' and context.get('inputs') == request['inputs'] and
-             len(context['anchors']) == 60 and set(accepted) ==
-             {(camera, frame) for camera in cameras for frame in ANCHOR_FRAMES},
-             'accepted 60-anchor context required')
-    slot = deepcopy(request['slot'])
-    _require(slot.get('status') == 'available', 'only available candidates have anchor previews')
-    _require('anchors' not in slot and 'anchor_previews' not in slot and
-             'anchor_preview_accounting' not in slot.get('evidence', {}),
-             'anchor preview input slot must contain only generation/clip evidence')
-    actual = request['record_kind'] == 'actual'
-    if actual:
-        from .budgets import budget_snapshot
-        _require(ledger is not None and config == load() and
-                 ledger.config == dict(config, new_download_gib_limit=110, new_artifact_disk_gib_limit=210) and
-                 output.parent == ledger.path.parent / 'jobs' and
-                 output.name == f'plan069-{candidate}-anchor-previews-001',
-                 'actual anchor previews require shared ledger output/configuration')
-        _require(not any(row.get('event') == 'reserve' for row in ledger.states().values()),
-                 'active attempt prevents anchor CPU rendering')
-        _require(ledger.totals()['cpu']['elapsed_seconds'] + seconds <=
-                 config['cpu_prepare_score_report_seconds_limit'], 'anchor CPU allocation exhausted')
-        _require(budget_snapshot(ledger.path.parent)['artifact_bytes'] + maximum <=
-                 ledger.config['new_artifact_disk_gib_limit'] * 2**30, 'anchor artifact allocation exhausted')
-    if candidate in ('D0', 'D1', 'D2', 'D3', 'D4'):
-        predictions = _historical_rows(slot, candidate, accepted, ledger if actual else None)
-    else:
-        native = _record(slot['provenance']['source_result'])
-        predictions = {(row['camera'], row['frame']): row.get('prediction', row.get('depth'))
-                       for row in native['rows'] if row['frame'] in ANCHOR_FRAMES}
-        _require(set(predictions) == set(accepted), '60 native anchors required')
-    raw_anchors = [dict(camera=camera, frame=frame, grid='scale-opencv-integer', domain=DOMAINS[candidate],
-                        source_rgb=accepted[camera, frame], prediction=prediction, record=prediction)
-                   for (camera, frame), prediction in sorted(predictions.items())]
-    slot['anchors'] = raw_anchors
-    if actual and candidate in CLIP_CANDIDATES:
-        native_record, native_rows, _ = _native_result(slot, candidate, request['context'], request['inputs'], cameras)
-        _clips(slot['clips'], candidate, request['context'], raw_anchors, native_record,
-               native_rows, slot['provenance']['ledger_outcome'])
     started = time.monotonic()
     deadline = started + seconds
-    output.mkdir(parents=True, exist_ok=False)
-    write_json(output / 'request.json', request)
+    # Unadmitted proof failures never write or mutate the ledger. Their measured
+    # CPU duration is returned on the exception for the trusted caller to charge.
     try:
+        actual, raw_anchors = _prepare(request, output, ledger, candidate, seconds, maximum)
+        _require(time.monotonic() < deadline, 'anchor preview CPU deadline during proof verification')
+    except BaseException as error:
+        error.anchor_preview_elapsed_seconds = time.monotonic() - started
+        raise
+    try:
+        output.mkdir(parents=True, exist_ok=False)
+        write_json(output / 'request.json', request)
         anchors = []
         retained = 0
         for row in raw_anchors:
@@ -111,7 +77,8 @@ def render(request, output, *, ledger=None):
                 _require(image.size == (960, 540) and image.mode == 'RGB', 'accepted anchor RGB grid changed')
                 image.load()
             with np.load(verify_record(row['prediction'])['path'], allow_pickle=False) as prediction:
-                values, valid = prediction['depth'], prediction['valid']
+                key = 'depth' if DOMAINS[candidate] == 'camera_z_metres' else 'relative'
+                values, valid = prediction[key], prediction['valid']
                 _require(values.shape == valid.shape == (540, 960) and values.dtype == np.float32 and
                          valid.dtype == np.bool_ and valid.any() and np.isfinite(values[valid]).all() and
                          np.isnan(values[~valid]).all(), 'frozen anchor depth/validity contract changed')
@@ -119,7 +86,10 @@ def render(request, output, *, ledger=None):
                     _require((values[valid] > 0).all(), 'metric anchor depth must be positive')
                 path = output / f"camera{row['camera']}-frame{row['frame']}.png"
                 display = _preview_frame(values, valid, DOMAINS[candidate], path)
-                if DOMAINS[candidate] != 'camera_z_metres':
+                if DOMAINS[candidate] == 'camera_z_metres':
+                    display.update(normalization_scope='one frozen anchor frame',
+                                   invalid_color='magenta', above_20_metres_color='white')
+                else:
                     display['normalization_scope'] = 'one frozen anchor frame'
                     display['units'] = 'relative arbitrary values'
                 preview = file_record(path)
@@ -150,11 +120,62 @@ def render(request, output, *, ledger=None):
     except BaseException as error:
         failure = dict(schema=ACCOUNTING, status='failed', candidate=candidate,
                        error=f'{type(error).__name__}: {error}', elapsed_seconds=time.monotonic() - started)
-        write_json(output / 'cpu-failure.json', failure)
-        if actual:
-            ledger.charge_cpu_preparation(failure['elapsed_seconds'], file_record(output / 'cpu-failure.json'))
+        error.anchor_preview_elapsed_seconds = failure['elapsed_seconds']
+        try:
+            write_json(output / 'cpu-failure.json', failure)
+        except OSError as receipt_error:
+            error.add_note(f'CPU failure receipt could not be written: {receipt_error}')
+        else:
+            if actual:
+                ledger.charge_cpu_preparation(failure['elapsed_seconds'], file_record(output / 'cpu-failure.json'))
         raise
 
+
+
+def _prepare(request, output, ledger, candidate, seconds, maximum):
+    """Verify provenance before any output or ledger mutation."""
+    config = read_json(verify_record(request['config'])['path'])
+    context = _record(request['context'])
+    cameras = sorted(training_cameras(config))
+    accepted = {(row['camera'], row['frame']): row['accepted_rgb'] for row in context['anchors']}
+    _require(context.get('schema') == 'plan069-depth-context/v1' and context.get('inputs') == request['inputs'] and
+             len(context['anchors']) == 60 and set(accepted) ==
+             {(camera, frame) for camera in cameras for frame in ANCHOR_FRAMES},
+             'accepted 60-anchor context required')
+    slot = deepcopy(request['slot'])
+    _require(slot.get('status') == 'available', 'only available candidates have anchor previews')
+    _require('anchors' not in slot and 'anchor_previews' not in slot and
+             'anchor_preview_accounting' not in slot.get('evidence', {}),
+             'anchor preview input slot must contain only generation/clip evidence')
+    actual = request['record_kind'] == 'actual'
+    if actual:
+        _require(ledger is not None and config == load() and
+                 ledger.config == dict(config, new_download_gib_limit=110, new_artifact_disk_gib_limit=210) and
+                 output.parent == ledger.path.parent / 'jobs' and
+                 output.name == f'plan069-{candidate}-anchor-previews-001',
+                 'actual anchor previews require shared ledger output/configuration')
+        _require(not any(row.get('event') == 'reserve' for row in ledger.states().values()),
+                 'active attempt prevents anchor CPU rendering')
+        _require(ledger.totals()['cpu']['elapsed_seconds'] + seconds <=
+                 config['cpu_prepare_score_report_seconds_limit'], 'anchor CPU allocation exhausted')
+        _require(budget_snapshot(ledger.path.parent)['artifact_bytes'] + maximum <=
+                 ledger.config['new_artifact_disk_gib_limit'] * 2**30, 'anchor artifact allocation exhausted')
+    if candidate in ('D0', 'D1', 'D2', 'D3', 'D4'):
+        predictions = _historical_rows(slot, candidate, accepted, ledger if actual else None)
+    else:
+        native = _record(slot['provenance']['source_result'])
+        predictions = {(row['camera'], row['frame']): row.get('prediction', row.get('depth'))
+                       for row in native['rows'] if row['frame'] in ANCHOR_FRAMES}
+        _require(set(predictions) == set(accepted), '60 native anchors required')
+    raw_anchors = [dict(camera=camera, frame=frame, grid='scale-opencv-integer', domain=DOMAINS[candidate],
+                        source_rgb=accepted[camera, frame], prediction=prediction, record=prediction)
+                   for (camera, frame), prediction in sorted(predictions.items())]
+    slot['anchors'] = raw_anchors
+    if actual and candidate in CLIP_CANDIDATES:
+        native_record, native_rows, _ = _native_result(slot, candidate, request['context'], request['inputs'], cameras)
+        _clips(slot['clips'], candidate, request['context'], raw_anchors, native_record,
+               native_rows, slot['provenance']['ledger_outcome'])
+    return actual, raw_anchors
 
 def aggregate_request(template, preview_records):
     """Attach actual preview receipts to explicit slots; missing slots stay pending."""
