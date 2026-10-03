@@ -98,6 +98,48 @@ class DepthSetupAuthorizationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'already consumed'):
                     ledger.reserve('plan069-D7-maps-001', ['no-retry'], current)
 
+    def test_established_worker_names_are_bound_to_exact_candidate_commands(self):
+        from vipe_benchmark.files import object_hash
+        workers = dict(D2='basketball_vipe_d2_maps.py',
+            D9='basketball_vipe_video_actual.py', D10='basketball_vipe_video_actual.py')
+        for candidate, name in workers.items():
+            with self.subTest(candidate=candidate), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                ledger = Ledger(root / 'ledger.jsonl', load())
+                review, authorization = file_record(REVIEW), file_record(DO)
+                source = source_review(root, candidate)
+                proposal = next(row for row in read_json(REVIEW)['proposals']
+                                if row['candidate'] == candidate)
+                admission_path = root / 'admission.json'
+                write_json(admission_path, dict(schema='plan069-depth-admission-result/v1',
+                    status='passed', candidate=candidate, proposal_sha256=object_hash(proposal),
+                    review=review, authorization=authorization, source_review=source,
+                    commercial={}, assets=[], runtime={}, live=dict(ledger_head_sha256='0' * 64)))
+                admission = file_record(admission_path)
+                job = f'plan069-{candidate}-maps-001'
+                request_path = root / 'requests' / (job + '.json')
+                write_json(request_path, dict(candidate=candidate, job_id=job, record_kind='actual',
+                    review=review, authorization=authorization, source_review=source, admission=admission))
+                worker = file_record(ROOT / 'scripts' / name)
+                binding = dict(request=file_record(request_path), worker=worker,
+                    executable=file_record(sys.executable), command=[sys.executable,
+                        worker['path'], '--request', str(request_path), '--output', str(root / 'jobs' / job)])
+                reading = dict(gpu_pids=[], download_bytes=0, artifact_bytes=0, device_bytes=0)
+                with patch('vipe_benchmark.depth_admission.review', return_value=[]), \
+                     patch('vipe_benchmark.execution.resources', return_value=reading):
+                    substituted = dict(binding, command=[sys.executable, worker['path'],
+                        '--request', str(request_path), '--output', str(root / 'other-output')])
+                    with self.assertRaisesRegex(ValueError, 'command binding'):
+                        ledger.authorize_depth_attempt(candidate, review, authorization, source,
+                                                       admission, **substituted)
+                    self.assertEqual(ledger.events(), [])
+                    ledger.authorize_depth_attempt(candidate, review, authorization, source,
+                                                   admission, **binding)
+                    reservation = dict(binding, review=review, authorization=authorization,
+                        source_review=source, admission=admission)
+                    reservation.pop('command')
+                    self.assertEqual(ledger.reserve(job, binding['command'], reservation)['event'], 'reserve')
+
     def test_exact_approval_allocates_once_and_reservation_blocks_overlap(self):
         with tempfile.TemporaryDirectory() as directory:
             ledger = Ledger(Path(directory) / 'ledger.jsonl', load())

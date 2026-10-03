@@ -55,6 +55,12 @@ def _live(ledger, local):
         device_peak_bytes=reading['device_bytes'])
 
 
+def validate_runtime_interpreter(qualification, executable):
+    """Admission binds the absolute virtual environment invocation spelling."""
+    if qualification.get('runtime', {}).get('python_executable') != str(Path(executable).absolute()):
+        raise ValueError('D7 qualified virtual environment interpreter differs')
+
+
 def dispatch(context, qualification, setup, *, qualitative_admission=None, run_id='plan031-20260913T032700Z'):
     if run_id != 'plan031-20260913T032700Z':
         raise ValueError('D7 depth attempt is bound to the accepted run')
@@ -76,6 +82,7 @@ def dispatch(context, qualification, setup, *, qualitative_admission=None, run_i
     qualified = read_json(qualification_record['path'])
     if qualified.get('schema') != 'plan069-depth-D7-qualification/v1':
         raise ValueError('exact D7 qualification bundle required')
+    validate_runtime_interpreter(qualified, sys.executable)
     context_record = file_record(context)
     if Path(context).resolve() != (local / 'jobs' / CONTEXT_JOB / 'context.json').resolve():
         raise ValueError('exact accepted depth context 003 path required')
