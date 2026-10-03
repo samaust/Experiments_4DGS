@@ -80,6 +80,14 @@ class VideoSetupTests(unittest.TestCase):
             transfer_id=path.name, output=str(path), bytes_received=len(payload)))
         return file_record(path)
 
+    def test_setup_source_review_binds_transfer_and_reservation_helper(self):
+        from vipe_benchmark.depth_admission import local_source_records
+        for candidate in ('D9', 'D10'):
+            with self.subTest(candidate=candidate):
+                reviewed = {Path(record['path']).name for record in local_source_records(candidate)}
+                self.assertIn('depth_setup.py', reviewed)
+                self.assertIn('contracts.py', reviewed)
+
     def test_exact_source_checkpoint_and_one_use_output(self):
         output = self.root / self.request['job_id']
         result = run_video_setup(self.request, output, acquire=self.acquire)
