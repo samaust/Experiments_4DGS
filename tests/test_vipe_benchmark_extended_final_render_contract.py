@@ -1,0 +1,312 @@
+"""Prospective extended depth choice at the public downstream REVIEW seam."""
+from pathlib import Path
+import sys
+import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+from vipe_benchmark.extended_final_render_contract import compositions
+
+
+class ExtendedContractTests(unittest.TestCase):
+    def test_metric_depth_choice_is_fixed_across_five_isolated_arms(self):
+        expected = {
+            'QF-B': {'segmentation': 'S2', 'depth': 'D5', 'motion': 'M0', 'neighbors': 'N0'},
+            'QF-M1': {'segmentation': 'S2', 'depth': 'D5', 'motion': 'M1', 'neighbors': 'N0'},
+            'QF-M2': {'segmentation': 'S2', 'depth': 'D5', 'motion': 'M2', 'neighbors': 'N0'},
+            'QF-N1': {'segmentation': 'S2', 'depth': 'D5', 'motion': 'M0', 'neighbors': 'N1'},
+            'QF-N2': {'segmentation': 'S2', 'depth': 'D5', 'motion': 'M0', 'neighbors': 'N2'},
+        }
+        self.assertEqual(compositions('D5'), expected)
+        for candidate in ('D4', 'D9', 'D11'):
+            with self.assertRaises(ValueError):
+                compositions(candidate)
+
+    def test_do_cannot_be_requested_by_a_review_contract(self):
+        from vipe_benchmark.extended_final_render_contract import parse_request
+        with self.assertRaisesRegex(ValueError, 'REVIEW'):
+            parse_request({'schema': 'plan069-final-render-request/v1', 'mode': 'DO', 'record_kind': 'fixture'})
+
+
+class AdmissionTests(unittest.TestCase):
+    def setUp(self):
+        import copy
+        import importlib
+        from vipe_benchmark.files import file_record, read_json, object_hash
+        from vipe_benchmark.final_render_contract import allocation_specs
+        from vipe_benchmark import depth_review
+        self.base = importlib.import_module('test_vipe_benchmark_final_render_contract').ContractTests()
+        self.base.setUp()
+        self.addCleanup(self.base.tearDown)
+        self.review = importlib.import_module('test_vipe_benchmark_depth_review').DepthReviewTests()
+        self.review.setUp()
+        self.addCleanup(self.review.doCleanups)
+        self.record = self.base.record
+        self.read = lambda record: read_json(record['path'])
+        self.request = copy.deepcopy(self.base.request)
+        self.request.update(schema='plan069-final-render-request/v1', depth_candidate='D5',
+                            compositions=compositions('D5'), id='extended-001', allocations=allocation_specs('extended-001'))
+        self.request['initializer_contract'].update(schema='plan069-final-render-initializer/v1',
+            normalization=dict(transform=[[0,-2,0,1],[2,0,0,2],[0,0,2,3],[0,0,0,1]]))
+        bindings = self.request['bindings']
+        inputs = self.read(bindings['inputs'])
+        normalization = self.request['initializer_contract']['normalization']
+        for row in inputs['rgb']:
+            row['K'] = [[2,0,1],[0,2,1],[0,0,1]]
+        for name in ('S2','M0','M1','M2'):
+            native = self.read(bindings[name])
+            for row in native['rows']:
+                row['K'] = [[2,0,1],[0,2,1],[0,0,1]]
+            bindings[name] = self.record(name+'-calibrated',native)
+            self.base.events.append(dict(event='finish',job_id=name+'-calibrated',status='complete',result=bindings[name]))
+        inputs.update(reference_geometry=dict(scale=1.7,normalization=normalization,
+            freeze=self.record('historical-freeze',dict(scale=1.7)),
+            normalization_source=self.record('historical-normalization',dict(normalization=normalization))),
+            map=self.record('accepted-map',{}))
+        bindings['inputs'] = self.record('extended-inputs',inputs)
+        self.review.inputs = bindings['inputs']
+        context = self.review.record(dict(inputs=bindings['inputs']))
+        for candidate, slot in self.review.slots.items():
+            generation = self.read(slot['evidence']['generation'])
+            fit = dict(self.read(generation['scales']['fit']), scale=1.7,
+                provenance=dict(inputs=bindings['inputs'],component=candidate,component_sha256='1'*64),
+                estimator_sha256='2'*64,scale_protocol_sha256='3'*64)
+            fit_record = self.review.record(fit)
+            check_record = self.review.record(dict(fit,role='selection',frozen_fit=fit_record))
+            generation.update(context=context,inputs=bindings['inputs'],scales=dict(fit=fit_record,check=check_record))
+            slot['evidence'].update(generation=self.review.record(generation),scale=check_record)
+            if candidate == 'D2':
+                slot['evidence'].update(historical_fit=self.review.record({'scale':fit_record}),
+                    historical_check=self.review.record({'scale':check_record}))
+        package = self.read(self.review.package)
+        package['bindings'].update(inputs=bindings['inputs'],context=context,
+            depth_aggregate_request=self.review.record(dict(candidates=self.review.slots)))
+        self.review.package = self.review.record(package)
+        self.review.form['package'] = self.review.package
+        self.review.freeze()
+        bindings['depth_decision'] = file_record(self.review.root/'decision.json')
+        selected = self.read(self.review.slots['D5']['evidence']['generation'])['scales']
+        bindings['D_fit'],bindings['D_check'] = selected['fit'],selected['check']
+        del bindings['D4_fit'],bindings['D4_check']
+        for name in ('N0','N1','N2'):
+            bindings[name] = self.record(name+'-extended',dict(self.read(bindings[name]),inputs=bindings['inputs']))
+            self.base.events.append(dict(event='finish',job_id=name+'-extended',status='complete',result=bindings[name]))
+        self.build_scene(inputs)
+        self.rebind_proposal()
+        self.ledger,self.storage = self.base.ledger,self.base.storage
+
+    def build_scene(self, inputs):
+        from sync_timing import common_training_keys
+        from vipe_benchmark.final_render_contract import TRAINING_CAMERAS
+        ids = [str(c) for c in range(34)]
+        timing = dict(schema='camera-timing/v1',units='seconds',
+            convention='corrected_timestamp_seconds = source_timestamp_seconds - offset_seconds',
+            camera_ids=ids,reference_camera='1',offset_seconds={c:0. for c in ids},
+            uncertainty_seconds={c:0. for c in ids},source_support_seconds={c:[0.,2.] for c in ids},
+            coverage=dict(camera_ids=ids),source_window_seconds=[0.,2.],normalization=dict(origin_seconds=0.,duration_seconds=2.),
+            kind='operational-assumption',provenance=dict(fixture=True))
+        keys,excluded = common_training_keys([(c,f,f/25) for c in ids for f in range(50)],[timing],['0','10','20','30'])
+        cameras = [dict(id=c,split='train' if int(c) in TRAINING_CAMERAS else 'test',width=960,height=540,
+            K=[[2,0,1.5],[0,2,1.5],[0,0,1]],world_to_camera_R=[[1,0,0],[0,1,0],[0,0,1]],
+            world_to_camera_T=[0,0,0],center=[0,0,0],
+            frames=[dict(frame_id=f,normalized_time=f/50,sha256=f'{c}-{f}') for f in range(50)]) for c in ids]
+        manifest = dict(schema='basketball-processed/v1',status='prepared',source_fps=25,timing=timing,
+            comparison_timings=[timing],time=timing['normalization'],heldout_camera_ids=['0','10','20','30'],
+            temporal_holdout_seconds=[.8,1.],training_keys=[list(k) for k in keys],training_exclusions=excluded,cameras=cameras,
+            freeze_sha256=inputs['reference_geometry']['freeze']['sha256'])
+        self.request['bindings']['scene_manifest'] = self.record('extended-manifest',manifest)
+        scene = dict(schema='plan069-final-render-scene/v1',status='complete',depth_component='D5',scale=1.7,
+            scale_evidence=dict(fit=self.request['bindings']['D_fit'],check=self.request['bindings']['D_check']),
+            normalization=self.request['initializer_contract']['normalization']['transform'],
+            historical_reference=inputs['reference_geometry'],map=inputs['map'],
+            units=dict(normalized_time_seconds=2.,frame_seconds=.04,velocity='metres/second -> normalization linear map * 2 seconds'),
+            cameras={str(c):dict(K=[[2,0,1],[0,2,1],[0,0,1]],R=[[1,0,0],[0,1,0],[0,0,1]],t=[0,0,0],center=[0,0,0]) for c in TRAINING_CAMERAS})
+        self.request['bindings']['scene_freeze'] = self.record('extended-scene',scene)
+
+    def rebind_proposal(self):
+        from vipe_benchmark.files import object_hash
+        bindings = self.request['bindings']
+        proposal = dict(schema='plan069-final-render-review-proposal/v1',record_kind='fixture',mode='REVIEW',depth_candidate=self.request['depth_candidate'],
+            bindings={k:v for k,v in bindings.items() if k!='proposal'},
+            settings_sha256=object_hash({k:v for k,v in self.request.items() if k!='bindings'}))
+        self.request['bindings']['proposal'] = self.record('proposal-'+str(len(list(self.base.root.glob('proposal-*')))),proposal)
+
+    def test_imported_choice_admits_only_a_prospective_review(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        before = self.ledger.events()
+        result = admit_review(self.request,self.ledger,self.storage)
+        self.assertEqual(result.coverage_edges_per_arm,810)
+        self.assertEqual((result.gpu_seconds,result.cpu_seconds),(49500,5400))
+        self.assertFalse(result.execution_authorized)
+        self.assertEqual(self.ledger.events(),before)
+
+    def test_rejects_mixed_depth_historical_choice_and_unequal_endpoint(self):
+        import copy
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        for change in (
+            lambda r:r['compositions']['QF-M1'].update(depth='D6'),
+            lambda r:r.update(depth_candidate='D4',compositions={a:dict(c,depth='D4') for a,c in r['compositions'].items()}),
+            lambda r:r.update(iterations=4999),
+            lambda r:r['render'].update(frames=list(range(49))),
+            lambda r:r.update(mode='DO'),
+        ):
+            with self.subTest(change=change):
+                request = copy.deepcopy(self.request)
+                change(request)
+                with self.assertRaises(ValueError):
+                    admit_review(request,self.ledger,self.storage)
+
+    def test_rebinding_proposal_cannot_substitute_decision_inputs_or_fit(self):
+        import copy
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        original = copy.deepcopy(self.request)
+        for name in ('inputs','D_fit','D_check'):
+            self.request = copy.deepcopy(original)
+            value = self.read(self.request['bindings'][name])
+            # Even identical content at a new path is a different bound record.
+            self.request['bindings'][name] = self.record('substituted-'+name,value)
+            self.rebind_proposal()
+            with self.assertRaisesRegex(ValueError,'manifest substitution'):
+                admit_review(self.request,self.ledger,self.storage)
+
+    def test_rejects_missing_native_coverage_and_substituted_component(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        missing = dict(self.read(self.request['bindings']['M1']))
+        missing['rows'] = missing['rows'][:-1]
+        self.request['bindings']['M1'] = self.record('missing-motion',missing)
+        self.base.events.append(dict(event='finish',job_id='missing-motion',status='complete',result=self.request['bindings']['M1']))
+        self.rebind_proposal()
+        with self.assertRaisesRegex(ValueError,'coverage'):
+            admit_review(self.request,self.ledger,self.storage)
+        self.request['bindings']['M1'] = self.request['bindings']['M0']
+        self.rebind_proposal()
+        with self.assertRaisesRegex(ValueError,'M1'):
+            admit_review(self.request,self.ledger,self.storage)
+
+    def test_rejects_changed_camera_time_transform_and_union(self):
+        import copy
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        original = copy.deepcopy(self.request)
+        for name, mutation in (
+            ('scene_freeze',lambda s:s['cameras']['1']['center'].__setitem__(0,1)),
+            ('scene_freeze',lambda s:s['units'].update(normalized_time_seconds=3)),
+            ('scene_freeze',lambda s:s['normalization'][0].__setitem__(3,9)),
+            ('scene_manifest',lambda s:s['training_keys'].pop()),
+        ):
+            self.request = copy.deepcopy(original)
+            scene = self.read(self.request['bindings'][name])
+            mutation(scene)
+            self.request['bindings'][name] = self.record('changed-scene-'+str(len(list(self.base.root.glob('changed-scene-*')))),scene)
+            self.rebind_proposal()
+            with self.assertRaises(ValueError):
+                admit_review(self.request,self.ledger,self.storage)
+
+    def test_rejects_changed_qualification_and_absent_evidence(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        self.request['bindings']['qualification'] = self.record('failed-qualification',dict(status='failed',record_kind='fixture'))
+        self.rebind_proposal()
+        with self.assertRaisesRegex(ValueError,'qualification'):
+            admit_review(self.request,self.ledger,self.storage)
+        del self.request['bindings']['runtime']
+        with self.assertRaisesRegex(ValueError,'bindings'):
+            admit_review(self.request,self.ledger,self.storage)
+
+    def test_rejects_active_consumed_and_exhausted_allocations(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        self.base.events.append(dict(event='reserve',job_id='another',status='reserved'))
+        with self.assertRaisesRegex(ValueError,'active'):
+            admit_review(self.request,self.ledger,self.storage)
+        self.base.events.pop()
+        self.base.events.append(dict(event='account',job_id=self.request['allocations'][0]['id'],status='blocked'))
+        with self.assertRaisesRegex(ValueError,'consumed'):
+            admit_review(self.request,self.ledger,self.storage)
+        self.base.events.pop()
+        self.ledger.totals=lambda events:{r:dict(elapsed_seconds=90000 if r=='gpu' else 0,reserved_seconds=0) for r in ('gpu','cpu','setup')}
+        with self.assertRaisesRegex(ValueError,'GPU'):
+            admit_review(self.request,self.ledger,self.storage)
+
+    def test_fixture_cannot_become_actual_human_authority(self):
+        import copy
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        actual = dict(copy.deepcopy(self.request),record_kind='actual')
+        with self.assertRaises(ValueError):
+            admit_review(actual,self.ledger,self.storage)
+
+    def test_initializer_keeps_selected_depth_provenance_and_arrays(self):
+        import numpy as np
+        from vipe_benchmark.extended_final_render_contract import validate_initializer
+        from vipe_benchmark.final_render_contract import initializer_arrays_hash
+        arrays=dict(positions=np.array([[1.,2.,3.]],np.float32),colors=np.zeros((1,3),np.float32),
+            velocities=np.zeros((1,3),np.float32),times=np.zeros((1,1),np.float32),durations=np.full((1,1),.2,np.float32),
+            region=np.zeros(1,np.int32),velocity_valid=np.zeros(1,np.bool_))
+        names=('S2','D_fit','D_check','depth_decision','M0','N0')
+        receipt=dict(self.request['initializer_contract'],arm='QF-B',composition=self.request['compositions']['QF-B'],
+            arrays_sha256=initializer_arrays_hash(arrays),scene_manifest=self.request['bindings']['scene_manifest'],
+            prerequisites={name:self.request['bindings'][name] for name in names})
+        checked=validate_initializer(self.request,'QF-B',receipt,arrays)
+        self.assertEqual(checked['point_count'],1)
+        self.assertFalse(checked['native_adapter_qualified'])
+        self.assertFalse(checked['execution_authorized'])
+        with self.assertRaisesRegex(ValueError,'isolation'):
+            validate_initializer(self.request,'QF-M1',receipt,arrays)
+        arrays['positions'][0,0]=9
+        with self.assertRaisesRegex(ValueError,'arrays changed'):
+            validate_initializer(self.request,'QF-B',receipt,arrays)
+
+    def test_unclear_real_imported_decision_does_not_admit_a_fallback(self):
+        import copy
+        from vipe_benchmark import depth_review
+        from vipe_benchmark.files import file_record
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        form = copy.deepcopy(self.review.form)
+        form['metric_choice'] = dict(outcome='unclear',candidate_ids=[],reason='Need additional judgment.',examples=[])
+        imported=depth_review.import_review(self.review.package,self.review.record(form),self.review.root/'unclear-review.json',actual=False)
+        depth_review.freeze_decision(imported,self.review.root/'unclear-decision.json',actual=False)
+        self.request['bindings']['depth_decision']=file_record(self.review.root/'unclear-decision.json')
+        self.rebind_proposal()
+        with self.assertRaisesRegex(ValueError,'ready'):
+            admit_review(self.request,self.ledger,self.storage)
+
+    def test_scene_camera_must_match_native_accepted_input_calibration(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        inputs=self.read(self.request['bindings']['inputs'])
+        inputs['rgb'][0]['K']=[[1]]
+        # Modify content in place to keep the decision identity stale: public
+        # validation must reject the bound hash rather than accept replacement.
+        from pathlib import Path
+        import json
+        Path(self.request['bindings']['inputs']['path']).write_text(json.dumps(inputs))
+        with self.assertRaises(ValueError):
+            admit_review(self.request,self.ledger,self.storage)
+
+    def test_manifest_frame_substitution_cannot_change_native_accepted_rgb(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        manifest=self.read(self.request['bindings']['scene_manifest'])
+        manifest['cameras'][1]['frames'][0]['sha256']='other-rgb'
+        self.request['bindings']['scene_manifest']=self.record('changed-manifest-rgb',manifest)
+        self.rebind_proposal()
+        with self.assertRaisesRegex(ValueError,'input geometry'):
+            admit_review(self.request,self.ledger,self.storage)
+
+    def test_all_six_eligible_metric_candidates_use_the_real_import_seam(self):
+        import copy
+        from vipe_benchmark import depth_review
+        from vipe_benchmark.files import file_record
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        for candidate in ('D2','D5','D6','D7','D8','D10'):
+            with self.subTest(candidate=candidate):
+                form=copy.deepcopy(self.review.form)
+                form['metric_choice']=dict(outcome='selected',candidate_ids=[candidate],
+                    reason='Independent CPU fixture selection.',examples=[self.review.example(candidate)])
+                imported=depth_review.import_review(self.review.package,self.review.record(form),self.review.root/(candidate+'-review.json'),actual=False)
+                depth_review.freeze_decision(imported,self.review.root/(candidate+'-decision.json'),actual=False)
+                scales=self.read(self.review.slots[candidate]['evidence']['generation'])['scales']
+                self.request.update(depth_candidate=candidate,compositions=compositions(candidate))
+                self.request['bindings'].update(depth_decision=file_record(self.review.root/(candidate+'-decision.json')),
+                    D_fit=scales['fit'],D_check=scales['check'])
+                scene=self.read(self.request['bindings']['scene_freeze'])
+                scene.update(depth_component=candidate,scale_evidence=dict(fit=scales['fit'],check=scales['check']))
+                self.request['bindings']['scene_freeze']=self.record(candidate+'-scene',scene)
+                self.rebind_proposal()
+                result=admit_review(self.request,self.ledger,self.storage)
+                self.assertEqual(result.coverage_edges_per_arm,810)
+                self.assertFalse(result.execution_authorized)
