@@ -1,0 +1,39 @@
+{
+  "schema": "plan069-D11-cpu-qualification-timing/v1",
+  "candidate": "D11",
+  "record_kind": "read-only-preparation",
+  "status": "prepared",
+  "elapsed_seconds": 0.3659499410001879,
+  "components": [
+    {
+      "name": "Previously reported draft001 and input003 generation, not in timing003 or charged native receipts",
+      "elapsed_seconds": 0.117568583,
+      "provenance": "Root message and isolated .local/D11-admission-draft-001.json preparation0.058050389s plus immutable input003 preparation0.059518194s; historical source003 failed and preserved in66a55b53."
+    },
+    {
+      "name": "Final runtime and qualification bundle generation and source/header/capture metadata checks",
+      "elapsed_seconds": 0.05679629500082228,
+      "provenance": "Isolated .local/D11-final-bundle-preparation-001.json."
+    },
+    {
+      "name": "Independent final bundle metadata/source verification",
+      "elapsed_seconds": 0.19158506299936562,
+      "provenance": "depth-D11-final-bundle-independent-review-001.json"
+    }
+  ],
+  "excluded_already_recorded_seconds": {
+    "pending_source_timing003": 0.2378337369991641,
+    "actual_native_cpu_receipts": 49.87339693900453,
+    "actual_combined_cpu_capture001": 889.0249250459983,
+    "actual_dependency_error_resolution": 105.48992949100102,
+    "actual_combined_cpu_capture002": 884.9206111799995,
+    "actual_combined_cpu_capture003": 873.5703672809977
+  },
+  "known_conservative_cumulative_cpu_with_pending003_and004_seconds": 2803.4830136150003,
+  "remaining_from_original_3600_known_receipts_seconds": 796.516986385,
+  "scope": "Measured distinct preparation only. Root alone charges ledger. Final GPU dispatch and clip/preview publication remain pending and must fit originalCPU3600. No estimates substitute for receipt measurements.",
+  "limitations": [
+    "Historical analysis, fixture preparation and other agents preparation not measured in this record; known receipt subtotal does not prove all CPU work charged.",
+    "Timing003 and004 pending until root charges them, exactly once; duplicate earlier0.117568583 charge must be excluded if root has separately accounted it."
+  ]
+}
