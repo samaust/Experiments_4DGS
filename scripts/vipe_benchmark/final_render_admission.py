@@ -58,7 +58,8 @@ def required_sources():
         'final_render_native.py','final_render_adapter.py','final_render_actual_result.py',
         'final_render_actual_worker.py','final_render_actual_dispatch.py','final_render_actual_control.py',
         'final_render_actual_supervisor.py','final_render_workers.py','supervisor.py','config.py',
-        'depth_review.py','s1_validation_contract.py')
+        'depth_review.py','s1_validation_contract.py','budgets.py',
+        's1_helper_session.py','s1_progress.py','s1_identity.py')
     required = [file_record(Path(__file__).with_name(name)) for name in names]
     required.extend(file_record(Path(__file__).resolve().parents[1]/name) for name in
         ('final-render-actual-worker.py','final-render-actual-control.py'))
