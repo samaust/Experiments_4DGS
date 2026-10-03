@@ -165,6 +165,8 @@ def dispatch(context, qualification, *, run_id=RUN):
         source_review=source_review, approval=grant, cap_amendment=approved['cap_amendment'],
         cap_approval=approved['cap_approval'], ledger_head_sha256=live['ledger_head_sha256'])
     _require(not blockers, 'D2 admission failed: ' + '; '.join(blockers))
+    # The locked allocator repeats the full closure check over a fresh sample.
+    live = _live(ledger, local)
     admission = dict(schema='plan069-depth-admission-result/v1', status='passed', candidate='D2',
         proposal_sha256=object_hash(proposal), review=review, authorization=authorization,
         source_review=source_review, qualification=qualified_record, live=live,

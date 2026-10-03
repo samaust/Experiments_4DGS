@@ -157,6 +157,15 @@ class D2ActualTest(unittest.TestCase):
         self.assertEqual(request['runtime'], self.runtime)
         self.assertEqual(request['context'], self.context)
 
+    def test_admission_refreshes_live_snapshot_after_closure_review(self):
+        samples = [dict(ledger_head_sha256='initial'), dict(ledger_head_sha256='refreshed')]
+        with patch.object(actual, '_live', side_effect=samples) as live, \
+             patch.object(actual, 'supervise', side_effect=self.supervise):
+            actual.dispatch(self.context_path, self.qualification_path)
+        self.assertEqual(live.call_count, 2)
+        admission = read_json(self.local / 'requests' / (actual.JOB + '-admission.json'))
+        self.assertEqual(admission['live']['ledger_head_sha256'], 'refreshed')
+
     def test_context_charge_required_before_authorization(self):
         self.ledger.history.clear()
         with patch.object(actual, 'supervise') as supervise:
