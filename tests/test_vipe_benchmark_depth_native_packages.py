@@ -9,6 +9,8 @@ import subprocess
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+from vipe_benchmark.files import file_record
+from vipe_benchmark.depth_source_integrity import source_manifest
 from vipe_benchmark.depth_native_packages import (
     D8_REQUIRED, D8_UTILS3D_REVISION, D11_PINNED, blockers, qualify)
 
@@ -22,6 +24,30 @@ class NativePackageTests(unittest.TestCase):
         packages['torch']['version'] = '2.4.1+cu121'
         packages['utils3d']['direct_url'] = dict(vcs_info=dict(commit_id=D8_UTILS3D_REVISION))
         self.assertEqual(blockers('D8', packages), [])
+
+    def test_d8_local_archive_requires_pinned_source_provenance(self):
+        packages = {name: dict(version='1.0', direct_url=None) for name in D8_REQUIRED}
+        packages['torch']['version'] = '2.4.1+cu124'
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            archive = root / 'utils3d.tar.gz'
+            archive.write_bytes(b'pinned dependency archive fixture')
+            source = root / 'source'
+            source.mkdir()
+            helper = source / 'utils3d.py'
+            helper.write_text('# pinned dependency fixture\n')
+            source_record = dict(name='utils3d', revision=D8_UTILS3D_REVISION,
+                record=file_record(archive), source_dir=str(source),
+                source_manifest=source_manifest(source))
+            packages['utils3d']['direct_url'] = dict(archive_info=dict(
+                hashes=dict(sha256=source_record['record']['sha256'])))
+            with patch('vipe_benchmark.depth_native_packages.installed', return_value=packages):
+                self.assertEqual(qualify('D8', source_packages=[source_record])['status'], 'passed')
+                with self.assertRaisesRegex(ValueError, 'pinned utils3d'):
+                    qualify('D8')
+                helper.write_text('# edited dependency fixture\n')
+                with self.assertRaisesRegex(ValueError, 'dependency source tree changed'):
+                    qualify('D8', source_packages=[source_record])
 
     def test_d11_requires_exact_native_versions(self):
         packages = {name: dict(version=version or '3.10.0')

@@ -47,6 +47,8 @@ class NativeD11Tests(unittest.TestCase):
                 source_manifest=source_manifest(root / 'source'))
             interpreter = root / 'python'
             interpreter.write_text('# fixture\n')
+            setup['runtime'] = dict(status='complete', python_executable=str(interpreter),
+                                    native_qualification={'status': 'passed'})
             rgb_a = np.full((540, 960, 3), 11, np.uint8)
             rgb_b = np.full((540, 960, 3), 22, np.uint8)
             calls = []
@@ -62,13 +64,13 @@ class NativeD11Tests(unittest.TestCase):
                 np.save(target / 'a.npy', np.full((540, 960), .1, np.float32))
                 np.save(target / 'b.npy', np.full((540, 960), .2, np.float32))
 
-            with patch('vipe_benchmark.native_d11.qualify', side_effect=ValueError('dependency qualification failed')):
+            with patch('vipe_benchmark.depth_native_packages.qualify', side_effect=ValueError('dependency qualification failed')):
                 with self.assertRaisesRegex(ValueError, 'dependency qualification failed'):
                     run_folder(setup, [('a', rgb_a)], root / 'out',
                                interpreter=interpreter, timeout_seconds=100, runner=run)
                 self.assertFalse((root / 'out').exists())
                 self.assertEqual(calls, [])
-            with patch('vipe_benchmark.native_d11.qualify', return_value={'status': 'passed'}):
+            with patch('vipe_benchmark.depth_native_packages.qualify', return_value={'status': 'passed'}):
                 config.write_text('seed: 999\n')
                 with self.assertRaisesRegex(ValueError, 'source tree changed'):
                     run_folder(setup, [('a', rgb_a)], root / 'out',
@@ -91,7 +93,8 @@ class NativeD11Tests(unittest.TestCase):
             native.write_text('import subprocess, sys, time\nsubprocess.Popen([sys.executable, "-c", ' + repr(child) + '])\ntime.sleep(60)\n')
             setup['native_source'] = file_record(native)
             setup['source_manifest'] = source_manifest(root / 'source')
-            with patch('vipe_benchmark.native_d11.qualify', return_value={'status': 'passed'}):
+            setup['runtime']['python_executable'] = sys.executable
+            with patch('vipe_benchmark.depth_native_packages.qualify', return_value={'status': 'passed'}):
                 with self.assertRaises(subprocess.TimeoutExpired):
                     run_folder(setup, [('a', rgb_a)], root / 'timed-out',
                                interpreter=sys.executable, timeout_seconds=.5)
@@ -107,7 +110,7 @@ class NativeD11Tests(unittest.TestCase):
             setup_path.write_text(json.dumps(setup))
             code = ('import json, numpy as np; from pathlib import Path; '
                     'from vipe_benchmark import native_d11; '
-                    'native_d11.qualify=lambda *args: {"status": "passed"}; '
+                    'native_d11.verify_runtime=lambda *args: {"status": "passed"}; '
                     'native_d11.run_folder(json.loads(Path(' + repr(str(setup_path)) +
                     ').read_text()), [("a", np.zeros((540,960,3), np.uint8))], ' +
                     repr(str(root / 'owned-out')) + ', interpreter=' + repr(sys.executable) +

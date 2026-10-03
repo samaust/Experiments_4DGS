@@ -11,7 +11,7 @@ import numpy as np
 from PIL import Image
 
 from .files import file_record, write_json
-from .depth_native_packages import qualify
+from .depth_native_runtime import verify_runtime
 from .depth_source_integrity import verify_source
 from .marigold_relative import PROFILE, SOURCE_REVISION
 
@@ -80,7 +80,7 @@ def run_folder(setup, frames, output, *, interpreter, timeout_seconds, runner=_s
     _require(frames and len(frames) <= 256, 'D11 frame count exceeds approved workload')
     interpreter = Path(interpreter).absolute()
     _require(interpreter.is_file(), 'qualified D11 interpreter missing')
-    qualification = qualify('D11', interpreter)
+    qualification = verify_runtime(setup, interpreter)
     _require(file_record(interpreter.parent / 'python') == file_record(interpreter),
              'D11 child Python differs from qualified interpreter')
     ids = [frame_id for frame_id, _ in frames]

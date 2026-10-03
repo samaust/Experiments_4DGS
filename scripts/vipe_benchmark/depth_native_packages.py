@@ -42,7 +42,7 @@ def installed(names):
     return found
 
 
-def blockers(candidate, packages):
+def blockers(candidate, packages, source_packages=()):
     if candidate == 'D8':
         problems = [f'{name} missing' for name in D8_REQUIRED if not packages.get(name)]
         torch = packages.get('torch') or {}
@@ -53,7 +53,13 @@ def blockers(candidate, packages):
             problems.append('D8 requires torch<2.5.0')
         utils = packages.get('utils3d') or {}
         vcs = (utils.get('direct_url') or {}).get('vcs_info') or {}
-        if vcs.get('commit_id') != D8_UTILS3D_REVISION:
+        archive = next((row for row in source_packages if row.get('name') == 'utils3d' and
+                        row.get('revision') == D8_UTILS3D_REVISION), None)
+        archive_info = (utils.get('direct_url') or {}).get('archive_info', {})
+        local = archive_info.get('hashes', {})
+        archive_hash = local.get('sha256') or archive_info.get('hash', '').removeprefix('sha256=')
+        archive_matches = archive is not None and archive_hash == archive['record']['sha256']
+        if vcs.get('commit_id') != D8_UTILS3D_REVISION and not archive_matches:
             problems.append('D8 requires pinned utils3d Git revision')
         return problems
     if candidate == 'D11':
@@ -73,7 +79,7 @@ def blockers(candidate, packages):
     raise ValueError('unsupported native dependency candidate')
 
 
-def qualify(candidate, interpreter=None):
+def qualify(candidate, interpreter=None, *, source_packages=()):
     """Probe exact entry interpreter without importing models or initializing CUDA."""
     interpreter = Path(interpreter or sys.executable).absolute()
     names = D8_REQUIRED if candidate == 'D8' else tuple(D11_PINNED)
@@ -89,11 +95,18 @@ def qualify(candidate, interpreter=None):
             env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'),
             capture_output=True, text=True, check=True, timeout=60)
         packages = json.loads(result.stdout)
-    problems = blockers(candidate, packages)
+    for source in source_packages:
+        if file_record(source['record']['path']) != source['record']:
+            raise ValueError('native dependency source archive changed')
+        from .depth_source_integrity import source_manifest
+        if source_manifest(source['source_dir']) != source['source_manifest']:
+            raise ValueError('native dependency source tree changed')
+    problems = blockers(candidate, packages, source_packages)
     if problems:
         raise ValueError('native dependency qualification failed: ' + '; '.join(problems))
     if before != file_record(interpreter):
         raise ValueError('native interpreter changed during qualification')
     return dict(schema='plan069-depth-native-packages/v1', status='passed',
                 candidate=candidate, interpreter_path=str(interpreter),
-                interpreter=before, packages=packages, packages_sha256=object_hash(packages))
+                interpreter=before, packages=packages, packages_sha256=object_hash(packages),
+                source_packages=list(source_packages))

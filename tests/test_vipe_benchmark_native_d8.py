@@ -61,14 +61,23 @@ class NativeD8Tests(unittest.TestCase):
                 candidate='D8', source_revision=native_d8.SOURCE_REVISION,
                 source_dir=str(root / 'source'),
                 native_source=file_record(source), source_archive=file_record(archive),
+                runtime=dict(status='complete', python_executable=sys.executable,
+                             native_qualification={'status': 'passed'}),
                 source_manifest=source_manifest(root / 'source'),
                 assets=[dict(repository='metricanything', path='student_pointmap.pt',
                              record=record)])
-            with patch.object(native_d8, 'qualify', side_effect=ValueError('dependency qualification failed')):
+            setup['runtime']['python_executable'] = str(root / 'wrong-python')
+            with self.assertRaisesRegex(ValueError, 'exact prepared interpreter'):
+                native_d8.load(setup, torch_module=Torch({'weight': 1}), model_class=Model)
+            setup['runtime']['python_executable'] = sys.executable
+            with patch('vipe_benchmark.depth_native_packages.qualify', return_value={'status': 'passed', 'packages_sha256': 'changed'}):
+                with self.assertRaisesRegex(ValueError, 'qualification changed since setup'):
+                    native_d8.load(setup, torch_module=Torch({'weight': 1}), model_class=Model)
+            with patch('vipe_benchmark.depth_native_packages.qualify', side_effect=ValueError('dependency qualification failed')):
                 with self.assertRaisesRegex(ValueError, 'dependency qualification failed'):
                     native_d8.load(setup, torch_module=Torch({'weight': 1}), model_class=Model)
             with patch.object(native_d8, 'WEIGHT_SHA256', record['sha256']), \
-                    patch.object(native_d8, 'qualify', return_value={'status': 'passed'}):
+                    patch('vipe_benchmark.depth_native_packages.qualify', return_value={'status': 'passed'}):
                 adapter = native_d8.load(setup, torch_module=Torch({'weight': 1}),
                                          model_class=Model)
                 self.assertEqual(adapter.runtime.strict, True)

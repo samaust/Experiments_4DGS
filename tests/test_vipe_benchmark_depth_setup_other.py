@@ -35,7 +35,7 @@ class OtherDepthSetupTests(unittest.TestCase):
             config['base'] = dict(url='https://huggingface.co/qwen',
                                   revision=self.revision)
         proposal = dict(candidate=candidate, required_assets=file_record(inventory),
-            allocation=dict(setup_seconds=1800, download_bytes=300 * 2**20),
+            allocation=dict(setup_seconds=1800, download_bytes=300 * 2**20, artifact_bytes=2**30),
             candidate_config=config)
         review = self.root / 'review.json'
         write_json(review, dict(schema='plan069-depth-execution-review/v1',
@@ -79,7 +79,13 @@ class OtherDepthSetupTests(unittest.TestCase):
                      lfs_sha256=hashlib.sha256(self.weights).hexdigest())
         request = self.request('D8', [asset])
         output = self.root / request['job_id']
-        result = run_setup(request, output, acquire=self.acquire('D8'))
+        prepared = []
+        def prepare(*args, **kwargs):
+            prepared.append(kwargs)
+            self.assertFalse((output / 'assets/MetricAnything/student_pointmap.pt').exists())
+            return dict(status='complete', record_kind='fixture', python_executable=sys.executable)
+        result = run_setup(request, output, acquire=self.acquire('D8'), prepare_environment=prepare)
+        self.assertEqual(prepared[0]['download_limit'], 300 * 2**20 - len(self.weights))
         self.assertEqual(result['assets'][0]['record'],
                          file_record(output / 'assets/MetricAnything/student_pointmap.pt'))
         self.assertTrue((output / 'source/models/student_pointmap/moge/model/v2.py').is_file())
@@ -87,7 +93,9 @@ class OtherDepthSetupTests(unittest.TestCase):
                          'models/student_pointmap/moge/model/v2.py')
         self.assertEqual(len(result['source_manifest']['sha256']), 64)
         with self.assertRaisesRegex(ValueError, 'immutable'):
-            run_setup(request, output, acquire=self.acquire('D8'))
+            run_setup(request, output, acquire=self.acquire('D8'),
+                           prepare_environment=lambda *args, **kwargs: dict(status='complete',
+                               record_kind='fixture', python_executable=sys.executable))
 
     def test_d11_checks_small_git_blob_and_preserves_failure(self):
         oid = hashlib.sha1(b'blob ' + str(len(self.weights)).encode() + b'\0' +
@@ -99,13 +107,18 @@ class OtherDepthSetupTests(unittest.TestCase):
                        bytes=len(self.weights), lfs_sha256=None, git_oid=oid)]
         request = self.request('D11', assets)
         result = run_setup(request, self.root / request['job_id'],
-                           acquire=self.acquire('D11'))
+                           acquire=self.acquire('D11'),
+                           prepare_environment=lambda *args, **kwargs: dict(status='complete',
+                               record_kind='fixture', python_executable=sys.executable))
         self.assertEqual(len(result['assets']), 2)
         self.assertEqual(result['candidate'], 'D11')
+        self.assertEqual(result['weight_revision'], self.revision)
 
         other = self.root / 'failed' / request['job_id']
         with self.assertRaisesRegex(ValueError, 'pinned asset byte count'):
-            run_setup(request, other, acquire=self.acquire('D11', corrupt=True))
+            run_setup(request, other, acquire=self.acquire('D11', corrupt=True),
+                               prepare_environment=lambda *args, **kwargs: dict(status='complete',
+                                   record_kind='fixture', python_executable=sys.executable))
         self.assertEqual(read_json(other / 'failure.json')['status'], 'failed')
         self.assertFalse((other / 'result.json').exists())
 

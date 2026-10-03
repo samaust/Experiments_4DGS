@@ -6,6 +6,7 @@ import time
 
 from .budgets import budget_snapshot
 from .depth_source_integrity import source_manifest
+from .depth_native_runtime import prepare
 from .depth_setup import _acquire, _active_reservation, _unpack_source
 from .files import file_record, object_hash, read_json, verify_record, write_json
 
@@ -76,7 +77,8 @@ def _setup_request(request):
     return proposal, assets
 
 
-def run_setup(request, output, *, request_path=None, acquire=_acquire):
+def run_setup(request, output, *, request_path=None, acquire=_acquire,
+              prepare_environment=prepare):
     """Download only reviewed source/assets under the active one-use reservation."""
     started = time.monotonic()
     proposal, assets = _setup_request(request)
@@ -94,10 +96,12 @@ def run_setup(request, output, *, request_path=None, acquire=_acquire):
     deadline = started + allocation['setup_seconds']
     output.mkdir(parents=True, exist_ok=False)
     write_json(output / 'request.json', request)
-    baseline = budget_snapshot(run_root)['download_bytes']
+    baseline_snapshot = budget_snapshot(run_root)
+    baseline = baseline_snapshot['download_bytes']
     download_limit = min(config['new_download_gib_limit'] * 2**30,
                          baseline + allocation['download_bytes'])
-    artifact_limit = config['new_artifact_disk_gib_limit'] * 2**30
+    artifact_limit = min(config['new_artifact_disk_gib_limit'] * 2**30,
+                         baseline_snapshot['artifact_bytes'] + allocation['artifact_bytes'])
     try:
         code = proposal['candidate_config']['code']
         source_archive = output / 'source.tar.gz'
@@ -109,6 +113,10 @@ def run_setup(request, output, *, request_path=None, acquire=_acquire):
         _unpack_source(source_archive, source_dir, code['revision'],
                        deadline=deadline, required=SOURCE[candidate][1])
         extracted_source = source_manifest(source_dir)
+        asset_bytes = sum(row['bytes'] for row in assets)
+        runtime = prepare_environment(request, output, config, run_root=run_root,
+            deadline=deadline, acquire=acquire, download_limit=download_limit - asset_bytes,
+            artifact_limit=artifact_limit - asset_bytes, request_path=request_path)
         records = []
         for asset in assets:
             repository = asset['repository']
@@ -130,9 +138,11 @@ def run_setup(request, output, *, request_path=None, acquire=_acquire):
         result = dict(schema='plan069-depth-setup-result/v1', status='complete',
             candidate=candidate, job_id=job_id, record_kind=request['record_kind'],
             review=request['review'], authorization=request['authorization'],
-            source_revision=code['revision'], source_archive=file_record(source_archive),
+            source_revision=code['revision'],
+            weight_revision=proposal['candidate_config']['weights']['revision'],
+            source_archive=file_record(source_archive),
             source_dir=str(source_dir), native_source=file_record(source_dir / SOURCE[candidate][1]),
-            source_manifest=extracted_source, assets=records,
+            source_manifest=extracted_source, assets=records, runtime=runtime,
             bytes_received=received, elapsed_seconds=time.monotonic() - started)
         _require(source_manifest(source_dir) == extracted_source,
                  'native source tree changed during setup')

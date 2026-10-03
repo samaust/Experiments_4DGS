@@ -3,7 +3,7 @@
 from pathlib import Path
 import sys
 
-from .depth_native_packages import qualify
+from .depth_native_runtime import verify_runtime
 from .depth_source_integrity import verify_source
 
 from .files import file_record
@@ -34,7 +34,7 @@ def load(setup_result, *, torch_module=None, model_class=None):
             setup_result.get('source_revision') != SOURCE_REVISION):
         raise ValueError('D8 requires completed pinned setup')
     verify_source(setup_result)
-    qualification = qualify('D8')
+    qualification = verify_runtime(setup_result)
     assets = setup_result.get('assets', [])
     if len(assets) != 1 or assets[0].get('repository') != 'metricanything' or \
             assets[0].get('path') != 'student_pointmap.pt':

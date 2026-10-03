@@ -7,6 +7,8 @@ import sys
 
 from vipe_benchmark.config import ROOT, load
 from vipe_benchmark.execution import resources
+from vipe_benchmark.depth_native_runtime import recipe, verify_runtime
+from vipe_benchmark.depth_source_integrity import verify_source
 from vipe_benchmark.files import file_record, read_json, verify_record, write_json
 from vipe_benchmark.ledger import Ledger
 from vipe_benchmark.supervisor import supervise
@@ -53,7 +55,7 @@ def dispatch(candidate, run_id):
         raise ValueError('GPU owner active before depth setup')
     request = dict(schema='plan069-depth-setup-request/v1', record_kind='actual',
         candidate=candidate, job_id=job_id, ledger_path=str(ledger.path),
-        review=review, authorization=authorization)
+        review=review, authorization=authorization, environment=recipe(candidate, local))
     write_json(request_path, request)
     ledger.authorize_depth_setup(candidate, review, authorization, source_review)
     worker = ROOT / 'scripts/basketball_vipe_depth_setup_other.py'
@@ -74,11 +76,14 @@ def dispatch(candidate, run_id):
                 raise ValueError('depth setup asset receipt differs')
         verify_record(result['source_archive'])
         verify_record(result['native_source'])
+        verify_source(result)
+        verify_runtime(result, result['runtime']['python_executable'])
         if (result.get('schema') != 'plan069-depth-setup-result/v1' or
                 result.get('status') != 'complete' or result.get('record_kind') != 'actual' or
                 result.get('candidate') != candidate or result.get('job_id') != job_id or
                 result.get('review') != review or result.get('authorization') != authorization or
                 result.get('source_revision') != proposal['candidate_config']['code']['revision'] or
+                result.get('weight_revision') != proposal['candidate_config']['weights']['revision'] or
                 result.get('bytes_received', 10**30) > proposal['allocation']['download_bytes'] or
                 result.get('elapsed_seconds', 10**30) > proposal['allocation']['setup_seconds']):
             raise ValueError('setup result differs from approved source, bounds or origin')
