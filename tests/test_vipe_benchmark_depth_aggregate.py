@@ -312,6 +312,22 @@ class AggregateTests(unittest.TestCase):
                     _verify_historical_anchors(self.context, records)
         self.historical_patch.start()
 
+    def test_identical_config_in_another_worktree_preserves_completed_previews(self):
+        self.clip_arm('D7')
+        relocated = self.root / 'other-worktree-config.json'
+        relocated.write_bytes(Path(self.config['path']).read_bytes())
+        self.request['bindings']['config'] = file_record(relocated)
+        manifest = assemble(self.request)
+        self.assertEqual(manifest['candidates'][8]['id'], 'D7')
+        self.assertEqual(manifest['candidates'][8]['status'], 'available')
+        self.request['bindings']['config']['bytes'] += 1
+        with self.assertRaisesRegex(ValueError, 'config record bytes/path mismatch'):
+            assemble(self.request)
+        different = self.record('different-config', {'training': 'different configuration'})
+        self.request['bindings']['config'] = different
+        with self.assertRaisesRegex(ValueError, 'charged anchor preview receipt'):
+            assemble(self.request)
+
     def test_anchor_images_require_actual_receipts_and_cpu_charges(self):
         self.clip_arm('D7')
         self.charge_patch.stop()

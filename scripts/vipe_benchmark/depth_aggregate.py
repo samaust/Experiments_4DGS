@@ -106,10 +106,17 @@ def _anchor_previews(slot, candidate, context, inputs, config):
     receipt = _record(record)
     accounting_record = slot['evidence']['anchor_preview_accounting']
     accounting = _record(accounting_record)
+    # Completed receipts may bind identical frozen configuration bytes in a
+    # different worktree. Verify both paths before comparing content identity.
+    preview_config = verify_record(receipt['config'])
+    aggregate_config = verify_record(config)
+    _require(preview_config == receipt['config'] and aggregate_config == config,
+             'anchor preview config record bytes/path mismatch')
     _require(receipt.get('schema') == 'plan069-depth-anchor-preview-result/v1' and
              receipt.get('record_kind') == 'actual' and receipt.get('status') == 'complete' and
              receipt.get('candidate') == candidate and receipt.get('context') == context and
-             receipt.get('inputs') == inputs and receipt.get('config') == config and
+             receipt.get('inputs') == inputs and
+             all(preview_config[key] == aggregate_config[key] for key in ('sha256', 'bytes')) and
              receipt.get('anchors') == slot['anchors'] and
              receipt.get('rendered_frames') == 60 and
              receipt.get('sources') == dict(
