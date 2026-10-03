@@ -5,6 +5,7 @@ from pathlib import Path
 import time
 
 from .budgets import budget_snapshot
+from .depth_source_integrity import source_manifest
 from .depth_setup import _acquire, _active_reservation, _unpack_source
 from .files import file_record, object_hash, read_json, verify_record, write_json
 
@@ -107,6 +108,7 @@ def run_setup(request, output, *, request_path=None, acquire=_acquire):
         source_dir = output / 'source'
         _unpack_source(source_archive, source_dir, code['revision'],
                        deadline=deadline, required=SOURCE[candidate][1])
+        extracted_source = source_manifest(source_dir)
         records = []
         for asset in assets:
             repository = asset['repository']
@@ -130,8 +132,12 @@ def run_setup(request, output, *, request_path=None, acquire=_acquire):
             review=request['review'], authorization=request['authorization'],
             source_revision=code['revision'], source_archive=file_record(source_archive),
             source_dir=str(source_dir), native_source=file_record(source_dir / SOURCE[candidate][1]),
-            assets=records,
+            source_manifest=extracted_source, assets=records,
             bytes_received=received, elapsed_seconds=time.monotonic() - started)
+        _require(source_manifest(source_dir) == extracted_source,
+                 'native source tree changed during setup')
+        _require(time.monotonic() <= deadline, 'depth setup allocation exceeded')
+        result['elapsed_seconds'] = time.monotonic() - started
         write_json(output / 'result.json', result)
         return result
     except BaseException as error:

@@ -83,6 +83,9 @@ class OtherDepthSetupTests(unittest.TestCase):
         self.assertEqual(result['assets'][0]['record'],
                          file_record(output / 'assets/MetricAnything/student_pointmap.pt'))
         self.assertTrue((output / 'source/models/student_pointmap/moge/model/v2.py').is_file())
+        self.assertEqual(result['source_manifest']['files'][0]['path'],
+                         'models/student_pointmap/moge/model/v2.py')
+        self.assertEqual(len(result['source_manifest']['sha256']), 64)
         with self.assertRaisesRegex(ValueError, 'immutable'):
             run_setup(request, output, acquire=self.acquire('D8'))
 

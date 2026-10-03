@@ -2,6 +2,14 @@
 
 from importlib import metadata
 import json
+from pathlib import Path
+import os
+import subprocess
+import sys
+
+from packaging.version import Version
+
+from .files import file_record, object_hash
 
 
 D8_UTILS3D_REVISION = '3fab839f0be9931dac7c8488eb0e1600c236e183'
@@ -54,7 +62,7 @@ def blockers(candidate, packages):
             entry = packages.get(name)
             if entry is None:
                 problems.append(name + ' missing')
-            elif exact is not None and entry.get('version', '').split('+', 1)[0] != exact:
+            elif exact is not None and Version(entry.get('version', '').split('+', 1)[0]) != Version(exact):
                 problems.append(name + ' differs from pinned version ' + exact)
         h5py = packages.get('h5py') or {}
         h5py_parts = h5py.get('version', '').split('.')[:2]
@@ -63,3 +71,29 @@ def blockers(candidate, packages):
             problems.append('h5py requires version >=3.10')
         return problems
     raise ValueError('unsupported native dependency candidate')
+
+
+def qualify(candidate, interpreter=None):
+    """Probe exact entry interpreter without importing models or initializing CUDA."""
+    interpreter = Path(interpreter or sys.executable).absolute()
+    names = D8_REQUIRED if candidate == 'D8' else tuple(D11_PINNED)
+    before = file_record(interpreter)
+    if candidate == 'D8' and str(interpreter) == str(Path(sys.executable).absolute()):
+        packages = installed(names)
+    else:
+        scripts = str(Path(__file__).resolve().parents[1])
+        code = ('import sys, json; sys.path.insert(0, ' + repr(scripts) + '); '
+                'from vipe_benchmark.depth_native_packages import installed; '
+                'print(json.dumps(installed(' + repr(names) + ')))')
+        result = subprocess.run([str(interpreter), '-I', '-B', '-c', code],
+            env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'),
+            capture_output=True, text=True, check=True, timeout=60)
+        packages = json.loads(result.stdout)
+    problems = blockers(candidate, packages)
+    if problems:
+        raise ValueError('native dependency qualification failed: ' + '; '.join(problems))
+    if before != file_record(interpreter):
+        raise ValueError('native interpreter changed during qualification')
+    return dict(schema='plan069-depth-native-packages/v1', status='passed',
+                candidate=candidate, interpreter_path=str(interpreter),
+                interpreter=before, packages=packages, packages_sha256=object_hash(packages))

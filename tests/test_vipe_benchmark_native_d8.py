@@ -9,6 +9,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from vipe_benchmark import native_d8
 from vipe_benchmark.files import file_record
+from vipe_benchmark.depth_source_integrity import source_manifest
 
 
 class Model:
@@ -49,16 +50,25 @@ class NativeD8Tests(unittest.TestCase):
             source = root / 'source/models/student_pointmap/moge/model/v2.py'
             source.parent.mkdir(parents=True)
             source.write_text('# pinned source\n')
+            archive = root / 'source.tar.gz'
+            archive.write_bytes(b'fixture archive')
+            helper = source.parent / 'modules.py'
+            helper.write_text('# pinned helper\n')
             weight = root / 'student_pointmap.pt'
             weight.write_bytes(b'fixture')
             record = file_record(weight)
             setup = dict(schema='plan069-depth-setup-result/v1', status='complete',
                 candidate='D8', source_revision=native_d8.SOURCE_REVISION,
                 source_dir=str(root / 'source'),
-                native_source=file_record(source),
+                native_source=file_record(source), source_archive=file_record(archive),
+                source_manifest=source_manifest(root / 'source'),
                 assets=[dict(repository='metricanything', path='student_pointmap.pt',
                              record=record)])
-            with patch.object(native_d8, 'WEIGHT_SHA256', record['sha256']):
+            with patch.object(native_d8, 'qualify', side_effect=ValueError('dependency qualification failed')):
+                with self.assertRaisesRegex(ValueError, 'dependency qualification failed'):
+                    native_d8.load(setup, torch_module=Torch({'weight': 1}), model_class=Model)
+            with patch.object(native_d8, 'WEIGHT_SHA256', record['sha256']), \
+                    patch.object(native_d8, 'qualify', return_value={'status': 'passed'}):
                 adapter = native_d8.load(setup, torch_module=Torch({'weight': 1}),
                                          model_class=Model)
                 self.assertEqual(adapter.runtime.strict, True)
@@ -66,6 +76,10 @@ class NativeD8Tests(unittest.TestCase):
                 self.assertFalse(adapter.runtime.training)
                 with self.assertRaisesRegex(ValueError, 'incomplete native weights'):
                     native_d8.load(setup, torch_module=Torch({}), model_class=Model)
+                helper.write_text('# edited executed module\n')
+                with self.assertRaisesRegex(ValueError, 'source tree changed'):
+                    native_d8.load(setup, torch_module=Torch({'weight': 1}), model_class=Model)
+                helper.write_text('# pinned helper\n')
                 weight.write_bytes(b'changed')
                 with self.assertRaisesRegex(ValueError, 'weights changed'):
                     native_d8.load(setup, torch_module=Torch({'weight': 1}),

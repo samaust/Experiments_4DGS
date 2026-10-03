@@ -33,11 +33,11 @@ LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py',
     D5=('moge_metric.py', 'moge_native.py', 'moge_setup.py'),
     D6=('moge_metric.py', 'moge_native.py', 'moge_setup.py'),
     D7=('dav2_metric.py', 'depth_setup.py', 'depth_metric_scale.py', 'depth_d7_run.py', 'depth_d7_publish.py'),
-    D8=('moge_metric.py', 'native_d8.py', 'depth_native_packages.py',
+    D8=('moge_metric.py', 'native_d8.py', 'depth_native_packages.py', 'depth_source_integrity.py',
         'depth_setup.py', 'depth_setup_other.py'),
     D9=('video_depth.py', 'video_native.py', 'video_setup.py'),
     D10=('video_depth.py', 'video_native.py', 'video_setup.py'),
-    D11=('marigold_relative.py', 'native_d11.py', 'depth_native_packages.py',
+    D11=('marigold_relative.py', 'native_d11.py', 'depth_native_packages.py', 'depth_source_integrity.py',
          'depth_setup.py', 'depth_setup_other.py'))
 
 
