@@ -1,6 +1,7 @@
 """Synthetic CPU contracts only; these are not execution or authorization evidence."""
 
 from pathlib import Path
+from copy import deepcopy
 import sys
 import tempfile
 import unittest
@@ -47,17 +48,34 @@ class AggregateTests(unittest.TestCase):
         self.publisher_patch.start()
         self.historical_patch = mock.patch('vipe_benchmark.depth_aggregate._verify_historical_anchors')
         self.historical_patch.start()
+        self.charge_patch = mock.patch('vipe_benchmark.depth_aggregate._verify_preview_charge')
+        self.charge_patch.start()
 
     def tearDown(self):
         self.camera_patch.stop()
         self.publisher_patch.stop()
         self.historical_patch.stop()
+        self.charge_patch.stop()
         self.temp.cleanup()
 
     def record(self, name, value):
         path = self.root / f'{name}.json'
         write_json(path, value)
         return file_record(path)
+
+    def previews(self, candidate):
+        slot = self.request['candidates'][candidate]
+        receipt = self.record(candidate + '-previews', dict(
+            schema='plan069-depth-anchor-preview-result/v1', record_kind='actual', status='complete',
+            candidate=candidate, context=self.context, inputs=self.inputs, config=self.config,
+            anchors=slot['anchors'], rendered_frames=60, slot=deepcopy(slot), sources=dict(
+                builder=file_record(Path(__file__).resolve().parents[1] / 'scripts/vipe_benchmark/depth_anchor_previews.py'),
+                renderer=file_record(Path(__file__).resolve().parents[1] / 'scripts/vipe_benchmark/depth_extension.py'))))
+        accounting = self.record(candidate + '-preview-accounting', dict(
+            schema='plan069-depth-anchor-preview-accounting/v1', status='complete',
+            candidate=candidate, result=receipt))
+        slot['anchor_previews'] = receipt
+        slot['evidence']['anchor_preview_accounting'] = accounting
 
     def test_pending_slots_remain_visible_and_block_actual_publication(self):
         manifest = assemble(self.request)
@@ -83,6 +101,7 @@ class AggregateTests(unittest.TestCase):
                           configuration=self.config)
         self.request['candidates']['D0'] = dict(status='available', reason='',
             evidence=evidence, provenance=provenance, anchors=rows)
+        self.previews('D0')
         self.assertEqual(len(assemble(self.request)['candidates'][1]['media']), 60)
         self.request['candidates']['D0']['anchors'] = rows[:-1]
         with self.assertRaisesRegex(ValueError, '60 anchors'):
@@ -140,6 +159,7 @@ class AggregateTests(unittest.TestCase):
                            if (camera, frame) not in keys]
         result = dict(schema={'D2': 'plan069-d2-maps-result/v1',
                               'D7': 'plan069-D7-maps-result/v1',
+                              'D11': 'plan069-D11-maps-result/v1',
                               'D9': 'plan069-video-depth-result/v1',
                               'D10': 'plan069-video-depth-result/v1'}.get(
                                   candidate, 'plan069-depth-single-maps-result/v1'),
@@ -191,6 +211,7 @@ class AggregateTests(unittest.TestCase):
             package=package, clips=4, new_map_identities=196))
         self.request['candidates'][candidate] = dict(status='available', reason='',
             evidence=evidence, provenance=provenance, anchors=anchors, clips=receipt)
+        self.previews(candidate)
         return anchors
 
     def test_complete_clip_arm_requires_four_matching_clips_and_anchor_reuse(self):
@@ -290,6 +311,19 @@ class AggregateTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'accepted ledger'):
                     _verify_historical_anchors(self.context, records)
         self.historical_patch.start()
+
+    def test_anchor_images_require_actual_receipts_and_cpu_charges(self):
+        self.clip_arm('D7')
+        self.charge_patch.stop()
+        with mock.patch('vipe_benchmark.depth_aggregate._verify_preview_charge',
+                        side_effect=ValueError('anchor preview CPU charge absent')):
+            with self.assertRaisesRegex(ValueError, 'CPU charge absent'):
+                assemble(self.request)
+        self.charge_patch.start()
+        slot = self.request['candidates']['D7']
+        slot.pop('anchor_previews')
+        with self.assertRaisesRegex(ValueError, 'exact file record required'):
+            assemble(self.request)
 
 
 if __name__ == '__main__':

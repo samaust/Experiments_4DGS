@@ -7,7 +7,7 @@ a missing file, a fixture receipt, or a preview package.
 from pathlib import Path
 
 from .config import training_cameras
-from .files import read_json, verify_record
+from .files import file_record, read_json, verify_record
 from .qualitative_package import publish as publish_package
 
 
@@ -64,7 +64,8 @@ def _anchors(rows, cameras, candidate, *, source=False):
         media.append(dict(selection_id=selection['id'], kind='frame',
                           camera_id=str(row['camera']), frame_ids=selection['frame_ids'],
                           timestamps=selection['timestamps'], resolution=[960, 540],
-                          record=row['record'], source_input=row['source_rgb']))
+                          record=row['record'], source_input=row['source_rgb'],
+                          **({'depth_display': row['display']} if 'display' in row else {})))
     return media
 
 
@@ -87,6 +88,44 @@ def _verify_historical_anchors(native_record, historical_records):
                      for event in events), 'D2: historical anchor result absent from accepted ledger')
 
 
+def _verify_preview_charge(source_result, accounting_record):
+    from .config import load
+    from .ledger import Ledger
+    root = Path(source_result['path']).resolve().parents[2]
+    config = dict(load(), new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
+    accounting = _record(accounting_record)
+    _require(any(event.get('event') == 'cpu_preparation_charge' and
+                 event.get('evidence') == accounting_record and
+                 event.get('elapsed_seconds') == accounting.get('elapsed_seconds')
+                 for event in Ledger(root / 'ledger.jsonl', config).events()),
+             'anchor preview CPU charge absent from live ledger')
+
+
+def _anchor_previews(slot, candidate, context, inputs, config):
+    record = slot.get('anchor_previews')
+    receipt = _record(record)
+    accounting_record = slot['evidence']['anchor_preview_accounting']
+    accounting = _record(accounting_record)
+    _require(receipt.get('schema') == 'plan069-depth-anchor-preview-result/v1' and
+             receipt.get('record_kind') == 'actual' and receipt.get('status') == 'complete' and
+             receipt.get('candidate') == candidate and receipt.get('context') == context and
+             receipt.get('inputs') == inputs and receipt.get('config') == config and
+             receipt.get('anchors') == slot['anchors'] and
+             receipt.get('rendered_frames') == 60 and
+             receipt.get('sources') == dict(
+                 builder=file_record(Path(__file__).with_name('depth_anchor_previews.py')),
+                 renderer=file_record(Path(__file__).with_name('depth_extension.py'))) and
+             receipt.get('slot', {}).get('provenance') == slot['provenance'] and
+             receipt['slot'].get('evidence') == {key: value for key, value in slot['evidence'].items()
+                 if key != 'anchor_preview_accounting'} and
+             receipt['slot'].get('clips') == slot.get('clips') and
+             accounting.get('schema') == 'plan069-depth-anchor-preview-accounting/v1' and
+             accounting.get('status') == 'complete' and accounting.get('candidate') == candidate and
+             accounting.get('result') == record,
+             f'{candidate}: actual charged anchor preview receipt required')
+    _verify_preview_charge(slot['provenance']['source_result'], accounting_record)
+
+
 def _native_result(slot, candidate, context, inputs, cameras):
     record = slot['provenance']['source_result']
     _require(slot['evidence'].get('generation') == record and
@@ -95,6 +134,7 @@ def _native_result(slot, candidate, context, inputs, cameras):
     result = _record(record)
     schemas = {'D2': 'plan069-d2-maps-result/v1',
                'D7': 'plan069-D7-maps-result/v1',
+               'D11': 'plan069-D11-maps-result/v1',
                'D9': 'plan069-video-depth-result/v1',
                'D10': 'plan069-video-depth-result/v1'}
     schema = schemas.get(candidate, 'plan069-depth-single-maps-result/v1')
@@ -307,6 +347,8 @@ def assemble(request):
                     _require([item['record'] for item in source_clips] ==
                              [item['record'] for item in clips_source],
                              f'{candidate}: source RGB clip bytes differ')
+            _anchor_previews(slot, candidate, context_record, request['bindings']['inputs'],
+                             request['bindings']['config'])
             _require(len(media) <= 64, f'{candidate}: published media bound exceeded')
             _require(all(key in slot.get('provenance', {}) for key in
                          ('source_result', 'ledger_outcome', 'configuration')),

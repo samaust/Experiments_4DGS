@@ -1,0 +1,183 @@
+"""CPU rendering contracts; fake ledgers never authorize real execution."""
+from copy import deepcopy
+from pathlib import Path
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+
+import numpy as np
+from PIL import Image
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+from vipe_benchmark.config import load
+from vipe_benchmark.depth_anchor_previews import aggregate_request, render
+from vipe_benchmark.depth_aggregate import CANDIDATES
+from vipe_benchmark.files import file_record, read_json, write_json
+
+
+class FakeLedger:
+    def __init__(self, root, config):
+        self.path = root / 'ledger.jsonl'
+        self.config = dict(config, new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
+        self.charges = []
+
+    def states(self):
+        return {}
+
+    def totals(self):
+        return dict(cpu=dict(elapsed_seconds=0))
+
+    def charge_cpu_preparation(self, elapsed, evidence):
+        self.charges.append((elapsed, evidence))
+
+
+class AnchorPreviewTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.cameras = [camera for camera in range(1, 34) if camera not in (10, 20, 30)]
+        self.camera_patch = patch('vipe_benchmark.depth_anchor_previews.training_cameras', return_value=self.cameras)
+        self.camera_patch.start()
+        rgb = self.root / 'rgb.png'
+        Image.new('RGB', (960, 540), (10, 20, 30)).save(rgb)
+        self.rgb = file_record(rgb)
+        values = np.full((540, 960), 3, np.float32)
+        valid = np.ones(values.shape, np.bool_)
+        valid[0, 0] = False
+        values[0, 0] = np.nan
+        values[0, 1] = 25
+        self.raw_path = self.root / 'depth.npz'
+        np.savez_compressed(self.raw_path, depth=values, valid=valid)
+        self.raw = file_record(self.raw_path)
+        self.inputs = self.record('inputs', dict(synthetic=True))
+        self.config = self.record('config', load())
+        self.context = self.record('context', dict(schema='plan069-depth-context/v1', inputs=self.inputs,
+            anchors=[dict(camera=camera, frame=frame, accepted_rgb=self.rgb)
+                     for camera in self.cameras for frame in (100, 175)]))
+
+    def tearDown(self):
+        self.camera_patch.stop()
+        self.temp.cleanup()
+
+    def record(self, name, value):
+        path = self.root / (name + '.json')
+        write_json(path, value)
+        return file_record(path)
+
+    def request(self, candidate='D7', kind='fixture'):
+        rows = [dict(camera=camera, frame=frame, prediction=self.raw, source_rgb=self.rgb,
+                     domain='camera_z_metres' if candidate != 'D11' else 'relative_log')
+                for camera in self.cameras for frame in (100, 175)]
+        native = self.record(candidate + '-native', dict(rows=rows))
+        package = self.record(candidate + '-package', dict(synthetic=True))
+        clips = self.record(candidate + '-clips', dict(package=package))
+        slot = dict(status='available', reason='', clips=clips, evidence={},
+                    provenance=dict(source_result=native, ledger_outcome=self.inputs, configuration=self.config))
+        return dict(schema='plan069-depth-anchor-preview-request/v1', record_kind=kind,
+                    candidate=candidate, config=self.config, context=self.context, inputs=self.inputs,
+                    slot=slot, max_seconds=30, max_artifact_bytes=32 * 2**20)
+
+    def test_sixty_metric_previews_preserve_raw_maps_and_source_frames(self):
+        request = self.request()
+        result = render(request, self.root / 'previews')
+        self.assertEqual(result['rendered_frames'], 60)
+        self.assertEqual(len(result['source_rgb']), 60)
+        self.assertEqual({(row['camera'], row['frame']) for row in result['anchors']},
+                         {(camera, frame) for camera in self.cameras for frame in (100, 175)})
+        self.assertTrue(all(row['prediction'] == self.raw and row['source_rgb'] == self.rgb
+                            for row in result['anchors']))
+        with Image.open(result['anchors'][0]['record']['path']) as image:
+            self.assertEqual(image.size, (960, 540))
+            self.assertEqual(image.getpixel((0, 0)), (255, 0, 255))
+            self.assertEqual(image.getpixel((1, 0)), (255, 255, 255))
+        self.assertEqual(result['anchors'][0]['display']['range_metres'], [0, 20])
+        self.assertEqual(file_record(self.raw_path), self.raw)
+        with self.assertRaisesRegex(ValueError, 'immutable'):
+            render(request, self.root / 'previews')
+
+    def test_relative_previews_declare_frame_scope_and_preserve_native_values(self):
+        request = self.request('D11')
+        result = render(request, self.root / 'relative')
+        display = result['anchors'][0]['display']
+        self.assertEqual(display['normalization_scope'], 'one frozen anchor frame')
+        self.assertEqual(display['units'], 'relative arbitrary values')
+        self.assertNotIn('range_metres', display)
+        self.assertEqual(result['physical_accuracy'], 'unverified')
+        self.assertEqual(result['human_review'], 'pending')
+
+    def test_failed_render_preserves_failure_and_respects_artifact_bound(self):
+        request = self.request()
+        request['max_artifact_bytes'] = 1
+        with self.assertRaisesRegex(ValueError, 'CPU/disk bound'):
+            render(request, self.root / 'too-small')
+        self.assertEqual(read_json(self.root / 'too-small/cpu-failure.json')['status'], 'failed')
+
+    def test_actual_shaped_cpu_render_charges_success_and_failure_to_fake_ledger(self):
+        ledger = FakeLedger(self.root, load())
+        output = self.root / 'jobs/plan069-D7-anchor-previews-001'
+        request = self.request(kind='actual')
+        with patch('vipe_benchmark.depth_anchor_previews._native_result', return_value=(None, None, None)), \
+             patch('vipe_benchmark.depth_anchor_previews._clips'), \
+             patch('vipe_benchmark.budgets.budget_snapshot', return_value=dict(artifact_bytes=0)):
+            render(request, output, ledger=ledger)
+        self.assertEqual(len(ledger.charges), 1)
+        accounting = read_json(ledger.charges[0][1]['path'])
+        self.assertEqual(accounting['result'], file_record(output / 'result.json'))
+        template = dict(schema='plan069-depth-aggregate-request/v1', record_kind='actual',
+                        bindings=dict(context=self.context, inputs=self.inputs),
+                        candidates={candidate: dict(status='missing', reason='Pending', evidence={})
+                                    for candidate in CANDIDATES})
+        template['candidates']['D7'] = deepcopy(request['slot'])
+        aggregate = aggregate_request(template, dict(D7=file_record(output / 'result.json')))
+        self.assertEqual(len(aggregate['candidates']['D7']['anchors']), 60)
+        self.assertEqual(aggregate['candidates']['D11']['status'], 'missing')
+        self.assertEqual(template['candidates']['D7'], request['slot'])
+        failed_root = self.root / 'failed'
+        failed_ledger = FakeLedger(failed_root, load())
+        request['max_artifact_bytes'] = 1
+        with patch('vipe_benchmark.depth_anchor_previews._native_result', return_value=(None, None, None)), \
+             patch('vipe_benchmark.depth_anchor_previews._clips'), \
+             patch('vipe_benchmark.budgets.budget_snapshot', return_value=dict(artifact_bytes=0)):
+            with self.assertRaisesRegex(ValueError, 'CPU/disk bound'):
+                render(request, failed_root / 'jobs/plan069-D7-anchor-previews-001', ledger=failed_ledger)
+        self.assertEqual(len(failed_ledger.charges), 1)
+        self.assertEqual(read_json(failed_ledger.charges[0][1]['path'])['status'], 'failed')
+
+    def test_fixture_previews_cannot_be_used_as_actual_aggregate_evidence(self):
+        request = self.request()
+        output = self.root / 'fixture'
+        render(request, output)
+        template = dict(schema='plan069-depth-aggregate-request/v1', record_kind='actual',
+            bindings=dict(context=self.context, inputs=self.inputs), candidates={
+                candidate: dict(status='missing', reason='Pending', evidence={}) for candidate in CANDIDATES})
+        template['candidates']['D7'] = request['slot']
+        with self.assertRaisesRegex(ValueError, 'actual anchor preview receipt'):
+            aggregate_request(template, dict(D7=file_record(output / 'result.json')))
+
+    def test_unadmitted_native_evidence_stops_before_actual_rendering(self):
+        request = self.request(kind='actual')
+        ledger = FakeLedger(self.root, load())
+        output = self.root / 'jobs/plan069-D7-anchor-previews-001'
+        with patch('vipe_benchmark.budgets.budget_snapshot', return_value=dict(artifact_bytes=0)):
+            with self.assertRaisesRegex(ValueError, 'generation/ledger provenance'):
+                render(request, output, ledger=ledger)
+        self.assertFalse(output.exists())
+        self.assertEqual(ledger.charges, [])
+
+    def test_legacy_anchors_render_only_the_frozen_fit_and_check_maps(self):
+        request = self.request('D0')
+        for role, frame in (('fit', 100), ('check', 175)):
+            historical = self.record('legacy-' + role, dict(component='D0', status='complete',
+                configuration=self.record('legacy-config-' + role, dict(role=role)),
+                rows=[dict(identity=dict(camera=camera, frame=frame), depth=self.raw,
+                           grid='scale-opencv-integer', source_rgb_sha256=self.rgb['sha256'])
+                      for camera in self.cameras]))
+            request['slot']['evidence']['historical_' + role] = historical
+        result = render(request, self.root / 'historical-previews')
+        self.assertEqual(len(result['anchors']), 60)
+        self.assertTrue(all(row['prediction'] == self.raw for row in result['anchors']))
+
+
+if __name__ == '__main__':
+    unittest.main()
