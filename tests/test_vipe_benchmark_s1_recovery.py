@@ -1570,6 +1570,15 @@ class ReceiptContractTests(unittest.TestCase):
                     graph=self.fixture();c=graph.contract;outer=graph.outer
                     run=ROOT/'docs/resolve-blocker/plan031-progress-20260922'
                     dispatch_record=file_record(run/'implementation-dispatch-049.json');dispatch=read_json(dispatch_record['path'])
+                    # Historical bytes keep their original checkout paths. This
+                    # synthetic graph uses disposable authority at this ROOT;
+                    # retain original digests and route only its logical file.
+                    dispatch=copy.deepcopy(dispatch)
+                    dispatch['plan']['path']=str(ROOT/'plans/plan_049.md')
+                    dispatch['implementation_status_snapshot']['path']=str(run/'implementation-status-049.md')
+                    dispatch['authorization_note']['path']=str(run/'authorization-049.md')
+                    synthetic_dispatch=graph.root/'synthetic-dispatch.json'
+                    synthetic_dispatch.write_text(json.dumps(dispatch))
                     plan=file_record(ROOT/'plans/plan_049.md');status=dispatch['implementation_status_snapshot'];authorization=dispatch['authorization_note'];driver=file_record(run/'launch-049-exec.py')
                     command=[str(ROOT/c.ARGV[0]),'-B','-m','vipe_benchmark.s1_validation_capture',str(graph.root),'--no-timeout']
                     def process_identity(pid,ppid,start):
@@ -1595,8 +1604,9 @@ class ReceiptContractTests(unittest.TestCase):
                     from contextlib import ExitStack
                     import shlex
                     session_stack=ExitStack();self.addCleanup(session_stack.close)
-                    logical_files={}
-                    original_record=c.file_record;original_strict=c.strict_record;original_json=c.session_json;original_ledger=c.job_ledger_input
+                    logical_dispatch=str(run/'implementation-dispatch-049.json')
+                    logical_files={logical_dispatch:synthetic_dispatch}
+                    original_record=c.file_record;original_strict=c.strict_record;original_json=c.session_json;original_ledger=c.job_ledger_input;original_read=c.read_json
                     def routed_record(path):
                         text=str(path);row=original_record(logical_files.get(text,path))
                         if text in logical_files:row['path']=text
@@ -1609,22 +1619,10 @@ class ReceiptContractTests(unittest.TestCase):
                         return original_strict(row)
                     def routed_json(path):return original_json(logical_files.get(str(path),path))
                     def routed_ledger(path):return original_ledger(logical_files.get(str(path),path))
-                    for name,implementation in [('file_record',routed_record),('strict_record',routed_strict),('session_json',routed_json),('read_json',routed_json),('job_ledger_input',routed_ledger)]:
+                    def routed_read(path):return original_read(logical_files.get(str(path),path))
+                    for name,implementation in [('file_record',routed_record),('strict_record',routed_strict),('session_json',routed_json),('job_ledger_input',routed_ledger),('read_json',routed_read)]:
                         session_stack.enter_context(patch.object(c,name,side_effect=implementation))
-                    # Route a disposable dispatch copy into this checkout. Keep
-                    # the frozen original Plan049 digest and all authority checks;
-                    # only the fixture's checkout-dependent paths are relocated.
-                    dispatch=copy.deepcopy(dispatch)
-                    dispatch['plan']['path']=str(ROOT/'plans/plan_049.md')
-                    status=file_record(run/'implementation-status-049.md')
-                    authorization=file_record(run/'authorization-049.md')
-                    dispatch['implementation_status_snapshot']=status
-                    dispatch['authorization_note']=authorization
-                    dispatch_path=graph.root/'synthetic-implementation-dispatch.json'
-                    dispatch_path.write_text(json.dumps(dispatch))
-                    logical_dispatch=str(run/'implementation-dispatch-049.json')
-                    logical_files[logical_dispatch]=dispatch_path
-                    dispatch_record=routed_record(logical_dispatch)
+                    dispatch_record=routed_record(run/'implementation-dispatch-049.json')
                     logical_identity=str(run/'launch-identity-049-aggregate-1000.json');logical_files[logical_identity]=identity_path
                     identity_request=routed_record(logical_identity)
                     logical_admission=str(run/'launch-admission-049-aggregate-1000.json')

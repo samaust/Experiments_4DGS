@@ -1,0 +1,27 @@
+{
+  "command": [
+    "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+    "-B",
+    "-c",
+    "import json,unittest,sys\nwanted=set(json.load(open(sys.argv[1])))\ncollected=unittest.defaultTestLoader.discover(\"tests\")\ndef cases(suite):\n for item in suite:\n  if isinstance(item,unittest.TestSuite):yield from cases(item)\n  else:yield item\nselected=[test for test in cases(collected) if test.id() in wanted]\nassert {t.id() for t in selected}==wanted\nresult=unittest.TextTestRunner(verbosity=1).run(unittest.TestSuite(selected))\nraise SystemExit(not result.wasSuccessful())\n",
+    "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/review-downstream/docs/research/vipe-alternatives/plan069-review-downstream-001/six-errors-fix-001/failed-methods.json"
+  ],
+  "environment": {
+    "PYTHONPATH": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/review-downstream/.local/plan069-cpu-validation/site-packages:scripts:tests",
+    "VIPE_CPU_VALIDATION": "1",
+    "S1_VALIDATION_RUN_DIRECTORY": "/tmp/plan069-six-errors-recovery-001",
+    "CUDA_VISIBLE_DEVICES": "",
+    "MPLCONFIGDIR": "/tmp/plan069-six-errors-mpl",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1"
+  },
+  "start_new_session": true,
+  "control_directory_precreated": true,
+  "returncode": 0,
+  "timed_out": false,
+  "elapsed_seconds": 196.0698028120005,
+  "limit_seconds": 600,
+  "tests_run": 65
+}

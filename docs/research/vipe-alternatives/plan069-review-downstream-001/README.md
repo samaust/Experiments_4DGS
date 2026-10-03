@@ -1,5 +1,10 @@
 # Issues #60, #61, #34 and #35: integration handoff
 
+The six validation errors below were subsequently corrected. See
+[diagnosis and verified targeted recovery](six-errors-fix-001/README.md) and
+[CPU validation setup](../../../experiments/cpu-validation.md). Earlier captures
+remain unchanged; include the current branch HEAD's correction commit at integration.
+
 ## Destination
 
 Source branch: `plan069-review-downstream`. Integration destination:

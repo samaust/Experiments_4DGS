@@ -138,11 +138,11 @@ class V6InheritedTests(unittest.TestCase):
                 value=original(path)
                 if str(path).endswith('optimizer-controls/case0000.json'):value['known_offset_frames']=123.
                 return value
-            # Admit this disposable fixture before its historical deadline so the
-            # control mutation reaches the assertion it is intended to test.
-            policy=read('configs/basketball-rev2/timing-shared-v6.json')
-            with patch('basketball_shared_diagnose_v6.read',side_effect=changed),patch('basketball_shared_diagnose_v6.verify_hashes'),patch('basketball_shared_diagnose_v6.time.time',return_value=policy['investigation_started_unix']):
-                with self.assertRaises(AssertionError):prepare(policy,Path(folder))
+            config=read('configs/basketball-rev2/timing-shared-v6.json')
+            # Reach the malformed control independently of today's wall clock.
+            with patch('basketball_shared_diagnose_v6.time.time',return_value=config['investigation_started_unix']+1), \
+                    patch('basketball_shared_diagnose_v6.read',side_effect=changed),patch('basketball_shared_diagnose_v6.verify_hashes'):
+                with self.assertRaises(AssertionError):prepare(config,Path(folder))
         with patch('basketball_shared_workflow_v6.time.time',return_value=5400.):
             with self.assertRaises(TimeoutError):bounded(dict(investigation_started_unix=0.),early=True)
 

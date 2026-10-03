@@ -2,6 +2,8 @@
 
 Use [the shared environment guide](../docs/environments.md) for commands and validation gates.
 
+For repository CPU tests, see [CPU validation dependencies](../docs/experiments/cpu-validation.md).
+
 The target is standard CPython 3.14, uv, Torch 2.13.0+cu130,
 torchvision 0.28.0+cu130, and the system CUDA 13.0 toolkit.
 `constraints-cu130.txt` fixes the base ABI; `base-cu130.in` installs it.
