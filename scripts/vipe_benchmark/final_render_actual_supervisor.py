@@ -40,7 +40,7 @@ def _check_sample(sample, request, config):
         raise ValueError('foreign GPU process; serial ownership lost')
 
 
-def supervise_reserved(ledger, reservation, command, output, invocation_record, *, release_path):
+def _supervise_reserved(ledger, reservation, command, output, invocation_record, *, release_path, lifecycle):
     evidence = reservation.get('evidence', {})
     if reservation.get('event') != 'reserve' or evidence.get('record_kind') != 'actual' or evidence.get('execution_authorized') is not True or evidence.get('native_adapter_qualified') is not True:
         raise ValueError('checked actual reservation required')
@@ -86,6 +86,8 @@ def supervise_reserved(ledger, reservation, command, output, invocation_record, 
                    CUDA_CACHE_PATH=str(cache/'cuda'),PYTHONDONTWRITEBYTECODE='1')
         from .s1_helper_session import create_owned_process, register_owned
         with (control_root/'worker.log').open('xb') as log:
+            lifecycle['launch_attempted'] = True
+            lifecycle['cleanup_confirmed'] = False
             process = create_owned_process('actual final render worker', subprocess.Popen,
                 command, stdout=log, stderr=subprocess.STDOUT, env=env,
                 start_new_session=True, deadline=deadline-3)
@@ -124,7 +126,8 @@ def supervise_reserved(ledger, reservation, command, output, invocation_record, 
             except BaseException as error:
                 secondary.append(repr(error))
         else:
-            cleanup = True
+            cleanup = not lifecycle['launch_attempted']
+        lifecycle['cleanup_confirmed'] = cleanup
     if primary is None and cleanup:
         try:
             accepted = run_control('accept',invocation_record,control_root/'accept',
@@ -155,3 +158,35 @@ def supervise_reserved(ledger, reservation, command, output, invocation_record, 
     if primary is not None:
         raise ActualSupervisionFailure(str(primary), dict(receipt=receipt,finish=finish)) from primary
     return dict(result=accepted['result'],supervision=file_record(receipt_path),finish=finish)
+
+
+def supervise_reserved(ledger, reservation, command, output, invocation_record, *, release_path):
+    """Consume one exact reservation, including charging prelaunch failures."""
+    evidence = reservation.get('evidence', {})
+    if reservation.get('event') != 'reserve' or evidence.get('record_kind') != 'actual' or evidence.get('execution_authorized') is not True or evidence.get('native_adapter_qualified') is not True:
+        raise ValueError('checked actual reservation required')
+    lifecycle = dict(launch_attempted=False,cleanup_confirmed=True)
+    try:
+        return _supervise_reserved(ledger,reservation,command,output,invocation_record,
+                                  release_path=release_path,lifecycle=lifecycle)
+    except ActualSupervisionFailure:
+        raise
+    except BaseException as error:
+        # Do not charge an unrelated or already completed ledger allocation.
+        try:
+            state = ledger.states().get(reservation['job_id'])
+            if state != reservation:
+                raise ValueError('exact active reservation changed during supervision')
+            failed = dict(schema='plan069-final-render-actual-supervision-failure/v1',
+                record_kind='actual',invocation=invocation_record,error=repr(error),
+                cleanup_confirmed=lifecycle['cleanup_confirmed'],execution_authorized=False)
+            failure_path = safe_path(output).parent/('supervision-failure-'+reservation['event_sha256']+'.json')
+            write_json(failure_path,failed)
+            finish = ledger.finish(reservation['job_id'],'failed',
+                max(0.,time.monotonic()-reservation['monotonic_start']),
+                invocation=invocation_record,cleanup_confirmed=lifecycle['cleanup_confirmed'],
+                failure=file_record(failure_path))
+        except BaseException as secondary:
+            error.add_note('terminal accounting: '+repr(secondary))
+            raise error
+        raise ActualSupervisionFailure(str(error),dict(failure=failed,finish=finish)) from error

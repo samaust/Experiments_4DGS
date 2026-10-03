@@ -154,11 +154,13 @@ def _operation(operation, invocation_record, pgid):
                 pass
         run_root = Path(invocation['ledger_path']).resolve().parent
         storage = budget_snapshot(run_root)
+        numerical = max(1,request['cpu_workers_limit']-1) if invocation['phase'] in ('train','render') else 1
+        workers = numerical+max(0,len(members)-1)+1 if members else 0
         value.update(gpu_reading(), artifact_bytes=storage['artifact_bytes'],
                      download_bytes=storage['download_bytes'],
                      free_disk_bytes=shutil.disk_usage(run_root).free,
                      phase_artifact_bytes=directory_bytes(invocation['output']) if Path(invocation['output']).exists() else 0,
-                     cpu_workers_used=len(members), observed_thread_count=threads,
+                     cpu_workers_used=workers, observed_thread_count=threads,
                      owned_pids=members, observed_unix=time.time())
     else:
         from .final_render_actual_result import validate_actual_worker_result

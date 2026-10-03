@@ -17,15 +17,16 @@ and kernel caches live beside it and remain included in cumulative accounting.
 
 Samples measure cumulative charged artifact/download storage through the
 existing budget snapshot and total device use through the existing GPU query.
-Concurrent worker processes are counted separately from diagnostic OS thread
-counts: the native runtime and result contract independently enforce their
-numeric worker limit. GPU processes outside the owned worker group are refused.
+The pinned numerical pool, additional worker processes and one monitoring
+helper count toward the CPU ceiling; CUDA housekeeping OS threads are reported
+separately. The parent native runtime reserves one CPU slot for monitoring. GPU processes outside the owned worker group are refused.
 
 The explicit CPU fixture process seam clamps all native authority flags false.
 Focused tests cover a hung operation, preservation of partial evidence,
 cleanup of a descendant after parent exit, bounded response transport, and
-rejection of fixture reservations before process creation. These tests do not
+rejection of fixture reservations before process creation, and charged command
+mismatch failures before launch. These tests do not
 run a native GPU model or create an actual approval or shared ledger event.
 
-Validation: five focused unittest cases pass; new source files parse as Python.
+Validation: six focused unittest cases pass; new source files parse as Python.
 Combined source review and full qualification belong to the parent milestone.
