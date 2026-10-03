@@ -41,7 +41,8 @@ def dispatch(candidate, run_id, runtime_environment):
     config = dict(load(), new_download_gib_limit=110,
                   new_artifact_disk_gib_limit=210)
     ledger = Ledger(local / 'ledger.jsonl', config)
-    environment = read_json(verify_record(file_record(runtime_environment))['path'])
+    environment_record = verify_record(file_record(runtime_environment))
+    environment = read_json(environment_record['path'])
     from vipe_benchmark.moge_environment import validate_environment_request
     requirement_record = environment['requirement_sources'][0]
     validate_environment_request(environment, Path(requirement_record['path']).parent,
@@ -63,6 +64,8 @@ def dispatch(candidate, run_id, runtime_environment):
         'scripts/basketball_vipe_moge_setup_dispatch.py')]
     if source_evidence.get('setup_sources') != setup_sources:
         raise ValueError('current MoGe setup source review required')
+    if source_evidence.get('runtime_recipe') != environment_record:
+        raise ValueError('exact reviewed MoGe runtime recipe required')
     output = local / 'jobs' / job_id
     request_path = local / 'requests' / (job_id + '.json')
     if output.exists() or request_path.exists():
@@ -73,7 +76,7 @@ def dispatch(candidate, run_id, runtime_environment):
     request = dict(schema='plan069-depth-setup-request/v1',
         record_kind='actual', candidate=candidate, job_id=job_id,
         ledger_path=str(ledger.path), review=review, authorization=authorization,
-        runtime_environment=environment)
+        runtime_environment=environment, runtime_environment_record=environment_record)
     write_json(request_path, request)
     ledger.authorize_depth_setup(candidate, review, authorization, source_review)
     command = [sys.executable, str(ROOT / 'scripts/basketball_vipe_moge_setup.py'),
@@ -112,7 +115,8 @@ def dispatch(candidate, run_id, runtime_environment):
     outcome = supervise(ledger, job_id, command, output,
         evidence=dict(request=file_record(request_path), review=review,
                       authorization=authorization, source_review=source_review,
-                      worker=file_record(ROOT / 'scripts/basketball_vipe_moge_setup.py')),
+                      worker=file_record(ROOT / 'scripts/basketball_vipe_moge_setup.py'),
+                      runtime_recipe=environment_record),
         sample_resources=lambda: resources(local, gpu=True),
         validate_result=validate, poll_seconds=2.)
     write_json(docs / (job_id + '.json'), dict(

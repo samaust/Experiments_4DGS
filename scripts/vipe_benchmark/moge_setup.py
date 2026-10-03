@@ -114,6 +114,10 @@ def run_moge_setup(request, output, *, request_path=None, acquire=_acquire):
     environment = request.get('runtime_environment')
     if request.get('record_kind') == 'actual':
         _require(isinstance(environment, dict), 'reviewed MoGe runtime environment required')
+        record = request.get('runtime_environment_record')
+        _require(isinstance(record, dict), 'exact reviewed MoGe runtime recipe record required')
+        _require(read_json(verify_record(record)['path']) == environment,
+                 'inline MoGe environment differs from reviewed runtime recipe')
     _require(candidate in ('D5', 'D6'), 'MoGe setup candidate must be D5 or D6')
     review = read_json(verify_record(request['review'])['path'])
     approved = read_json(verify_record(request['authorization'])['path'])
