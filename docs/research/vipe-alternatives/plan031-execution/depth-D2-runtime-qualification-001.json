@@ -1,0 +1,287 @@
+{
+  "schema": "plan069-depth-runtime-qualification/v1",
+  "candidate": "D2",
+  "source_revision": "3d835ec1a5802d64a8b8b15f817a1ab54809bfe4",
+  "status": "passed",
+  "config": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/configs/vipe-alternatives/components-v1.json",
+    "sha256": "4c850b7f26e45ce74f2ee9fec8eba49546be73385b78c69da5c65006b1605f67",
+    "bytes": 11395
+  },
+  "python_executable": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E5-setup-recovery-004/environment/bin/python",
+  "assets": [
+    {
+      "repository": "da3",
+      "path": "model.safetensors",
+      "record": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E5-setup/snapshots/da3_snapshot/model.safetensors",
+        "sha256": "bbea5b0b3ee389849cffa7ddae89de064a90abd2b055fc5aa99aac68db324776",
+        "bytes": 1336734448
+      }
+    }
+  ],
+  "profile": {
+    "mode": "historical DA3METRIC-LARGE",
+    "input": "960x540 RGB; process_res=504 upper_bound_resize; ImageNet normalization",
+    "precision": "bfloat16",
+    "seed": "native eval, no stochastic sampling",
+    "setting": "`DA3METRIC-LARGE`, `process_res=504`, `process_res_method='upper_bound_resize'`, ImageNet normalization, batch of one image, native bfloat16 inference. No input extrinsics, no pose-scale alignment, `infer_gs=false`, no export that requires predicted cameras. Compute processed-K focal/300 scaling once and restore output grid; retain raw depth and actual processed K.",
+    "dependency_sources": [
+      "pyproject.toml; historical E5 locked runtime"
+    ]
+  },
+  "local_sources": [
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/files.py",
+      "sha256": "6731caae7af2e561233fc0ac847f6111922ca0f2a01a2f2eacd150e81056641b",
+      "bytes": 2229
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/config.py",
+      "sha256": "8660d808890bbc009dfb401b63cb2742b51ea63ac34ac2457086e4ef916b2ef4",
+      "bytes": 7264
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/ledger.py",
+      "sha256": "16a70e7e582ca6881e7faa53988d17a5ae74cd3c44c1d935b3575e0cd889b44e",
+      "bytes": 48492
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/depth_admission.py",
+      "sha256": "48fbe78acc449d67ecc608c86f81308e023c6dffc6a0a0256b9e84bde0e8c332",
+      "bytes": 16601
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/depth_extension.py",
+      "sha256": "fa61bba64726ebe19d21c92073034e27a5004c3c2d8d1e323f05865a83b53595",
+      "bytes": 18176
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/depth_clips.py",
+      "sha256": "10b6b4c5c29a338eb25095b6c75ec50bccaf7ddb7f1d6d085aa3725f2a1d7d17",
+      "bytes": 32080
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/scale.py",
+      "sha256": "6848ee8bdcf94739f6d8dc5737c663388020de613d9828ab0bdee7f52d8061d0",
+      "bytes": 3863
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/qualitative_package.py",
+      "sha256": "359e9c5da1b52f37f3a19baa78cfb3819b090797c096663f572f097859305408",
+      "bytes": 16774
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/execution.py",
+      "sha256": "d39862eacb474bd10aba64dd1d2f6ec8ca061b036d9ebd54d35644b91c93c488",
+      "bytes": 40002
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/supervisor.py",
+      "sha256": "c91019649944fe121de40dcf082a29bc7377f08e558301e91180b160ced0df4f",
+      "bytes": 41909
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/budgets.py",
+      "sha256": "d55ddff6ee37ff1db189630a82157730a0537ce1b5ff238785740b61b05816db",
+      "bytes": 17874
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/runtime.py",
+      "sha256": "1069b3af03587b79c74f21013f6ceda94c910e77b66ffeafe1e1d99fd459364a",
+      "bytes": 48123
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/isolation.py",
+      "sha256": "b4184a260710efc2d25dd65ab098af27f10cc0488eacd10bfee5133a616eb43c",
+      "bytes": 2305
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/ffmpeg_binding.py",
+      "sha256": "4d56a1ae72e796209933001389f2ba1eb492cc64019c148c447126a69b6ff0c9",
+      "bytes": 4137
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/transfer_proxy.py",
+      "sha256": "550b9a7d42998a22c558cd6dc215d7e69d648478edae33f2a8265662e25c9f8b",
+      "bytes": 18913
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/s1_helper_session.py",
+      "sha256": "a66cc285931fdf141bf4184a61ba9a6297ddda6a79e123d849d384cb82b193a1",
+      "bytes": 169441
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/s1_identity.py",
+      "sha256": "365df1937bb9830f4eb0b0f3fe8c82b8c36584e2ed83b7233077d95c6b583e21",
+      "bytes": 985
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/s1_progress.py",
+      "sha256": "8b22a44625b6e6150499f32fb5c6feb333c71d2e77a5af9dca25f951572101b1",
+      "bytes": 106867
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/s1_clock.py",
+      "sha256": "16f44ad6adaca2ac8966759d9cb6889d3c44cf3580604ec6ff0a137494818280",
+      "bytes": 7403
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/backends.py",
+      "sha256": "3328215a51312f9ec563122882952fc5c8ef39f9a4e8b73a95e4e82c468e277f",
+      "bytes": 82239
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/contracts.py",
+      "sha256": "7be3fa26444cfd9926d78d2fc4818fa74757cb7f9e7439e771874b7431fe389f",
+      "bytes": 9701
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/stages.py",
+      "sha256": "9cadc7ac082a110112c7e68cf99e85394eec77efdf8891e402dc99a40e24bf7a",
+      "bytes": 28472
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/d2_preflight.py",
+      "sha256": "72d49ed56c6f7715216d76f9d3c736c5c6a8812d483a8c796f9635422595caf5",
+      "bytes": 5481
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/d2_maps.py",
+      "sha256": "73289a6845aa1a78572ae123889b49e4655f83ea59883bb037cad42bc354ed9c",
+      "bytes": 11841
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/d2_actual.py",
+      "sha256": "4fc8274ab63222d3e977340341168d07ad8e66896c50cea225ed6fe955eadc67",
+      "bytes": 15188
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/basketball_scale.py",
+      "sha256": "b00d6d9a3f16e80cf129cac684ff17149fed873e5291d80cf1b487ddfeba69fd",
+      "bytes": 16110
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/basketball_vipe_d2_maps.py",
+      "sha256": "f9c5b3e34ee2325593c4a426b0e0d4e6e67e1c015c25192a50fa73d431593f05",
+      "bytes": 4788
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/basketball_vipe_d2_dispatch.py",
+      "sha256": "026e571cc4d7a9bc165cd13c141b62d4daff1d8b481725de451b7eb0a274bcc0",
+      "bytes": 511
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/basketball_vipe_d2_publish.py",
+      "sha256": "128f0bada3ec9736a5a9fc45f53ce1cc160f50285908e3031dceca17682f8490",
+      "bytes": 362
+    }
+  ],
+  "dependency_manifest": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/depth-D2-installed-dependencies-001.json",
+    "sha256": "e441c1a2704e9331e9a2982d87dcee134bce5ef034b00f58269e67f983e39eb9",
+    "bytes": 732457
+  },
+  "source_review": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/depth-D2-source-review-002.json",
+    "sha256": "2765cb10ea120cf34f94ff4a99975d7f849ca5b616475bf8b9dfd109147e6035",
+    "bytes": 55858
+  },
+  "native_cpu_checks": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/depth-D2-native-cpu-qualification-001.json",
+    "sha256": "d5af27e7a54afa4a06c9f53edbb64514be30306070a99e5881c17446b6c5d59f",
+    "bytes": 8753
+  },
+  "preflight": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/d2-depth/.local/d2-cpu-preflight-002/result.json",
+    "sha256": "acd1964ea76dea2a08f4fe7d96de80159fa4412f43675604a90f9a1238482ba9",
+    "bytes": 3180
+  },
+  "assets_record": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E5-setup-recovery-004/assets.json",
+    "sha256": "5bd3787b6478130289f301af792740ecaff651d41325f8f290d27ce274b12725",
+    "bytes": 114014
+  },
+  "worker_runtime": {
+    "python": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E5-setup-recovery-004/environment/bin/python",
+    "versions": {
+      "python": "3.11",
+      "torch": "2.5.1+cu124",
+      "torchvision": "0.20.1+cu124",
+      "numpy": "1.26.4"
+    },
+    "inventory": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E5-setup-recovery-004/inventory.json",
+      "sha256": "9213e11a4529c7dee9a0d6c797616da7ffce666c1bd8d10266bf50457bda6bc5",
+      "bytes": 12566463
+    },
+    "imports": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E5-setup-recovery-004/imports.json",
+      "sha256": "b67298e1b4582ab0c83bcebdb2998028c392063133903a3ba83956672a0e178d",
+      "bytes": 2645
+    },
+    "dependency_lock": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E5-setup-recovery-004/requirements.lock",
+      "sha256": "b7d02f1b272950ca092093c505b45e7a6f72cee106d17201d0473ad7181a3128",
+      "bytes": 168609
+    },
+    "build_inputs": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E5-setup-recovery-004/build-inputs.json",
+      "sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "bytes": 3
+    }
+  },
+  "setup": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E5-setup-recovery-004/result.json",
+    "sha256": "7402125fe1eccfb196ca93af21679415e5e9a59dfdfeb24b2e220bf956c3cb1a",
+    "bytes": 8266
+  },
+  "historical_check": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/D2-check/result.json",
+    "sha256": "7ce59baf16834ed2a5b6a75d2e898e9554c6b30889b00895259bc495125d5777",
+    "bytes": 1836220
+  },
+  "python_executable_record": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/managed-python/cpython-3.11.15-linux-x86_64-gnu/bin/python3.11",
+    "sha256": "8deffe5dd9ebcf98a062917a4e73bb8fbb7d5846f83dec01fb7506fd5d41c54e",
+    "bytes": 21721984
+  },
+  "validation": {
+    "status": "passed",
+    "tests": 20,
+    "files": [
+      {
+        "record": {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/tests/test_vipe_benchmark_d2_preflight.py",
+          "sha256": "831288e5d20a2601843ca532d3eb953a4fc78a591fe7223eee843b4933759351",
+          "bytes": 5894
+        },
+        "tests": 5,
+        "status": "passed"
+      },
+      {
+        "record": {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/tests/test_vipe_benchmark_d2_maps.py",
+          "sha256": "7d9df370719037f744696ddde76791a4c5a88c050596046c6491341c29fffbe0",
+          "bytes": 10448
+        },
+        "tests": 6,
+        "status": "passed"
+      },
+      {
+        "record": {
+          "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/tests/test_vipe_benchmark_d2_actual.py",
+          "sha256": "734db15b3ae4d74a280ad634a03aa40fc0a131b3564da6c5ce9312b8a95863fa",
+          "bytes": 12745
+        },
+        "tests": 9,
+        "status": "passed"
+      }
+    ]
+  },
+  "qualification_scope": "Exact E5 native import receipt plus fully revalidated installed/source/checkpoint bytes, CPU worker fixtures and unchanged accepted historical D2 anchors. Passing prerequisite evidence only; a fresh real GPU reservation/first-result qualification remains part of the one approved actual map attempt.",
+  "limitations": [
+    "No new GPU call or model prediction in this qualification; output quality/physical accuracy unverified.",
+    "Host use within assessed copyright scope only; no redistribution/hosting/datacenter/patent clearance."
+  ]
+}
