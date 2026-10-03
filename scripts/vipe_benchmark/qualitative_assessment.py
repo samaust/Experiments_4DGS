@@ -82,7 +82,7 @@ def _closure(snapshot):
         raise ValueError('complete repository issue snapshot required')
     datetime.fromisoformat(snapshot['captured_at'].replace('Z', '+00:00'))
     issues = snapshot['issues']
-    required = {3: list(range(4, 18)), 18: [19, 20, 21, 22, 23, 44], 23: [34, 35, 45], 44: [56, 57, 58, 59], 45: [60, 61, 62]}
+    required = {18: [19, 20, 21, 22, 23, 44], 23: [34, 35, 45], 44: [56, 57, 58, 59], 45: [60, 61, 62]}
     for parent, children in required.items():
         if str(parent) not in issues or not set(children) <= set(issues[str(parent)]['children']):
             raise ValueError('omitted known child dependency')
@@ -279,6 +279,16 @@ def build_assessment(request_record, output, *, actual=True):
         snapshot = _bound(request['issue_snapshot'])
         report['issue_snapshot'] = {'record': request['issue_snapshot'], 'snapshot': snapshot}
         report['issue_closure'] = _closure(snapshot)
+        preparation = {str(issue): snapshot['issues'].get(str(issue), {'state': 'MISSING'})
+                       for issue in range(4, 18)}
+        unfinished_preparation = [int(issue) for issue, item in preparation.items()
+                                  if item['state'] != 'CLOSED']
+        report['historical_preparation_dependencies'] = dict(
+            scope='Historical referenced preparation dependencies; not synthetic native child edges',
+            issues=preparation, unfinished=unfinished_preparation)
+        if unfinished_preparation:
+            blockers.append('unfinished historical preparation dependencies: ' +
+                            ', '.join(map(str, unfinished_preparation)))
         pending = [issue for issue in (34, 44, 45, 60, 61, 62) if snapshot['issues'][str(issue)]['state'] != 'CLOSED' or not report['issue_closure'][str(issue)]['all_descendants_closed']]
         if pending:
             blockers.append('unfinished required issues: ' + ', '.join(map(str, pending)))
@@ -358,6 +368,11 @@ def render_markdown(report):
         lines.extend(['', 'Full suite passed: ' + str(report['verification']['full_suite_passed'])])
     lines.extend(['', '## Recursive issue completion snapshot', '',
                   'This saved snapshot does not close issues or prove current GitHub state.', ''])
+    if 'historical_preparation_dependencies' in report:
+        preparation = report['historical_preparation_dependencies']
+        lines.extend(['Historical preparation references #4–17 are separate from the native child graph.',
+                      'Unfinished historical preparation references: ' +
+                      (', '.join('#' + str(issue) for issue in preparation['unfinished']) or 'none'), ''])
     for key, closure in report['issue_closure'].items():
         if closure['unfinished_descendants']:
             lines.append('- #' + key + ': unfinished descendants ' + ', '.join('#' + str(item) for item in closure['unfinished_descendants']))

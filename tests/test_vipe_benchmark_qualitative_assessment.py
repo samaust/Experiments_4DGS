@@ -67,7 +67,7 @@ class AssessmentTests(unittest.TestCase):
     def snapshot(self):
         issues = {str(i): {'state': 'CLOSED', 'children': []} for i in
                   (*range(3, 24), 34, 35, 44, 45, 56, 57, 58, 59, 60, 61, 62)}
-        for parent, children in [(3, list(range(4, 18))), (18, [19, 20, 21, 22, 23, 44]), (23, [34, 35, 45]),
+        for parent, children in [(18, [19, 20, 21, 22, 23, 44]), (23, [34, 35, 45]),
                                  (44, [56, 57, 58, 59]), (45, [60, 61, 62])]:
             issues[str(parent)]['children'] = children
         return {'schema': 'plan069-issue-snapshot/v1', 'repository': 'samaust/Experiments_4DGS',
@@ -206,3 +206,22 @@ class AssessmentTests(unittest.TestCase):
         report = build_assessment(self.put('request.json', self.request), self.root / 'report.json', actual=False)
         self.assertFalse(report['verification']['full_suite_passed'])
         self.assertIn('qualification did not pass unchanged sources', report['blockers'])
+
+    def test_native_issue3_has_no_children_and_historical_preparation_is_separate(self):
+        snapshot = self.snapshot()
+        self.assertEqual(snapshot['issues']['3']['children'], [])
+        self.request['issue_snapshot'] = self.put('issues.json', snapshot)
+        report = build_assessment(self.put('request.json', self.request), self.root / 'report.json', actual=False)
+        self.assertEqual(report['historical_preparation_dependencies']['unfinished'], [])
+        self.assertTrue(report['issue_closure']['3']['all_descendants_closed'])
+
+    def test_missing_or_reopened_preparation_dependencies_remain_blocked(self):
+        for defect in ('missing', 'reopened'):
+            snapshot = self.snapshot()
+            if defect == 'missing': del snapshot['issues']['4']
+            else: snapshot['issues']['4']['state'] = 'OPEN'
+            self.request['issue_snapshot'] = self.put(defect + '-issues.json', snapshot)
+            report = build_assessment(self.put(defect + '-request.json', self.request), self.root / (defect + '-report.json'), actual=False)
+            self.assertIn(4, report['historical_preparation_dependencies']['unfinished'])
+            self.assertIn('unfinished historical preparation dependencies: 4', report['blockers'])
+            self.assertTrue(report['issue_closure']['3']['all_descendants_closed'])

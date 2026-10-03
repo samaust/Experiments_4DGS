@@ -84,10 +84,16 @@ samaust/Experiments_4DGS`, ISO `captured_at`, `roots: [3,18,23]`, and
 `state: OPEN|CLOSED` and a `children` list of integer numbers.
 
 Include all actual children and descendants. The reporter rejects missing
-children, cycles and omitted known relationships: #3 → #4–17,
+children, cycles and omitted known native relationships:
 #18 → #19–23/#44, #23 → #34/#35/#45, #44 → #56–59,
 #45 → #60–62. A closed parent with an open descendant is still ineligible.
 Required unfinished #34/#44/#45/#60/#61/#62 work blocks final assessment.
+Historical preparation references #4–17 must also appear as closed dependencies
+in the snapshot. Missing or reopened preparation issues keep the assessment
+blocked. These references are reported separately from native child edges:
+#3 currently has no native subissues, and its child list must remain faithful
+to GitHub rather than acquiring invented #4–17 edges.
+
 An offline saved snapshot cannot establish current GitHub state or authorize
 closure; live recursive checks remain necessary when closing issues.
 
