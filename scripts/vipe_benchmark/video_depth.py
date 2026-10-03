@@ -202,7 +202,46 @@ def admitted_video_request(request, output, config, *, ledger, request_path):
         raise ValueError('video setup is not ledger-complete')
     if Path(output).resolve().parent != (run_root / 'jobs').resolve():
         raise ValueError('actual video output outside shared run')
+    video_slot_guard(request, ledger)
     return setup
+
+
+def video_slot_guard(request, ledger):
+    """Verify setup lineage once, then check unchanged caps without rehashing weights."""
+    from .budgets import budget_snapshot
+    from .depth_map_allowance import remaining_map_allocation, check_slot_byte_budget
+    events = ledger.events()
+    grants = [event for event in events if event.get('event') == 'depth_attempt_authorized'
+              and event.get('candidate') == request['component']]
+    if len(grants) != 1 or not grants[0].get('slot_byte_budget'):
+        raise ValueError('video whole-slot byte proof required')
+    grant = grants[0]
+    admission = read_json(verify_record(request['admission'])['path'])
+    review = read_json(verify_record(request['review'])['path'])
+    proposal = next(row for row in review['proposals'] if row['candidate'] == request['component'])
+    if (admission.get('completed_setup') != request['setup'] or
+            grant.get('admission') != request['admission'] or
+            grant.get('review') != request['review'] or
+            grant.get('authorization') != request['authorization'] or
+            grant.get('source_review') != request['source_review'] or
+            grant.get('proposal_sha256') != object_hash(proposal) or
+            request.get('max_seconds') != proposal['allocation']['gpu_seconds']):
+        raise ValueError('video whole-slot admission binding changed')
+    stage = remaining_map_allocation(proposal, request['setup'], events,
+                                    ledger.path.parent, admission['assets'])
+    budget = grant['slot_byte_budget']
+    setup_grants = [event for event in events if event.get('event') == 'depth_setup_authorized'
+                    and event.get('candidate') == request['component']]
+    if len(setup_grants) != 1 or budget.get('setup_baseline') != setup_grants[0].get('resource_snapshot'):
+        raise ValueError('video whole-slot setup baseline changed')
+    if (grant.get('map_stage_allowance') != stage or budget.get('setup') != stage['setup'] or
+            budget.get('setup_finish_event_sha256') != stage['setup_finish_event_sha256']):
+        raise ValueError('video whole-slot setup lineage changed')
+    def guard():
+        check_slot_byte_budget(proposal, budget, ledger.path.parent,
+                               budget_snapshot(ledger.path.parent))
+    guard()
+    return guard
 
 
 def _run_video(request, output, config, *, backend, ledger, record_kind):
@@ -260,10 +299,13 @@ def _run_video(request, output, config, *, backend, ledger, record_kind):
     output = Path(output)
     if output.name != request['id'] or output.exists():
         raise ValueError('immutable video output identity changed or exists')
+    slot_guard = video_slot_guard(request, ledger) if record_kind == 'actual' else lambda: None
+    slot_guard()
     start = time.monotonic()
     output.mkdir(parents=True, exist_ok=False)
     write_json(output / 'request.json', request)
     (output / 'source.py').write_bytes(Path(__file__).read_bytes())
+    slot_guard()
     charged_elapsed = 0.
     try:
         map_rows, result_rows, sequences, anchors = [], [], [], {}
@@ -272,7 +314,8 @@ def _run_video(request, output, config, *, backend, ledger, record_kind):
         schedule = ([(camera, role) for role in ('fit', 'check') for camera in cameras]
                     if component == 'D10' else
                     [(camera, role) for camera in cameras for role in ('fit', 'check')])
-        fit_predictions, check_predictions = {}, {}
+        fit_predictions: dict[int, dict] = {}
+        check_predictions: dict[int, dict] = {}
         fit = None
         if component == 'D10':
             from .scale import evaluate
@@ -283,6 +326,7 @@ def _run_video(request, output, config, *, backend, ledger, record_kind):
             fit_rows = [row for row in depth_rows if row['identity']['frame'] == 100]
             check_rows = [row for row in depth_rows if row['identity']['frame'] == 175]
         for camera, role in schedule:
+            slot_guard()
             if time.monotonic() - start >= seconds:
                 raise TimeoutError('video fixture deadline exceeded')
             frames, footprint, context_rows = materialize_role(request['context'], camera, role)
@@ -298,11 +342,13 @@ def _run_video(request, output, config, *, backend, ledger, record_kind):
                 if frame not in (100, 175) and not (role == 'check' and camera in (1, 11, 21, 31)):
                     continue
                 path = output / f'camera{camera}-frame{frame}.npz'
+                slot_guard()
                 with path.open('xb') as stream:
                     np.savez_compressed(stream,
                         **({'depth': prediction.values[index]} if component == 'D10'
                            else {'relative': prediction.values[index]}),
                         valid=prediction.valid[index], raw_values=prediction.raw_values[index])
+                slot_guard()
                 record = file_record(path)
                 if component == 'D10' and frame in (100, 175):
                     (fit_predictions if role == 'fit' else check_predictions)[camera] = record
@@ -324,7 +370,9 @@ def _run_video(request, output, config, *, backend, ledger, record_kind):
             if component == 'D10' and role == 'fit' and camera == cameras[-1]:
                 fit = evaluate(fit_rows, fit_predictions, config, provenance=provenance)
                 fit['component'] = 'D10'
+                slot_guard()
                 write_json(output / 'scale-fit.json', fit)
+                slot_guard()
                 if fit['status'] != 'passed':
                     qualitative = request.get('qualitative_admission')
                     if not isinstance(qualitative, dict):
@@ -337,11 +385,13 @@ def _run_video(request, output, config, *, backend, ledger, record_kind):
                         raise ValueError('D10 qualitative admission binding changed')
                 # The complete fit decision and any qualitative-only authority
                 # precede the first check-context inference and publication.
+                slot_guard()
                 write_json(output / 'fit-gate.json', dict(
                     schema='plan069-video-fit-gate/v1', component='D10',
                     status=fit['status'], qualitative_admission=
                         request.get('qualitative_admission') if fit['status'] != 'passed' else None,
                     fit=file_record(output / 'scale-fit.json')))
+                slot_guard()
         expected_anchors = {(camera, frame) for camera in cameras for frame in (100, 175)}
         if (len(anchor_rows) != 60 or
                 {(row['camera'], row['frame']) for row in anchor_rows} != expected_anchors or
@@ -365,7 +415,9 @@ def _run_video(request, output, config, *, backend, ledger, record_kind):
                     provenance=provenance, cameras=diagnostics['cameras'],
                     check_diagnostics=diagnostics)
             check['component'] = 'D10'
+            slot_guard()
             write_json(output / 'scale-check.json', check)
+            slot_guard()
             scales['check'] = file_record(output / 'scale-check.json')
         result = dict(schema='plan069-video-depth-result/v1', id=request['id'],
             status='complete', record_kind=record_kind, component=component,
@@ -377,7 +429,9 @@ def _run_video(request, output, config, *, backend, ledger, record_kind):
                              commercial='unverified' if record_kind == 'fixture' else 'admitted',
                              runtime='fixture-only' if record_kind == 'fixture' else 'actual-native'))
         map_result_path = output / 'result.json'
+        slot_guard()
         write_json(map_result_path, result)
+        slot_guard()
         inference_elapsed = time.monotonic() - start
         if inference_elapsed > seconds:
             raise TimeoutError('video fixture deadline exceeded')
@@ -395,7 +449,7 @@ def _run_video(request, output, config, *, backend, ledger, record_kind):
         provenance['ledger_outcome'] = file_record(output / 'ledger-outcome.json')
         clips = publish_fixture_clips(request['context'], component, domain,
             map_rows, anchors, output / 'clips', provenance,
-            max_seconds=max(.001, seconds - inference_elapsed))
+            max_seconds=max(.001, seconds - inference_elapsed), resource_guard=slot_guard)
         elapsed = time.monotonic() - start
         if elapsed > seconds:
             raise TimeoutError('video fixture deadline exceeded')
@@ -403,7 +457,9 @@ def _run_video(request, output, config, *, backend, ledger, record_kind):
             status='complete', record_kind=record_kind,
             worker=file_record(map_result_path),
             package=clips['package'], elapsed_seconds=elapsed)
+        slot_guard()
         write_json(output / 'transaction.json', receipt)
+        slot_guard()
         ledger.charge_cpu_preparation(elapsed - charged_elapsed,
             file_record(output / 'transaction.json'))
         return receipt

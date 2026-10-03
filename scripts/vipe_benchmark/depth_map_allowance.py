@@ -24,7 +24,9 @@ def remaining_map_allocation(proposal, setup, events, run_root, assets):
              'owned completed setup result required for map allowance')
     result = read_json(setup_record['path'])
     allocation = dict(proposal['allocation'])
-    _require(result.get('schema') == 'plan069-depth-setup-result/v1' and
+    setup_schema = ('plan069-video-setup-result/v1' if candidate in ('D9', 'D10')
+                    else 'plan069-depth-setup-result/v1')
+    _require(result.get('schema') == setup_schema and
              result.get('record_kind') == 'actual' and result.get('status') == 'complete' and
              result.get('candidate') == candidate and result.get('job_id') == job and
              result.get('source_revision') == proposal['candidate_config']['code']['revision'] and
@@ -171,14 +173,34 @@ def check_slot_byte_budget(proposal, budget, run_root, reading, *, historical=Fa
 def historical_slot_byte_guard(ledger, candidate):
     """Return a no-download CPU guard for an already admitted native slot."""
     from .budgets import budget_snapshot
-    allocations = [event for event in ledger.events() if event.get('event') == 'depth_attempt_authorized'
+    events = ledger.events()
+    allocations = [event for event in events if event.get('event') == 'depth_attempt_authorized'
                    and event.get('candidate') == candidate]
     if len(allocations) != 1 or allocations[0].get('slot_byte_budget') is None:
-        _require(candidate != 'D11', 'D11 diagnostics require whole-slot byte proof')
+        _require(candidate not in ('D5', 'D6', 'D8', 'D9', 'D10', 'D11'),
+                 'native depth diagnostics require whole-slot byte proof')
         return lambda: None
     allocation = allocations[0]
     review = read_json(verify_record(allocation['review'])['path'])
     proposal = next(row for row in review['proposals'] if row['candidate'] == candidate)
+    budget = allocation['slot_byte_budget']
+    setup_grants = [event for event in events if event.get('event') == 'depth_setup_authorized'
+                    and event.get('candidate') == candidate]
+    finishes = [event for event in events if event.get('event') == 'finish'
+                and event.get('job_id') == f'plan069-{candidate}-setup-001']
+    stage = allocation.get('map_stage_allowance') or {}
+    _require(len(setup_grants) == len(finishes) == 1 and
+             setup_grants[0].get('resource_snapshot') == budget.get('setup_baseline') and
+             allocation.get('proposal_sha256') == budget.get('proposal_sha256') == object_hash(proposal) and
+             stage.get('setup') == budget.get('setup') and
+             stage.get('setup_finish_event_sha256') == budget.get('setup_finish_event_sha256') and
+             finishes[0].get('event_sha256') == budget.get('setup_finish_event_sha256') and
+             finishes[0].get('result') == budget.get('setup') and
+             finishes[0].get('resource') == 'setup' and finishes[0].get('status') == 'complete' and
+             finishes[0].get('cleanup_confirmed') is True and
+             finishes[0].get('cleanup_uncertain') is False and
+             finishes[0].get('surviving_pids') == [] and finishes[0].get('deadline_exceeded') is False,
+             'historical whole-slot setup lineage changed')
     baseline = budget_snapshot(ledger.path.parent)['download_bytes']
 
     def check():

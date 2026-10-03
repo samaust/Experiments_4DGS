@@ -51,6 +51,47 @@ class MapAllowanceTests(unittest.TestCase):
         write_json(receipt, document)
         self.runtime['receipt'] = file_record(receipt)
 
+    def test_video_checkpoint_setup_receives_only_verified_asset_credit(self):
+        for candidate in ('D9', 'D10'):
+            with self.subTest(candidate=candidate):
+                self.prepare_completed_setup()
+                self.proposal['candidate'] = candidate
+                self.approval['candidate'] = candidate
+                self.approval['proposal_sha256'] = object_hash(self.proposal)
+                old = self.setup_root
+                self.setup_root = old.with_name(f'plan069-{candidate}-setup-001')
+                old.rename(self.setup_root)
+                self.asset = self.setup_root / 'model.bin'
+                self.assets[0]['record'] = file_record(self.asset)
+                inventory_path = Path(self.proposal['required_assets']['path'])
+                inventory = read_json(inventory_path)
+                inventory['candidates'][candidate] = inventory['candidates'].pop('D5')
+                inventory_path.unlink()
+                write_json(inventory_path, inventory)
+                self.proposal['required_assets'] = file_record(inventory_path)
+                self.approval['proposal_sha256'] = object_hash(self.proposal)
+                for path, document in ((Path(self.review['path']), dict(schema='plan069-depth-execution-review/v1',status='REVIEW',proposals=[self.proposal])),):
+                    path.unlink(); write_json(path,document)
+                self.review = file_record(self.review['path'])
+                path = Path(self.authorization['path']); path.unlink()
+                write_json(path,dict(schema='plan069-depth-user-authorization/v1',status='DO',review=self.review,candidate_approvals=[self.approval]))
+                self.authorization = file_record(path)
+                job = f'plan069-{candidate}-setup-001'
+                request = self.root/'requests'/(job+'.json')
+                write_json(request,dict(schema='plan069-depth-setup-request/v1',record_kind='actual',candidate=candidate,job_id=job,review=self.review,authorization=self.authorization,ledger_path=str(self.root/'ledger.jsonl')))
+                self.setup = self.setup_root/'result.json'
+                document = read_json(self.setup); self.setup.unlink()
+                document.update(schema='plan069-video-setup-result/v1',candidate=candidate,job_id=job,review=self.review,authorization=self.authorization,checkpoint=self.assets[0]['record'])
+                document.pop('assets'); write_json(self.setup,document)
+                self.events[0].update(candidate=candidate,review=self.review,authorization=self.authorization,proposal_sha256=object_hash(self.proposal))
+                self.events[1].update(job_id=job,evidence=dict(request=file_record(request),review=self.review,authorization=self.authorization))
+                self.events[2].update(job_id=job,result=file_record(self.setup))
+                result = remaining_map_allocation(self.proposal,file_record(self.setup),self.events,self.root,self.assets)
+                self.assertEqual(result['credited_assets_bytes'],12)
+                self.assertEqual(result['allocation']['artifact_bytes'],88)
+            if candidate == 'D9':
+                self.tearDown(); self.setUp()
+
     def test_allowance_helper_is_bound_in_every_candidate_source_closure(self):
         from vipe_benchmark.depth_admission import LOCAL_ADAPTERS, local_source_records
         for candidate in LOCAL_ADAPTERS:
@@ -239,16 +280,32 @@ class WholeSlotBudgetTests(unittest.TestCase):
         budget = dict(schema='plan069-depth-slot-byte-budget/v1',candidate='D11',
             proposal_sha256=object_hash(proposal),shared_setup_artifact_bytes=40,
             setup_baseline=dict(download_bytes=1000,artifact_bytes=2000),
-            absolute_limits=dict(download_bytes=1100,artifact_bytes=2200))
+            absolute_limits=dict(download_bytes=1100,artifact_bytes=2200),
+            setup=dict(path='accepted-setup'),setup_finish_event_sha256='f'*64)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             write_json(root/'review.json',dict(proposals=[proposal]))
-            ledger = SimpleNamespace(path=root/'ledger.jsonl',events=lambda:[dict(
-                event='depth_attempt_authorized',candidate='D11',slot_byte_budget=budget,
-                review=file_record(root/'review.json'))])
+            events = [dict(event='depth_setup_authorized',candidate='D11',
+                           resource_snapshot=budget['setup_baseline']),
+                      dict(event='finish',job_id='plan069-D11-setup-001',resource='setup',
+                           status='complete',result=budget['setup'],event_sha256='f'*64,
+                           cleanup_confirmed=True,cleanup_uncertain=False,surviving_pids=[],
+                           deadline_exceeded=False),
+                      dict(event='depth_attempt_authorized',candidate='D11',slot_byte_budget=budget,
+                           proposal_sha256=object_hash(proposal),map_stage_allowance=dict(
+                               setup=budget['setup'],setup_finish_event_sha256='f'*64),
+                           review=file_record(root/'review.json'))]
+            ledger = SimpleNamespace(path=root/'ledger.jsonl',events=lambda:events)
             reading = dict(download_bytes=999999,artifact_bytes=999999)
             with patch('vipe_benchmark.depth_map_allowance.owned_slot_bytes',return_value=140), \
                     patch('vipe_benchmark.budgets.budget_snapshot',return_value=reading):
+                for changes in ({'status':'failed'}, {'cleanup_confirmed':False},
+                                {'result':dict(path='foreign')}, {'event_sha256':'wrong'}):
+                    original = dict(events[1])
+                    events[1].update(changes)
+                    with self.subTest(changes=changes), self.assertRaisesRegex(ValueError,'lineage'):
+                        historical_slot_byte_guard(ledger,'D11')
+                    events[1] = original
                 guard = historical_slot_byte_guard(ledger,'D11')
                 guard()
                 reading['download_bytes'] += 1

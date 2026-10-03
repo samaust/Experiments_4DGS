@@ -91,7 +91,8 @@ def dispatch(candidate, admission_path, context_path,
         source_review=source_review, approval=grant,
         cap_amendment=approved['cap_amendment'], cap_approval=approved['cap_approval'],
         ledger_head_sha256=previous_live['ledger_head_sha256'],
-        now_unix=previous_live['sampled_unix'])
+        now_unix=previous_live['sampled_unix'], completed_setup=setup,
+        setup_events=ledger.events(), run_root=local)
     if blockers:
         raise ValueError('video qualification evidence failed: ' + '; '.join(blockers))
     request = dict(schema='plan069-video-depth-request/v1', record_kind='actual',
@@ -119,15 +120,20 @@ def dispatch(candidate, admission_path, context_path,
     live = _live(ledger, local)
     if live['active_gpu_owner'] is not None or live['active_reservations']:
         raise ValueError('single GPU or reservation already owned')
-    refreshed = dict(accepted, live=live, input_admission=input_admission)
+    refreshed = dict(accepted, live=live, input_admission=input_admission, completed_setup=setup)
     write_json(refreshed_path, refreshed)
     admission = file_record(refreshed_path)
     request['admission'] = admission
     write_json(request_path, request)
     request_record = file_record(request_path)
-    ledger.authorize_depth_attempt(candidate, review, authorization,
+    allocation_event = ledger.authorize_depth_attempt(candidate, review, authorization,
         source_review, admission, command=command, request=request_record,
         worker=worker_record, executable=executable_record)
+    from vipe_benchmark.depth_map_allowance import check_slot_byte_budget
+    def slot_resources():
+        reading = resources(local, gpu=True)
+        check_slot_byte_budget(proposal, allocation_event['slot_byte_budget'], local, reading)
+        return reading
     def validate(out):
         result = read_json(verify_record(file_record(out / 'result.json'))['path'])
         if (result.get('schema') != 'plan069-video-depth-result/v1' or
@@ -144,7 +150,7 @@ def dispatch(candidate, admission_path, context_path,
                       setup=setup, review=review, authorization=authorization,
                       source_review=source_review, qualification=qualification,
                       worker=worker_record, executable=executable_record),
-        sample_resources=lambda: resources(local, gpu=True),
+        sample_resources=slot_resources,
         validate_result=validate, poll_seconds=2.)
 
 

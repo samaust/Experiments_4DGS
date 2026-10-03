@@ -7,6 +7,7 @@ import time
 from basketball_vipe_video_setup_dispatch import shared_run_root
 from vipe_benchmark.config import load
 from vipe_benchmark.depth_clips import publish_fixture_clips
+from vipe_benchmark.depth_map_allowance import historical_slot_byte_guard
 from vipe_benchmark.execution import resources
 from vipe_benchmark.files import file_record, object_hash, read_json, verify_record, write_json
 from vipe_benchmark.ledger import Ledger
@@ -53,7 +54,14 @@ def publish(candidate, run_id='plan031-20260913T032700Z'):
     finish_path = local / 'receipts' / f'{job_id}-finish.json'
     if output.exists() or finish_path.exists():
         raise ValueError('immutable video clip publication already attempted')
+    slot_guard = historical_slot_byte_guard(ledger, candidate)
+    def resource_guard():
+        slot_guard()
+        if resources(local)['artifact_bytes'] >= config['new_artifact_disk_gib_limit'] * 2**30:
+            raise ValueError('artifact storage allocation exhausted')
+    resource_guard()
     write_json(finish_path, finish)
+    resource_guard()
     context = read_json(verify_record(request['context'])['path'])
     settings = object_hash(read_json(request['extension_configuration']['path'])
                            ['candidates'][candidate])
@@ -82,7 +90,8 @@ def publish(candidate, run_id='plan031-20260913T032700Z'):
     try:
         receipt = publish_fixture_clips(request['context'], candidate, result['domain'],
             rows, anchors, output, provenance, max_seconds=seconds,
-            record_kind='actual')
+            record_kind='actual', resource_guard=resource_guard)
+        resource_guard()
     except BaseException as error:
         failure = local / 'receipts' / f'plan069-{candidate}-clips-001-failure.json'
         write_json(failure, dict(schema='plan069-depth-clips-failure/v1',

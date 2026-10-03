@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 import basketball_vipe_video_actual_dispatch as dispatcher
+import basketball_vipe_video_publish as publisher
 from vipe_benchmark.config import load, training_cameras
 from vipe_benchmark.files import file_record, read_json, write_json
 from vipe_benchmark.ledger import Ledger
@@ -28,7 +29,7 @@ class VideoDispatchBindingTests(unittest.TestCase):
         write_json(config, load())
         self.review_path = self.root / 'review.json'
         write_json(self.review_path, dict(proposals=[dict(candidate=candidate,
-            allocation=dict(gpu_seconds=12000)) for candidate in ('D9', 'D10')]))
+            allocation=dict(gpu_seconds=12000, download_bytes=10000, artifact_bytes=10000)) for candidate in ('D9', 'D10')]))
         self.approval = self.root / 'approval.json'
         write_json(self.approval, dict(review=file_record(self.review_path),
             candidate_approvals=[dict(candidate=candidate) for candidate in ('D9', 'D10')],
@@ -63,6 +64,7 @@ class VideoDispatchBindingTests(unittest.TestCase):
         setup.parent.mkdir(parents=True)
         write_json(setup, dict(status='complete'))
         ledger = Mock(path=self.local / 'ledger.jsonl')
+        ledger.events.return_value = []
         ledger.states.return_value = {f'plan069-{candidate}-setup-001': dict(
             event='finish', status='complete', result=file_record(setup))}
         ledger.events.return_value = []
@@ -72,6 +74,9 @@ class VideoDispatchBindingTests(unittest.TestCase):
         clock = [2000.]
 
         def review_evidence(*args, **kwargs):
+            self.assertEqual(kwargs['completed_setup'], file_record(setup))
+            self.assertEqual(kwargs['setup_events'], [])
+            self.assertEqual(kwargs['run_root'], self.local)
             self.assertEqual(kwargs['now_unix'], 1000.)
             self.assertEqual(kwargs['live']['sampled_unix'], 1000.)
             clock[0] += 10.  # Rehashing old qualification outlasts the live window.
@@ -85,6 +90,7 @@ class VideoDispatchBindingTests(unittest.TestCase):
             self.assertEqual(saved['source_review'], source_review)
             self.assertEqual(saved['qualification'], file_record(self.qualification))
             refreshed = read_json(admission['path'])
+            self.assertEqual(refreshed['completed_setup'], file_record(setup))
             self.assertEqual(refreshed['input_admission'], original_admission)
             self.assertEqual(refreshed['live']['sampled_unix'], 2010.)
             self.assertEqual(file_record(original_admission['path']), original_admission)
@@ -100,9 +106,16 @@ class VideoDispatchBindingTests(unittest.TestCase):
                 dict(review=review, authorization=authorization,
                      source_review=source_review, admission=admission),
                 dict(local_sources=[worker]), captured, command)
+            return dict(slot_byte_budget=dict(schema='plan069-depth-slot-byte-budget/v1',
+                candidate=candidate, proposal_sha256=dispatcher.object_hash(proposal),
+                shared_setup_artifact_bytes=0, setup_baseline=dict(download_bytes=0,artifact_bytes=0),
+                absolute_limits=dict(download_bytes=10000,artifact_bytes=10000)))
         ledger.authorize_depth_attempt.side_effect = authorize
 
         def supervise(ledger_arg, job_id, command, output, *, evidence, **kwargs):
+            self.assertEqual(kwargs['sample_resources']()['artifact_bytes'], 0)
+            with patch.object(dispatcher, 'resources', return_value=dict(artifact_bytes=10001,download_bytes=0)), self.assertRaisesRegex(ValueError, 'whole-slot allocation exceeded'):
+                kwargs['sample_resources']()
             self.assertEqual(command, captured['command'])
             for key in ('request', 'worker', 'executable'):
                 self.assertEqual(evidence[key], captured[key])
@@ -132,6 +145,32 @@ class VideoDispatchBindingTests(unittest.TestCase):
     def test_d10_authorization_and_supervision_share_exact_bindings(self):
         self.run_dispatch('D10')
 
+    def test_publication_without_slot_proof_fails_before_any_receipt_or_output(self):
+        candidate = 'D9'
+        job = 'plan069-D9-maps-001'
+        result_path = self.local / 'jobs' / job / 'result.json'
+        context = file_record(self.context)
+        write_json(result_path, dict(schema='plan069-video-depth-result/v1',
+            record_kind='actual', component=candidate, context=context,
+            rows=[{}] * 256, anchor_rows=[{}] * 60, sequences=[{}] * 60))
+        setup_path = self.local / 'jobs/plan069-D9-setup-001/result.json'
+        write_json(setup_path, dict(status='complete'))
+        write_json(self.local / 'requests' / (job + '.json'),
+            dict(component=candidate, context=context, admission={}, setup=file_record(setup_path)))
+        ledger = Mock(path=self.local / 'ledger.jsonl')
+        ledger.events.return_value = []
+        ledger.states.return_value = {job: dict(event='finish',status='complete',result=file_record(result_path))}
+        ledger.totals.return_value = dict(cpu=dict(elapsed_seconds=0))
+        with patch.object(publisher, 'shared_run_root', return_value=self.root), \
+             patch.object(publisher, 'Ledger', return_value=ledger), \
+             patch.object(publisher, 'setup_environment'), \
+             patch.object(publisher, 'resources', return_value=dict(artifact_bytes=0)), \
+             self.assertRaisesRegex(ValueError, 'whole-slot byte proof'):
+            publisher.publish(candidate)
+        self.assertFalse((self.local / 'receipts').exists())
+        self.assertFalse((self.local / 'jobs/plan069-D9-clips-001').exists())
+        ledger.charge_cpu_preparation.assert_not_called()
+
     def test_qualified_environment_invocation_path_must_match(self):
         runtime = dict(receipt=file_record(self.qualification))
         validate_runtime_interpreter(runtime, sys.executable)
@@ -157,6 +196,7 @@ class VideoDispatchBindingTests(unittest.TestCase):
         setup = file_record(setup_path)
         config = dict(load(), new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
         ledger = Mock(path=self.local / 'ledger.jsonl')
+        ledger.events.return_value = []
         ledger.states.return_value = {
             job: dict(event='reserve', resource='gpu', seconds=12000,
                       evidence=dict(admission=admission)),
@@ -168,8 +208,10 @@ class VideoDispatchBindingTests(unittest.TestCase):
             max_seconds=12000)
         with patch('vipe_benchmark.depth_setup._active_reservation',
                    return_value=(self.local, config)):
-            self.assertEqual(admitted_video_request(request, self.local / 'jobs' / job,
-                config, ledger=ledger, request_path=self.root / 'request.json'), setup_document)
+            with self.assertRaisesRegex(ValueError, 'whole-slot'):
+                admitted_video_request(request, self.local / 'jobs' / job,
+                    config, ledger=ledger, request_path=self.root / 'request.json')
+            self.assertFalse((self.local / 'jobs' / job).exists())
             for key in ('qualification', 'source_review'):
                 with self.subTest(key=key), self.assertRaisesRegex(ValueError, 'binding changed'):
                     admitted_video_request(dict(request, **{key: admission}),
