@@ -20,7 +20,9 @@ MAX_MESSAGE = 1024 * 1024
 
 
 class ControlFailure(RuntimeError):
-    pass
+    def __init__(self, message, *, cleanup_confirmed=True):
+        self.cleanup_confirmed = cleanup_confirmed
+        super().__init__(message)
 
 
 def bounded_json(path):
@@ -57,12 +59,14 @@ def _run(command, root, seconds, deadline, kind):
     if finish <= time.monotonic():
         raise ControlFailure('control deadline exhausted before launch')
     process = None
+    launch_attempted = False
     primary = None
     cleanup = False
     observed = None
     try:
         from .s1_helper_session import create_owned_process, register_owned
         with (root/'control.log').open('xb') as log:
+            launch_attempted = True
             process = create_owned_process('final render control', subprocess.Popen,
                 command, stdout=log, stderr=subprocess.STDOUT, cwd=root,
                 env=cpu_environment(), start_new_session=True, deadline=finish)
@@ -91,18 +95,25 @@ def _run(command, root, seconds, deadline, kind):
                 else:
                     primary.add_note('control cleanup: '+repr(error))
         else:
-            cleanup = True
+            cleanup = not launch_attempted
+    if primary is None and time.monotonic() >= finish:
+        primary = ControlFailure('control cleanup exceeded operation deadline')
     if primary is not None or not cleanup:
         write_json(root/'control-failure.json', dict(schema='plan069-final-render-control-failure/v1',
             record_kind=kind, error=repr(primary), cleanup_confirmed=cleanup,
             execution_authorized=False))
-        raise ControlFailure(str(primary or 'control cleanup uncertain')) from primary
+        raise ControlFailure(str(primary or 'control cleanup uncertain'),cleanup_confirmed=cleanup) from primary
     message = bounded_json(root/'response.json')
     if type(message) is not dict:
         raise ControlFailure('control response must be an object')
     if kind == 'fixture':
         message = dict(message, record_kind='fixture', execution_authorized=False,
                        native_adapter_qualified=False)
+    if time.monotonic() >= finish:
+        write_json(root/'control-failure.json',dict(schema='plan069-final-render-control-failure/v1',
+            record_kind=kind,error='control publication exceeded operation deadline',
+            cleanup_confirmed=cleanup,execution_authorized=False))
+        raise ControlFailure('control publication exceeded operation deadline',cleanup_confirmed=cleanup)
     return message
 
 

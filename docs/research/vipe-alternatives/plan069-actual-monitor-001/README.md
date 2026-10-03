@@ -28,5 +28,14 @@ rejection of fixture reservations before process creation, and charged command
 mismatch failures before launch. These tests do not
 run a native GPU model or create an actual approval or shared ledger event.
 
-Validation: six focused unittest cases pass; new source files parse as Python.
+Validation: eight focused unittest cases pass; new source files parse as Python.
 Combined source review and full qualification belong to the parent milestone.
+
+Review corrections require explicit `cleanup_uncertain` on every terminal
+ledger event, preserve helper cleanup uncertainty after worker cleanup, and
+reject helper success after cleanup or response transport crosses its deadline.
+A final fixed sample after worker cleanup and acceptance checks GPU idleness and
+cumulative resource ceilings, including control artifacts, with a 1 MiB reserve
+for supervision publication. Failed-only CPU process fixtures cover uncertain
+monitor cleanup; a real SIGTERM-ignoring descendant demonstrates cleanup
+overrun rejection. No passing actual native receipt is produced by these tests.

@@ -47,3 +47,10 @@ class ActualControlTests(unittest.TestCase):
             command = [sys.executable, '-c', "open('response.json','w').write(' '*1048577)"]
             with self.assertRaisesRegex(ValueError, 'bounded transport'):
                 run_fixture_control(command, Path(directory), seconds=2)
+
+    def test_cleanup_past_operation_deadline_cannot_publish_success(self):
+        with tempfile.TemporaryDirectory() as directory:
+            command = [sys.executable, '-c', "import subprocess,sys,json,time; subprocess.Popen([sys.executable,'-c','import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); time.sleep(30)']); time.sleep(.1); json.dump({},open('response.json','w'))"]
+            with self.assertRaisesRegex(ControlFailure,'deadline') as caught:
+                run_fixture_control(command, Path(directory), seconds=.5)
+            self.assertTrue(caught.exception.cleanup_confirmed)

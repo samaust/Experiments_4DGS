@@ -10,7 +10,7 @@ import subprocess
 import time
 
 from .files import file_record, safe_path, write_json
-from .final_render_actual_control import bounded_json, cpu_environment, exited, run_control
+from .final_render_actual_control import ControlFailure, bounded_json, cpu_environment, exited, run_control
 from .supervisor import stop_group
 
 
@@ -67,6 +67,8 @@ def _supervise_reserved(ledger, reservation, command, output, invocation_record,
     secondary = []
     cleanup = False
     accepted = None
+    final_sample = None
+    helpers_clean = True
     peak_device = 0
     peak_cpu = 0
     control_root = output.parent/(output.name+'-controls')
@@ -119,6 +121,8 @@ def _supervise_reserved(ledger, reservation, command, output, invocation_record,
                     time.sleep(.05)
     except BaseException as error:
         primary = error
+        if isinstance(error,ControlFailure) and not error.cleanup_confirmed:
+            helpers_clean = False
     finally:
         if process is not None:
             try:
@@ -127,6 +131,7 @@ def _supervise_reserved(ledger, reservation, command, output, invocation_record,
                 secondary.append(repr(error))
         else:
             cleanup = not lifecycle['launch_attempted']
+        cleanup = cleanup and helpers_clean
         lifecycle['cleanup_confirmed'] = cleanup
     if primary is None and cleanup:
         try:
@@ -134,14 +139,32 @@ def _supervise_reserved(ledger, reservation, command, output, invocation_record,
                                    deadline=deadline,seconds=max(.001,deadline-time.monotonic()))
         except BaseException as error:
             primary = error
+            if isinstance(error,ControlFailure) and not error.cleanup_confirmed:
+                cleanup = False
+                lifecycle['cleanup_confirmed'] = False
+    if primary is None and cleanup:
+        try:
+            # No retained worker group remains: every compute PID is foreign.
+            final_sample = run_control('sample',invocation_record,control_root/'final-sample',
+                worker_pgid=None,deadline=deadline,seconds=min(15.,max(.001,deadline-time.monotonic())))
+            _check_sample(final_sample,request,ledger.config)
+            if final_sample['artifact_bytes']+2**20 > ledger.config['new_artifact_disk_gib_limit']*2**30 or final_sample['free_disk_bytes'] < 2**20:
+                raise ValueError('insufficient publication storage reserve')
+            peak_device = max(peak_device,final_sample['device_bytes'])
+            peak_cpu = max(peak_cpu,final_sample['cpu_workers_used'])
+        except BaseException as error:
+            primary = error
+            if isinstance(error,ControlFailure) and not error.cleanup_confirmed:
+                cleanup = False
+                lifecycle['cleanup_confirmed'] = False
     if primary is None and not cleanup:
         primary = RuntimeError('actual worker cleanup uncertain')
     if primary is None and time.monotonic() >= deadline:
         primary = TimeoutError('publication-inclusive actual allocation exceeded')
     receipt = dict(schema='plan069-final-render-actual-supervision/v1',record_kind='actual',
         status='complete' if primary is None else 'failed',invocation=invocation_record,
-        reservation_sha256=reservation['event_sha256'],cleanup_confirmed=cleanup,
-        acceptance=accepted,peak_device_bytes=peak_device,peak_cpu_workers=peak_cpu,
+        reservation_sha256=reservation['event_sha256'],cleanup_confirmed=cleanup,cleanup_uncertain=not cleanup,
+        acceptance=accepted,final_sample=final_sample,peak_device_bytes=peak_device,peak_cpu_workers=peak_cpu,
         error=None if primary is None else repr(primary),secondary_errors=secondary,
         execution_authorized=primary is None,native_adapter_qualified=primary is None)
     receipt_path = control_root/'supervision.json'
@@ -152,7 +175,7 @@ def _supervise_reserved(ledger, reservation, command, output, invocation_record,
         primary = TimeoutError('supervision publication exceeded actual allocation')
         write_json(control_root/'publication-failure.json',dict(error=repr(primary),execution_authorized=False))
     finish = ledger.finish(reservation['job_id'],'complete' if primary is None else 'failed',
-        elapsed,invocation=invocation_record,cleanup_confirmed=cleanup,
+        elapsed,invocation=invocation_record,cleanup_confirmed=cleanup,cleanup_uncertain=not cleanup,
         result=None if primary is not None else accepted['result'],
         supervision=file_record(receipt_path))
     if primary is not None:
@@ -185,7 +208,7 @@ def supervise_reserved(ledger, reservation, command, output, invocation_record, 
             finish = ledger.finish(reservation['job_id'],'failed',
                 max(0.,time.monotonic()-reservation['monotonic_start']),
                 invocation=invocation_record,cleanup_confirmed=lifecycle['cleanup_confirmed'],
-                failure=file_record(failure_path))
+                cleanup_uncertain=not lifecycle['cleanup_confirmed'],failure=file_record(failure_path))
         except BaseException as secondary:
             error.add_note('terminal accounting: '+repr(secondary))
             raise error
