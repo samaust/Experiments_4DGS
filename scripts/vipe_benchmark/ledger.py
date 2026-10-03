@@ -69,7 +69,7 @@ class Ledger:
         with self.path.open('a+') as stream:
             fcntl.flock(stream, fcntl.LOCK_EX)
             stream.seek(0)
-            events = []
+            events: list[dict] = []
             previous = None
             for line in stream:
                 row = json.loads(line)
@@ -347,16 +347,29 @@ class Ledger:
                 source_review=source_review, approval=grant,
                 cap_amendment=cap_amendment,
                 cap_approval=approved.get('cap_approval'),
-                ledger_head_sha256=head)
+                ledger_head_sha256=head,
+                completed_setup=evidence.get('completed_setup'),
+                setup_events=events, run_root=self.path.parent)
             if blockers:
                 raise ValueError('depth admission failed: ' + '; '.join(blockers))
+            allocation = proposal['allocation']
+            stage = None
+            if evidence.get('completed_setup') is not None:
+                from .depth_map_allowance import remaining_map_allocation
+                if read_json(verify_record(request)['path']).get('setup') != evidence['completed_setup']:
+                    raise ValueError('map request differs from credited completed setup')
+                stage = remaining_map_allocation(proposal, evidence['completed_setup'],
+                    events, self.path.parent, evidence['assets'])
+                allocation = stage['allocation']
             reading = resources(self.path.parent, gpu=True)
             if reading['gpu_pids']:
                 raise ValueError('GPU owner active before depth allocation')
+            if stage is not None and any(reading[key] < stage['credited_assets_bytes']
+                    for key in ('download_bytes', 'artifact_bytes')):
+                raise ValueError('completed setup assets no longer included in live accounting')
             total = self.totals(events)['gpu']['elapsed_seconds']
             if total + seconds > self.config['gpu_total_seconds_limit']:
                 raise ValueError('depth GPU cumulative allowance exhausted')
-            allocation = proposal['allocation']
             for key, cap in (('download_bytes', 'new_download_gib_limit'),
                              ('artifact_bytes', 'new_artifact_disk_gib_limit')):
                 if reading[key] + allocation[key] > self.config[cap] * 2**30:
@@ -367,7 +380,8 @@ class Ledger:
                 candidate=candidate, seconds=seconds,
                 proposal_sha256=object_hash(proposal), review=review,
                 authorization=authorization, source_review=source_review,
-                admission=admission, resource_snapshot=reading, command=command, **binding))
+                admission=admission, resource_snapshot=reading, map_stage_allowance=stage,
+                command=command, **binding))
 
     def charge_cpu_preparation(self, elapsed_seconds, evidence):
         """Charge separately retriable input acquisition without a model attempt."""

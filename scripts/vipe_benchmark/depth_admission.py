@@ -26,7 +26,7 @@ LIMIT_KEYS = dict(download_bytes='new_download_gib_limit',
                   gpu_seconds='gpu_total_seconds_limit',
                   cpu_seconds='cpu_prepare_score_report_seconds_limit',
                   setup_seconds='setup_wall_seconds_limit')
-LOCAL_COMMON = ('files.py', 'config.py', 'ledger.py', 'depth_admission.py',
+LOCAL_COMMON = ('files.py', 'config.py', 'ledger.py', 'depth_admission.py', 'depth_map_allowance.py',
     'depth_extension.py', 'depth_clips.py', 'scale.py', 'qualitative_package.py',
     'execution.py', 'supervisor.py', 'budgets.py', 'runtime.py', 'isolation.py',
     'ffmpeg_binding.py', 'transfer_proxy.py', 's1_helper_session.py',
@@ -100,7 +100,8 @@ def _require(condition, message):
 
 def review(proposal, *, config, commercial, assets, runtime, live,
            source_review=None, approval=None, cap_amendment=None, cap_approval=None,
-           ledger_head_sha256=None, now_unix=None):
+           ledger_head_sha256=None, now_unix=None, completed_setup=None,
+           setup_events=None, run_root=None):
     """Return blocking reasons for one exact candidate/stage and live snapshot.
 
     File records are rehashed at this boundary. ``approval`` is a separate
@@ -259,6 +260,18 @@ def review(proposal, *, config, commercial, assets, runtime, live,
           live.get('ledger_head_sha256') == ledger_head_sha256,
           'fresh ledger-bound live-state snapshot required')
     allocation = proposal.get('allocation', {})
+    if completed_setup is not None:
+        from .depth_map_allowance import remaining_map_allocation
+        try:
+            stage = remaining_map_allocation(proposal, completed_setup, setup_events, run_root, assets)
+            check(qualification.get('setup') == completed_setup,
+                  'qualified runtime must bind credited completed setup')
+            check(all(live.get('used', {}).get(key, -1) >= stage['credited_assets_bytes']
+                      for key in ('download_bytes', 'artifact_bytes')),
+                  'setup asset credit is absent from live used totals')
+            allocation = stage['allocation']
+        except (KeyError, TypeError, ValueError, OSError) as error:
+            blockers.append('completed setup map allowance invalid: ' + str(error))
     for key, config_key in LIMIT_KEYS.items():
         amount = allocation.get(key)
         used = live.get('used', {}).get(key)

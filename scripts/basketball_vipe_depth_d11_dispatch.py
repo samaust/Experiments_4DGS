@@ -137,7 +137,8 @@ def dispatch(context, qualification, setup, *, source_review_path, run_id='plan0
         assets=assets, runtime=runtime, live=live,
         source_review=source_review, approval=grant,
         cap_amendment=do['cap_amendment'], cap_approval=do['cap_approval'],
-        ledger_head_sha256=live['ledger_head_sha256'])
+        ledger_head_sha256=live['ledger_head_sha256'],
+        completed_setup=setup_record, setup_events=ledger.events(), run_root=local)
     if blockers:
         raise ValueError('D11 admission failed: ' + '; '.join(blockers))
     # Evidence hashing can outlast the live snapshot window. The locked
@@ -147,7 +148,7 @@ def dispatch(context, qualification, setup, *, source_review_path, run_id='plan0
         candidate='D11', proposal_sha256=object_hash(proposal), review=review,
         authorization=approved, source_review=source_review,
         qualification=qualification_record, commercial=commercial,
-        assets=assets, runtime=runtime, live=live)
+        assets=assets, runtime=runtime, live=live, completed_setup=setup_record)
     write_json(admission_path, admission)
     admission_record = file_record(admission_path)
     request = dict(schema='plan069-D11-maps-request/v1', record_kind='actual',
