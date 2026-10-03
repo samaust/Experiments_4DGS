@@ -45,6 +45,21 @@ class _Snapshot:
         return totals
 
 
+
+def required_sources():
+    """Return the fixed current admission/native control source closure."""
+    names = ('final_render_admission.py','ledger.py','files.py','extended_final_render_contract.py',
+        'final_render_contract.py','final_render_inventory.py','final_render_loaders.py',
+        'final_render_matcher.py','final_render_geometry.py','final_render_initializer.py',
+        'final_render_native.py','final_render_adapter.py','final_render_actual_result.py',
+        'final_render_actual_worker.py','final_render_actual_dispatch.py','final_render_actual_control.py',
+        'final_render_actual_supervisor.py','final_render_workers.py','supervisor.py','config.py',
+        'depth_review.py','s1_validation_contract.py')
+    required = [file_record(Path(__file__).with_name(name)) for name in names]
+    required.extend(file_record(Path(__file__).resolve().parents[1]/name) for name in
+        ('final-render-actual-worker.py','final-render-actual-control.py'))
+    return required
+
 def _actual_evidence(envelope, request, events):
     fields = {'schema','record_kind','mode','request','approval','qualification','commercial',
         'source_review','commands','interpreter','checkout','source_files','ledger_head_sha256','matcher_runtime'}
@@ -65,14 +80,7 @@ def _actual_evidence(envelope, request, events):
             all(type(arg) is str and arg for arg in argv) and argv[0] == envelope['interpreter']['path']
             for argv in commands.values()), 'all exact approved native commands required')
     sources = envelope['source_files']
-    names = ('final_render_admission.py','ledger.py','files.py','extended_final_render_contract.py',
-        'final_render_contract.py','final_render_inventory.py','final_render_loaders.py',
-        'final_render_matcher.py','final_render_geometry.py','final_render_initializer.py',
-        'final_render_native.py','final_render_adapter.py','final_render_actual_result.py',
-        'final_render_actual_worker.py','final_render_actual_dispatch.py','final_render_actual_control.py',
-        'final_render_actual_supervisor.py','final_render_workers.py')
-    required = [file_record(Path(__file__).with_name(name)) for name in names]
-    required.append(file_record(Path(__file__).resolve().parents[1]/'final-render-actual-worker.py'))
+    required = required_sources()
     _require(type(sources) is list and all(record in sources for record in required),
         'complete current native control/admission source closure required')
     from .final_render_matcher import validate_inventory as validate_matcher_inventory
