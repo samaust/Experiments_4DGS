@@ -7,13 +7,13 @@ import copy
 import math
 
 from .files import file_record, object_hash, read_json, verify_record
+from .depth_review import METRIC_CANDIDATES
 from .final_render_contract import (
     BLOCKERS, COMPOSITIONS, KEYFRAMES, PHASES, PRESET_SOURCE, TRAINING_CAMERAS,
     ReviewAdmission, allocation_specs, initializer_arrays_hash, normalization_matrix,
 )
 
 SCHEMA = 'plan069-final-render-request/v1'
-METRIC_CANDIDATES = ('D2', 'D5', 'D6', 'D7', 'D8', 'D10')
 
 
 def _require(condition, message):
