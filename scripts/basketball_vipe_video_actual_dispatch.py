@@ -42,6 +42,10 @@ def dispatch(candidate, admission_path, context_path,
             len(source.get('rows', [])) != 4500 or
             {(row['camera'], row['frame']) for row in source['rows']} != expected):
         raise ValueError('exact passing admission and complete video context required')
+    qualification = accepted.get('qualification', accepted.get('runtime', {}).get('receipt'))
+    if not isinstance(qualification, dict):
+        raise ValueError('video admission must bind exact runtime qualification')
+    verify_record(qualification)
     setup_id = f'plan069-{candidate}-setup-001'
     setup_path = local / 'jobs' / setup_id / 'result.json'
     setup = file_record(setup_path)
@@ -58,9 +62,10 @@ def dispatch(candidate, admission_path, context_path,
     if snapshot['gpu_pids']:
         raise ValueError('single GPU already owned')
     request = dict(schema='plan069-video-depth-request/v1', record_kind='actual',
-        id=job_id, job_id=job_id, component=candidate,
+        id=job_id, job_id=job_id, component=candidate, candidate=candidate,
         ledger_path=str(ledger.path), admission=admission, setup=setup,
-        review=review, authorization=authorization, context=context,
+        review=review, authorization=authorization, source_review=source_review,
+        qualification=qualification, context=context,
         configuration=file_record(ROOT / 'configs/vipe-alternatives/benchmark-v1.json'),
         extension_configuration=file_record(CONFIG), cameras=cameras,
         max_seconds=proposal['allocation']['gpu_seconds'])
@@ -73,11 +78,14 @@ def dispatch(candidate, admission_path, context_path,
             raise ValueError('D10 qualitative admission binding changed')
         request['qualitative_admission'] = qualitative
     write_json(request_path, request)
-    ledger.authorize_depth_attempt(candidate, review, authorization,
-                                   source_review, admission)
     worker = ROOT / 'scripts/basketball_vipe_video_actual.py'
     command = [sys.executable, str(worker), '--request', str(request_path),
                '--output', str(output)]
+    request_record, worker_record = file_record(request_path), file_record(worker)
+    executable_record = file_record(sys.executable)
+    ledger.authorize_depth_attempt(candidate, review, authorization,
+        source_review, admission, command=command, request=request_record,
+        worker=worker_record, executable=executable_record)
     def validate(out):
         result = read_json(verify_record(file_record(out / 'result.json'))['path'])
         if (result.get('schema') != 'plan069-video-depth-result/v1' or
@@ -90,9 +98,10 @@ def dispatch(candidate, admission_path, context_path,
                 len(result.get('sequences', [])) != 60):
             raise ValueError('actual video result lacks all anchors or contexts')
     return supervise(ledger, job_id, command, output,
-        evidence=dict(request=file_record(request_path), admission=admission,
+        evidence=dict(request=request_record, admission=admission,
                       setup=setup, review=review, authorization=authorization,
-                      source_review=source_review, worker=file_record(worker)),
+                      source_review=source_review, qualification=qualification,
+                      worker=worker_record, executable=executable_record),
         sample_resources=lambda: resources(local, gpu=True),
         validate_result=validate, poll_seconds=2.)
 

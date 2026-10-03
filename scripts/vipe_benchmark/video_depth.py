@@ -155,6 +155,7 @@ def admitted_video_request(request, output, config, *, ledger, request_path):
     if (request.get('schema') != 'plan069-video-depth-request/v1' or
             request.get('record_kind') != 'actual' or
             request.get('component') not in ('D9', 'D10') or
+            request.get('candidate') != request.get('component') or
             request.get('id') != f"plan069-{request.get('component')}-maps-001" or
             request.get('job_id') != request.get('id')):
         raise ValueError('actual D9/D10 video request required')
@@ -163,6 +164,13 @@ def admitted_video_request(request, output, config, *, ledger, request_path):
         raise ValueError('actual video ledger/configuration binding changed')
     state = ledger.states().get(request['id'], {})
     admission = read_json(verify_record(request['admission'])['path'])
+    qualification = admission.get('qualification', admission.get('runtime', {}).get('receipt'))
+    if (request.get('source_review') != admission.get('source_review') or
+            not isinstance(qualification, dict) or
+            request.get('qualification') != qualification):
+        raise ValueError('video source review or qualification binding changed')
+    verify_record(request['source_review'])
+    verify_record(qualification)
     if (state.get('event') != 'reserve' or state.get('resource') != 'gpu' or
             state.get('evidence', {}).get('admission') != request['admission'] or
             request.get('max_seconds', 10**30) > state.get('seconds', 0) or
