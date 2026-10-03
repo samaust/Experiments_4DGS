@@ -11,7 +11,7 @@ import basketball_vipe_video_actual_dispatch as dispatcher
 from vipe_benchmark.config import load, training_cameras
 from vipe_benchmark.files import file_record, read_json, write_json
 from vipe_benchmark.ledger import Ledger
-from vipe_benchmark.video_depth import admitted_video_request
+from vipe_benchmark.video_depth import admitted_video_request, validate_runtime_interpreter
 
 
 class VideoDispatchBindingTests(unittest.TestCase):
@@ -30,9 +30,12 @@ class VideoDispatchBindingTests(unittest.TestCase):
         write_json(self.review_path, dict(proposals=[dict(candidate=candidate,
             allocation=dict(gpu_seconds=12000)) for candidate in ('D9', 'D10')]))
         self.approval = self.root / 'approval.json'
-        write_json(self.approval, dict(review=file_record(self.review_path)))
+        write_json(self.approval, dict(review=file_record(self.review_path),
+            candidate_approvals=[dict(candidate=candidate) for candidate in ('D9', 'D10')],
+            cap_amendment=file_record(self.review_path), cap_approval=dict(status='approved')))
         self.qualification = self.root / 'qualification.json'
-        write_json(self.qualification, dict(status='passed'))
+        write_json(self.qualification, dict(status='passed',
+            python_executable=str(Path(sys.executable).absolute())))
         self.context = self.root / 'context.json'
         write_json(self.context, dict(schema='plan069-depth-context/v1',
             rows=[dict(camera=camera, frame=frame)
@@ -47,16 +50,32 @@ class VideoDispatchBindingTests(unittest.TestCase):
         source_review.parent.mkdir(parents=True, exist_ok=True)
         write_json(source_review, dict(status='passed'))
         admission = self.root / 'admission.json'
+        proposal = next(row for row in read_json(self.review_path)['proposals']
+                        if row['candidate'] == candidate)
         write_json(admission, dict(schema='plan069-depth-admission-result/v1',
             status='passed', candidate=candidate, source_review=file_record(source_review),
+            review=file_record(self.review_path), authorization=file_record(self.approval),
+            proposal_sha256=dispatcher.object_hash(proposal), commercial={}, assets=[],
+            live=dict(sampled_unix=1000., ledger_head_sha256='0' * 64),
             runtime=dict(receipt=file_record(self.qualification))))
+        original_admission = file_record(admission)
         setup = self.local / 'jobs' / f'plan069-{candidate}-setup-001' / 'result.json'
         setup.parent.mkdir(parents=True)
         write_json(setup, dict(status='complete'))
         ledger = Mock(path=self.local / 'ledger.jsonl')
         ledger.states.return_value = {f'plan069-{candidate}-setup-001': dict(
             event='finish', status='complete', result=file_record(setup))}
+        ledger.events.return_value = []
+        ledger.totals.return_value = {resource: dict(elapsed_seconds=0, reserved_seconds=0)
+                                     for resource in ('gpu', 'cpu', 'setup')}
         captured = {}
+        clock = [2000.]
+
+        def review_evidence(*args, **kwargs):
+            self.assertEqual(kwargs['now_unix'], 1000.)
+            self.assertEqual(kwargs['live']['sampled_unix'], 1000.)
+            clock[0] += 10.  # Rehashing old qualification outlasts the live window.
+            return []
 
         def authorize(candidate, review, authorization, source_review, admission, *,
                       command, request, worker, executable):
@@ -65,6 +84,12 @@ class VideoDispatchBindingTests(unittest.TestCase):
             self.assertEqual(saved['component'], candidate)
             self.assertEqual(saved['source_review'], source_review)
             self.assertEqual(saved['qualification'], file_record(self.qualification))
+            refreshed = read_json(admission['path'])
+            self.assertEqual(refreshed['input_admission'], original_admission)
+            self.assertEqual(refreshed['live']['sampled_unix'], 2010.)
+            self.assertEqual(file_record(original_admission['path']), original_admission)
+            clock[0] += 2.9  # The locked allocator rechecks the complete evidence.
+            self.assertLessEqual(clock[0] - refreshed['live']['sampled_unix'], 5.)
             self.assertEqual(executable, file_record(sys.executable))
             self.assertEqual(worker, file_record(self.worker))
             self.assertEqual(command, [sys.executable, str(self.worker), '--request',
@@ -91,7 +116,10 @@ class VideoDispatchBindingTests(unittest.TestCase):
              patch.object(dispatcher, 'DO', self.approval), \
              patch.object(dispatcher, 'shared_run_root', return_value=self.root), \
              patch.object(dispatcher, 'Ledger', return_value=ledger), \
-             patch.object(dispatcher, 'resources', return_value=dict(gpu_pids=[])), \
+             patch.object(dispatcher, 'resources', return_value=dict(gpu_pids=[],
+                 download_bytes=0, artifact_bytes=0, device_bytes=0)), \
+             patch.object(dispatcher, 'admit', side_effect=review_evidence), \
+             patch.object(dispatcher.time, 'time', side_effect=lambda: clock[0]), \
              patch.object(dispatcher, 'supervise', side_effect=supervise), \
              patch.object(Path, 'read_text', read_text):
             result = dispatcher.dispatch(candidate, admission, self.context)
@@ -103,6 +131,12 @@ class VideoDispatchBindingTests(unittest.TestCase):
 
     def test_d10_authorization_and_supervision_share_exact_bindings(self):
         self.run_dispatch('D10')
+
+    def test_qualified_environment_invocation_path_must_match(self):
+        runtime = dict(receipt=file_record(self.qualification))
+        validate_runtime_interpreter(runtime, sys.executable)
+        with self.assertRaisesRegex(ValueError, 'interpreter differs'):
+            validate_runtime_interpreter(runtime, self.root / 'another-env/bin/python')
 
     def test_worker_rechecks_admission_qualification_and_source_bindings(self):
         job = 'plan069-D9-maps-001'

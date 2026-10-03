@@ -149,9 +149,17 @@ def run_video_actual(request, output, config, *, backend, ledger, request_path):
                       record_kind='actual')
 
 
+def validate_runtime_interpreter(runtime, executable):
+    """Keep the qualified virtual environment path, including its invocation spelling."""
+    qualification = read_json(verify_record(runtime['receipt'])['path'])
+    if qualification.get('python_executable') != str(Path(executable).absolute()):
+        raise ValueError('video qualified virtual environment interpreter differs')
+
+
 def admitted_video_request(request, output, config, *, ledger, request_path):
     """Recheck the exact live reservation before importing model code or CUDA."""
     from .depth_setup import _active_reservation
+    import sys
     if (request.get('schema') != 'plan069-video-depth-request/v1' or
             request.get('record_kind') != 'actual' or
             request.get('component') not in ('D9', 'D10') or
@@ -171,6 +179,7 @@ def admitted_video_request(request, output, config, *, ledger, request_path):
         raise ValueError('video source review or qualification binding changed')
     verify_record(request['source_review'])
     verify_record(qualification)
+    validate_runtime_interpreter(admission['runtime'], sys.executable)
     if (state.get('event') != 'reserve' or state.get('resource') != 'gpu' or
             state.get('evidence', {}).get('admission') != request['admission'] or
             request.get('max_seconds', 10**30) > state.get('seconds', 0) or
