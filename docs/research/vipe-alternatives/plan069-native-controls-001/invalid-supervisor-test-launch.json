@@ -1,0 +1,9 @@
+{
+  "status": "invalid-test-launch",
+  "command": "env PYTHONPATH=scripts:tests CUDA_VISIBLE_DEVICES=empty explicit-venv-python -m unittest test_vipe_benchmark_final_render_dispatch test_vipe_benchmark_supervisor",
+  "returncode": 1,
+  "summary": "117 tests;19 failures,296 subtest/error entries",
+  "cause": "Missing VIPE_CPU_VALIDATION=1 and S1_VALIDATION_RUN_DIRECTORY; fixture helper operations rejected and scenario persistence failed.",
+  "interpretation": "No passing qualification claimed; not evidence of a source regression. Eight dispatch checks passed.",
+  "correction": "Use full CPU fixture environment and fresh precreated output; target SupervisorTests defaults, then required full suite once."
+}
