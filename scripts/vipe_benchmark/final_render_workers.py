@@ -1,7 +1,7 @@
-"""Bounded CPU fixture workers over the prospective native runtime boundary.
+"""Bounded fixture and guarded actual training/render worker controls.
 
-Actual jobs require a future qualified DO dispatcher. These entrypoints never
-instantiate a native runtime, reserve a ledger identity or admit actual requests.
+Actual paths require registered DO admission and the fixed native runtime class.
+Only the separate child entry constructs native factories; no ledger is mutated.
 """
 import math
 import time
@@ -31,20 +31,32 @@ def _bound(record):
     return read_json(record['path'])
 
 
-def _prepare(request, arm, parent, initializer, runtime, phase):
-    _require(request.get('record_kind') == getattr(runtime,'record_kind',None) == 'fixture',
-        'fixture-only worker; actual DO adapter is unqualified')
+def _prepare(request, arm, parent, initializer, runtime, phase, invocation_record=None, output=None):
+    actual = request.get('record_kind') == 'actual'
+    if actual:
+        _require(invocation_record is not None, 'actual worker requires bound invocation')
+        from .final_render_admission import worker_binding
+        from .final_render_native import NativeFreeTimeRuntime
+        binding = worker_binding(invocation_record,request,arm,phase)
+        _require(type(runtime) is NativeFreeTimeRuntime and
+            binding['invocation'].get('parent_result') == parent and
+            binding['invocation'].get('initializer') == initializer and
+            binding['invocation'].get('output') == str(safe_path(output).resolve()),
+            'fixed actual native runtime and invocation inputs required')
+    else:
+        _require(invocation_record is None and request.get('record_kind') == getattr(runtime,'record_kind',None) == 'fixture',
+            'fixture-only worker; actual DO adapter is unqualified')
     _require(runtime.is_fresh is True, 'fresh runtime instance required')
     request = parse_request(request)
     validate_scene_bindings(request)
     preceding = 'initializer' if phase == 'train' else 'train'
-    previous = validate_worker_result(request, arm, preceding, _bound(parent))
+    previous = _validate_result(request, arm, preceding, _bound(parent))
     _require(previous['status'] == 'complete', 'complete predecessor required')
     if phase == 'render':
         _require('terminal_publication' in previous, 'published training completion required')
     bundle = _bound(initializer)
     _require(bundle.get('schema') == 'plan069-final-render-prepared-initializer/v1' and
-        bundle.get('record_kind') == 'fixture' and bundle.get('arm') == arm and
+        bundle.get('record_kind') == request['record_kind'] and bundle.get('arm') == arm and
         bundle.get('request_sha256') == object_hash(request) and
         bundle.get('execution_authorized') is False and bundle.get('native_adapter_qualified') is False,
         'bound same-arm initializer bundle required')
@@ -55,16 +67,25 @@ def _prepare(request, arm, parent, initializer, runtime, phase):
     with np.load(safe_path(bundle['archive']['path']), allow_pickle=False) as archive:
         arrays = {name:archive[name].copy() for name in archive.files}
     data, receipt = prepare_model_input(request, arm, bundle['initializer_receipt'], arrays)
-    provenance = dict(schema='plan069-final-render-checkpoint-provenance/v1',record_kind='fixture',
+    provenance = dict(schema='plan069-final-render-checkpoint-provenance/v1',record_kind=request['record_kind'],
         request_sha256=object_hash(request),arm=arm,composition=request['compositions'][arm],
         initializer=initializer,native_input_sha256=object_hash(receipt),seed=0,
         bindings=request['bindings'],normalization=request['initializer_contract']['normalization'])
     return request, previous, data, receipt, provenance
 
 
+def _validate_result(request, arm, phase, result, *, published=True):
+    if request['record_kind'] == 'actual':
+        from .final_render_actual_result import validate_actual_worker_result
+        return validate_actual_worker_result(request,arm,phase,result,published=published)
+    return validate_worker_result(request,arm,phase,result)
+
+
 class _Budget:
-    def __init__(self, request, phase, output, clock, start):
+    def __init__(self, request, phase, output, clock, start, invocation_record=None):
         self.request, self.phase, self.output, self.clock = request, phase, output, clock
+        self.invocation_record = invocation_record
+        self.actual = request['record_kind'] == 'actual'
         _require(type(start) in (float,int) and math.isfinite(start), 'finite monotonic clock required')
         self.start = self.last = start
         self.usage = dict(peak_device_bytes=0,cpu_workers_used=0)
@@ -95,12 +116,14 @@ class _Budget:
 
     def failure(self, arm, error):
         receipt = dict(schema='plan069-final-render-worker-failure/v1',
-            record_kind='fixture',status='failed',arm=arm,phase=self.phase,
+            record_kind=self.request['record_kind'],status='failed',arm=arm,phase=self.phase,
             request_sha256=object_hash(self.request),reason=type(error).__name__+': '+str(error),
             completed_iterations=self.completed_iterations,rendered_frames=self.rendered_frames,
             cleanup_confirmed=self.cleanup_confirmed,elapsed_seconds=self.last-self.start,
             artifacts=self.artifacts(),resource_usage=self.usage,
-            execution_authorized=False,native_adapter_qualified=False)
+            execution_authorized=self.actual,native_adapter_qualified=self.actual)
+        if self.actual:
+            receipt['invocation'] = self.invocation_record
         error.worker_failure = receipt
         current = sum(path.stat().st_size for path in self.output.rglob('*') if path.is_file())
         size = len((json.dumps(receipt,indent=2,allow_nan=False)+'\n').encode())
@@ -140,18 +163,22 @@ def _publish(request, arm, parent, budget, extra, *, proofs=()):
     try:
         budget.check(0.)
         artifacts = budget.artifacts()
-        checkpoint = extra['checkpoint']
-        _require(verify_record(checkpoint) == checkpoint, 'checkpoint changed during cleanup/publication')
+        checkpoint = extra.get('checkpoint')
+        if checkpoint is not None:
+            _require(verify_record(checkpoint) == checkpoint, 'checkpoint changed during cleanup/publication')
         for record in proofs:
             _require(verify_record(record) == record, 'restoration proof changed during cleanup/publication')
-        result = dict(schema='plan069-final-render-worker-result/v1',record_kind='fixture',status='complete',
+        result = dict(schema='plan069-final-render-actual-worker-result/v1' if budget.actual else 'plan069-final-render-worker-result/v1',
+            record_kind=request['record_kind'],status='complete',
             arm=arm,phase=budget.phase,composition=request['compositions'][arm],request_sha256=object_hash(request),
             allocation_id=request['id']+'/'+arm+'/'+budget.phase,parent_result=parent,
             elapsed_seconds=budget.last-budget.start,peak_device_bytes=budget.usage['peak_device_bytes'],
             artifact_bytes=sum(r['bytes'] for r in artifacts)+_RESULT_RESERVE,
-            cpu_workers_used=budget.usage['cpu_workers_used'],execution_authorized=False,
-            native_adapter_qualified=False,artifacts=artifacts,**extra)
-        validate_worker_result(request,arm,budget.phase,result)
+            cpu_workers_used=budget.usage['cpu_workers_used'],execution_authorized=budget.actual,
+            native_adapter_qualified=budget.actual,artifacts=artifacts,**extra)
+        if budget.actual:
+            result['invocation'] = budget.invocation_record
+        _validate_result(request,arm,budget.phase,result,published=False)
         budget.check(1.)
         result['elapsed_seconds'] = budget.last-budget.start
         result['terminal_publication'] = str(budget.output/'completion.json')
@@ -162,10 +189,13 @@ def _publish(request, arm, parent, budget, extra, *, proofs=()):
         write_json(path,result)
         published = file_record(path)
         budget.check(1.)
-        completion = dict(schema='plan069-final-render-worker-completion/v1',record_kind='fixture',status='complete',
+        completion = dict(schema='plan069-final-render-actual-worker-completion/v1' if budget.actual else 'plan069-final-render-worker-completion/v1',
+            record_kind=request['record_kind'],status='complete',
             arm=arm,phase=budget.phase,request_sha256=object_hash(request),result=published,
             elapsed_seconds=budget.last-budget.start,cleanup_confirmed=budget.cleanup_confirmed,
-            artifact_bytes=result['artifact_bytes'],execution_authorized=False,native_adapter_qualified=False)
+            artifact_bytes=result['artifact_bytes'],execution_authorized=budget.actual,native_adapter_qualified=budget.actual)
+        if budget.actual:
+            completion['invocation'] = budget.invocation_record
         completion_size = len((json.dumps(completion,indent=2,allow_nan=False)+'\n').encode())
         _require(result_size+completion_size <= _RESULT_RESERVE, 'completion storage reserve exceeded')
         write_json(budget.output/'completion.json',completion)
@@ -176,13 +206,15 @@ def _publish(request, arm, parent, budget, extra, *, proofs=()):
         raise
 
 
-def train(request, arm, parent, initializer, output, runtime, *, clock=time.monotonic):
+def train(request, arm, parent, initializer, output, runtime, *, clock=time.monotonic, invocation_record=None):
     """Exercise sequential native updates and immutable checkpoint publication."""
+    _require(request.get('record_kind') != 'actual' or clock is time.monotonic,
+        'actual worker requires native monotonic clock')
     start = clock()
-    request, _, data, receipt, provenance = _prepare(request,arm,parent,initializer,runtime,'train')
+    request, _, data, receipt, provenance = _prepare(request,arm,parent,initializer,runtime,'train',invocation_record,output)
     output = safe_path(output).resolve()
     output.mkdir(parents=True,exist_ok=False)
-    budget = _Budget(request,'train',output,clock,start)
+    budget = _Budget(request,'train',output,clock,start,invocation_record)
     with _managed_runtime(runtime,budget,arm):
         budget.check(150.)
         budget.resources(runtime)
@@ -207,16 +239,18 @@ def train(request, arm, parent, initializer, output, runtime, *, clock=time.mono
     return _publish(request,arm,parent,budget,dict(completed_iterations=5000,checkpoint=artifact))
 
 
-def render(request, arm, parent, initializer, output, runtime, *, clock=time.monotonic):
+def render(request, arm, parent, initializer, output, runtime, *, clock=time.monotonic, invocation_record=None):
     """Reload a complete fake endpoint and publish all matched held-out PNGs."""
     from PIL import Image
+    _require(request.get('record_kind') != 'actual' or clock is time.monotonic,
+        'actual worker requires native monotonic clock')
     start = clock()
-    request, previous, data, receipt, provenance = _prepare(request,arm,parent,initializer,runtime,'render')
+    request, previous, data, receipt, provenance = _prepare(request,arm,parent,initializer,runtime,'render',invocation_record,output)
     checkpoint = previous['checkpoint']
     _require(verify_record(checkpoint) == checkpoint, 'consumed checkpoint bytes changed')
     output = safe_path(output).resolve()
     output.mkdir(parents=True,exist_ok=False)
-    budget = _Budget(request,'render',output,clock,start)
+    budget = _Budget(request,'render',output,clock,start,invocation_record)
     frames = []
     with _managed_runtime(runtime,budget,arm):
         budget.check(150.)
@@ -235,8 +269,11 @@ def render(request, arm, parent, initializer, output, runtime, *, clock=time.mon
         budget.completed_iterations = 5000
         _require(verify_record(checkpoint) == checkpoint, 'consumed checkpoint changed during reload')
         reload_path = output/'reload-validation.json'
-        write_json(reload_path,dict(schema='plan069-final-render-fixture-reload/v1',record_kind='fixture',
-            status='passed',checkpoint=checkpoint,iteration=5000,request_sha256=object_hash(request),arm=arm))
+        reload_receipt = dict(schema='plan069-final-render-actual-reload/v1' if budget.actual else 'plan069-final-render-fixture-reload/v1',
+            record_kind=request['record_kind'],status='passed',checkpoint=checkpoint,iteration=5000,request_sha256=object_hash(request),arm=arm)
+        if budget.actual:
+            reload_receipt.update(restored_state_equal=True,restored_checkpoint=restored_record)
+        write_json(reload_path,reload_receipt)
         reload_record = file_record(reload_path)
         for camera in request['render']['cameras']:
             for frame in request['render']['frames']:
