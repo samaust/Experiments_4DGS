@@ -40,6 +40,8 @@ def _prepare(request, arm, parent, initializer, runtime, phase):
     preceding = 'initializer' if phase == 'train' else 'train'
     previous = validate_worker_result(request, arm, preceding, _bound(parent))
     _require(previous['status'] == 'complete', 'complete predecessor required')
+    if phase == 'render':
+        _require('terminal_publication' in previous, 'published training completion required')
     bundle = _bound(initializer)
     _require(bundle.get('schema') == 'plan069-final-render-prepared-initializer/v1' and
         bundle.get('record_kind') == 'fixture' and bundle.get('arm') == arm and
@@ -133,6 +135,47 @@ def _managed_runtime(runtime, budget, arm):
         raise failure
 
 
+def _publish(request, arm, parent, budget, extra, *, proofs=()):
+    """Finish validation/publication under the same failure and clock checks."""
+    try:
+        budget.check(0.)
+        artifacts = budget.artifacts()
+        checkpoint = extra['checkpoint']
+        _require(verify_record(checkpoint) == checkpoint, 'checkpoint changed during cleanup/publication')
+        for record in proofs:
+            _require(verify_record(record) == record, 'restoration proof changed during cleanup/publication')
+        result = dict(schema='plan069-final-render-worker-result/v1',record_kind='fixture',status='complete',
+            arm=arm,phase=budget.phase,composition=request['compositions'][arm],request_sha256=object_hash(request),
+            allocation_id=request['id']+'/'+arm+'/'+budget.phase,parent_result=parent,
+            elapsed_seconds=budget.last-budget.start,peak_device_bytes=budget.usage['peak_device_bytes'],
+            artifact_bytes=sum(r['bytes'] for r in artifacts)+_RESULT_RESERVE,
+            cpu_workers_used=budget.usage['cpu_workers_used'],execution_authorized=False,
+            native_adapter_qualified=False,artifacts=artifacts,**extra)
+        validate_worker_result(request,arm,budget.phase,result)
+        budget.check(1.)
+        result['elapsed_seconds'] = budget.last-budget.start
+        result['terminal_publication'] = str(budget.output/'completion.json')
+        result_size = len((json.dumps(result,indent=2,allow_nan=False)+'\n').encode())
+        _require(result_size+4096 <= _RESULT_RESERVE and result['artifact_bytes'] <= request['artifact_bytes_limit'],
+            'terminal result storage reserve exceeded')
+        path = budget.output/'result.json'
+        write_json(path,result)
+        published = file_record(path)
+        budget.check(1.)
+        completion = dict(schema='plan069-final-render-worker-completion/v1',record_kind='fixture',status='complete',
+            arm=arm,phase=budget.phase,request_sha256=object_hash(request),result=published,
+            elapsed_seconds=budget.last-budget.start,cleanup_confirmed=budget.cleanup_confirmed,
+            artifact_bytes=result['artifact_bytes'],execution_authorized=False,native_adapter_qualified=False)
+        completion_size = len((json.dumps(completion,indent=2,allow_nan=False)+'\n').encode())
+        _require(result_size+completion_size <= _RESULT_RESERVE, 'completion storage reserve exceeded')
+        write_json(budget.output/'completion.json',completion)
+        budget.check(0.)
+        return result
+    except BaseException as error:
+        budget.failure(arm,error)
+        raise
+
+
 def train(request, arm, parent, initializer, output, runtime, *, clock=time.monotonic):
     """Exercise sequential native updates and immutable checkpoint publication."""
     start = clock()
@@ -159,21 +202,9 @@ def train(request, arm, parent, initializer, output, runtime, *, clock=time.mono
         _require(type(metadata.get('iteration')) is int and
             metadata == dict(iteration=5000,provenance=provenance),
             'checkpoint endpoint/provenance differs')
+        artifact = file_record(checkpoint)
         budget.resources(runtime)
-        usage = budget.usage
-    artifact = file_record(checkpoint)
-    artifacts = budget.artifacts()
-    result = dict(schema='plan069-final-render-worker-result/v1',record_kind='fixture',status='complete',
-        arm=arm,phase='train',composition=request['compositions'][arm],request_sha256=object_hash(request),
-        allocation_id=request['id']+'/'+arm+'/train',parent_result=parent,elapsed_seconds=budget.last-start,
-        peak_device_bytes=usage['peak_device_bytes'],artifact_bytes=sum(r['bytes'] for r in artifacts)+_RESULT_RESERVE,
-        cpu_workers_used=usage['cpu_workers_used'],execution_authorized=False,native_adapter_qualified=False,
-        artifacts=artifacts,completed_iterations=5000,checkpoint=artifact)
-    validate_worker_result(request,arm,'train',result)
-    _require(len((json.dumps(result,indent=2,allow_nan=False)+'\n').encode()) <= _RESULT_RESERVE,
-        'terminal result storage reserve exceeded')
-    write_json(output/'result.json',result)
-    return result
+    return _publish(request,arm,parent,budget,dict(completed_iterations=5000,checkpoint=artifact))
 
 
 def render(request, arm, parent, initializer, output, runtime, *, clock=time.monotonic):
@@ -206,6 +237,7 @@ def render(request, arm, parent, initializer, output, runtime, *, clock=time.mon
         reload_path = output/'reload-validation.json'
         write_json(reload_path,dict(schema='plan069-final-render-fixture-reload/v1',record_kind='fixture',
             status='passed',checkpoint=checkpoint,iteration=5000,request_sha256=object_hash(request),arm=arm))
+        reload_record = file_record(reload_path)
         for camera in request['render']['cameras']:
             for frame in request['render']['frames']:
                 budget.check(30.)
@@ -221,16 +253,5 @@ def render(request, arm, parent, initializer, output, runtime, *, clock=time.mon
                 frames.append(dict(camera=camera,frame=frame,rgb=file_record(path)))
                 budget.rendered_frames = len(frames)
         budget.resources(runtime)
-    artifacts = budget.artifacts()
-    result = dict(schema='plan069-final-render-worker-result/v1',record_kind='fixture',status='complete',
-        arm=arm,phase='render',composition=request['compositions'][arm],request_sha256=object_hash(request),
-        allocation_id=request['id']+'/'+arm+'/render',parent_result=parent,elapsed_seconds=budget.last-start,
-        peak_device_bytes=budget.usage['peak_device_bytes'],artifact_bytes=sum(r['bytes'] for r in artifacts)+_RESULT_RESERVE,
-        cpu_workers_used=budget.usage['cpu_workers_used'],execution_authorized=False,native_adapter_qualified=False,
-        artifacts=artifacts,checkpoint=checkpoint,reload_validation=file_record(reload_path),iteration=5000,
-        render_settings=request['render'],rendered_frames=frames)
-    validate_worker_result(request,arm,'render',result)
-    _require(len((json.dumps(result,indent=2,allow_nan=False)+'\n').encode()) <= _RESULT_RESERVE,
-        'terminal result storage reserve exceeded')
-    write_json(output/'result.json',result)
-    return result
+    return _publish(request,arm,parent,budget,dict(checkpoint=checkpoint,reload_validation=reload_record,
+        iteration=5000,render_settings=request['render'],rendered_frames=frames),proofs=(restored_record,reload_record))

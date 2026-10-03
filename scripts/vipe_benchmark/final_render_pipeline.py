@@ -7,7 +7,7 @@ import copy
 import math
 
 from .extended_final_render_contract import parse_request
-from .files import object_hash, read_json, verify_record
+from .files import object_hash, read_json, verify_record, safe_path
 from .final_render_contract import PHASES
 
 
@@ -20,6 +20,29 @@ def _bound(record):
     _require(type(record) is dict and set(record) == {'path', 'sha256', 'bytes'} and
         verify_record(record) == record, 'exact immutable worker artifact required')
     return read_json(record['path'])
+
+
+def _validate_publication(request, arm, phase, result):
+    if 'terminal_publication' not in result:
+        return  # Historical synthetic fixture records predate worker publication.
+    path = safe_path(result['terminal_publication'])
+    _require(path.name == 'completion.json' and not (path.parent/'failure.json').exists(),
+        'worker terminal publication failed')
+    completion = read_json(path)
+    elapsed = completion.get('elapsed_seconds')
+    _require(completion.get('schema') == 'plan069-final-render-worker-completion/v1' and
+        completion.get('record_kind') == 'fixture' and completion.get('status') == 'complete' and
+        completion.get('arm') == arm and completion.get('phase') == phase and
+        completion.get('request_sha256') == object_hash(request) and
+        completion.get('cleanup_confirmed') is True and completion.get('execution_authorized') is False and
+        completion.get('native_adapter_qualified') is False and
+        type(elapsed) in (float,int) and math.isfinite(elapsed) and
+        result['elapsed_seconds'] <= elapsed < PHASES[phase][1] and
+        completion.get('artifact_bytes') == result['artifact_bytes'],
+        'bound successful worker publication completion required')
+    published = completion.get('result')
+    _require(published.get('path') == str(path.parent/'result.json') and _bound(published) == result,
+        'completion must bind the exact published result')
 
 
 def validate_worker_result(request, arm, phase, result):
@@ -44,7 +67,10 @@ def validate_worker_result(request, arm, phase, result):
         fields.update(('completed_iterations', 'checkpoint'))
     elif phase == 'render':
         fields.update(('checkpoint', 'reload_validation', 'iteration', 'render_settings', 'rendered_frames'))
+    if 'terminal_publication' in result:
+        fields.add('terminal_publication')
     _require(set(result) == fields, 'exact worker result fields required')
+    _validate_publication(request,arm,phase,result)
     elapsed = result.get('elapsed_seconds')
     _require(type(elapsed) in (int, float) and math.isfinite(elapsed) and
         0 <= elapsed <= PHASES[phase][1], 'worker exceeded finite phase deadline')
@@ -67,6 +93,7 @@ def validate_worker_result(request, arm, phase, result):
         _require(parent is None, 'geometry cannot consume a previous phase')
     else:
         previous = _bound(parent)
+        _validate_publication(request,arm,phases[phases.index(phase)-1],previous)
         _require(previous.get('status') == 'complete' and previous.get('record_kind') == 'fixture' and
             previous.get('phase') == phases[phases.index(phase)-1] and previous.get('arm') == arm and
             previous.get('request_sha256') == object_hash(request) and

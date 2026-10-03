@@ -3,6 +3,8 @@ import importlib
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
+import os
 
 import numpy as np
 
@@ -298,6 +300,60 @@ class WorkerTests(unittest.TestCase):
         with self.assertRaises(KeyboardInterrupt):
             train(self.request,'QF-B',self.parent,self.initializer,output,runtime)
         self.assertTrue(runtime.closed)
+        self.assertTrue(read_json(output/'failure.json')['cleanup_confirmed'])
+
+    def test_terminal_publication_error_keeps_checkpoint_and_failure_evidence(self):
+        from vipe_benchmark.final_render_workers import train
+        runtime=FakeFreeTimeRuntime();output=self.root/'publication-failure'
+        link=os.link
+        def fail_result_link(source,destination,*args,**kwargs):
+            if Path(destination).name == 'result.json':
+                raise ValueError('synthetic terminal publication failure')
+            return link(source,destination,*args,**kwargs)
+        with patch('os.link',side_effect=fail_result_link):
+            with self.assertRaisesRegex(ValueError,'terminal publication') as raised:
+                train(self.request,'QF-B',self.parent,self.initializer,output,runtime)
+        self.assertTrue(runtime.closed)
+        self.assertTrue((output/'checkpoint-005000.pt').exists())
+        self.assertTrue(read_json(output/'failure.json')['cleanup_confirmed'])
+        self.assertEqual(raised.exception.worker_failure['completed_iterations'],5000)
+
+    def test_published_result_past_deadline_cannot_advance_rendering(self):
+        from vipe_benchmark.final_render_workers import train,render
+        from vipe_benchmark.final_render_pipeline import validate_worker_result
+        runtime=FakeFreeTimeRuntime();now=[0.];output=self.root/'late-publication'
+        link=os.link
+        def late_result_link(source,destination,*args,**kwargs):
+            result=link(source,destination,*args,**kwargs)
+            if Path(destination).name == 'result.json':
+                now[0]=3601.
+            return result
+        with patch('os.link',side_effect=late_result_link):
+            with self.assertRaisesRegex(RuntimeError,'deadline'):
+                train(self.request,'QF-B',self.parent,self.initializer,output,runtime,clock=lambda:now[0])
+        self.assertTrue((output/'result.json').exists())
+        self.assertFalse((output/'completion.json').exists())
+        self.assertEqual(read_json(output/'failure.json')['elapsed_seconds'],3601.)
+        with self.assertRaisesRegex(ValueError,'publication failed'):
+            validate_worker_result(self.request,'QF-B','train',read_json(output/'result.json'))
+        render_output=self.root/'rejected-render'
+        with self.assertRaisesRegex(ValueError,'publication failed'):
+            render(self.request,'QF-B',file_record(output/'result.json'),self.initializer,
+                render_output,FakeFreeTimeRuntime())
+        self.assertFalse(render_output.exists())
+
+    def test_deadline_during_terminal_validation_rejects_completion(self):
+        from vipe_benchmark.final_render_workers import train
+        runtime=FakeFreeTimeRuntime();now=[0.];output=self.root/'terminal-deadline'
+        open_file=Path.open
+        def advance_clock(path,*args,**kwargs):
+            if str(path) == self.parent['path'] and runtime.closed:
+                now[0]=3601.
+            return open_file(path,*args,**kwargs)
+        with patch.object(Path,'open',advance_clock):
+            with self.assertRaisesRegex(RuntimeError,'deadline'):
+                train(self.request,'QF-B',self.parent,self.initializer,output,runtime,clock=lambda:now[0])
+        self.assertFalse((output/'result.json').exists())
         self.assertTrue(read_json(output/'failure.json')['cleanup_confirmed'])
 
 

@@ -12,6 +12,11 @@ with `record_kind=fixture`. Actual requests and native runtimes are rejected bef
 output creation. They return and exclusively publish the existing
 `plan069-final-render-worker-result/v1` contract; the existing pipeline validator
 accepts those complete outcomes. All authority/qualification flags remain false.
+An immutable `completion.json` binds the published result and records elapsed time
+through publication. Worker results include its `terminal_publication` path;
+the shared result/pipeline validator requires that completion and no failure
+receipt, including for final renders. Historical synthetic fixtures retain their
+existing contract. Rendering also checks its exact training completion receipt.
 
 The initializer argument is an exact file record for
 `plan069-final-render-prepared-initializer/v1`, containing record_kind, arm,
@@ -48,7 +53,7 @@ training and 900-second render ceilings between operations. Reserve 120 seconds
 for checkpoint/reload work and 30 seconds for cleanup; retain the latter during
 frame generation. Resource observations and actual output storage are checked
 between operations under the request's device/CPU/artifact limits. Reserve 1MiB
-within that artifact limit for the final control receipt; storage claims include
+within that artifact limit for the final result and completion receipts; storage claims include
 that reserve and every published artifact. These are conservative control reserves,
 not measured native runtime/retention estimates or new allowances.
 
@@ -60,6 +65,10 @@ pipeline gate. The raised original exception also carries `worker_failure` in
 memory if a failure file cannot fit. PermissionError remains a host-access failure.
 Never overwrite output, manufacture completion, retry automatically or delete
 successful partial writes. A failure JSON is not ledger terminal accounting.
+Final artifact hashing, validation and publication receive the same deadline and
+failure checks. Checkpoint, restored snapshot and reload receipt identities are
+checked again after cleanup. A published result without successful completion is
+partial evidence and cannot advance rendering.
 
 These cooperative checks cannot interrupt a hung callback. A separately qualified
 DO dispatcher must enforce finite process termination, device monitoring, cleanup
