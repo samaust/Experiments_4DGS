@@ -216,25 +216,27 @@ class AnchorPreviewTests(unittest.TestCase):
         self.assertEqual(len(failed_ledger.charges), 1)
         self.assertEqual(read_json(failed_ledger.charges[0][1]['path'])['status'], 'failed')
 
-    def test_actual_d11_requires_whole_slot_proof_before_output(self):
-        request = self.request('D11', kind='actual')
-        ledger = FakeLedger(self.root, load())
-        output = self.root / 'jobs/plan069-D11-anchor-previews-002'
-        with patch('vipe_benchmark.depth_anchor_previews._native_result', return_value=(None, None, None)), \
-             patch('vipe_benchmark.depth_anchor_previews._clips'), \
-             patch('vipe_benchmark.budgets.budget_snapshot', return_value=dict(artifact_bytes=0)):
-            with self.assertRaisesRegex(ValueError, 'D11 diagnostics require whole-slot byte proof'):
-                render(request, output, ledger=ledger)
-        self.assertFalse(output.exists())
-        self.assertEqual(ledger.charges, [])
+    def test_actual_native_previews_require_whole_slot_proof_before_output(self):
+        for candidate in ('D11', 'D9', 'D10'):
+            with self.subTest(candidate=candidate):
+                request = self.request(candidate, kind='actual')
+                ledger = FakeLedger(self.root, load())
+                output = self.root / f'jobs/plan069-{candidate}-anchor-previews-002'
+                with patch('vipe_benchmark.depth_anchor_previews._native_result', return_value=(None, None, None)), \
+                     patch('vipe_benchmark.depth_anchor_previews._clips'), \
+                     patch('vipe_benchmark.budgets.budget_snapshot', return_value=dict(artifact_bytes=0)):
+                    with self.assertRaisesRegex(ValueError, 'native depth diagnostics require whole-slot byte proof'):
+                        render(request, output, ledger=ledger)
+                self.assertFalse(output.exists())
+                self.assertEqual(ledger.charges, [])
 
     def test_preview_slot_guards_stop_overcap_and_stage_downloads(self):
-        request = self.request('D11', kind='actual')
+        request = self.request('D9', kind='actual')
         for mode in ('before-output', 'after-png', 'download'):
             with self.subTest(mode=mode):
                 root = self.root / mode
                 ledger = FakeLedger(root, load())
-                output = root / 'jobs/plan069-D11-anchor-previews-002'
+                output = root / 'jobs/plan069-D9-anchor-previews-002'
                 def factory(*args):
                     if mode == 'before-output':
                         raise ValueError('retained candidate artifacts exceed whole-slot allocation')

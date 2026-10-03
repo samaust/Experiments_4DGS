@@ -68,7 +68,7 @@ def render(request, output, *, ledger=None):
         full_guard, output_guard = _publication_guards(actual, candidate, ledger, output)
         _require(time.monotonic() < deadline, 'anchor preview CPU deadline during proof verification')
     except BaseException as error:
-        error.anchor_preview_elapsed_seconds = time.monotonic() - started
+        setattr(error, 'anchor_preview_elapsed_seconds', time.monotonic() - started)
         raise
     try:
         output_guard(2**20)
@@ -136,7 +136,7 @@ def render(request, output, *, ledger=None):
     except BaseException as error:
         failure = dict(schema=ACCOUNTING, status='failed', candidate=candidate,
                        error=f'{type(error).__name__}: {error}', elapsed_seconds=time.monotonic() - started)
-        error.anchor_preview_elapsed_seconds = failure['elapsed_seconds']
+        setattr(error, 'anchor_preview_elapsed_seconds', failure['elapsed_seconds'])
         try:
             write_json(output / 'cpu-failure.json', failure)
         except OSError as receipt_error:
@@ -195,18 +195,12 @@ def _prepare(request, output, ledger, candidate, seconds, maximum):
 
 def _publication_guards(actual, candidate, ledger, output):
     """Use full initial/final scans and cheap output-only checks between writes."""
-    if not actual or candidate not in ('D5', 'D6', 'D8', 'D11'):
+    if not actual or candidate not in ('D5', 'D6', 'D8', 'D9', 'D10', 'D11'):
         return (lambda: None), (lambda additional_bytes=0: None)
-    from .depth_map_allowance import historical_slot_byte_guard
-    from .depth_single_run import _actual_output_guard
-    # Factory checks all retained revisions and forbids missing D11 slot proof.
+    from .depth_map_allowance import historical_slot_byte_guard, historical_slot_output_guard
+    # Factory checks all retained revisions and forbids missing native slot proof.
     full = historical_slot_byte_guard(ledger, candidate)
-    allocations = [event for event in ledger.events()
-                   if event.get('event') == 'depth_attempt_authorized' and
-                   event.get('candidate') == candidate]
-    _require(len(allocations) == 1, 'exact whole-slot preview authorization required')
-    lightweight = _actual_output_guard(dict(record_kind='actual', candidate=candidate,
-        ledger_path=str(ledger.path), review=allocations[0]['review']), output)
+    lightweight = historical_slot_output_guard(ledger, candidate, output)
     return full, lightweight
 
 

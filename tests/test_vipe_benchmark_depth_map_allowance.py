@@ -311,3 +311,64 @@ class WholeSlotBudgetTests(unittest.TestCase):
                 reading['download_bytes'] += 1
                 with self.assertRaisesRegex(ValueError,'must not acquire'):
                     guard()
+
+
+    def test_video_cpu_guards_bind_proof_and_preserved_scope_without_global_reallocation(self):
+        import tempfile
+        from types import SimpleNamespace
+        from vipe_benchmark.budgets import directory_bytes
+        from vipe_benchmark.depth_map_allowance import historical_slot_byte_guard, historical_slot_output_guard
+        for candidate in ('D9', 'D10'):
+            with self.subTest(candidate=candidate), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                old = root / 'jobs' / f'plan069-{candidate}-anchor-previews-001'
+                old.mkdir(parents=True)
+                (old / 'preserved.bin').write_bytes(b'x' * 40)
+                other = root / 'jobs/plan069-D11-maps-001'
+                other.mkdir()
+                (other / 'unrelated.bin').write_bytes(b'x' * 30000)
+                output = root / 'jobs' / f'plan069-{candidate}-anchor-previews-002'
+                artifact_cap = directory_bytes(old) + 40 + 4096
+                proposal = dict(candidate=candidate, allocation=dict(download_bytes=100, artifact_bytes=artifact_cap))
+                budget = dict(schema='plan069-depth-slot-byte-budget/v1', candidate=candidate,
+                    proposal_sha256=object_hash(proposal), shared_setup_artifact_bytes=40,
+                    setup_baseline=dict(download_bytes=1000, artifact_bytes=2000),
+                    absolute_limits=dict(download_bytes=1100, artifact_bytes=2000 + artifact_cap),
+                    setup=dict(path='accepted-setup'), setup_finish_event_sha256='f' * 64)
+                write_json(root / 'review.json', dict(proposals=[proposal]))
+                events = [dict(event='depth_setup_authorized', candidate=candidate,
+                               resource_snapshot=budget['setup_baseline']),
+                          dict(event='finish', job_id=f'plan069-{candidate}-setup-001', resource='setup',
+                               status='complete', result=budget['setup'], event_sha256='f' * 64,
+                               cleanup_confirmed=True, cleanup_uncertain=False, surviving_pids=[],
+                               deadline_exceeded=False),
+                          dict(event='depth_attempt_authorized', candidate=candidate,
+                               slot_byte_budget=budget, proposal_sha256=object_hash(proposal),
+                               map_stage_allowance=dict(setup=budget['setup'], setup_finish_event_sha256='f' * 64),
+                               review=file_record(root / 'review.json'))]
+                ledger = SimpleNamespace(path=root / 'ledger.jsonl', events=lambda:events)
+                reading = dict(download_bytes=999999, artifact_bytes=999999)
+                with patch('vipe_benchmark.budgets.budget_snapshot', return_value=reading):
+                    full = historical_slot_byte_guard(ledger, candidate)
+                    fast = historical_slot_output_guard(ledger, candidate, output)
+                    fast(4096)
+                    with self.assertRaisesRegex(ValueError, 'artifact headroom'):
+                        fast(4097)
+                    budget['proposal_sha256'] = 'foreign-proposal'
+                    with self.assertRaisesRegex(ValueError, 'whole-slot byte budget'):
+                        historical_slot_output_guard(ledger, candidate, output)
+                    budget['proposal_sha256'] = object_hash(proposal)
+                    events[-1]['slot_byte_budget'] = None
+                    with self.assertRaisesRegex(ValueError, 'whole-slot byte proof'):
+                        historical_slot_output_guard(ledger, candidate, output)
+                    events[-1]['slot_byte_budget'] = budget
+                    reading['download_bytes'] += 1
+                    with self.assertRaisesRegex(ValueError, 'must not acquire'):
+                        full()
+                    reading['download_bytes'] -= 1
+                    output.mkdir()
+                    (output / 'new.png').write_bytes(b'x' * 4097)
+                    with self.assertRaisesRegex(ValueError, 'artifact headroom'):
+                        fast()
+                    with self.assertRaisesRegex(ValueError, 'retained candidate'):
+                        full()

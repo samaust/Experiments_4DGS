@@ -210,3 +210,40 @@ def historical_slot_byte_guard(ledger, candidate):
                                reading, historical=True)
     check()
     return check
+
+
+def historical_slot_output_guard(ledger, candidate, output):
+    """Check only the new CPU output directory between full historical checks.
+
+    The caller first creates ``historical_slot_byte_guard`` for accepted setup
+    lineage and download baseline, then repeats that full guard before accounting.
+    Freeze all other retained revisions here; reserve exact shared overhead from
+    the same immutable proposal rather than a second candidate allocation.
+    """
+    from .budgets import directory_bytes
+    root = ledger.path.resolve().parent
+    output = Path(output).resolve()
+    _require(output.parent == root / 'jobs' and
+             output.name.startswith(f'plan069-{candidate}-anchor-previews-'),
+             'owned CPU preview output directory required')
+    allocations = [event for event in ledger.events()
+                   if event.get('event') == 'depth_attempt_authorized' and
+                   event.get('candidate') == candidate]
+    _require(len(allocations) == 1, 'exact whole-slot preview authorization required')
+    allocation = allocations[0]
+    budget = allocation.get('slot_byte_budget')
+    _require(budget is not None, 'native depth diagnostics require whole-slot byte proof')
+    review = verify_record(allocation['review'])
+    _require(review == allocation['review'], 'exact preview review file record required')
+    proposal = next(row for row in read_json(review['path'])['proposals']
+                    if row['candidate'] == candidate)
+    check_slot_byte_budget(proposal, budget, root, {}, historical=True)
+    other_owned = owned_slot_bytes(root, candidate) - directory_bytes(output)
+    available = proposal['allocation']['artifact_bytes'] - budget['shared_setup_artifact_bytes'] - other_owned
+
+    def check(additional_bytes=0):
+        _require(type(additional_bytes) is int and additional_bytes >= 0 and
+                 directory_bytes(output) + additional_bytes <= available,
+                 'next preview output exceeds remaining whole-slot artifact headroom')
+    check()
+    return check
