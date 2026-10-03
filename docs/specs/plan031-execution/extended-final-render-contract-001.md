@@ -63,3 +63,21 @@ rejected when promoted to actual mode.
 rendering, qualification and actual final-render human review. #35 owns reporting.
 A real #45 depth decision and separately approved DO admission remain necessary
 for native work. This module performs no setup, download, GPU use or ledger write.
+
+## Approved cumulative budget amendment
+
+Historical `bindings.config` remains the original 60 GiB download / 150 GiB
+artifact configuration used by S2, M/N results and qualification. To review
+against the approved 110/210 ledger limits, supply request `budget_amendment`
+with exact `amendment` and `authorization` file records. The proposal settings
+hash binds these records.
+
+`validate_budget_configuration(request, ledger.config)` accepts only
+`plan069-depth-cap-amendment/v1` with status REVIEW, the historical configuration
+hash/size and exactly 110/210 caps. Its authorization must have the recorded
+`plan069-depth-user-authorization/v1` DO status, exact amendment record and
+approved `plan069-depth-cap-approval/v1` object hash. Actual mode pins the
+existing immutable user authorization bytes; fixture authorization must be
+labeled fixture. No other ledger configuration field may differ. Missing
+approval, changed amendment, configuration drift or forged actual authorization
+is rejected. These approved resource caps grant no downstream DO authority.

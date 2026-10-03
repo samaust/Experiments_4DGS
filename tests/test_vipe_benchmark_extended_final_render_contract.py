@@ -310,3 +310,77 @@ class AdmissionTests(unittest.TestCase):
                 result=admit_review(self.request,self.ledger,self.storage)
                 self.assertEqual(result.coverage_edges_per_arm,810)
                 self.assertFalse(result.execution_authorized)
+
+    def authorize_amended_budget(self):
+        from vipe_benchmark.files import object_hash
+        baseline=self.request['bindings']['config']
+        amendment=self.record('budget-amendment',dict(schema='plan069-depth-cap-amendment/v1',status='REVIEW',
+            historical_configuration={key:baseline[key] for key in ('sha256','bytes')},
+            new_download_gib_limit=110,new_artifact_disk_gib_limit=210))
+        authorization=self.record('budget-authorization',dict(schema='plan069-depth-user-authorization/v1',status='DO',
+            record_kind='fixture',cap_amendment=amendment,
+            cap_approval=dict(schema='plan069-depth-cap-approval/v1',status='approved',amendment_sha256=object_hash(self.read(amendment)))))
+        self.request['budget_amendment']=dict(amendment=amendment,authorization=authorization)
+        self.ledger.config=dict(self.ledger.config,new_download_gib_limit=110,new_artifact_disk_gib_limit=210)
+        self.rebind_proposal()
+
+    def test_approved_budget_amendment_preserves_original_prerequisite_configuration(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        original=self.request['bindings']['config']
+        self.authorize_amended_budget()
+        self.storage.update(artifact_bytes=151*2**30,download_bytes=70*2**30)
+        result=admit_review(self.request,self.ledger,self.storage)
+        self.assertFalse(result.execution_authorized)
+        self.assertEqual(self.request['bindings']['config'],original)
+        self.assertEqual(self.read(original)['new_artifact_disk_gib_limit'],150)
+
+    def test_amended_ledger_requires_authorization_and_rejects_other_configuration_drift(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        self.ledger.config=dict(self.ledger.config,new_download_gib_limit=110,new_artifact_disk_gib_limit=210)
+        with self.assertRaisesRegex(ValueError,'amendment required'):
+            admit_review(self.request,self.ledger,self.storage)
+        self.authorize_amended_budget()
+        self.ledger.config['gpu_total_seconds_limit'] += 1
+        with self.assertRaisesRegex(ValueError,'outside exact'):
+            admit_review(self.request,self.ledger,self.storage)
+        self.ledger.config['gpu_total_seconds_limit'] -= 1
+        del self.request['budget_amendment']['authorization']
+        self.rebind_proposal()
+        with self.assertRaisesRegex(ValueError,'authorization records'):
+            admit_review(self.request,self.ledger,self.storage)
+
+    def test_changed_budget_amendment_and_approval_are_rejected(self):
+        import copy
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        self.authorize_amended_budget()
+        original=copy.deepcopy(self.request)
+        for name, change in (
+            ('amendment',lambda a:a.update(new_download_gib_limit=111)),
+            ('amendment',lambda a:a['historical_configuration'].update(bytes=1)),
+            ('authorization',lambda a:a.update(status='REVIEW')),
+            ('authorization',lambda a:a['cap_approval'].update(amendment_sha256='0'*64)),
+            ('authorization',lambda a:a.update(record_kind='human')),
+        ):
+            self.request=copy.deepcopy(original)
+            document=self.read(self.request['budget_amendment'][name])
+            change(document)
+            self.request['budget_amendment'][name]=self.record('altered-budget-'+str(len(list(self.base.root.glob('altered-budget-*')))),document)
+            self.rebind_proposal()
+            with self.assertRaises(ValueError):
+                admit_review(self.request,self.ledger,self.storage)
+
+    def test_actual_budget_seam_accepts_only_the_recorded_user_cap_authorization(self):
+        from vipe_benchmark.extended_final_render_contract import validate_budget_configuration
+        from vipe_benchmark.depth_admission import BENCHMARK
+        from vipe_benchmark.files import file_record
+        authorization=file_record(Path(__file__).resolve().parents[1]/'docs/research/vipe-alternatives/plan031-execution/depth-approval-001.json')
+        amendment=self.read(authorization)['cap_amendment']
+        baseline=file_record(BENCHMARK)
+        value=dict(record_kind='actual',bindings={'config':baseline},budget_amendment=dict(amendment=amendment,authorization=authorization))
+        amended=dict(self.read(baseline),new_download_gib_limit=110,new_artifact_disk_gib_limit=210)
+        validate_budget_configuration(value,amended)
+        document=self.read(authorization)
+        document['authorization_basis']='CPU fixture cannot forge actual user authorization'
+        value['budget_amendment']['authorization']=self.record('forged-user-authorization',document)
+        with self.assertRaisesRegex(ValueError,'recorded user'):
+            validate_budget_configuration(value,amended)

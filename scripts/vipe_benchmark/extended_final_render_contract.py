@@ -77,6 +77,9 @@ def parse_request(value):
              'proposal prerequisite bindings differ')
     _require(proposal.get('settings_sha256') == object_hash({key: item for key, item in value.items() if key != 'bindings'}),
              'proposal fixed settings differ')
+    if 'budget_amendment' in value:
+        baseline = _bound(bindings['config'])
+        validate_budget_configuration(value, dict(baseline, new_download_gib_limit=110, new_artifact_disk_gib_limit=210))
     if value['record_kind'] == 'actual':
         _require(bindings['source'] == file_record(__file__) and bindings['preset']['sha256'] == PRESET_SOURCE,
                  'current extended contract/preset source pins required')
@@ -248,7 +251,7 @@ def admit_review(value, ledger, storage):
     _validate_depth(request)
     validate_scene_bindings(request)
     events = ledger.events()
-    _require(_bound(bindings['config']) == ledger.config, 'ledger allocation configuration differs')
+    validate_budget_configuration(request, ledger.config)
     _require(not any(state['event'] == 'reserve' for state in ledger.states(events).values()), 'active allocation blocks REVIEW admission')
     ids = {allocation['id'] for allocation in request['allocations']}
     consumed = {event.get('job_id') for event in events if event.get('event') in
@@ -293,3 +296,41 @@ def validate_initializer(value, arm, receipt, arrays):
     return dict(schema='plan069-final-render-initializer-validation/v1', status='passed', arm=arm,
                 point_count=len(arrays['positions']), request_sha256=object_hash(request),
                 native_adapter_qualified=False, execution_authorized=False)
+
+
+def validate_budget_configuration(value, config):
+    """Accept only the separately approved 110/210 caps over original science.
+
+    The configuration bound to historical worker requests and qualification is
+    unchanged. This approval supplies resource caps only, never native authority.
+    """
+    baseline_record = value['bindings']['config']
+    baseline = _bound(baseline_record)
+    bound = value.get('budget_amendment')
+    if bound is None:
+        _require(config == baseline, 'ledger allocation configuration differs; approved budget amendment required')
+        return
+    _require(type(bound) is dict and set(bound) == {'amendment', 'authorization'}, 'exact budget amendment and authorization records required')
+    amendment = _bound(bound['amendment'])
+    authorization = _bound(bound['authorization'])
+    _require(baseline.get('new_download_gib_limit') == 60 and baseline.get('new_artifact_disk_gib_limit') == 150,
+             'budget amendment requires historical 60/150 caps')
+    expected = dict(schema='plan069-depth-cap-amendment/v1', status='REVIEW',
+        historical_configuration={key: baseline_record[key] for key in ('sha256', 'bytes')},
+        new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
+    _require(amendment == expected, 'exact 110/210 budget amendment differs from historical configuration')
+    _require(authorization.get('schema') == 'plan069-depth-user-authorization/v1' and authorization.get('status') == 'DO' and
+             authorization.get('cap_amendment') == bound['amendment'] and authorization.get('cap_approval') ==
+             dict(schema='plan069-depth-cap-approval/v1', status='approved', amendment_sha256=object_hash(amendment)),
+             'exact approved budget authorization required')
+    if value['record_kind'] == 'actual':
+        _require({key: baseline_record[key] for key in ('sha256', 'bytes')} ==
+                 dict(sha256='298e0a3a6c6c30b92dbfd7c8fa55a3dfbca1dff801a67c0830cf47db0bd9f823', bytes=2625),
+                 'actual historical configuration pin differs')
+        _require({key: bound['authorization'][key] for key in ('sha256', 'bytes')} ==
+                 dict(sha256='6026870067801494627766daeaaa1708e8bef89f87f241aa30162a66952938be', bytes=3190),
+                 'actual budget approval is not the recorded user authorization')
+    else:
+        _require(authorization.get('record_kind') == 'fixture', 'budget authorization fixture label required')
+    amended = dict(baseline, new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
+    _require(config == amended, 'ledger configuration differs outside exact approved 110/210 caps')
