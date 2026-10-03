@@ -1,6 +1,8 @@
 """Generate D2's 196 missing matched-clip maps; reuse four frozen anchors."""
 
 from pathlib import Path
+import math
+import os
 import time
 
 import numpy as np
@@ -8,8 +10,10 @@ import numpy as np
 from .backends import AssetBundle
 from .contracts import depth as validate_depth
 from .depth_clips import SCHEMA, materialize_role
-from .d2_preflight import SCHEMA as PREFLIGHT_SCHEMA
-from .files import file_record, read_json, verify_record, write_json
+from .d2_preflight import SCHEMA as PREFLIGHT_SCHEMA, verify_runtime
+from .depth_admission import HISTORICAL, BENCHMARK, local_source_records
+from .config import ROOT
+from .files import file_record, object_hash, read_json, verify_record, write_json
 
 
 REQUEST_SCHEMA = 'plan069-d2-maps-request/v1'
@@ -40,6 +44,9 @@ def run(request, output, *, backend, load_role=materialize_role,
     if request['record_kind'] == 'actual':
         _require(reservation_check is not None and reservation_check(request, output),
                  'actual D2 maps require active exact supervision')
+        start = float(os.environ['VIPE_RESERVATION_START'])
+        _require(math.isfinite(start) and 0 <= time.monotonic() - start < 3600,
+                 'D2 reservation wall deadline exceeded')
     _require(Path(output).name == request['job_id'], 'D2 output identity changed')
     preflight = read_json(verify_record(request['preflight'])['path'])
     _require(preflight.get('schema') == PREFLIGHT_SCHEMA and
@@ -52,12 +59,27 @@ def run(request, output, *, backend, load_role=materialize_role,
     bundle = AssetBundle('D2', assets)
     _require(preflight['checkpoint'] in bundle.records['da3_snapshot']['files'] and
              preflight['runtime'] == request.get('runtime') and
-             getattr(backend, 'component', 'D2') == 'D2',
+             getattr(backend, 'component', None) == 'D2',
              'D2 source, runtime or model binding changed')
     historical = read_json(verify_record(request['historical_check'])['path'])
     _require(historical.get('status') == 'complete' and historical.get('component') == 'D2' and
              len(historical.get('rows', [])) == 30,
              'completed frozen D2 check required')
+    frozen = read_json(verify_record(historical['configuration'])['path'])
+    _require(frozen.get('component') == 'D2' and frozen.get('role') == 'check' and
+             verify_record(frozen['configuration'])['sha256'] == file_record(BENCHMARK)['sha256'] and
+             frozen.get('assets') == assets and frozen.get('runtime') == request['runtime'] and
+             frozen.get('inputs') == request.get('inputs') and
+             frozen.get('forbidden_vipe_roots') == request.get('forbidden_vipe_roots') and
+             historical.get('component_sha256') == object_hash(dict(
+                 component='D2', assets=frozen['assets'], runtime=frozen['runtime'])),
+             'D2 historical component configuration differs from current invocation')
+    settings = read_json(HISTORICAL)['settings']['D2']
+    for row in historical['rows']:
+        _require(row.get('metadata', {}).get('settings') == settings and
+                 row['metadata'].get('settings_sha256') == object_hash(settings),
+                 'D2 historical settings differ from frozen HISTORICAL')
+    verify_runtime(request['runtime'])
     context = read_json(verify_record(request['context'])['path'])
     _require(context.get('schema') == SCHEMA and
              context.get('inputs') == request.get('inputs') and
@@ -97,6 +119,7 @@ def run(request, output, *, backend, load_role=materialize_role,
                              np.array_equal(anchor['K'], source['K']),
                              'frozen D2 anchor lineage differs')
                     prediction = anchor['depth']
+                    metadata = anchor['metadata']
                     reused = True
                 else:
                     estimate = backend.predict(images[index], np.asarray(source['K'], np.float64), valid)
@@ -108,20 +131,36 @@ def run(request, output, *, backend, load_role=materialize_role,
                              estimate.raw_depth.dtype.kind == 'f' and
                              estimate.raw_depth.ndim == 2,
                              'D2 native output grid or dtype changed')
+                    _require(time.monotonic() - start < request['max_seconds'],
+                             'D2 attempt wall deadline exceeded')
+                    metadata = estimate.metadata
+                    _require(metadata.get('component') == 'D2' and
+                             metadata.get('settings') == settings and
+                             metadata.get('settings_sha256') == object_hash(settings) and
+                             metadata.get('assets_sha256') == object_hash(bundle.records) and
+                             np.asarray(metadata.get('native_processed_K')).shape == (3, 3) and
+                             np.isfinite(np.asarray(metadata['native_processed_K'], float)).all(),
+                             'D2 native metadata differs from frozen settings or processed K')
                     validate_depth(estimate.depth, estimate.valid, valid)
                     destination = output / f'camera{camera}-frame{frame}.npz'
+                    arrays = dict(depth=estimate.depth, valid=estimate.valid,
+                                  raw_depth=estimate.raw_depth)
+                    if estimate.confidence is not None:
+                        arrays['confidence'] = estimate.confidence
                     with destination.open('xb') as stream:
-                        np.savez_compressed(stream, depth=estimate.depth, valid=estimate.valid,
-                            raw_depth=estimate.raw_depth)
+                        np.savez_compressed(stream, **arrays)
                     prediction = file_record(destination)
                     reused = False
                 rows.append(dict(camera=camera, frame=frame, role='check',
                     source_rgb=source['source_rgb'], inputs=context['inputs'],
                     grid=source['grid'], domain='camera_z_metres',
                     settings=historical['component_sha256'], prediction=prediction,
+                    metadata=metadata,
                     reused_anchor=reused))
         _require(len(rows) == 200 and sum(not row['reused_anchor'] for row in rows) == 196,
                  'D2 workload differs from four clips and 196 new maps')
+        _require(time.monotonic() - start < request['max_seconds'],
+                 'D2 attempt wall deadline exceeded')
         result = dict(schema=RESULT_SCHEMA, status='complete', candidate='D2',
             record_kind=request['record_kind'], job_id=request['job_id'],
             context=request['context'], historical_check=request['historical_check'],
@@ -136,3 +175,29 @@ def run(request, output, *, backend, load_role=materialize_role,
             error=f'{type(error).__name__}: {error}',
             elapsed_seconds=time.monotonic() - start))
         raise
+
+
+def build_request(*, proposal, preflight, historical_check, context, admission,
+                  ledger_path, forbidden_vipe_roots):
+    """Build the fixed D2 invocation from reviewed CPU and historical evidence."""
+    receipt = read_json(verify_record(preflight)['path'])
+    inputs = read_json(verify_record(context)['path'])['inputs']
+    _require(receipt.get('candidate') == 'D2' and
+             receipt.get('proposal_sha256') == object_hash(proposal) and
+             isinstance(forbidden_vipe_roots, list) and bool(forbidden_vipe_roots) and
+             all(Path(root).is_absolute() for root in forbidden_vipe_roots),
+             'exact D2 proposal and forbidden source roots required')
+    return dict(schema=REQUEST_SCHEMA, record_kind='actual', component='D2',
+        candidate='D2', job_id='plan069-D2-maps-001', max_seconds=3600,
+        proposal=proposal, proposal_sha256=object_hash(proposal), preflight=preflight,
+        historical_check=historical_check, context=context, inputs=inputs,
+        admission=admission, ledger_path=str(Path(ledger_path).resolve()),
+        assets_record=receipt['assets'], runtime=receipt['runtime'],
+        forbidden_vipe_roots=forbidden_vipe_roots,
+        local_sources=local_source_records('D2'))
+
+
+def worker_command(request, request_path, output):
+    """Use the qualified interpreter and exact D2 worker for reservation/launch."""
+    return [request['runtime']['python'], str(ROOT / 'scripts/basketball_vipe_d2_maps.py'),
+            '--request', str(Path(request_path).resolve()), '--output', str(Path(output).resolve())]

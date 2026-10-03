@@ -68,6 +68,24 @@ class D2PreflightTest(unittest.TestCase):
                          json.loads(self.inventory.read_text())['candidates']['D2']['files'][0]['lfs_sha256'])
         self.assertIn('GPU runtime smoke', result['remaining_gates'])
 
+    def test_runtime_load_rechecks_nested_inventory_after_qualification(self):
+        with patch.object(d2_preflight, 'INVENTORY', self.inventory), \
+             patch.object(d2_preflight, 'PROFILES', self.profiles):
+            result = d2_preflight.qualify(self.proposal, self.e5_record, self.root / 'out')
+        (self.e5 / 'environment/bin/python').write_bytes(b'changed installed file')
+        with self.assertRaisesRegex(ValueError, 'changed file'):
+            d2_preflight.verify_runtime(result['runtime'])
+
+    def test_runtime_load_rechecks_lock_and_import_receipts(self):
+        runtime = json.loads(Path(self.e5_record['path']).read_text())['runtime']
+        for key in ('dependency_lock', 'imports', 'build_inputs'):
+            path = Path(runtime[key]['path'])
+            original = path.read_bytes()
+            path.write_bytes(b'changed receipt')
+            with self.assertRaisesRegex(ValueError, 'changed file'):
+                d2_preflight.verify_runtime(runtime)
+            path.write_bytes(original)
+
     def test_rejects_changed_required_checkpoint(self):
         self.proposal['required_assets'] = dict(self.proposal['required_assets'], sha256='0' * 64)
         with patch.object(d2_preflight, 'INVENTORY', self.inventory), \

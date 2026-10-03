@@ -61,6 +61,27 @@ def qualify(proposal, e5_result, output):
     _require(interpreter.is_file() and interpreter.is_absolute() and
              interpreter.parent.parent.parent == Path(e5_result['path']).parent,
              'E5 interpreter must belong to the completed setup')
+    installed = verify_runtime(runtime)
+    packages = installed['packages']
+    result = dict(schema=SCHEMA, status='cpu_preflight_passed', candidate='D2',
+        proposal_sha256=object_hash(proposal), e5_result=e5_result,
+        source_revision=D2_SPEC['code']['revision'],
+        weights_revision=D2_SPEC['weights']['revision'],
+        source_license=next(row for row in bundle.records['da3_source']['files']
+                            if Path(row['path']).name == 'LICENSE'),
+        checkpoint=checkpoint, assets=assets_record,
+        runtime=runtime, installed_distributions=len(packages),
+        installed_files=sum(len(package['files']) for package in packages),
+        remaining_gates=[
+            'independent source review', 'installed dependency commercial assessment',
+            'GPU runtime smoke', 'fresh ledger-bound admission'])
+    output.mkdir(parents=True, exist_ok=False)
+    write_json(output / 'result.json', result)
+    return result
+
+
+def verify_runtime(runtime):
+    """Rehash the installed closure and qualification records before model load."""
     for key in ('inventory', 'imports', 'dependency_lock', 'build_inputs'):
         verify_record(runtime[key])
     installed = read_json(runtime['inventory']['path'])
@@ -81,18 +102,4 @@ def qualify(proposal, e5_result, output):
     imports = read_json(runtime['imports']['path'])
     _require(imports.get('status') == 'complete',
              'native DA3 imports did not qualify')
-    result = dict(schema=SCHEMA, status='cpu_preflight_passed', candidate='D2',
-        proposal_sha256=object_hash(proposal), e5_result=e5_result,
-        source_revision=D2_SPEC['code']['revision'],
-        weights_revision=D2_SPEC['weights']['revision'],
-        source_license=next(row for row in bundle.records['da3_source']['files']
-                            if Path(row['path']).name == 'LICENSE'),
-        checkpoint=checkpoint, assets=assets_record,
-        runtime=runtime, installed_distributions=len(packages),
-        installed_files=sum(len(package['files']) for package in packages),
-        remaining_gates=[
-            'independent source review', 'installed dependency commercial assessment',
-            'GPU runtime smoke', 'fresh ledger-bound admission'])
-    output.mkdir(parents=True, exist_ok=False)
-    write_json(output / 'result.json', result)
-    return result
+    return installed
