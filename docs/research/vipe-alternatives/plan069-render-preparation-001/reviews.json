@@ -1,0 +1,29 @@
+{
+  "base_commit": "251b3d03bb393fde7101946e9c0c02deabcbd6c7",
+  "implementation_commit": "3515a52b",
+  "correction_commit": "f262bf3c",
+  "scope": "Issue #34 reusable CPU preparation; actual execution and issue completion not claimed",
+  "standards": {
+    "reviewer": "/root/render_prep_standards",
+    "hard_violations": 0,
+    "actionable_heuristics": 0,
+    "summary": "No actionable findings against AGENTS.md or the code-review smell baseline."
+  },
+  "spec": {
+    "reviewer": "/root/render_prep_spec",
+    "initial_findings": 1,
+    "finding": "Standalone render worker validation did not rehash the consumed training checkpoint; full pipeline validation already caught the changed file.",
+    "resolution": "Rehash consumed checkpoint at standalone public seam. Regression failed before fix; all 10 pipeline tests passed afterward. Reviewer confirmed resolved in f262bf3c with no new actionable findings.",
+    "unresolved_findings": 0
+  },
+  "verification": {
+    "focused_before_review": "62 unittest cases passed in 36.246 seconds",
+    "post_correction_pipeline": "10 unittest cases passed in 3.344 seconds",
+    "syntax": "AST compilation passed for all six changed Python files",
+    "static_typecheck": "No configured or installed mypy/pyright; static typing pass not claimed",
+    "full_suite": "See immutable full-suite-001 receipts and logs"
+  },
+  "execution_authorized": false,
+  "native_adapter_qualified": false,
+  "actual_final_renders": false
+}
