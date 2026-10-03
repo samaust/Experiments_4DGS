@@ -276,6 +276,8 @@ class Ledger:
                 worker not in source.get('local_sources', []) or
                 Path(worker['path']).name != ('basketball_vipe_depth_single_maps.py' if
                     candidate in ('D5', 'D6', 'D8') else
+                    'basketball_vipe_d2_maps.py' if candidate == 'D2' else
+                    'basketball_vipe_video_actual.py' if candidate in ('D9', 'D10') else
                     f'basketball_vipe_depth_{candidate.lower()}_maps.py') or
                 request_record['path'] != str(self.path.parent / 'requests' / (job_id + '.json')) or
                 request.get('candidate') != candidate or request.get('job_id') != job_id or
