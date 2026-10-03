@@ -72,7 +72,10 @@ def _unpack_source(archive, output, revision, *, deadline):
                 destination.mkdir(parents=True, exist_ok=True)
             else:
                 destination.parent.mkdir(parents=True, exist_ok=True)
-                with stream.extractfile(member) as source, destination.open('xb') as target:
+                source = stream.extractfile(member)
+                if source is None:
+                    raise ValueError('MoGe source archive file content missing')
+                with source, destination.open('xb') as target:
                     while chunk := source.read(2**20):
                         _require(time.monotonic() < deadline,
                                  'MoGe source extraction deadline')
@@ -108,6 +111,9 @@ def run_moge_setup(request, output, *, request_path=None, acquire=_acquire):
     """Acquire only the exact approved source/checkpoint for D5 or D6."""
     started = time.monotonic()
     candidate = request.get('candidate')
+    environment = request.get('runtime_environment')
+    if request.get('record_kind') == 'actual':
+        _require(isinstance(environment, dict), 'reviewed MoGe runtime environment required')
     _require(candidate in ('D5', 'D6'), 'MoGe setup candidate must be D5 or D6')
     review = read_json(verify_record(request['review'])['path'])
     approved = read_json(verify_record(request['authorization'])['path'])
@@ -123,6 +129,7 @@ def run_moge_setup(request, output, *, request_path=None, acquire=_acquire):
              grant.get('status') == 'approved' and
              grant.get('proposal_sha256') == object_hash(proposal),
              'exact approved MoGe setup request required')
+    assert proposal is not None  # Guaranteed by the approved-request gate above.
     model = proposal['candidate_config']
     _require(model['code']['url'] == 'https://github.com/microsoft/MoGe' and
              model['code']['revision'] == '74fbce054ebed49800de42d0ad0e83495065719a' and
@@ -167,6 +174,20 @@ def run_moge_setup(request, output, *, request_path=None, acquire=_acquire):
                  'MoGe source plus checkpoint exceeds transfer allocation')
         _unpack_source(archive, output / 'source', model['code']['revision'],
                        deadline=deadline)
+        runtime_result = None
+        dependency_archives = []
+        if environment is not None:
+            from .moge_environment import validate_environment_request
+            validate_environment_request(environment, output / 'source', candidate,
+                                         request['record_kind'])
+            for package in environment['sources']:
+                path = output / 'dependency-sources' / (package['name'] + '.tar.gz')
+                path.parent.mkdir(parents=True, exist_ok=True)
+                record = acquire(package['url'], path, max_bytes=package['max_bytes'],
+                    deadline=deadline, run_root=run_root, download_limit=download_limit,
+                    artifact_limit=artifact_limit)
+                dependency_archives.append(dict(name=package['name'], revision=package['revision'],
+                    record=record, install_local_offline=True))
         checkpoint = output / asset['path']
         weight_url = (model['weights']['url'] + '/resolve/' +
                       model['weights']['revision'] + '/' + asset['path'])
@@ -176,6 +197,15 @@ def run_moge_setup(request, output, *, request_path=None, acquire=_acquire):
         _require(weight_result['bytes'] == asset['bytes'] and
                  weight_result['sha256'] == asset['lfs_sha256'],
                  'MoGe checkpoint bytes differ from pinned LFS object')
+        if environment is not None:
+            from .depth_environment import provision_depth_environment
+            runtime_request = dict(environment, sources=dependency_archives)
+            if request['record_kind'] == 'actual':
+                runtime_request.update(ledger_path=request['ledger_path'],
+                    setup_request=file_record(request_path))
+            runtime_result = provision_depth_environment(runtime_request, output / 'runtime', config,
+                run_root=run_root, deadline=deadline, download_limit=download_limit,
+                artifact_limit=artifact_limit)
         received = budget_snapshot(run_root)['download_bytes'] - baseline
         _require(received <= allocation['download_bytes'] and
                  time.monotonic() <= deadline, 'MoGe setup allocation exceeded')
@@ -189,7 +219,18 @@ def run_moge_setup(request, output, *, request_path=None, acquire=_acquire):
             source_dir=str(output / 'source'),
             source_tree=source_tree_records(output / 'source'), bytes_received=received,
             elapsed_seconds=time.monotonic() - started)
+        if runtime_result is not None:
+            runtime_path = output / 'runtime/result.json'
+            _require(runtime_path.is_file() and read_json(runtime_path) == runtime_result and
+                     runtime_result.get('status') == 'complete' and
+                     runtime_result.get('candidate') == candidate, 'MoGe runtime receipt missing or incomplete')
+            result['runtime_environment'] = file_record(runtime_path)
+            result['python_executable'] = runtime_result['python_executable']
+            result['dependency_sources'] = dependency_archives
         write_json(output / 'result.json', result)
+        from .budgets import directory_bytes
+        _require(directory_bytes(output) <= allocation.get('artifact_bytes', artifact_limit),
+                 'MoGe setup exceeded candidate artifact allocation')
         return result
     except BaseException as error:
         received = budget_snapshot(run_root)['download_bytes'] - baseline

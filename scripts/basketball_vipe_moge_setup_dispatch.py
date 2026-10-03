@@ -29,7 +29,7 @@ def shared_run_root():
     return repository
 
 
-def dispatch(candidate, run_id):
+def dispatch(candidate, run_id, runtime_environment):
     if candidate not in ('D5', 'D6'):
         raise ValueError('MoGe setup candidate must be D5 or D6')
     if run_id != 'plan031-20260913T032700Z':
@@ -42,6 +42,11 @@ def dispatch(candidate, run_id):
     config = dict(load(), new_download_gib_limit=110,
                   new_artifact_disk_gib_limit=210)
     ledger = Ledger(local / 'ledger.jsonl', config)
+    environment = read_json(verify_record(file_record(runtime_environment))['path'])
+    from vipe_benchmark.moge_environment import validate_environment_request
+    requirement_record = environment['requirement_sources'][0]
+    validate_environment_request(environment, Path(requirement_record['path']).parent,
+                                 candidate, 'actual')
     review, authorization = file_record(REVIEW), file_record(DO)
     source_review_path = (ROOT / 'docs/research/vipe-alternatives/plan031-execution' /
                           f'depth-{candidate}-source-review-001.json')
@@ -50,6 +55,9 @@ def dispatch(candidate, run_id):
     setup_sources = [file_record(ROOT / path) for path in (
         'scripts/vipe_benchmark/moge_setup.py',
         'scripts/vipe_benchmark/moge_native.py',
+        'scripts/vipe_benchmark/moge_environment.py',
+        'scripts/vipe_benchmark/depth_environment.py',
+        'scripts/vipe_benchmark/runtime_inventory.py',
         'scripts/basketball_vipe_moge_setup.py',
         'scripts/basketball_vipe_moge_setup_dispatch.py')]
     if source_evidence.get('setup_sources') != setup_sources:
@@ -65,16 +73,27 @@ def dispatch(candidate, run_id):
         raise ValueError('GPU owner active before MoGe setup')
     request = dict(schema='plan069-depth-setup-request/v1',
         record_kind='actual', candidate=candidate, job_id=job_id,
-        ledger_path=str(ledger.path), review=review, authorization=authorization)
+        ledger_path=str(ledger.path), review=review, authorization=authorization,
+        runtime_environment=environment)
     write_json(request_path, request)
     ledger.authorize_depth_setup(candidate, review, authorization, source_review)
     command = [sys.executable, str(ROOT / 'scripts/basketball_vipe_moge_setup.py'),
         '--request', str(request_path), '--output', str(output)]
     def validate(out):
         result = read_json(verify_record(file_record(out / 'result.json'))['path'])
+        from vipe_benchmark.budgets import directory_bytes
+        if directory_bytes(out) > proposal['allocation']['artifact_bytes']:
+            raise ValueError(candidate + ' setup exceeds candidate artifact allocation')
         expected = read_json(proposal['required_assets']['path'])['candidates'][candidate]['files'][0]
         checkpoint = verify_record(result['checkpoint'])
         verify_record(result['source_archive'])
+        runtime = read_json(verify_record(result['runtime_environment'])['path'])
+        if (runtime.get('status') != 'complete' or runtime.get('candidate') != candidate or
+                runtime.get('python_executable') != result.get('python_executable')):
+            raise ValueError(candidate + ' isolated runtime receipt differs')
+        verify_record(runtime['python'])
+        verify_record(runtime['dependency_lock'])
+        verify_record(runtime['inventory'])
         if source_tree_records(result['source_dir']) != result.get('source_tree'):
             raise ValueError(candidate + ' extracted source differs from setup receipt')
         if (result.get('schema') != 'plan069-depth-setup-result/v1' or
@@ -107,8 +126,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--candidate', choices=('D5', 'D6'), required=True)
     parser.add_argument('--run-id', default='plan031-20260913T032700Z')
+    parser.add_argument('--runtime-environment', required=True)
     args = parser.parse_args()
-    dispatch(args.candidate, args.run_id)
+    dispatch(args.candidate, args.run_id, args.runtime_environment)
 
 
 if __name__ == '__main__':
