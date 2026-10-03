@@ -1,5 +1,6 @@
 """Actual setup binds the independently reviewed recipe before side effects."""
 from pathlib import Path
+import json
 import sys
 import unittest
 from unittest.mock import MagicMock, patch
@@ -39,13 +40,20 @@ class RecipeBinding(unittest.TestCase):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('fixture reviewed source')
+        self.current_sources = [file_record(self.root / name) for name in SETUP_SOURCES]
+        self.profile = self.root / 'profiles.json'
+        write_json(self.profile, dict(profile='fixture'))
         source_review = self.root / 'docs/research/vipe-alternatives/plan031-execution/depth-D5-source-review-001.json'
         source_review.parent.mkdir(parents=True)
-        write_json(source_review, dict(setup_sources=[file_record(self.root / name) for name in SETUP_SOURCES],
-            runtime_recipe=file_record(self.recipe_path)))
-        self.proposal = dict(allocation=dict(artifact_bytes=1000000, setup_seconds=1800))
+        self.source_review = source_review
+        write_json(source_review, dict(schema='plan069-depth-source-review/v1', status='passed',
+            candidate='D5', reviewer='independent fixture reviewer', source_revision='pinned-revision',
+            profile_inventory=file_record(self.profile), local_sources=self.current_sources,
+            setup_sources=self.current_sources, runtime_recipe=file_record(self.recipe_path)))
+        self.proposal = dict(allocation=dict(artifact_bytes=1000000, setup_seconds=1800),
+            candidate_config=dict(code=dict(revision='pinned-revision')), profile_inventory=file_record(self.profile))
 
-    def dispatch(self, path, *, supervisor=None):
+    def dispatch(self, path, *, supervisor=None, source_review_path=None):
         ledger = MagicMock()
         self.ledger = ledger
         original_read = Path.read_text
@@ -55,10 +63,14 @@ class RecipeBinding(unittest.TestCase):
              patch.object(dispatch_cli, 'shared_run_root', return_value=self.root), \
              patch.object(dispatch_cli, 'execution_authorization', return_value=({}, {}, self.proposal, {})), \
              patch.object(dispatch_cli, 'Ledger', return_value=ledger), \
+             patch('vipe_benchmark.depth_admission.local_source_records', return_value=self.current_sources), \
              patch.object(dispatch_cli, 'resources', return_value=dict(gpu_pids=[])), \
              patch.object(dispatch_cli, 'supervise', side_effect=supervisor or AssertionError('reservation reached')), \
              patch.object(Path, 'read_text', read_path):
-            dispatch_cli.dispatch('D5', self.run_id, path)
+            if source_review_path is None:
+                dispatch_cli.dispatch('D5', self.run_id, path)
+            else:
+                dispatch_cli.dispatch('D5', self.run_id, path, source_review_path=source_review_path)
         return ledger
 
     def test_valid_self_consistent_substitutions_rejected_before_request_or_reservation(self):
@@ -128,6 +140,45 @@ class RecipeBinding(unittest.TestCase):
                 run_moge_setup(request, output, acquire=acquire)
         acquire.assert_called_once()
         self.assertEqual(read_json(output / 'request.json')['runtime_environment_record'], file_record(self.recipe_path))
+
+    def test_explicit_review002_is_bound_and_review001_remains_unchanged(self):
+        selected = self.root / 'source-review002.json'
+        write_json(selected, read_json(self.source_review))
+        blocked = read_json(self.source_review)
+        blocked['status'] = 'blocked'
+        self.source_review.write_text(json.dumps(blocked) + '\n')
+        before = file_record(self.source_review)
+        def supervise(ledger, job, command, output, **kwargs):
+            self.assertEqual(kwargs['evidence']['source_review'], file_record(selected))
+            output.mkdir(parents=True)
+            write_json(output / 'result.json', dict(status='complete'))
+            return dict(status='complete')
+        self.dispatch(self.recipe_path, source_review_path=selected, supervisor=supervise)
+        self.assertEqual(file_record(self.source_review), before)
+
+    def test_wrong_candidate_stale_or_substituted_review_rejected_before_request(self):
+        for field in ('candidate', 'local_sources', 'source_revision', 'runtime_recipe', 'status'):
+            with self.subTest(field=field):
+                selected = self.root / ('selected-' + field + '.json')
+                document = read_json(self.source_review)
+                if field == 'candidate':
+                    document[field] = 'D6'
+                elif field == 'local_sources':
+                    document[field][0]['sha256'] = '0' * 64
+                elif field == 'source_revision':
+                    document[field] = 'different-pinned-revision'
+                elif field == 'status':
+                    document[field] = 'blocked'
+                else:
+                    alternate = self.root / 'other-reviewed-runtime.json'
+                    write_json(alternate, self.recipe)
+                    document[field] = file_record(alternate)
+                write_json(selected, document)
+                with self.assertRaisesRegex(ValueError, 'current.*source review|reviewed.*recipe'):
+                    self.dispatch(self.recipe_path, source_review_path=selected)
+                self.ledger.authorize_depth_setup.assert_not_called()
+                self.assertFalse((self.local / 'requests/plan069-D5-setup-001.json').exists())
+                self.assertFalse((self.local / 'jobs/plan069-D5-setup-001').exists())
 
 
 if __name__ == '__main__':

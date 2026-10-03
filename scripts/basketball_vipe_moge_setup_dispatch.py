@@ -28,7 +28,7 @@ def shared_run_root():
     return repository
 
 
-def dispatch(candidate, run_id, runtime_environment):
+def dispatch(candidate, run_id, runtime_environment, *, source_review_path=None):
     if candidate not in ('D5', 'D6'):
         raise ValueError('MoGe setup candidate must be D5 or D6')
     if run_id != 'plan031-20260913T032700Z':
@@ -48,10 +48,20 @@ def dispatch(candidate, run_id, runtime_environment):
     validate_environment_request(environment, Path(requirement_record['path']).parent,
                                  candidate, 'actual')
     review, authorization, proposal, _ = execution_authorization(candidate)
-    source_review_path = (ROOT / 'docs/research/vipe-alternatives/plan031-execution' /
-                          f'depth-{candidate}-source-review-001.json')
+    source_review_path = (Path(source_review_path) if source_review_path is not None else
+        ROOT / 'docs/research/vipe-alternatives/plan031-execution' /
+        f'depth-{candidate}-source-review-001.json')
     source_review = file_record(source_review_path)
     source_evidence = read_json(source_review_path)
+    from vipe_benchmark.depth_admission import local_source_records
+    if (source_evidence.get('schema') != 'plan069-depth-source-review/v1' or
+            source_evidence.get('status') != 'passed' or
+            source_evidence.get('candidate') != candidate or
+            source_evidence.get('source_revision') != proposal['candidate_config']['code']['revision'] or
+            source_evidence.get('profile_inventory') != proposal['profile_inventory'] or
+            source_evidence.get('local_sources') != local_source_records(candidate) or
+            not source_evidence.get('reviewer')):
+        raise ValueError('current independent MoGe source review required before setup request')
     setup_sources = [file_record(ROOT / path) for path in (
         'scripts/vipe_benchmark/moge_setup.py',
         'scripts/vipe_benchmark/moge_native.py',
@@ -130,8 +140,10 @@ def main():
     parser.add_argument('--candidate', choices=('D5', 'D6'), required=True)
     parser.add_argument('--run-id', default='plan031-20260913T032700Z')
     parser.add_argument('--runtime-environment', required=True)
+    parser.add_argument('--source-review', help='Exact immutable independently reviewed source receipt')
     args = parser.parse_args()
-    dispatch(args.candidate, args.run_id, args.runtime_environment)
+    dispatch(args.candidate, args.run_id, args.runtime_environment,
+             source_review_path=args.source_review)
 
 
 if __name__ == '__main__':
