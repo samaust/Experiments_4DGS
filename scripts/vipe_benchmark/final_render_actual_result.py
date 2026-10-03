@@ -88,6 +88,10 @@ def validate_actual_worker_result(request, arm, phase, result, *, published=True
             geometry.get('recipe',{}).get('matcher_runtime') == binding['matcher_runtime'] and
             geometry.get('recipe',{}).get('invocation') == result['invocation'],
             'qualified full-rig geometry required')
+        from .final_render_initializer import _geometry
+        checked, _, _ = _geometry(request,arm,result['geometry'])
+        _require(all(row['artifact'] in artifacts for row in checked.rows),
+            'geometry result omits published observation archives')
     elif phase == 'initializer':
         bundle = _bound(result['initializer'])
         assembly = _bound(result['assembly'])
