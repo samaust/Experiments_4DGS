@@ -26,8 +26,11 @@ LIMIT_KEYS = dict(download_bytes='new_download_gib_limit',
                   gpu_seconds='gpu_total_seconds_limit',
                   cpu_seconds='cpu_prepare_score_report_seconds_limit',
                   setup_seconds='setup_wall_seconds_limit')
-LOCAL_COMMON = ('files.py', 'ledger.py', 'depth_admission.py', 'depth_extension.py',
-    'depth_clips.py', 'scale.py', 'qualitative_package.py')
+LOCAL_COMMON = ('files.py', 'config.py', 'ledger.py', 'depth_admission.py',
+    'depth_extension.py', 'depth_clips.py', 'scale.py', 'qualitative_package.py',
+    'execution.py', 'supervisor.py', 'budgets.py', 'runtime.py', 'isolation.py',
+    'ffmpeg_binding.py', 'transfer_proxy.py', 's1_helper_session.py',
+    's1_identity.py', 's1_progress.py', 's1_clock.py')
 LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py',
                           'd2_preflight.py', 'd2_maps.py', 'd2_actual.py'),
     D5=('moge_metric.py', 'moge_native.py', 'moge_setup.py',
@@ -53,6 +56,7 @@ def local_source_records(candidate):
     """Rehash every local inference and publication source bound by review."""
     records = [file_record(ROOT / 'scripts/vipe_benchmark' / name)
                for name in (*LOCAL_COMMON, *LOCAL_ADAPTERS[candidate])]
+    records.append(file_record(ROOT / 'scripts/basketball_scale.py'))
     if candidate == 'D2':
         records.append(file_record(ROOT / 'scripts/basketball_vipe_d2_maps.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_d2_dispatch.py'))
