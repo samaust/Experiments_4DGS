@@ -101,3 +101,90 @@ def remaining_map_allocation(proposal, setup, events, run_root, assets):
         allocation[allocation_key] -= credit
     return dict(allocation=allocation, credited_assets_bytes=credit,
                 setup=setup_record, setup_finish_event_sha256=finish['event_sha256'])
+
+
+def owned_slot_bytes(run_root, candidate):
+    """Count all retained candidate job revisions, including preserved failures."""
+    from .budgets import directory_bytes
+    jobs = Path(run_root).resolve() / 'jobs'
+    total = 0
+    for path in jobs.glob(f'plan069-{candidate}-*'):
+        _require(not path.is_symlink(), 'owned candidate job must not be a symlink')
+        if path.is_dir():
+            total += directory_bytes(path)
+    return total
+
+
+def bind_slot_byte_budget(proposal, stage, events, run_root, reading):
+    """Freeze conservative shared setup overhead and unchanged whole-slot caps."""
+    candidate = proposal['candidate']
+    grants = [event for event in events if event.get('event') == 'depth_setup_authorized'
+              and event.get('candidate') == candidate]
+    _require(len(grants) == 1, 'exact setup baseline required for whole-slot budget')
+    baseline = grants[0]['resource_snapshot']
+    limits = {}
+    for key in ('download_bytes', 'artifact_bytes'):
+        _require(type(baseline.get(key)) is int and baseline[key] >= 0 and
+                 type(reading.get(key)) is int and reading[key] >= baseline[key],
+                 'accounted monotonic setup baseline required for whole-slot budget')
+        limits[key] = baseline[key] + proposal['allocation'][key]
+        _require(reading[key] <= limits[key], key + ' whole-slot allocation exceeded')
+    owned = owned_slot_bytes(run_root, candidate)
+    overhead = max(0, reading['artifact_bytes'] - baseline['artifact_bytes'] - owned)
+    _require(owned + overhead <= proposal['allocation']['artifact_bytes'],
+             'retained setup artifacts exceed whole-slot allocation')
+    return dict(schema='plan069-depth-slot-byte-budget/v1', candidate=candidate,
+                proposal_sha256=object_hash(proposal), setup=stage['setup'],
+                setup_finish_event_sha256=stage['setup_finish_event_sha256'],
+                setup_baseline=baseline, absolute_limits=limits,
+                shared_setup_artifact_bytes=overhead)
+
+
+def check_slot_byte_budget(proposal, budget, run_root, reading, *, historical=False):
+    """Check active whole-slot caps; late CPU diagnostics check retained scope.
+
+    Historical CPU callers separately prove no new downloads during their stage.
+    Their artifact guard retains frozen shared setup overhead without charging
+    unrelated later jobs to the old candidate.
+    """
+    _require(budget.get('schema') == 'plan069-depth-slot-byte-budget/v1' and
+             budget.get('candidate') == proposal['candidate'] and
+             budget.get('proposal_sha256') == object_hash(proposal) and
+             type(budget.get('shared_setup_artifact_bytes')) is int and
+             budget['shared_setup_artifact_bytes'] >= 0 and
+             all(type(budget.get('setup_baseline', {}).get(key)) is int and
+                 budget['setup_baseline'][key] >= 0 and
+                 budget.get('absolute_limits', {}).get(key) ==
+                    budget['setup_baseline'][key] + proposal['allocation'][key]
+                 for key in ('download_bytes', 'artifact_bytes')),
+             'exact approved whole-slot byte budget required')
+    if not historical:
+        for key in ('download_bytes', 'artifact_bytes'):
+            _require(type(reading.get(key)) is int and
+                     budget['setup_baseline'][key] <= reading[key] <= budget['absolute_limits'][key],
+                     key + ' whole-slot allocation exceeded')
+    _require(owned_slot_bytes(run_root, proposal['candidate']) +
+             budget['shared_setup_artifact_bytes'] <= proposal['allocation']['artifact_bytes'],
+             'retained candidate artifacts exceed whole-slot allocation')
+
+
+def historical_slot_byte_guard(ledger, candidate):
+    """Return a no-download CPU guard for an already admitted native slot."""
+    from .budgets import budget_snapshot
+    allocations = [event for event in ledger.events() if event.get('event') == 'depth_attempt_authorized'
+                   and event.get('candidate') == candidate]
+    if len(allocations) != 1 or allocations[0].get('slot_byte_budget') is None:
+        _require(candidate != 'D11', 'D11 diagnostics require whole-slot byte proof')
+        return lambda: None
+    allocation = allocations[0]
+    review = read_json(verify_record(allocation['review'])['path'])
+    proposal = next(row for row in review['proposals'] if row['candidate'] == candidate)
+    baseline = budget_snapshot(ledger.path.parent)['download_bytes']
+
+    def check():
+        reading = budget_snapshot(ledger.path.parent)
+        _require(reading['download_bytes'] == baseline, 'CPU diagnostics must not acquire new downloads')
+        check_slot_byte_budget(proposal, allocation['slot_byte_budget'], ledger.path.parent,
+                               reading, historical=True)
+    check()
+    return check

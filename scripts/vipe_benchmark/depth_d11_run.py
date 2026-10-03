@@ -9,7 +9,7 @@ import numpy as np
 from .config import load
 from .depth_clips import materialize_role
 from .depth_extension import CONFIG, _prediction
-from .depth_single_run import _actual_gate, _input_lineage, _membership
+from .depth_single_run import _actual_gate, _actual_output_guard, _check_actual_slot, _npz_write_bound, _input_lineage, _membership
 from .files import file_record, load_array, object_hash, read_json, verify_record, write_json
 from .marigold_relative import MarigoldLogStage2Adapter, PROFILE
 from .native_d11 import CachedD11Runtime, run_folder
@@ -85,6 +85,7 @@ def run_maps(request, output, *, backend=None, request_path=None):
                 images[camera, source['frame']] = rgb, valid
     ordered = sorted(images)
     _require(len(ordered) == 256, 'D11 unique native folder workload changed')
+    output_guard = _actual_output_guard(request, output)
     output.mkdir(parents=True, exist_ok=False)
     write_json(output / 'request.json', request)
     started, result_rows = time.monotonic(), []
@@ -103,6 +104,7 @@ def run_maps(request, output, *, backend=None, request_path=None):
             backend = MarigoldLogStage2Adapter(CachedD11Runtime(predictions))
         _require(getattr(backend, 'component', None) == 'D11', 'D11 backend candidate changed')
         for key in ordered:
+            output_guard()
             _require(time.monotonic() < deadline, 'D11 output deadline exceeded')
             rgb, valid = images[key]
             source = rows[key]
@@ -112,6 +114,7 @@ def run_maps(request, output, *, backend=None, request_path=None):
                      prediction.metadata.get('profile') == PROFILE,
                      'D11 native relative-log profile changed')
             path = output / f'camera{key[0]}-frame{key[1]}.npz'
+            output_guard(_npz_write_bound(values, supported, raw))
             with path.open('xb') as stream:
                 np.savez_compressed(stream, relative=values, valid=supported, raw_values=raw)
             result_rows.append(dict(camera=key[0], frame=key[1],
@@ -132,6 +135,7 @@ def run_maps(request, output, *, backend=None, request_path=None):
             elapsed_seconds=time.monotonic() - started)
         _require(time.monotonic() < deadline, 'D11 result deadline exceeded')
         write_json(output / 'result.json', result)
+        _check_actual_slot(request)
         return result
     except BaseException as error:
         write_json(output / 'failure.json', dict(schema='plan069-D11-maps-failure/v1',

@@ -51,7 +51,7 @@ class SinglePublishTests(unittest.TestCase):
         write_json(review, dict(proposals=[dict(candidate='D5',
             candidate_config=read_json(CONFIG)['candidates']['D5'],
             workload=dict(unique_published_maps=256, clips=4, clip_frames=50, clip_fps=25),
-            allocation=dict(cpu_seconds=120, artifact_bytes=2**30))]))
+            allocation=dict(cpu_seconds=120, artifact_bytes=2**30,download_bytes=2**30))]))
         job = 'plan069-D5-maps-001'
         actual_request = dict(request, record_kind='actual', job_id=job,
             qualitative_admission=file_record(actual_qualitative),
@@ -82,6 +82,20 @@ class SinglePublishTests(unittest.TestCase):
             write_json(output / 'result.json', receipt)
             return receipt
         output = local / 'jobs/plan069-D5-clips-001'
+        from vipe_benchmark.files import object_hash
+        proposal = read_json(review)['proposals'][0]
+        previous_events = ledger.events.return_value
+        ledger.events.return_value = previous_events + [dict(event='depth_attempt_authorized',candidate='D5',
+            slot_byte_budget=dict(schema='plan069-depth-slot-byte-budget/v1',candidate='D5',
+                proposal_sha256=object_hash(proposal),shared_setup_artifact_bytes=2**30,
+                setup_baseline=dict(download_bytes=0,artifact_bytes=0),
+                absolute_limits=dict(download_bytes=2**30,artifact_bytes=2**30)))]
+        with patch('vipe_benchmark.depth_single_publish.Ledger',return_value=ledger), \
+                self.assertRaisesRegex(ValueError,'whole-slot'):
+            publish_after_gpu(file_record(result_path),output)
+        self.assertFalse(output.exists())
+        self.assertEqual(ledger.charge_cpu_preparation.call_count,0)
+        ledger.events.return_value = previous_events
         with patch('vipe_benchmark.depth_single_publish.Ledger', return_value=ledger), patch(
                 'vipe_benchmark.depth_clips.publish_fixture_clips', render):
             receipt = publish_after_gpu(file_record(result_path), output)

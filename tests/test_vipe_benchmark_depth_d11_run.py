@@ -87,10 +87,12 @@ class D11MapsTests(unittest.TestCase):
                 source_manifest=setup['source_manifest'],
                 native_qualification=setup['runtime']['native_qualification'], predictions=rows))
             return rows
-        with patch('vipe_benchmark.depth_d11_run._actual_gate', return_value=(__import__('time').monotonic()+120, setup)), patch(
+        with patch('vipe_benchmark.depth_d11_run._actual_output_guard') as output_guard, patch('vipe_benchmark.depth_d11_run._check_actual_slot') as slot_guard, patch('vipe_benchmark.depth_d11_run._actual_gate', return_value=(__import__('time').monotonic()+120, setup)), patch(
                 'vipe_benchmark.depth_d11_run.materialize_role', self.fixture.materialize), patch(
                 'vipe_benchmark.depth_d11_run.run_folder', native):
             result = run_maps(request, self.root / request['job_id'], request_path=self.root / 'request.json')
+        self.assertEqual(slot_guard.call_count,1)
+        self.assertEqual(output_guard.return_value.call_count,512)
         self.assertEqual(len(calls), 1)
         self.assertEqual(len(calls[0]), 256)
         self.assertEqual(calls[0], sorted(calls[0]))

@@ -146,7 +146,8 @@ class MapAllowanceTests(unittest.TestCase):
         from vipe_benchmark.ledger import Ledger
         self.prepare_completed_setup()
         ledger = Ledger(self.root / 'ledger.jsonl', self.config)
-        initial = dict(gpu_pids=[], download_bytes=0,artifact_bytes=0,device_bytes=0)
+        initial = dict(gpu_pids=[], download_bytes=self.config['new_download_gib_limit']*2**30-20,
+                       artifact_bytes=self.config['new_artifact_disk_gib_limit']*2**30-100,device_bytes=0)
         with patch('vipe_benchmark.execution.resources', return_value=initial):
             ledger.authorize_depth_setup('D5',self.review,self.authorization,self.source_review)
             ledger.reserve('plan069-D5-setup-001',['bounded-fixture-setup'],self.events[1]['evidence'])
@@ -171,13 +172,15 @@ class MapAllowanceTests(unittest.TestCase):
             str(self.root/'jobs/plan069-D5-maps-001')]
         reading = dict(initial,**{key:self.live['used'][key] for key in ['download_bytes','artifact_bytes']})
         excess = dict(reading, artifact_bytes=self.config['new_artifact_disk_gib_limit']*2**30-88+1)
-        with patch('vipe_benchmark.execution.resources',return_value=excess), \
+        with patch('vipe_benchmark.depth_map_allowance.owned_slot_bytes',return_value=12), \
+                patch('vipe_benchmark.execution.resources',return_value=excess), \
                 self.assertRaisesRegex(ValueError,'artifact_bytes depth allocation exceeds live cap'):
             ledger.authorize_depth_attempt('D5',self.review,self.authorization,self.source_review,
                 admission,command=command,request=file_record(request_path),worker=worker,
                 executable=file_record(sys.executable))
         self.assertEqual(ledger.events(), events)
-        with patch('vipe_benchmark.execution.resources',return_value=reading):
+        with patch('vipe_benchmark.depth_map_allowance.owned_slot_bytes',return_value=12), \
+                patch('vipe_benchmark.execution.resources',return_value=reading):
             event = ledger.authorize_depth_attempt('D5',self.review,self.authorization,self.source_review,
                 admission,command=command,request=file_record(request_path),worker=worker,
                 executable=file_record(sys.executable))
@@ -185,3 +188,69 @@ class MapAllowanceTests(unittest.TestCase):
         self.assertEqual(event['map_stage_allowance']['allocation']['artifact_bytes'],88)
         self.assertEqual(event['resource_snapshot']['artifact_bytes'],reading['artifact_bytes'])
         self.assertEqual(event['map_stage_allowance']['setup_finish_event_sha256'],events[-1]['event_sha256'])
+
+
+class WholeSlotBudgetTests(unittest.TestCase):
+    def test_setup_runtime_and_source_costs_leave_no_second_full_allocation(self):
+        from vipe_benchmark.depth_map_allowance import bind_slot_byte_budget, check_slot_byte_budget
+        proposal = dict(candidate='D11',allocation=dict(download_bytes=100,artifact_bytes=200))
+        stage = dict(setup=dict(path='accepted-result'), setup_finish_event_sha256='f'*64)
+        events = [dict(event='depth_setup_authorized',candidate='D11',
+                       resource_snapshot=dict(download_bytes=1000,artifact_bytes=2000))]
+        with patch('vipe_benchmark.depth_map_allowance.owned_slot_bytes',return_value=140):
+            budget = bind_slot_byte_budget(proposal,stage,events,'/tmp',
+                dict(download_bytes=1090,artifact_bytes=2180))
+            self.assertEqual(budget['shared_setup_artifact_bytes'],40)
+            check_slot_byte_budget(proposal,budget,'/tmp',dict(download_bytes=1100,artifact_bytes=2200))
+            for reading in (dict(download_bytes=1101,artifact_bytes=2200),
+                            dict(download_bytes=1100,artifact_bytes=2201)):
+                with self.subTest(reading=reading), self.assertRaisesRegex(ValueError,'whole-slot'):
+                    check_slot_byte_budget(proposal,budget,'/tmp',reading)
+        with patch('vipe_benchmark.depth_map_allowance.owned_slot_bytes',return_value=161), \
+                self.assertRaisesRegex(ValueError,'retained candidate'):
+            check_slot_byte_budget(proposal,budget,'/tmp',dict(download_bytes=1100,artifact_bytes=2200))
+        with patch('vipe_benchmark.depth_map_allowance.owned_slot_bytes',return_value=140):
+            check_slot_byte_budget(proposal,budget,'/tmp',
+                dict(download_bytes=999999,artifact_bytes=999999),historical=True)
+
+    def test_owned_scope_counts_preserved_revisions_and_excludes_other_candidates(self):
+        import tempfile
+        from vipe_benchmark.budgets import directory_bytes
+        from vipe_benchmark.depth_map_allowance import owned_slot_bytes
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ('setup-001','maps-001','clips-001','anchor-previews-001','anchor-previews-002'):
+                folder = root/'jobs'/('plan069-D11-'+name)
+                folder.mkdir(parents=True)
+                (folder/'retained.bin').write_bytes(b'preserved')
+            other = root/'jobs/plan069-D5-maps-001'
+            other.mkdir()
+            (other/'other.bin').write_bytes(b'other slot')
+            self.assertEqual(owned_slot_bytes(root,'D11'),
+                sum(directory_bytes(path) for path in (root/'jobs').glob('plan069-D11-*')))
+            self.assertLess(owned_slot_bytes(root,'D11'),directory_bytes(root/'jobs'))
+
+
+    def test_late_cpu_diagnostics_reject_new_downloads_without_charging_other_jobs(self):
+        import tempfile
+        from types import SimpleNamespace
+        from vipe_benchmark.depth_map_allowance import historical_slot_byte_guard
+        proposal = dict(candidate='D11',allocation=dict(download_bytes=100,artifact_bytes=200))
+        budget = dict(schema='plan069-depth-slot-byte-budget/v1',candidate='D11',
+            proposal_sha256=object_hash(proposal),shared_setup_artifact_bytes=40,
+            setup_baseline=dict(download_bytes=1000,artifact_bytes=2000),
+            absolute_limits=dict(download_bytes=1100,artifact_bytes=2200))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_json(root/'review.json',dict(proposals=[proposal]))
+            ledger = SimpleNamespace(path=root/'ledger.jsonl',events=lambda:[dict(
+                event='depth_attempt_authorized',candidate='D11',slot_byte_budget=budget,
+                review=file_record(root/'review.json'))])
+            reading = dict(download_bytes=999999,artifact_bytes=999999)
+            with patch('vipe_benchmark.depth_map_allowance.owned_slot_bytes',return_value=140), \
+                    patch('vipe_benchmark.budgets.budget_snapshot',return_value=reading):
+                guard = historical_slot_byte_guard(ledger,'D11')
+                guard()
+                reading['download_bytes'] += 1
+                with self.assertRaisesRegex(ValueError,'must not acquire'):
+                    guard()

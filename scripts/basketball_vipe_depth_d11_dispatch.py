@@ -160,10 +160,15 @@ def dispatch(context, qualification, setup, *, source_review_path, run_id='plan0
     write_json(request_path, request)
     command = [sys.executable, str(ROOT / 'scripts/basketball_vipe_depth_d11_maps.py'),
         '--request', str(request_path), '--output', str(output)]
-    ledger.authorize_depth_attempt('D11', review, approved, source_review, admission_record,
+    allocation_event = ledger.authorize_depth_attempt('D11', review, approved, source_review, admission_record,
         command=command, request=file_record(request_path),
         worker=file_record(ROOT / 'scripts/basketball_vipe_depth_d11_maps.py'),
         executable=file_record(sys.executable))
+    from vipe_benchmark.depth_map_allowance import check_slot_byte_budget
+    def slot_resources():
+        reading = resources(local, gpu=True)
+        check_slot_byte_budget(proposal, allocation_event['slot_byte_budget'], local, reading)
+        return reading
     def validate(out):
         result = read_json(verify_record(file_record(out / 'result.json'))['path'])
         validate_result(result, request)
@@ -173,7 +178,7 @@ def dispatch(context, qualification, setup, *, source_review_path, run_id='plan0
                       authorization=approved, source_review=source_review,
                       worker=file_record(ROOT / 'scripts/basketball_vipe_depth_d11_maps.py'),
                       executable=file_record(sys.executable)),
-        sample_resources=lambda: resources(local, gpu=True),
+        sample_resources=slot_resources,
         validate_result=validate, poll_seconds=2.)
 
 

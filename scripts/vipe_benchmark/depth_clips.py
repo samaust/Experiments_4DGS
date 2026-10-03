@@ -271,7 +271,7 @@ def _encode_video(path, frames, deadline):
 
 def publish_fixture_clips(context_record, candidate, domain, map_rows, anchor_records,
                           output, provenance, *, max_seconds=120,
-                          record_kind='fixture'):
+                          record_kind='fixture', resource_guard=None):
     """Publish matched clips from independently bound raw map records."""
     import cv2
     from basketball_scale import undistortion
@@ -371,6 +371,8 @@ def publish_fixture_clips(context_record, candidate, domain, map_rows, anchor_re
         if key[1] == 175 and row['prediction'] != anchor_records[key[0]]:
             raise ValueError('frame-175 anchor reuse differs from accepted result')
     output = Path(output)
+    if resource_guard is not None:
+        resource_guard()
     output.mkdir(parents=True, exist_ok=False)
     calibration_rows = {entry['camera_id']: entry for entry in read_json(context['calibration']['path'])['cameras']}
     selections, rgb_media, depth_media, normalization = [], [], [], {}
@@ -416,8 +418,14 @@ def publish_fixture_clips(context_record, candidate, domain, map_rows, anchor_re
         def depth_frames():
             for value, valid in samples:
                 yield _clip_pixels(value, valid, domain, bounds)
+        if resource_guard is not None:
+            resource_guard()
         source_video = _encode_video(output / f'camera{camera}-source.mp4', source_frames(), deadline)
+        if resource_guard is not None:
+            resource_guard()
         depth_video = _encode_video(output / f'camera{camera}-{candidate}.mp4', depth_frames(), deadline)
+        if resource_guard is not None:
+            resource_guard()
         common = dict(selection_id=selection['id'], kind='clip', camera_id=str(camera),
             frame_ids=selection['frame_ids'], timestamps=selection['timestamps'], resolution=[960, 540])
         rgb_media.append(dict(common, record=source_video,

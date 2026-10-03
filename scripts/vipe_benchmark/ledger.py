@@ -367,6 +367,10 @@ class Ledger:
             if stage is not None and any(reading[key] < stage['credited_assets_bytes']
                     for key in ('download_bytes', 'artifact_bytes')):
                 raise ValueError('completed setup assets no longer included in live accounting')
+            slot_budget = None
+            if stage is not None:
+                from .depth_map_allowance import bind_slot_byte_budget
+                slot_budget = bind_slot_byte_budget(proposal, stage, events, self.path.parent, reading)
             total = self.totals(events)['gpu']['elapsed_seconds']
             if total + seconds > self.config['gpu_total_seconds_limit']:
                 raise ValueError('depth GPU cumulative allowance exhausted')
@@ -381,6 +385,7 @@ class Ledger:
                 proposal_sha256=object_hash(proposal), review=review,
                 authorization=authorization, source_review=source_review,
                 admission=admission, resource_snapshot=reading, map_stage_allowance=stage,
+                slot_byte_budget=slot_budget,
                 command=command, **binding))
 
     def charge_cpu_preparation(self, elapsed_seconds, evidence):

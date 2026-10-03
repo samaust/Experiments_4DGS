@@ -71,6 +71,16 @@ def publish_after_gpu(map_result_record, output):
              'single-image map request/result admission binding changed')
     review = read_json(verify_record(request['review'])['path'])
     proposal = next(row for row in review['proposals'] if row['candidate'] == candidate)
+    from .depth_map_allowance import check_slot_byte_budget
+    allocation_events = [event for event in ledger.events() if event.get('event') == 'depth_attempt_authorized'
+                         and event.get('candidate') == candidate]
+    slot_budget = allocation_events[0].get('slot_byte_budget') if len(allocation_events) == 1 else None
+    if candidate == 'D11':
+        _require(slot_budget is not None, 'D11 publication requires whole-slot byte budget')
+    def check_slot():
+        if slot_budget is not None:
+            check_slot_byte_budget(proposal, slot_budget, local, budget_snapshot(local))
+    check_slot()
     _require(proposal['workload']['unique_published_maps'] == 256 and
              proposal['workload']['clips'] == 4 and
              proposal['workload']['clip_frames'] == 50 and
@@ -128,12 +138,13 @@ def publish_after_gpu(map_result_record, output):
         from .depth_clips import publish_fixture_clips
         receipt = publish_fixture_clips(result['context'], candidate,
             domain, clip_rows, anchors, output, provenance,
-            max_seconds=seconds, record_kind='actual')
+            max_seconds=seconds, record_kind='actual', resource_guard=check_slot)
         elapsed = time.monotonic() - started
         _require(elapsed <= seconds and receipt.get('clips') == 4 and
                  receipt.get('new_map_identities') == 196 and
                  receipt.get('record_kind') == 'actual',
                  'single-image actual clip receipt differs from reviewed allocation')
+        check_slot()
         _require(directory_bytes(map_path.parent) + directory_bytes(output)
                  <= proposal['allocation']['artifact_bytes'],
                  'single-image map/clip artifacts exceed candidate allocation')
@@ -152,6 +163,7 @@ def publish_after_gpu(map_result_record, output):
             candidate=candidate, map_result=map_result_record,
             clips_result=file_record(output / 'result.json'),
             elapsed_seconds=elapsed))
+        check_slot()
         ledger.charge_cpu_preparation(elapsed, file_record(output / 'cpu-accounting.json'))
         return receipt
     except BaseException as error:

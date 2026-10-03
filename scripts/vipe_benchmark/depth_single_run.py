@@ -80,7 +80,9 @@ def _actual_gate(request, request_path, output):
     _require(output.resolve() == ledger_path.parent / 'jobs' / job,
              'actual output differs from shared reservation')
     config = dict(load(), new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
-    state = Ledger(ledger_path, config).states().get(job, {})
+    ledger = Ledger(ledger_path, config)
+    events = ledger.events()
+    state = ledger.states(events).get(job, {})
     command = state.get('command', [])
     _require(state.get('event') == 'reserve' and
              state.get('evidence', {}).get('request') == file_record(request_path) and
@@ -106,13 +108,28 @@ def _actual_gate(request, request_path, output):
                  ('review', 'authorization', 'source_review', 'qualification')) and
              all(admission.get(k) == qualified.get(k) for k in ('commercial', 'assets', 'runtime')),
              'exact admitted proposal and qualification binding required')
+    completed_setup = admission.get('completed_setup')
+    if completed_setup is not None:
+        _require(completed_setup == request['setup'],
+                 'worker setup differs from credited admission')
+    _require(candidate != 'D11' or completed_setup is not None,
+             'D11 requires completed setup stage proof')
     live = admission['live']
     blockers = admit(proposal, config=config, commercial=qualified['commercial'],
         assets=qualified['assets'], runtime=qualified['runtime'], live=live,
         source_review=request['source_review'], approval=grant,
         cap_amendment=authorization['cap_amendment'], cap_approval=authorization['cap_approval'],
-        ledger_head_sha256=live['ledger_head_sha256'], now_unix=live['sampled_unix'])
+        ledger_head_sha256=live['ledger_head_sha256'], now_unix=live['sampled_unix'],
+        completed_setup=completed_setup, setup_events=events, run_root=ledger_path.parent)
     _require(not blockers, 'native qualification changed: ' + '; '.join(blockers))
+    if completed_setup is not None:
+        from .budgets import budget_snapshot
+        from .depth_map_allowance import check_slot_byte_budget
+        allocation_events = [event for event in events if event.get('event') == 'depth_attempt_authorized'
+                             and event.get('candidate') == candidate]
+        _require(len(allocation_events) == 1, 'exact map slot byte authorization required')
+        check_slot_byte_budget(proposal, allocation_events[0]['slot_byte_budget'],
+                               ledger_path.parent, budget_snapshot(ledger_path.parent))
     setup = read_json(verify_record(request['setup'])['path'])
     _require(setup.get('schema') == 'plan069-depth-setup-result/v1' and
              setup.get('status') == 'complete' and setup.get('record_kind') == 'actual' and
@@ -140,6 +157,59 @@ def _actual_gate(request, request_path, output):
         verify_record(setup['native_source'])
     return deadline, setup
 
+
+
+def _check_actual_slot(request):
+    if request['record_kind'] != 'actual':
+        return
+    from .budgets import budget_snapshot
+    from .depth_map_allowance import check_slot_byte_budget
+    ledger_path = Path(request['ledger_path']).resolve()
+    events = Ledger(ledger_path, load()).events()
+    allocations = [event for event in events if event.get('event') == 'depth_attempt_authorized'
+                   and event.get('candidate') == request['candidate']]
+    _require(len(allocations) == 1, 'exact whole-slot map authorization required')
+    budget = allocations[0].get('slot_byte_budget')
+    if budget is None:
+        _require(request['candidate'] != 'D11', 'D11 whole-slot byte proof required')
+        return
+    review = read_json(verify_record(request['review'])['path'])
+    proposal = next(row for row in review['proposals'] if row['candidate'] == request['candidate'])
+    check_slot_byte_budget(proposal, budget, ledger_path.parent, budget_snapshot(ledger_path.parent))
+
+
+
+def _npz_write_bound(*arrays):
+    """Array payload plus ample NPY/ZIP/DEFLATE overhead before opening output."""
+    payload = sum(array.nbytes for array in arrays)
+    return (payload * 101 + 99) // 100 + 2**20
+
+def _actual_output_guard(request, output):
+    """Use bounded map-directory scans between full admission/terminal checks."""
+    if request['record_kind'] != 'actual':
+        return lambda additional_bytes=0: None
+    from .budgets import directory_bytes
+    from .depth_map_allowance import owned_slot_bytes
+    root = Path(request['ledger_path']).resolve().parent
+    allocations = [event for event in Ledger(root / 'ledger.jsonl', load()).events()
+                   if event.get('event') == 'depth_attempt_authorized' and
+                   event.get('candidate') == request['candidate']]
+    _require(len(allocations) == 1, 'exact whole-slot map authorization required')
+    budget = allocations[0].get('slot_byte_budget')
+    if budget is None:
+        _require(request['candidate'] != 'D11', 'D11 whole-slot byte proof required')
+        return lambda additional_bytes=0: None
+    review = read_json(verify_record(request['review'])['path'])
+    proposal = next(row for row in review['proposals'] if row['candidate'] == request['candidate'])
+    other_owned = owned_slot_bytes(root, request['candidate']) - directory_bytes(output)
+    available = proposal['allocation']['artifact_bytes'] - budget['shared_setup_artifact_bytes'] - other_owned
+
+    def check(additional_bytes=0):
+        _require(type(additional_bytes) is int and additional_bytes >= 0 and
+                 directory_bytes(output) + additional_bytes <= available,
+                 'next map output exceeds remaining whole-slot artifact headroom')
+    check()
+    return check
 
 def _native_backend(candidate, setup_record):
     if candidate in ('D5', 'D6'):
@@ -216,6 +286,7 @@ def run_maps(request, output, *, backend=None, request_path=None):
     from .moge_metric import supplied_horizontal_fov
     for camera in training_cameras(config):
         supplied_horizontal_fov(np.asarray(rows[camera, 100]['K']), 960, 540)
+    output_guard = _actual_output_guard(request, output)
     output.mkdir(parents=True, exist_ok=False)
     write_json(output / 'request.json', request)
     started = time.monotonic()
@@ -227,6 +298,7 @@ def run_maps(request, output, *, backend=None, request_path=None):
             backend = _native_backend(candidate, request['setup'])
         _require(getattr(backend, 'component', None) == candidate, 'native candidate differs')
         def infer(key, rgb, valid, kind):
+            output_guard()
             _require(time.monotonic() < deadline, 'single-image GPU map deadline exceeded')
             source = rows[key]
             prediction = backend.predict(rgb, np.asarray(source['K'], np.float64), valid)
@@ -234,6 +306,7 @@ def run_maps(request, output, *, backend=None, request_path=None):
             values, accepted, raw, points = _prediction(prediction, 'camera_z_metres', valid)
             _require(points is not None, 'single-image candidate requires native PointMap')
             path = output / f'camera{key[0]}-frame{key[1]}.npz'
+            output_guard(_npz_write_bound(values, accepted, raw, points))
             with path.open('xb') as stream:
                 np.savez_compressed(stream, depth=values, valid=accepted,
                                     raw_values=raw, native_points=points)
@@ -284,6 +357,7 @@ def run_maps(request, output, *, backend=None, request_path=None):
             engineering_eligibility='passed' if fit['status'] == check['status'] == 'passed' else 'blocked',
             physical_accuracy='unverified', elapsed_seconds=time.monotonic() - started)
         write_json(output / 'result.json', result)
+        _check_actual_slot(request)
         return result
     except BaseException as error:
         write_json(output / 'failure.json', dict(schema='plan069-depth-single-maps-failure/v1',
