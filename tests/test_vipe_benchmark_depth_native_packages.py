@@ -56,10 +56,30 @@ class NativePackageTests(unittest.TestCase):
             source_record = dict(name='utils3d', revision=D8_UTILS3D_REVISION,
                 record=file_record(archive), source_dir=str(source),
                 source_manifest=source_manifest(source))
-            packages['utils3d']['direct_url'] = dict(archive_info=dict(
-                hashes=dict(sha256=source_record['record']['sha256'])))
+            packages['utils3d']['direct_url'] = dict(url=archive.as_uri(), archive_info={})
             with patch('vipe_benchmark.depth_native_packages.installed', return_value=packages):
                 self.assertEqual(qualify('D8', source_packages=[source_record])['status'], 'passed')
+                for metadata in [dict(url=archive.as_uri(), archive_info=dict(hashes=dict(sha256=source_record['record']['sha256']))),
+                                 dict(url=archive.as_uri(), archive_info=dict(hash='sha256='+source_record['record']['sha256']))]:
+                    packages['utils3d']['direct_url'] = metadata
+                    self.assertEqual(qualify('D8', source_packages=[source_record])['status'], 'passed')
+                for metadata in [dict(url='https://example.org/archive', archive_info={}),
+                                 dict(url=archive.as_uri(), archive_info=dict(hash='sha256=wrong')),
+                                 dict(url=archive.as_uri(), archive_info=dict(hashes=dict(sha256='wrong'))),
+                                 dict(url=archive.as_uri(), archive_info=dict(hashes=dict(md5='wrong'))),
+                                 dict(url=archive.as_uri(), dir_info=dict(editable=True)),
+                                 dict(url=archive.as_uri(), archive_info={}, vcs_info=dict(commit_id=D8_UTILS3D_REVISION))]:
+                    packages['utils3d']['direct_url'] = metadata
+                    with self.assertRaisesRegex(ValueError, 'pinned utils3d'):
+                        qualify('D8', source_packages=[source_record])
+                packages['utils3d']['direct_url'] = dict(url=archive.as_uri(), archive_info={})
+                with self.assertRaisesRegex(ValueError, 'pinned utils3d'):
+                    qualify('D8', source_packages=[dict(source_record, revision='wrong')])
+                archive.write_bytes(b'changed archive bytes')
+                with self.assertRaisesRegex(ValueError, 'source archive changed'):
+                    qualify('D8', source_packages=[source_record])
+                archive.write_bytes(b'pinned dependency archive fixture')
+
                 with self.assertRaisesRegex(ValueError, 'pinned utils3d'):
                     qualify('D8')
                 helper.write_text('# edited dependency fixture\n')

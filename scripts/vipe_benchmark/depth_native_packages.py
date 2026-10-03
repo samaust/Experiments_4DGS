@@ -71,11 +71,24 @@ def blockers(candidate, packages, source_packages=(), compatibility_profile=None
         vcs = (utils.get('direct_url') or {}).get('vcs_info') or {}
         archive = next((row for row in source_packages if row.get('name') == 'utils3d' and
                         row.get('revision') == D8_UTILS3D_REVISION), None)
-        archive_info = (utils.get('direct_url') or {}).get('archive_info', {})
-        local = archive_info.get('hashes', {})
-        archive_hash = local.get('sha256') or archive_info.get('hash', '').removeprefix('sha256=')
-        archive_matches = archive is not None and archive_hash == archive['record']['sha256']
-        if vcs.get('commit_id') != D8_UTILS3D_REVISION and not archive_matches:
+        direct = utils.get('direct_url') or {}
+        archive_info = direct.get('archive_info')
+        archive_matches = False
+        if archive is not None and isinstance(archive_info, dict):
+            expected = archive['record']
+            # PEP 610 permits an empty archive_info for an exact local archive.
+            # qualify() rehashes the archive and complete source manifest first.
+            valid_fields = set(direct) == {'url', 'archive_info'} and \
+                set(archive_info) <= {'hash', 'hashes'}
+            hashes = archive_info.get('hashes', {})
+            valid_hashes = isinstance(hashes, dict) and set(hashes) <= {'sha256'} and \
+                ('sha256' not in hashes or hashes['sha256'] == expected['sha256'])
+            valid_hash = 'hash' not in archive_info or \
+                archive_info['hash'] == 'sha256=' + expected['sha256']
+            archive_matches = valid_fields and valid_hashes and valid_hash and \
+                direct.get('url') == Path(expected['path']).absolute().as_uri()
+        pinned = archive_matches if source_packages else vcs.get('commit_id') == D8_UTILS3D_REVISION
+        if not pinned:
             problems.append('D8 requires pinned utils3d Git revision')
         return problems
     if candidate == 'D11':
