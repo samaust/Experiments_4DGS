@@ -115,6 +115,14 @@ class PipelineTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_pipeline(self.request,'QF-B',self.records)
 
+    def test_standalone_render_rehashes_the_consumed_training_checkpoint(self):
+        from vipe_benchmark.files import read_json
+        from vipe_benchmark.final_render_pipeline import validate_worker_result
+        result=read_json(self.records['render']['path'])
+        Path(self.checkpoint['path']).write_text('changed checkpoint bytes')
+        with self.assertRaises(ValueError):
+            validate_worker_result(self.request,'QF-B','render',result)
+
     def test_five_fixture_pipelines_share_depth_and_keep_separate_arm_results(self):
         from vipe_benchmark.files import read_json
         from vipe_benchmark.final_render_pipeline import validate_pipeline

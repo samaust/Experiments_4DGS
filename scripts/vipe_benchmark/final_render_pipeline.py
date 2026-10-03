@@ -83,6 +83,8 @@ def validate_worker_result(request, arm, phase, result):
         _require(type(result.get('iteration')) is int and result['iteration'] == 5000 and
             checkpoint == previous.get('checkpoint') and previous.get('completed_iterations') == 5000,
             'render must reload exact 5000-iteration training checkpoint')
+        _require(type(checkpoint) is dict and set(checkpoint) == {'path', 'sha256', 'bytes'} and
+            verify_record(checkpoint) == checkpoint, 'consumed training checkpoint bytes changed')
         reload = _bound(result.get('reload_validation'))
         _require(result['reload_validation'] in artifacts and reload == dict(
             schema='plan069-final-render-fixture-reload/v1', record_kind='fixture', status='passed',
