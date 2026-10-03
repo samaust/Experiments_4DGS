@@ -5,6 +5,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from vipe_benchmark import depth_admission as admission
@@ -101,6 +102,25 @@ class DepthAdmissionTests(unittest.TestCase):
 
     def test_complete_exact_evidence_and_live_capacity_can_pass(self):
         self.assertEqual(self.decide(), [])
+
+    def test_evidence_hashing_does_not_age_a_snapshot_that_was_fresh_at_review_entry(self):
+        clock = [100.]
+        verify = admission.verify_record
+        def slow_evidence(record):
+            clock[0] += 10.
+            return verify(record)
+        live = dict(self.live, sampled_unix=99.)
+        with patch('vipe_benchmark.depth_admission.time.time', side_effect=lambda: clock[0]), \
+             patch('vipe_benchmark.depth_admission.verify_record', side_effect=slow_evidence):
+            self.assertEqual(self.decide(live=live), [])
+        self.assertGreater(clock[0], 105.)
+        clock[0] = 100.
+        with patch('vipe_benchmark.depth_admission.time.time', side_effect=lambda: clock[0]), \
+             patch('vipe_benchmark.depth_admission.verify_record', side_effect=slow_evidence):
+            self.assertIn('fresh ledger-bound live-state snapshot required',
+                self.decide(live=dict(live, sampled_unix=94.)))
+        self.assertIn('fresh ledger-bound live-state snapshot required',
+            self.decide(live=live, now_unix=106.))
 
     def test_missing_commercial_dependency_and_asset_blocks(self):
         self.assertIn('exact commercial permissions unresolved',

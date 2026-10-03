@@ -90,6 +90,9 @@ def review(proposal, *, config, commercial, assets, runtime, live,
     explicit DO record binding the proposal's canonical hash; a REVIEW document
     alone never grants execution.
     """
+    # Freshness applies at entry; locked allocation samples resources again
+    # after rehashing immutable evidence, before it appends authorization.
+    now = time.time() if now_unix is None else now_unix
     blockers = []
     def check(condition, reason):
         if not condition:
@@ -231,7 +234,6 @@ def review(proposal, *, config, commercial, assets, runtime, live,
     check(live.get('active_gpu_owner') is None and
           live.get('active_reservations') == [], 'single GPU or reservation already owned')
     sampled = live.get('sampled_unix')
-    now = time.time() if now_unix is None else now_unix
     check(live.get('fresh') is True and
           type(sampled) in (int, float) and math.isfinite(sampled) and
           type(now) in (int, float) and math.isfinite(now) and

@@ -83,6 +83,11 @@ class DepthSetupAuthorizationTests(unittest.TestCase):
                             file_record(path) if field == 'authorization' else approved,
                             source, current, **binding(current))
                 self.assertEqual(ledger.events(), [])
+                with patch('vipe_benchmark.execution.resources', return_value=dict(reading, gpu_pids=[123])):
+                    with self.assertRaisesRegex(ValueError, 'GPU owner active before depth allocation'):
+                        ledger.authorize_depth_attempt('D7', review, approved, source,
+                                                       current, **binding(current))
+                self.assertEqual(ledger.events(), [])
                 ledger.authorize_depth_attempt('D7', review, approved, source, current, **binding(current))
                 self.assertEqual(ledger.jobs['plan069-D7-maps-001']['seconds'], 3600)
                 with self.assertRaisesRegex(ValueError, 'already authorized'):
