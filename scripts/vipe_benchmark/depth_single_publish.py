@@ -24,7 +24,8 @@ def publish_after_gpu(map_result_record, output):
     domain = 'relative_log' if candidate == 'D11' else 'camera_z_metres'
     expected_schema = RESULT
     if candidate == 'D11':
-        from .depth_d11_run import RESULT as expected_schema
+        from .depth_d11_run import RESULT as d11_schema
+        expected_schema = d11_schema
     JOB = f'plan069-{candidate}-maps-001'
     CLIPS_JOB = f'plan069-{candidate}-clips-001'
     local = map_path.parents[2]
@@ -75,8 +76,7 @@ def publish_after_gpu(map_result_record, output):
     allocation_events = [event for event in ledger.events() if event.get('event') == 'depth_attempt_authorized'
                          and event.get('candidate') == candidate]
     slot_budget = allocation_events[0].get('slot_byte_budget') if len(allocation_events) == 1 else None
-    if candidate == 'D11':
-        _require(slot_budget is not None, 'D11 publication requires whole-slot byte budget')
+    _require(slot_budget is not None, 'native publication requires whole-slot byte budget')
     def check_slot():
         if slot_budget is not None:
             check_slot_byte_budget(proposal, slot_budget, local, budget_snapshot(local))

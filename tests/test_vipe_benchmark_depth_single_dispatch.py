@@ -21,7 +21,7 @@ class SingleDispatchTest(unittest.TestCase):
                             ('CONTEXT_RECEIPT', self.receipt_path),
                             ('Ledger', lambda path, config: self.ledger),
                             ('_live', lambda ledger, local: dict(ledger_head_sha256='head')),
-                            ('admit', lambda *args, **kwargs: []),
+                            ('admit', lambda *args, **kwargs: self.checks.append(kwargs) or []),
                             ('local_source_records', lambda candidate: [])):
             patcher = patch.object(dispatch, name, value)
             patcher.start()
@@ -71,6 +71,11 @@ class SingleDispatchTest(unittest.TestCase):
         candidate = job.split('-')[1]
         request = read_json(command[3])
         self.assertEqual(request['candidate'], candidate)
+        admission = read_json(request['admission']['path'])
+        self.assertEqual(admission['completed_setup'],request['setup'])
+        self.assertEqual(self.checks[-1]['completed_setup'],request['setup'])
+        self.assertEqual(self.checks[-1]['setup_events'],ledger.events())
+        self.assertEqual(self.checks[-1]['run_root'],self.local)
         self.assertEqual(request['schema'], 'plan069-depth-single-maps-request/v1')
         self.assertEqual(command[0], sys.executable)
         self.assertTrue(command[1].endswith('basketball_vipe_depth_single_maps.py'))
@@ -110,6 +115,7 @@ class SingleDispatchTest(unittest.TestCase):
             order.append('live')
             return dict(ledger_head_sha256='refreshed' if len(order)>1 else 'initial')
         def admit(*_args, **kwargs):
+            self.checks.append(kwargs)
             order.append('admit')
             self.assertEqual(kwargs['live']['ledger_head_sha256'], 'initial')
             return []
@@ -205,6 +211,29 @@ class SingleDispatchTest(unittest.TestCase):
         with patch.object(dispatch, 'execution_authorization', side_effect=self.authorization(do)), patch.object(dispatch, 'supervise', return_value={}):
             with self.assertRaisesRegex(ValueError, 'cleanup not confirmed'):
                 dispatch.dispatch('D5', self.context_path, qualified, setup, source)
+
+
+    def test_each_native_sampler_uses_authorization_budget_and_propagates_cap_rejection(self):
+        for candidate in ('D5','D6','D8'):
+            with self.subTest(candidate=candidate):
+                do,qualified,setup,source = self.candidate(candidate)
+                budget = dict(marker=candidate)
+                reading = dict(download_bytes=12,artifact_bytes=34,gpu_pids=[],device_bytes=0)
+                def supervise(*args,**kwargs):
+                    return kwargs['sample_resources']()
+                with patch.object(dispatch,'execution_authorization',side_effect=self.authorization(do)), \
+                        patch.object(self.ledger,'authorize_depth_attempt',return_value=dict(slot_byte_budget=budget)), \
+                        patch.object(dispatch,'resources',return_value=reading), \
+                        patch.object(dispatch,'supervise',side_effect=supervise), \
+                        patch('vipe_benchmark.depth_map_allowance.check_slot_byte_budget',
+                              side_effect=ValueError('whole-slot cap rejected')) as check:
+                    with self.assertRaisesRegex(ValueError,'whole-slot cap rejected'):
+                        dispatch.dispatch(candidate,self.context_path,qualified,setup,source)
+                proposal,bound,root,observed = check.call_args.args
+                self.assertEqual(proposal['candidate'],candidate)
+                self.assertIs(bound,budget)
+                self.assertEqual(root,self.local)
+                self.assertIs(observed,reading)
 
 
 if __name__ == '__main__':

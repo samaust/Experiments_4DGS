@@ -461,12 +461,16 @@ def publish_fixture_clips(context_record, candidate, domain, map_rows, anchor_re
             depth_result=provenance['source_result'],
             depth_admission=provenance['admission'],
             depth_finish=provenance['ledger_outcome'])
+    if resource_guard is not None:
+        resource_guard()
     package = publish_package(manifest, output / 'package', deadline=deadline)['package']
     receipt = dict(schema='plan069-depth-clips-result/v1', status='complete',
         record_kind=record_kind, candidate=candidate, context=context_record,
         package=package, clips=4, new_map_identities=196,
         display=display, elapsed_seconds=time.monotonic() - start)
     write_json(output / 'result.json', receipt)
+    if resource_guard is not None:
+        resource_guard()
     return receipt
 
 

@@ -95,7 +95,7 @@ class SinglePublishTests(unittest.TestCase):
             publish_after_gpu(file_record(result_path),output)
         self.assertFalse(output.exists())
         self.assertEqual(ledger.charge_cpu_preparation.call_count,0)
-        ledger.events.return_value = previous_events
+        ledger.events.return_value[-1]['slot_byte_budget']['shared_setup_artifact_bytes'] = 0
         with patch('vipe_benchmark.depth_single_publish.Ledger', return_value=ledger), patch(
                 'vipe_benchmark.depth_clips.publish_fixture_clips', render):
             receipt = publish_after_gpu(file_record(result_path), output)

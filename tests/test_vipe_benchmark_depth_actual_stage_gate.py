@@ -141,7 +141,7 @@ class ActualStageGateTests(unittest.TestCase):
                 state['evidence']['request'] = file_record(self.request_path)
                 state['evidence']['admission'] = self.request['admission']
                 with patch.object(Ledger, 'states', return_value={self.request['job_id']: state}):
-                    with self.assertRaisesRegex(ValueError, 'allocation|credited admission'):
+                    with self.assertRaisesRegex(ValueError, 'allocation|credited admission|completed setup stage proof'):
                         self.gate()
         self.assertEqual(self.ledger.events(), before)
 

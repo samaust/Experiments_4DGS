@@ -338,6 +338,8 @@ class Ledger:
             live = evidence.get('live', {})
             if live.get('ledger_head_sha256') != head:
                 raise ValueError('depth admission ledger head is stale')
+            if candidate in ('D5','D6','D8','D9','D10','D11') and evidence.get('completed_setup') is None:
+                raise ValueError('new native slot requires completed setup stage proof')
             from .depth_admission import BENCHMARK, CAP_AMENDMENT
             historical = read_json(BENCHMARK)
             cap_amendment = file_record(CAP_AMENDMENT) if self.config != historical else None

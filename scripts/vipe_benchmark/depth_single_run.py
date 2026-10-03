@@ -112,8 +112,8 @@ def _actual_gate(request, request_path, output):
     if completed_setup is not None:
         _require(completed_setup == request['setup'],
                  'worker setup differs from credited admission')
-    _require(candidate != 'D11' or completed_setup is not None,
-             'D11 requires completed setup stage proof')
+    _require(completed_setup is not None,
+             'new native slot requires completed setup stage proof')
     live = admission['live']
     blockers = admit(proposal, config=config, commercial=qualified['commercial'],
         assets=qualified['assets'], runtime=qualified['runtime'], live=live,
@@ -171,7 +171,7 @@ def _check_actual_slot(request):
     _require(len(allocations) == 1, 'exact whole-slot map authorization required')
     budget = allocations[0].get('slot_byte_budget')
     if budget is None:
-        _require(request['candidate'] != 'D11', 'D11 whole-slot byte proof required')
+        _require(request['candidate'] not in (*CANDIDATES,'D11'), 'new native slot whole-slot byte proof required')
         return
     review = read_json(verify_record(request['review'])['path'])
     proposal = next(row for row in review['proposals'] if row['candidate'] == request['candidate'])
@@ -197,7 +197,7 @@ def _actual_output_guard(request, output):
     _require(len(allocations) == 1, 'exact whole-slot map authorization required')
     budget = allocations[0].get('slot_byte_budget')
     if budget is None:
-        _require(request['candidate'] != 'D11', 'D11 whole-slot byte proof required')
+        _require(request['candidate'] not in (*CANDIDATES,'D11'), 'new native slot whole-slot byte proof required')
         return lambda additional_bytes=0: None
     review = read_json(verify_record(request['review'])['path'])
     proposal = next(row for row in review['proposals'] if row['candidate'] == request['candidate'])

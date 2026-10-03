@@ -155,14 +155,15 @@ def dispatch(candidate, context, qualification, setup, source_review, *,
     blockers = admit(proposal, config=config, commercial=qualified['commercial'],
         assets=qualified['assets'], runtime=qualified['runtime'], live=live,
         source_review=source_record, approval=grant, cap_amendment=approved['cap_amendment'],
-        cap_approval=approved['cap_approval'], ledger_head_sha256=live['ledger_head_sha256'])
+        cap_approval=approved['cap_approval'], ledger_head_sha256=live['ledger_head_sha256'],
+        completed_setup=setup_record, setup_events=ledger.events(), run_root=local)
     _require(not blockers, 'single-image admission failed: ' + '; '.join(blockers))
     # Rehashing the closure can consume most of the five-second sample window.
     # The allocator fully revalidates this refreshed snapshot under its lock.
     live = _live(ledger, local)
     admission = dict(schema='plan069-depth-admission-result/v1', status='passed', candidate=candidate,
         proposal_sha256=object_hash(proposal), review=review, authorization=authorization,
-        source_review=source_record, qualification=qualified_record, live=live,
+        source_review=source_record, qualification=qualified_record, live=live,completed_setup=setup_record,
         **{key: qualified[key] for key in ('commercial', 'assets', 'runtime')})
     write_json(admission_path, admission)
     admission_record = file_record(admission_path)
@@ -177,12 +178,17 @@ def dispatch(candidate, context, qualification, setup, source_review, *,
     command = [interpreter, str(worker), '--request', str(request_path), '--output', str(output)]
     binding = dict(request=file_record(request_path), worker=file_record(worker),
                    executable=file_record(interpreter))
-    ledger.authorize_depth_attempt(candidate, review, authorization, source_record, admission_record,
+    allocation_event = ledger.authorize_depth_attempt(candidate, review, authorization, source_record, admission_record,
                                    command=command, **binding)
+    from vipe_benchmark.depth_map_allowance import check_slot_byte_budget
+    def slot_resources():
+        reading = resources(local,gpu=True)
+        check_slot_byte_budget(proposal,allocation_event['slot_byte_budget'],local,reading)
+        return reading
     outcome = supervise(ledger, job, command, output,
         evidence=dict(admission=admission_record, review=review, authorization=authorization,
                       source_review=source_record, **binding),
-        sample_resources=lambda: resources(local, gpu=True),
+        sample_resources=slot_resources,
         validate_result=lambda out: validate_result(read_json(out / 'result.json'), request), poll_seconds=2.)
     finish = ledger.states().get(job, {})
     _require(finish.get('event') == 'finish' and finish.get('status') == 'complete' and

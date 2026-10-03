@@ -138,6 +138,11 @@ class DepthSetupAuthorizationTests(unittest.TestCase):
                         ledger.authorize_depth_attempt(candidate, review, authorization, source,
                                                        admission, **substituted)
                     self.assertEqual(ledger.events(), [])
+                    if candidate in ('D9','D10'):
+                        with self.assertRaisesRegex(ValueError,'completed setup stage proof'):
+                            ledger.authorize_depth_attempt(candidate,review,authorization,source,admission,**binding)
+                        self.assertEqual(ledger.events(),[])
+                        continue
                     ledger.authorize_depth_attempt(candidate, review, authorization, source,
                                                    admission, **binding)
                     reservation = dict(binding, review=review, authorization=authorization,
