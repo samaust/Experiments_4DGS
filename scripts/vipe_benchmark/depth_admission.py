@@ -29,7 +29,7 @@ LIMIT_KEYS = dict(download_bytes='new_download_gib_limit',
 LOCAL_COMMON = ('files.py', 'ledger.py', 'depth_admission.py', 'depth_extension.py',
     'depth_clips.py', 'scale.py', 'qualitative_package.py')
 LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py',
-                          'd2_preflight.py', 'd2_maps.py'),
+                          'd2_preflight.py', 'd2_maps.py', 'd2_actual.py'),
     D5=('moge_metric.py', 'moge_native.py', 'moge_setup.py'),
     D6=('moge_metric.py', 'moge_native.py', 'moge_setup.py'),
     D7=('dav2_metric.py', 'moge_metric.py', 'depth_setup.py', 'depth_metric_scale.py', 'depth_d7_run.py', 'depth_d7_publish.py'),
@@ -47,6 +47,8 @@ def local_source_records(candidate):
                for name in (*LOCAL_COMMON, *LOCAL_ADAPTERS[candidate])]
     if candidate == 'D2':
         records.append(file_record(ROOT / 'scripts/basketball_vipe_d2_maps.py'))
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_d2_dispatch.py'))
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_d2_publish.py'))
     if candidate == 'D7':
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_setup.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_setup_dispatch.py'))
