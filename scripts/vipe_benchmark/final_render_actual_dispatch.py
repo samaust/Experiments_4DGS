@@ -28,12 +28,11 @@ class ActualDispatcher:
         envelope = _bound(envelope_record)
         if envelope.get('schema') != 'plan069-final-render-do/v1' or envelope.get('record_kind') != 'actual' or envelope.get('mode') != 'DO':
             raise ValueError('actual DO envelope required; fixtures cannot authorize native dispatch')
-        from .extended_final_render_contract import parse_request
+        from .extended_final_render_contract import parse_request, validate_budget_configuration
         request = parse_request(_bound(envelope['request']))
         if request['record_kind'] != 'actual':
             raise ValueError('actual REVIEW request required')
-        if ledger.config != _bound(request['bindings']['config']):
-            raise ValueError('shared ledger configuration differs from frozen request')
+        validate_budget_configuration(request,ledger.config)
         self.envelope_record, self.ledger = envelope_record, ledger
 
     def dispatch(self, arm, phase, invocation_path, output, *, parent_result=None,
@@ -63,7 +62,7 @@ class ActualDispatcher:
         control_root = invocation_path.with_name(invocation_path.stem+'-control')
         if any(p.exists() or p.is_symlink() for p in (invocation_path,output,release_path,control_root)):
             raise FileExistsError('fresh immutable dispatch paths required')
-        if output == invocation_path or output in invocation_path.parents or output in control_root.parents:
+        if output in (invocation_path,release_path,control_root) or output in invocation_path.parents or output in control_root.parents:
             raise ValueError('worker output cannot contain dispatch control files')
         if phase == 'geometry' and any(v is not None for v in (parent_result,initializer,voxel_width)):
             raise ValueError('geometry must start without predecessor or initializer')
@@ -101,7 +100,7 @@ class ActualDispatcher:
                     'device_bytes','gpu_pids','cpu_workers_used','cleanup_confirmed','observed_unix')}
         reservation = reserve(self.envelope_record,self.ledger,arm,phase,command,
                               probe=live_probe,parent_result=parent_result)
-        start = time.monotonic()
+        start = reservation['monotonic_start']
         try:
             validate_dispatch_invocation(invocation_record,self.ledger,reservation)
         except BaseException as error:

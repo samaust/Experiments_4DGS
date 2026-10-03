@@ -123,7 +123,8 @@ authority is supplied by this module. Never call GPU methods in CPU qualificatio
         if not torch.cuda.is_available():
             raise RuntimeError('CUDA unavailable; native runtime has no CPU fallback')
         self.torch = torch
-        torch.set_num_threads(request['cpu_workers_limit'])
+        # The supervisor's bounded resource helper runs alongside this pool.
+        torch.set_num_threads(max(1, request['cpu_workers_limit'] - 1))
         for module, key in [('gsplat.csrc','gsplat'),('fused_ssim_cuda','fused_ssim')]:
             if file_record(importlib.import_module(module).__file__) != self.inventory['binaries'][key]:
                 raise ValueError('loaded native binary differs: '+key)

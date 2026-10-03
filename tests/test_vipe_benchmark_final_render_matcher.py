@@ -7,6 +7,15 @@ from vipe_benchmark.files import file_record, write_json
 
 
 class MatcherPreparationTests(unittest.TestCase):
+    def test_actual_geometry_refuses_an_injected_clock_before_model_access(self):
+        from vipe_benchmark.final_render_geometry import run
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)/'result'
+            with self.assertRaisesRegex(ValueError,'clock'):
+                run({'record_kind':'actual'},'arm',output,object(),
+                    invocation_record={'path':'unused'},clock=lambda:0.)
+            self.assertFalse(output.exists())
+
     def test_unapproved_checkpoint_rejected_without_publication(self):
         from vipe_benchmark.final_render_matcher import prepare_inventory, validate_inventory
         with tempfile.TemporaryDirectory() as temporary:

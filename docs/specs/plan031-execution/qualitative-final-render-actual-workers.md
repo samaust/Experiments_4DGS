@@ -60,3 +60,9 @@ completion alone is not a successful ledger finish or final human review.
 CPU tests verify fixture refusal and unchanged fixture worker behavior. They do
 not establish actual qualification, DO admission, native matcher correctness,
 CUDA execution or successful final renders. No actual job is launched here.
+
+The native numerical pool uses at most `cpu_workers_limit - 1` threads (seven
+under the eight-worker contract), reserving one worker for bounded monitoring.
+Prelaunch numerical defaults and control helpers use one thread. CUDA housekeeping
+threads are reported separately from numerical workers; spawned worker processes
+consume the same ceiling. Current-source qualification must measure this policy.

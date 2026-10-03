@@ -84,6 +84,7 @@ def run(request, arm, output, backend, observation_loader=None, *, tracker=None,
     """Run a fixture or a centrally admitted native worker without promotion."""
     actual = request.get('record_kind') == 'actual'
     if actual:
+        _require(clock is time.monotonic, 'actual geometry requires the real monotonic clock')
         _require(invocation_record is not None, 'actual geometry requires supervised native admission and an immutable invocation')
         from .final_render_matcher import NativeGeometryBackend
         _require(type(backend) is NativeGeometryBackend, 'exact pinned native geometry backend required')
