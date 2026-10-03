@@ -1,0 +1,87 @@
+{
+  "schema": "plan069-native-runtime-cache-preflight/v1",
+  "record_kind": "read-only-research",
+  "inventory_packages": 359,
+  "cache_root": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/setup-cache",
+  "actual_operations": false,
+  "denied_operation": {
+    "method": "HEAD",
+    "url": "https://download-r2.pytorch.org/whl/cu124/torch-2.4.1%2Bcu124-cp311-cp311-linux_x86_64.whl",
+    "initial_error": "domain not on sandbox allowlist",
+    "outside_retry_error": "HTTP Error403:Forbidden",
+    "canonical_index": "https://download.pytorch.org/whl/cu124/torch/index.html",
+    "canonical_url_matches": true,
+    "headers_body_not_captured": true
+  },
+  "D8": {
+    "package_download_allowance_bytes": 2147483648,
+    "artifact_allowance_bytes": 5368709120,
+    "cached_torch_version": "2.5.1+cu124",
+    "required_torch_version": "2.4.1+cu124",
+    "cached_torch_expanded_bytes": 1752647811,
+    "required_torch_exact_size_unknown": true,
+    "triton": {
+      "name": "triton",
+      "version": "3.0.0",
+      "url": "https://files.pythonhosted.org/packages/33/3e/a2f59384587eff6aeb7d37b6780de7fedd2214935e27520430ca9f5b7975/triton-3.0.0-1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "compressed_bytes": 209438883,
+      "uncompressed_file_bytes": 579944407,
+      "allocated_file_bytes": 580603904,
+      "files": 316,
+      "metadata_range_bytes": 65536
+    },
+    "nccl_reference": {
+      "name": "nvidia-nccl-cu12",
+      "version": "2.20.5",
+      "status": "uncached",
+      "wheel": "nvidia_nccl_cu12-2.20.5-py3-none-manylinux2014_x86_64.whl",
+      "url": "https://files.pythonhosted.org/packages/4b/2a/0a131f572aa09f741c30ccd45a8e56316e8be8dfc7bc19bf0ab7cfef7b19/nvidia_nccl_cu12-2.20.5-py3-none-manylinux2014_x86_64.whl",
+      "compressed_bytes": 176249402,
+      "uncompressed_file_bytes": 232735538,
+      "allocated_file_bytes": 232759296,
+      "files": 12,
+      "requirements": null
+    },
+    "nccl_reference_cu124_pin_requires_native_metadata_confirmation": true,
+    "torch25_proxy_plus_triton3_nccl20_bytes": 2566011011,
+    "conclusion": "likely retained-cache cap failure; proxy estimate only, no exact proof; do not consume setup while canonical wheel access denied"
+  },
+  "D11": {
+    "package_download_allowance_bytes": 8589934592,
+    "artifact_allowance_bytes": 59055800320,
+    "exact_assets_bytes": 42988352806,
+    "torch_cp312_proxy_expanded_bytes": 1761597233,
+    "torchvision_cp312_proxy_expanded_bytes": 22662173,
+    "triton_cp311_allocated_bytes": 669741056,
+    "uncached_other_direct_pinned_allocated_bytes": 998510592,
+    "direct_and_core_proxy_expanded_bytes": 3452511054,
+    "compatible_pinned_cache_names": [
+      "pyyaml",
+      "safetensors",
+      "tabulate"
+    ],
+    "pending_transitive_names": [
+      "tzdata",
+      "joblib",
+      "absl-py",
+      "grpcio",
+      "markdown",
+      "tensorboard-data-server",
+      "tokenizers",
+      "gitpython",
+      "sentry-sdk",
+      "cuda-bindings",
+      "triton"
+    ],
+    "new_core_tags": "cp311",
+    "cached_core_tags": "cp312",
+    "conclusion": "no demonstrated cap failure; direct/core proxy fits8GiB, full dependency resolver/ABI-specificTorchsize not established; canonical wheel host denial remains"
+  },
+  "caveats": [
+    "Cache inventory is a snapshot and not a resolved hash lock.",
+    "Unpinned resolver choices may differ from retained compatible versions.",
+    "D8 nativecu124Torchmetadata not retrieved; PyPI2.4.1CUDA12.1dependency metadata is reference only, no alternate wheel selected.",
+    "Metadata HTTP range requests read only bounded ZIPcentral directory bytes into memory/tmp, not full wheels or setup-cache.",
+    "No model/GPU/assets/setup/liveledger operations were performed."
+  ]
+}

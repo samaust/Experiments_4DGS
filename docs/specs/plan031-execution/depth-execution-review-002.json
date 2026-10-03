@@ -1,0 +1,524 @@
+{
+  "schema": "plan069-depth-execution-review/v1",
+  "status": "REVIEW",
+  "scope": "D2 control and D5-D11",
+  "asset_inventory": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-required-assets-v1.json",
+    "sha256": "6eb36eabb298b3c525af98d34a75a1c79d036ba2c48bf5a9e31efd7aba42e117",
+    "bytes": 6414
+  },
+  "proposals": [
+    {
+      "schema": "plan069-depth-execution-proposal/v1",
+      "status": "REVIEW",
+      "candidate": "D2",
+      "candidate_config": {
+        "model": "DA3METRIC-LARGE",
+        "mode": "historical D2 exact invocation",
+        "code": {
+          "url": "https://github.com/ByteDance-Seed/Depth-Anything-3",
+          "revision": "3d835ec1a5802d64a8b8b15f817a1ab54809bfe4"
+        },
+        "weights": {
+          "url": "https://huggingface.co/depth-anything/DA3METRIC-LARGE",
+          "revision": "4010e39f3634a45bc60553321fb49fb760bd594e"
+        }
+      },
+      "required_assets": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-required-assets-v1.json",
+        "sha256": "6eb36eabb298b3c525af98d34a75a1c79d036ba2c48bf5a9e31efd7aba42e117",
+        "bytes": 6414
+      },
+      "max_attempts": 1,
+      "workload": {
+        "anchor_maps": 0,
+        "unique_published_maps": 196,
+        "native_context_frames": 196,
+        "clips": 4,
+        "clip_frames": 50,
+        "clip_fps": 25
+      },
+      "allocation": {
+        "download_bytes": 3484218096,
+        "artifact_bytes": 5368709120,
+        "gpu_seconds": 3600,
+        "cpu_seconds": 1800,
+        "setup_seconds": 1200,
+        "device_bytes": 22548578304
+      },
+      "profile": {
+        "mode": "historical DA3METRIC-LARGE",
+        "input": "960x540 RGB; process_res=504 upper_bound_resize; ImageNet normalization",
+        "precision": "bfloat16",
+        "seed": "native eval, no stochastic sampling",
+        "setting": "`DA3METRIC-LARGE`, `process_res=504`, `process_res_method='upper_bound_resize'`, ImageNet normalization, batch of one image, native bfloat16 inference. No input extrinsics, no pose-scale alignment, `infer_gs=false`, no export that requires predicted cameras. Compute processed-K focal/300 scaling once and restore output grid; retain raw depth and actual processed K.",
+        "dependency_sources": [
+          "pyproject.toml; historical E5 locked runtime"
+        ]
+      },
+      "profile_inventory": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-runtime-profiles-v1.json",
+        "sha256": "7cd68706984e7d00a708d6217c1bcdc0814d83cd56b58589e4007b76cb0490ca",
+        "bytes": 4064
+      }
+    },
+    {
+      "schema": "plan069-depth-execution-proposal/v1",
+      "status": "REVIEW",
+      "candidate": "D5",
+      "candidate_config": {
+        "model": "MoGe-2 ViT-L original",
+        "mode": "supplied_horizontal_fov",
+        "domain": "camera_z_metres",
+        "survey_id": "i38-moge2-vitl-fov",
+        "code": {
+          "url": "https://github.com/microsoft/MoGe",
+          "revision": "74fbce054ebed49800de42d0ad0e83495065719a"
+        },
+        "weights": {
+          "url": "https://huggingface.co/Ruicheng/moge-2-vitl",
+          "revision": "39c4d5e957afe587e04eec59dc2bcc3be5ecd968"
+        }
+      },
+      "required_assets": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-required-assets-v1.json",
+        "sha256": "6eb36eabb298b3c525af98d34a75a1c79d036ba2c48bf5a9e31efd7aba42e117",
+        "bytes": 6414
+      },
+      "max_attempts": 1,
+      "workload": {
+        "anchor_maps": 60,
+        "unique_published_maps": 256,
+        "native_context_frames": 256,
+        "clips": 4,
+        "clip_frames": 50,
+        "clip_fps": 25
+      },
+      "allocation": {
+        "download_bytes": 7747481644,
+        "artifact_bytes": 9663676416,
+        "gpu_seconds": 3600,
+        "cpu_seconds": 1800,
+        "setup_seconds": 1800,
+        "device_bytes": 22548578304
+      },
+      "profile": {
+        "mode": "supplied horizontal FoV",
+        "input": "960x540 RGB float32 CHW /255; resolution_level=9; force_projection=true; apply_mask=true",
+        "precision": "fp16 native infer",
+        "seed": "native eval, no stochastic sampling",
+        "dependency_sources": [
+          "pyproject.toml",
+          "requirements.txt",
+          "native MoGe v2 import closure"
+        ]
+      },
+      "profile_inventory": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-runtime-profiles-v1.json",
+        "sha256": "7cd68706984e7d00a708d6217c1bcdc0814d83cd56b58589e4007b76cb0490ca",
+        "bytes": 4064
+      }
+    },
+    {
+      "schema": "plan069-depth-execution-proposal/v1",
+      "status": "REVIEW",
+      "candidate": "D6",
+      "candidate_config": {
+        "model": "MoGe-3 ViT-L",
+        "mode": "supplied_horizontal_fov_3_refinement_steps",
+        "domain": "camera_z_metres",
+        "survey_id": "i38-moge3-vitl",
+        "code": {
+          "url": "https://github.com/microsoft/MoGe",
+          "revision": "74fbce054ebed49800de42d0ad0e83495065719a"
+        },
+        "weights": {
+          "url": "https://huggingface.co/Ruicheng/moge-3-vitl",
+          "revision": "184008f877d7ad1ad4c2cd2182a9bd1f63d0e5be"
+        }
+      },
+      "required_assets": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-required-assets-v1.json",
+        "sha256": "6eb36eabb298b3c525af98d34a75a1c79d036ba2c48bf5a9e31efd7aba42e117",
+        "bytes": 6414
+      },
+      "max_attempts": 1,
+      "workload": {
+        "anchor_maps": 60,
+        "unique_published_maps": 256,
+        "native_context_frames": 256,
+        "clips": 4,
+        "clip_frames": 50,
+        "clip_fps": 25
+      },
+      "allocation": {
+        "download_bytes": 7923784338,
+        "artifact_bytes": 9663676416,
+        "gpu_seconds": 3600,
+        "cpu_seconds": 1800,
+        "setup_seconds": 1800,
+        "device_bytes": 22548578304
+      },
+      "profile": {
+        "mode": "supplied horizontal FoV; three refinements",
+        "input": "960x540 RGB float32 CHW /255; resolution_level=9; force_projection=true; apply_mask=true; refine_steps=3",
+        "precision": "fp32 native infer",
+        "seed": "native eval, no stochastic sampling",
+        "dependency_sources": [
+          "pyproject.toml",
+          "requirements.txt",
+          "native MoGe v3 sparse-convolution import closure"
+        ]
+      },
+      "profile_inventory": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-runtime-profiles-v1.json",
+        "sha256": "7cd68706984e7d00a708d6217c1bcdc0814d83cd56b58589e4007b76cb0490ca",
+        "bytes": 4064
+      }
+    },
+    {
+      "schema": "plan069-depth-execution-proposal/v1",
+      "status": "REVIEW",
+      "candidate": "D7",
+      "candidate_config": {
+        "model": "Depth Anything V2 Metric Hypersim Small",
+        "mode": "native_518_indoor_20_metres",
+        "domain": "camera_z_metres",
+        "survey_id": "i42-dav2-small-hypersim",
+        "code": {
+          "url": "https://github.com/DepthAnything/Depth-Anything-V2",
+          "revision": "a561b849ebae10a6f5ef49e26c83cbbcd36c71bf"
+        },
+        "weights": {
+          "url": "https://huggingface.co/depth-anything/Depth-Anything-V2-Metric-Hypersim-Small",
+          "revision": "3bc65d4e14a6786a61acec16453c50e12bf5f338"
+        }
+      },
+      "required_assets": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-required-assets-v1.json",
+        "sha256": "6eb36eabb298b3c525af98d34a75a1c79d036ba2c48bf5a9e31efd7aba42e117",
+        "bytes": 6414
+      },
+      "max_attempts": 1,
+      "workload": {
+        "anchor_maps": 60,
+        "unique_published_maps": 256,
+        "native_context_frames": 256,
+        "clips": 4,
+        "clip_frames": 50,
+        "clip_fps": 25
+      },
+      "allocation": {
+        "download_bytes": 2246705938,
+        "artifact_bytes": 5368709120,
+        "gpu_seconds": 3600,
+        "cpu_seconds": 1800,
+        "setup_seconds": 1800,
+        "device_bytes": 22548578304
+      },
+      "profile": {
+        "mode": "native Hypersim Small metric",
+        "input": "960x540 RGB to BGR; 518 lower-bound 14-multiple; ImageNet normalization; max_depth=20m",
+        "precision": "float32",
+        "seed": "native eval, no stochastic sampling",
+        "dependency_sources": [
+          "metric_depth/requirements.txt; DINOv2 Small import closure"
+        ]
+      },
+      "profile_inventory": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-runtime-profiles-v1.json",
+        "sha256": "7cd68706984e7d00a708d6217c1bcdc0814d83cd56b58589e4007b76cb0490ca",
+        "bytes": 4064
+      }
+    },
+    {
+      "schema": "plan069-depth-execution-proposal/v1",
+      "status": "REVIEW",
+      "candidate": "D8",
+      "candidate_config": {
+        "model": "MetricAnything Student PointMap",
+        "mode": "supplied_horizontal_fov",
+        "domain": "camera_z_metres",
+        "survey_id": "i38-metricanything-pointmap",
+        "code": {
+          "url": "https://github.com/metric-anything/metric-anything",
+          "revision": "616a5e6762f5fc40d1a4ef990fee04c800532f59"
+        },
+        "weights": {
+          "url": "https://huggingface.co/yjh001/metricanything_student_pointmap",
+          "revision": "8f1f08c53c683d4e19864601dfaf78515f29a63b"
+        }
+      },
+      "required_assets": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-required-assets-v1.json",
+        "sha256": "6eb36eabb298b3c525af98d34a75a1c79d036ba2c48bf5a9e31efd7aba42e117",
+        "bytes": 6414
+      },
+      "max_attempts": 1,
+      "workload": {
+        "anchor_maps": 60,
+        "unique_published_maps": 256,
+        "native_context_frames": 256,
+        "clips": 4,
+        "clip_frames": 50,
+        "clip_fps": 25
+      },
+      "allocation": {
+        "download_bytes": 7747448624,
+        "artifact_bytes": 9663676416,
+        "gpu_seconds": 3600,
+        "cpu_seconds": 1800,
+        "setup_seconds": 1800,
+        "device_bytes": 22548578304
+      },
+      "profile": {
+        "mode": "PointMap student; supplied horizontal FoV",
+        "input": "960x540 RGB float32 CHW /255; resolution_level=9; force_projection=true; apply_mask=true",
+        "precision": "fp16 native infer",
+        "seed": "native eval, no stochastic sampling",
+        "dependency_sources": [
+          "models/student_pointmap/requirements.txt",
+          "student_pointmap bundled MoGe import closure"
+        ]
+      },
+      "profile_inventory": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-runtime-profiles-v1.json",
+        "sha256": "7cd68706984e7d00a708d6217c1bcdc0814d83cd56b58589e4007b76cb0490ca",
+        "bytes": 4064
+      }
+    },
+    {
+      "schema": "plan069-depth-execution-proposal/v1",
+      "status": "REVIEW",
+      "candidate": "D9",
+      "candidate_config": {
+        "model": "Video Depth Anything Small",
+        "mode": "native_offline_sequence",
+        "domain": "relative_inverse",
+        "survey_id": "i40-vda-small",
+        "code": {
+          "url": "https://github.com/DepthAnything/Video-Depth-Anything",
+          "revision": "4f5ae23172ba60fd7bc11ef671cca678842c7072"
+        },
+        "weights": {
+          "url": "https://huggingface.co/depth-anything/Video-Depth-Anything-Small",
+          "revision": "256875362cff76724b920335dfb4b29dd611f66e"
+        }
+      },
+      "required_assets": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-required-assets-v1.json",
+        "sha256": "6eb36eabb298b3c525af98d34a75a1c79d036ba2c48bf5a9e31efd7aba42e117",
+        "bytes": 6414
+      },
+      "max_attempts": 1,
+      "workload": {
+        "anchor_maps": 60,
+        "unique_published_maps": 256,
+        "native_context_frames": 4500,
+        "clips": 4,
+        "clip_frames": 50,
+        "clip_fps": 25
+      },
+      "allocation": {
+        "download_bytes": 2263924404,
+        "artifact_bytes": 5368709120,
+        "gpu_seconds": 12000,
+        "cpu_seconds": 3600,
+        "setup_seconds": 2400,
+        "device_bytes": 22548578304
+      },
+      "profile": {
+        "mode": "native offline relative video",
+        "input": "30 cameras; fit frames 50-149; check frames 150-199; input_size=518; windows 32/overlap10",
+        "precision": "fp16 autocast",
+        "seed": "native eval, no stochastic sampling",
+        "dependency_sources": [
+          "requirements.txt; native video_depth_anything import closure"
+        ]
+      },
+      "profile_inventory": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-runtime-profiles-v1.json",
+        "sha256": "7cd68706984e7d00a708d6217c1bcdc0814d83cd56b58589e4007b76cb0490ca",
+        "bytes": 4064
+      }
+    },
+    {
+      "schema": "plan069-depth-execution-proposal/v1",
+      "status": "REVIEW",
+      "candidate": "D10",
+      "candidate_config": {
+        "model": "Metric Video Depth Anything Small",
+        "mode": "native_offline_sequence_metric",
+        "domain": "camera_z_metres",
+        "convention": {
+          "kind": "camera_z",
+          "conversion_count": 0,
+          "evidence": "https://github.com/DepthAnything/Video-Depth-Anything/blob/4f5ae23172ba60fd7bc11ef671cca678842c7072/run.py#L76-L86"
+        },
+        "survey_id": "i40-vda-metric-small",
+        "code": {
+          "url": "https://github.com/DepthAnything/Video-Depth-Anything",
+          "revision": "4f5ae23172ba60fd7bc11ef671cca678842c7072"
+        },
+        "weights": {
+          "url": "https://huggingface.co/depth-anything/Metric-Video-Depth-Anything-Small",
+          "revision": "273d090f2ce17df50c2872d82c8322c45da5b4dd"
+        }
+      },
+      "required_assets": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-required-assets-v1.json",
+        "sha256": "6eb36eabb298b3c525af98d34a75a1c79d036ba2c48bf5a9e31efd7aba42e117",
+        "bytes": 6414
+      },
+      "max_attempts": 1,
+      "workload": {
+        "anchor_maps": 60,
+        "unique_published_maps": 256,
+        "native_context_frames": 4500,
+        "clips": 4,
+        "clip_frames": 50,
+        "clip_fps": 25
+      },
+      "allocation": {
+        "download_bytes": 2263927711,
+        "artifact_bytes": 5368709120,
+        "gpu_seconds": 12000,
+        "cpu_seconds": 3600,
+        "setup_seconds": 2400,
+        "device_bytes": 22548578304
+      },
+      "profile": {
+        "mode": "native offline metric video",
+        "input": "30 cameras; fit frames 50-149; check frames 150-199; input_size=518; windows 32/overlap10",
+        "precision": "fp16 autocast",
+        "seed": "native eval, no stochastic sampling",
+        "dependency_sources": [
+          "requirements.txt; native video_depth_anything metric import closure"
+        ]
+      },
+      "profile_inventory": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-runtime-profiles-v1.json",
+        "sha256": "7cd68706984e7d00a708d6217c1bcdc0814d83cd56b58589e4007b76cb0490ca",
+        "bytes": 4064
+      }
+    },
+    {
+      "schema": "plan069-depth-execution-proposal/v1",
+      "status": "REVIEW",
+      "candidate": "D11",
+      "candidate_config": {
+        "model": "Marigold V2 Log-stage2",
+        "mode": "single_step_4bit_qwen_base",
+        "domain": "relative_log",
+        "survey_id": "i39-marigold-v2-log-stage2",
+        "code": {
+          "url": "https://github.com/huawei-bayerlab/marigold-v2",
+          "revision": "bf21e4ad9fb0ae1376bbfb2ec79e999802f19a85"
+        },
+        "weights": {
+          "url": "https://huggingface.co/huawei-bayerlab/marigold-v2-0",
+          "revision": "cdf9810fb690886391a63aec012b5f501064fb0d"
+        },
+        "base": {
+          "url": "https://huggingface.co/Qwen/Qwen-Image-Edit-2509",
+          "revision": "d3968ef930e841f4c73640fb8afa3b306a78167e"
+        }
+      },
+      "required_assets": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-required-assets-v1.json",
+        "sha256": "6eb36eabb298b3c525af98d34a75a1c79d036ba2c48bf5a9e31efd7aba42e117",
+        "bytes": 6414
+      },
+      "max_attempts": 1,
+      "workload": {
+        "anchor_maps": 60,
+        "unique_published_maps": 256,
+        "native_context_frames": 256,
+        "clips": 4,
+        "clip_frames": 50,
+        "clip_fps": 25
+      },
+      "allocation": {
+        "download_bytes": 51578287398,
+        "artifact_bytes": 59055800320,
+        "gpu_seconds": 7200,
+        "cpu_seconds": 3600,
+        "setup_seconds": 3600,
+        "device_bytes": 22548578304
+      },
+      "profile": {
+        "modality": "depth",
+        "checkpoint": "depth/Log-stage2",
+        "base": "Qwen/Qwen-Image-Edit-2509",
+        "prompt": "qwen_edit_2509_qwen_depth_realimg512",
+        "seed": 2025,
+        "steps": 1,
+        "guidance_scale": 1.0,
+        "timestep": 0.499,
+        "transformer_quantization": "4bit-nf4",
+        "compute_dtype": "bfloat16",
+        "vae_dtype": "bfloat16",
+        "resize": "ReshapeToMultiple(16, Lanczos), then linear restore to original grid",
+        "output": "mean of decoded RGB channels; affine-invariant log depth",
+        "dependency_sources": [
+          "pyproject.toml; setup/setup_env.sh; exact native inference import closure"
+        ]
+      },
+      "profile_inventory": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-runtime-profiles-v1.json",
+        "sha256": "7cd68706984e7d00a708d6217c1bcdc0814d83cd56b58589e4007b76cb0490ca",
+        "bytes": 4064
+      }
+    }
+  ],
+  "readiness_at_publication": {
+    "D2": {
+      "source_review": "pending",
+      "runtime_qualification": "pending",
+      "commercial_assessment": "pending",
+      "allocation_approval": "pending"
+    },
+    "D5": {
+      "source_review": "pending",
+      "runtime_qualification": "pending",
+      "commercial_assessment": "pending",
+      "allocation_approval": "pending"
+    },
+    "D6": {
+      "source_review": "pending",
+      "runtime_qualification": "pending",
+      "commercial_assessment": "pending",
+      "allocation_approval": "pending"
+    },
+    "D7": {
+      "source_review": "pending",
+      "runtime_qualification": "pending",
+      "commercial_assessment": "pending",
+      "allocation_approval": "pending"
+    },
+    "D8": {
+      "source_review": "pending",
+      "runtime_qualification": "pending",
+      "commercial_assessment": "pending",
+      "allocation_approval": "pending"
+    },
+    "D9": {
+      "source_review": "pending",
+      "runtime_qualification": "pending",
+      "commercial_assessment": "pending",
+      "allocation_approval": "pending"
+    },
+    "D10": {
+      "source_review": "pending",
+      "runtime_qualification": "pending",
+      "commercial_assessment": "pending",
+      "allocation_approval": "pending"
+    },
+    "D11": {
+      "source_review": "pending",
+      "runtime_qualification": "pending",
+      "commercial_assessment": "pending",
+      "allocation_approval": "pending"
+    }
+  }
+}
