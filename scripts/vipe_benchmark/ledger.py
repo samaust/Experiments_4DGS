@@ -274,7 +274,9 @@ class Ledger:
         request = read_json(request_record['path'])
         if (command != expected_command or executable != file_record(sys.executable) or
                 worker not in source.get('local_sources', []) or
-                Path(worker['path']).name != f'basketball_vipe_depth_{candidate.lower()}_maps.py' or
+                Path(worker['path']).name != ('basketball_vipe_depth_single_maps.py' if
+                    candidate in ('D5', 'D6', 'D8') else
+                    f'basketball_vipe_depth_{candidate.lower()}_maps.py') or
                 request_record['path'] != str(self.path.parent / 'requests' / (job_id + '.json')) or
                 request.get('candidate') != candidate or request.get('job_id') != job_id or
                 request.get('record_kind') != 'actual' or
