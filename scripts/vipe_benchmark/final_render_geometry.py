@@ -1,8 +1,4 @@
-"""Full-rig geometry computation through injected, explicitly fixture backends.
-
-No model loader, Torch import, dispatch, ledger write or actual execution authority.
-Native use needs a separately qualified and supervised execution adapter.
-"""
+"""Full-rig geometry through fixture or admitted pinned native backends."""
 import math
 import ast
 import json
@@ -51,11 +47,11 @@ def _index(rows, pair=False):
     return result
 
 
-def _fixture_measurement(value):
+def _measurement(value, *, actual=False):
     _require(isinstance(value,dict) and set(value) == {'wall_seconds','cuda_seconds'} and
         all(type(value[k]) in (int,float) and math.isfinite(value[k]) and value[k] >= 0 for k in value),
-        'finite nonnegative fixture measurement required')
-    _require(value['cuda_seconds'] == 0, 'fixture backend cannot claim CUDA execution')
+        'finite nonnegative geometry measurement required')
+    _require(actual or value['cuda_seconds'] == 0, 'fixture backend cannot claim CUDA execution')
 
 
 def _matching_helpers():
@@ -83,18 +79,46 @@ def _matching_helpers():
     return namespace['balanced_samples'],namespace['query_warp'],pins['ROMA_PIN'],pins['ROMA_WEIGHTS']
 
 
-def run(request, arm, output, backend, observation_loader=None, *, tracker=None, clock=time.monotonic):
-    """Compute 810 fixture edges, publish immutable NPZs and a bound result.
+def run(request, arm, output, backend, observation_loader=None, *, tracker=None,
+        clock=time.monotonic, invocation_record=None):
+    """Run a fixture or a centrally admitted native worker without promotion."""
+    actual = request.get('record_kind') == 'actual'
+    if actual:
+        _require(invocation_record is not None, 'actual geometry requires supervised native admission and an immutable invocation')
+        from .final_render_matcher import NativeGeometryBackend
+        _require(type(backend) is NativeGeometryBackend, 'exact pinned native geometry backend required')
+        _require(observation_loader is None and tracker is None, 'actual geometry requires verified loader and unchanged LK')
+        backend.bind_worker(invocation_record,request,arm)
+    else:
+        _require(invocation_record is None, 'fixture geometry cannot consume actual invocation')
+    try:
+        result = _run(request,arm,output,backend,observation_loader,tracker=tracker,clock=clock,
+            invocation_record=invocation_record)
+    except BaseException as error:
+        if actual:
+            try:
+                backend.close()
+            except BaseException as cleanup_error:
+                error.add_note(f'native matcher cleanup failed: {type(cleanup_error).__name__}: {cleanup_error}')
+        raise
+    if actual:
+        backend.close()
+    return result
 
-    Backend supplies match/crop/triangulate, sample_thresh and record_kind=fixture.
+
+def _run(request, arm, output, backend, observation_loader=None, *, tracker=None,
+        clock=time.monotonic, invocation_record=None):
+    """Compute 810 edges, publish immutable NPZs and a bound result.
+
+    Backend supplies match/crop/triangulate and the unchanged sample threshold.
     observation_loader(source, S2_row, M_row) returns rgb/valid/labels/changing
     arrays; semantic classes come from the exact S2 row. The default loader
     verifies frozen file bytes and native array contracts without preprocessing.
     The default temporal tracker is unchanged OpenCV LK; CPU fixtures may
     inject known endpoints.
     """
-    _require(request.get('record_kind') == 'fixture', 'actual geometry requires supervised native qualification')
-    _require(getattr(backend,'record_kind',None) == 'fixture', 'explicit fixture backend required')
+    actual = request.get('record_kind') == 'actual'
+    _require(getattr(backend,'record_kind',None) == request.get('record_kind'), 'explicit fixture backend or matching admitted native record kind required')
     verified_loader = observation_loader is None
     if verified_loader:
         from .final_render_loaders import load_observation
@@ -134,11 +158,11 @@ def run(request, arm, output, backend, observation_loader=None, *, tracker=None,
             row = native[name].get(key)
             _require(row is not None and row['source_rgb_sha256'] == source['rgb']['sha256'] == accepted[c,f]['sha256'] and
                 row['K'] == source['K'] == cameras[c]['K'] and row['grid'] == source['grid'], 'native source identity/calibration differs')
+    started = clock()
+    _require(type(started) in (int,float) and math.isfinite(started), 'finite geometry clock required')
     threshold = getattr(backend,'sample_thresh',None)
     _require(type(threshold) in (float,int) and math.isfinite(threshold) and 0 <= threshold <= 1, 'finite matcher sampling threshold required')
     output = safe_path(output)
-    started = clock()
-    _require(type(started) in (int,float) and math.isfinite(started), 'finite geometry clock required')
     output.mkdir(parents=True,exist_ok=False)
     rng = np.random.default_rng(0); rows = []; cache = {}
     last = started; artifacts = []
@@ -153,6 +177,12 @@ def run(request, arm, output, backend, observation_loader=None, *, tracker=None,
         last = now
         _require(last-started <= deadline, 'geometry wall limit exceeded; partial files preserved')
         _require(artifact_bytes <= request['artifact_bytes_limit'], 'geometry artifact limit exceeded; partial files preserved')
+        if actual:
+            usage = backend.usage()
+            for name,limit in [('peak_device_bytes',request['device_bytes_limit']),
+                    ('cpu_workers_used',request['cpu_workers_limit'])]:
+                _require(type(usage[name]) is int and 0 <= usage[name] <= limit,
+                    'native geometry resource limit exceeded: '+name)
 
     def observation(c,f,pair):
         key = (c,f,pair)
@@ -194,7 +224,7 @@ def run(request, arm, output, backend, observation_loader=None, *, tracker=None,
                                 _require(type(instance) is int and labels[camera]['semantics'].get(str(instance),{}).get('class') == 'person',
                                     'crop semantic person identity differs')
                     for measurement in (matching,cropping):
-                        _fixture_measurement(measurement)
+                        _measurement(measurement,actual=actual)
                     warps[other] = warp
                     uv0 = (warp[...,:2].reshape(-1,2)+1)*[480,270]
                     probability = confidence.reshape(-1).copy()
@@ -211,7 +241,7 @@ def run(request, arm, output, backend, observation_loader=None, *, tracker=None,
                 for pair,uv0,uv1,matching,cropping,crops in candidates:
                     check_budget(); other = ids[pair]
                     (xyz,numerical),triangulation = backend.triangulate(P[0],P[pair],uv0,uv1)
-                    _fixture_measurement(triangulation)
+                    _measurement(triangulation,actual=actual)
                     xyz = np.asarray(xyz)
                     all_uv = np.asarray([uv0]+[uv1 if c == other or not len(uv0) else query_warp(warps[c],uv0) for c in ids[1:]])
                     arrays,diagnostic = evaluate_edge(xyz,numerical,all_uv,ids,pair,cameras,labels,changing)
@@ -253,33 +283,35 @@ def run(request, arm, output, backend, observation_loader=None, *, tracker=None,
         script_root = Path(__file__).resolve().parents[1]
         recipe = dict(mode='person-cropped',seed=0,samples_per_edge=5000,reprojection_pixels=2,parallax_degrees=1,
             minimum_foreground_support_cameras=3,lk_forward_backward_pixels=1,frame_seconds=.04,
-            roma_revision=ROMA_PIN,expected_roma_weights=ROMA_WEIGHTS,native_model_verified=False,
+            roma_revision=ROMA_PIN,expected_roma_weights=ROMA_WEIGHTS,native_model_verified=actual,
             observation_loader='verified-native-files' if verified_loader else 'injected-fixture',
             sources=[file_record(path) for path in (Path(__file__),script_root/'basketball_temporal_cloud.py',
                 script_root/'basketball_temporal_geometry.py',script_root/'vipe_benchmark/diagnostics.py',script_root/'edgs_source.py')])
+        if actual:
+            recipe.update(matcher_runtime=backend.inventory_record,invocation=invocation_record)
         if verified_loader:
             recipe['sources'].append(file_record(script_root/'vipe_benchmark/final_render_loaders.py'))
-        geometry = dict(schema='plan069-final-render-geometry/v1',status='complete',record_kind='fixture',arm=arm,
+        geometry = dict(schema='plan069-final-render-geometry/v1',status='complete',record_kind=request['record_kind'],arm=arm,
             request_sha256=object_hash(request),composition=composition,scene=bindings['scene_freeze'],rows=rows,
-            prerequisites={name:bindings[name] for name in names},recipe=recipe,execution_authorized=False,native_adapter_qualified=False)
+            prerequisites={name:bindings[name] for name in names},recipe=recipe,execution_authorized=actual,native_adapter_qualified=actual)
         payload_bytes = len((json.dumps(geometry,indent=2,allow_nan=False)+'\n').encode())
         _require(artifact_bytes+payload_bytes <= request['artifact_bytes_limit'], 'geometry artifact limit exceeded; partial files preserved')
         write_json(output/'geometry.json',geometry)
         geometry_record = file_record(output/'geometry.json'); artifacts.append(geometry_record)
         artifact_bytes += geometry_record['bytes'];check_budget()
-        return dict(schema='plan069-final-render-geometry-worker/v1',record_kind='fixture',status='complete',arm=arm,
+        return dict(schema='plan069-final-render-geometry-worker/v1',record_kind=request['record_kind'],status='complete',arm=arm,
             request_sha256=object_hash(request),composition=composition,allocation_id=allocation['id'],geometry=geometry_record,
             coverage_edges=len(rows),artifact_bytes=artifact_bytes,elapsed_seconds=last-started,
-            peak_device_bytes=0,cpu_workers_used=1,execution_authorized=False,native_adapter_qualified=False)
+            **(backend.usage() if actual else dict(peak_device_bytes=0,cpu_workers_used=1)),execution_authorized=actual,native_adapter_qualified=actual)
     except PermissionError:
         # Keep host-access denial distinct from a corrected application retry.
         raise
     except Exception as error:
-        failure = dict(schema='plan069-final-render-geometry-failure/v1',record_kind='fixture',status='failed',
+        failure = dict(schema='plan069-final-render-geometry-failure/v1',record_kind=request['record_kind'],status='failed',
             arm=arm,composition=composition,request_sha256=object_hash(request),allocation_id=allocation['id'],
             reason=f'{type(error).__name__}: {error}',artifacts=artifacts,artifact_bytes=sum(r['bytes'] for r in artifacts),
-            elapsed_seconds=last-started,peak_device_bytes=0,cpu_workers_used=1,
-            execution_authorized=False,native_adapter_qualified=False)
+            elapsed_seconds=last-started,**(backend.usage() if actual else dict(peak_device_bytes=0,cpu_workers_used=1)),
+            execution_authorized=actual,native_adapter_qualified=actual)
         # Include the control receipt itself in published-byte accounting.
         control_bytes = artifact_bytes
         while True:
