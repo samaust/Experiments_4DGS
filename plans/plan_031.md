@@ -68,6 +68,18 @@ and actual CUDA/native compatibility evidence in the allocated D1 job before
 claiming runtime success. No extra model smoke job or fallback is authorized.
 See the [migration audit](../docs/research/vipe-alternatives/plan031-20260913T032700Z/e4-cu130-migration-audit.md).
 
+### D8 runtime amendment — 2026-10-03
+
+The user requested the latest stable PyTorch supporting CUDA 13.0 for D8 in
+[Plan 069](plan_069.md): Python 3.11, **torch 2.14.1+cu130** and
+**torchvision 0.29.1+cu130**. Preserve D8's original pinned `torch<2.5.0`
+requirement verbatim and record this explicit local compatibility exception.
+Actual native compatibility remains pending metered setup and qualification;
+metadata checks alone do not establish it. Model/source/weight pins, input grids,
+scale gates, workloads and approved resource/attempt limits remain unchanged.
+See the [runtime amendment](../docs/research/vipe-alternatives/plan069-D8-cu130-runtime-amendment.md).
+Preserve original REVIEW/approval records and create new affected lineage.
+
 Implement every configuration exactly as defined in
 [protocol section 5](../docs/research/vipe-alternatives/benchmark-protocol.md#5-frozen-configurations),
 including precision, processors, thresholds, merge rules and pair resets.

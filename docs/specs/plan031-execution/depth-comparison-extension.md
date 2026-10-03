@@ -29,6 +29,19 @@ infrastructure and historical controls, preserves existing evidence, and supplie
 the new review dependency for #34. Depth continues to provide global scene
 scale; dense geometry continues through the existing triangulation workflow.
 
+### D8 runtime amendment — 2026-10-03
+
+The user-selected runtime is Torch **2.14.1+cu130** and TorchVision
+**0.29.1+cu130**, using the retained Python 3.11 seed. Preserve the pinned
+upstream `torch<2.5.0` file and its record; require the exact local compatibility
+profile at setup and native entry. Reject modern Torch without that profile,
+wrong CUDA/version pairs and changed original requirements. This records a local
+exception, not upstream support or successful native compatibility. Actual
+metered runtime qualification must still verify imports, exact dependencies,
+strict checkpoint loading and original-grid/mask/scale contracts before accepted
+results. Refresh affected execution lineage without editing immutable approvals.
+See [the runtime audit](../../research/vipe-alternatives/plan069-D8-cu130-runtime-amendment.md).
+
 ## User Stories
 
 1. As a researcher, I want all seven approved additions included, so that the experiment reflects the agreed shortlist.

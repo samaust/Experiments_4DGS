@@ -35,6 +35,16 @@ inference/output terms separately. Permission uncertainty remains a blocker to
 commercial eligibility. This depth assessment does not establish commercial
 clearance for every component in the reconstruction workflow.
 
+### D8 runtime amendment — 2026-10-03
+
+Use the user-requested Python 3.11 / Torch **2.14.1+cu130** /
+TorchVision **0.29.1+cu130** runtime. Preserve the pinned upstream
+`torch<2.5.0` requirements file and bind the explicit local compatibility profile;
+this is outside upstream support. Actual imports, strict checkpoint loading and
+native/grid compatibility remain qualification gates, not completed findings.
+See [the amendment and remaining gates](../docs/research/vipe-alternatives/plan069-D8-cu130-runtime-amendment.md).
+Refresh affected review/proposal lineage; retain existing workload and limits.
+
 ## Workload and comparison
 
 - Generate the 60 frame-100/frame-175 anchors per addition using the same 30
