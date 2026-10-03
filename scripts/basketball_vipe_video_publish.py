@@ -10,6 +10,7 @@ from vipe_benchmark.depth_clips import publish_fixture_clips
 from vipe_benchmark.execution import resources
 from vipe_benchmark.files import file_record, object_hash, read_json, verify_record, write_json
 from vipe_benchmark.ledger import Ledger
+from vipe_benchmark.video_native import setup_environment
 
 
 def publish(candidate, run_id='plan031-20260913T032700Z'):
@@ -38,6 +39,8 @@ def publish(candidate, run_id='plan031-20260913T032700Z'):
             request.get('admission') is None or
             request.get('component') != candidate):
         raise ValueError('video result/request/context binding changed')
+    setup = read_json(verify_record(request['setup'])['path'])
+    setup_environment(setup)
     if any(row['event'] == 'reserve' for row in ledger.states().values()):
         raise ValueError('CPU package cannot overlap active run')
     seconds = min(600, config['cpu_prepare_score_report_seconds_limit'] -

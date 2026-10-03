@@ -4,6 +4,7 @@ import importlib
 import importlib.metadata
 from pathlib import Path
 import sys
+import shutil
 
 from .files import file_record, read_json, verify_record, write_json
 
@@ -15,12 +16,36 @@ REQUIRED_SOURCE = (
     'video_depth_anything/dinov2_layers/attention.py',
     'video_depth_anything/dpt_temporal.py',
     'video_depth_anything/motion_module/motion_module.py',
+    'video_depth_anything/motion_module/attention.py',
+    'video_depth_anything/dpt.py', 'video_depth_anything/util/transform.py',
     'utils/util.py',
 )
 REQUIRED_DISTRIBUTIONS = (
     'torch', 'torchvision', 'numpy', 'opencv-python', 'einops',
     'easydict', 'tqdm',
+    'matplotlib', 'pillow', 'imageio', 'imageio-ffmpeg', 'decord', 'OpenEXR',
 )
+
+
+def setup_environment(setup):
+    """Require the provisioned environment and tools before inventory or inference."""
+    runtime = read_json(verify_record(setup['runtime_environment'])['path'])
+    if (runtime.get('schema') != 'plan069-depth-environment-result/v1' or
+            runtime.get('status') != 'complete' or runtime.get('candidate') != setup['candidate'] or
+            runtime.get('record_kind') != setup.get('record_kind') or
+            runtime.get('python_executable') != setup.get('python_executable') or
+            setup.get('python_executable') != str(Path(setup['runtime_environment']['path']).parent /
+                                                'environment/bin/python') or
+            str(Path(sys.executable).absolute()) != setup.get('python_executable') or
+            any(runtime.get(key) != setup.get(key) for key in ('python', 'dependency_lock', 'inventory'))):
+        raise ValueError('exact provisioned video environment interpreter required')
+    for key in ('python', 'dependency_lock', 'inventory'):
+        verify_record(runtime[key])
+    for name, record in setup['media_tools'].items():
+        installed = shutil.which(name)
+        if installed is None or file_record(installed) != verify_record(record):
+            raise ValueError('video media tool invocation differs from frozen setup: ' + name)
+    return runtime
 
 
 def native_source_records(source_dir):
@@ -57,36 +82,26 @@ def write_dependency_inventory(candidate, setup_result, output):
     setup = read_json(verify_record(setup_result)['path'])
     if setup.get('candidate') != candidate or setup.get('status') != 'complete':
         raise ValueError('completed exact video setup required')
+    runtime = setup_environment(setup)
     source_files = native_source_records(setup['source_dir'])
     if setup.get('source_files') != source_files:
         raise ValueError('native video source changed before dependency inventory')
     versions = installed_dependency_versions()
-    files = []
-    notices = []
-    for name, version in versions.items():
-        if version is None:
-            continue
-        dist = importlib.metadata.distribution(name)
-        paths = dist.files or []
-        selected = [entry for entry in paths if (
-            entry.name in ('METADATA', 'RECORD', 'WHEEL') or
-            entry.suffix in ('.so', '.pyd') or
-            'LICENSE' in entry.name.upper() or
-            'NOTICE' in entry.name.upper())]
-        if not selected:
-            raise ValueError('installed dependency has no verifiable metadata: ' + name)
-        for entry in selected:
-            path = Path(dist.locate_file(entry))
-            if not path.is_file():
-                raise ValueError('installed dependency file missing: ' + str(path))
-            record = file_record(path)
-            files.append(record)
-            if 'LICENSE' in entry.name.upper() or 'NOTICE' in entry.name.upper():
-                notices.append(record)
+    inventory = read_json(runtime['inventory']['path'])
+    if inventory.get('executable') != setup['python_executable'] or not inventory.get('inventory_only'):
+        raise ValueError('video installed dependency inventory interpreter changed')
+    files = [verify_record(record) for package in inventory['packages'] for record in package['files']]
+    if not files:
+        raise ValueError('video dependency inventory has no verifiable closure')
+    notices = [record for record in files if any(
+        name in Path(record['path']).name.upper() for name in ('LICENSE', 'NOTICE'))]
     document = dict(schema='plan069-depth-installed-dependencies/v1',
         candidate=candidate, source_revision=setup['source_revision'],
         setup=setup_result, versions=versions, files=files,
         notices=notices, native_source_files=source_files,
+        runtime_environment=setup['runtime_environment'], inventory=runtime['inventory'],
+        dependency_lock=runtime['dependency_lock'], python_executable=setup['python_executable'],
+        python=runtime['python'], media_tools=setup['media_tools'], xformers=setup['xformers'],
         status='captured-not-commercially-cleared')
     write_json(output, document)
     return file_record(output)
@@ -102,12 +117,15 @@ def load_native_video(candidate, setup_result, *, device='cuda'):
             setup.get('record_kind') != 'actual'):
         raise ValueError('completed actual video setup required')
     source_dir = Path(setup['source_dir']).resolve()
+    setup_environment(setup)
     if setup.get('source_files') != native_source_records(source_dir):
         raise ValueError('native video source changed after setup')
     checkpoint = verify_record(setup['checkpoint'])['path']
     if Path(checkpoint).resolve().parent != Path(setup_result['path']).resolve().parent:
         raise ValueError('native video checkpoint escaped setup directory')
-    installed_dependency_versions()
+    versions = installed_dependency_versions()
+    if versions['xformers'] is not None:
+        raise ValueError('video recipe requires the qualified native torch attention fallback')
     if str(source_dir) not in sys.path:
         sys.path.insert(0, str(source_dir))
     import torch

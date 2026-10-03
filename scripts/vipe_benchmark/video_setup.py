@@ -8,6 +8,7 @@ from .budgets import budget_snapshot
 from .depth_setup import _acquire, _active_reservation
 from .files import file_record, object_hash, read_json, verify_record, write_json
 from .video_native import native_source_records
+from .video_environment import bind_source_environment
 
 
 def _extract(archive, destination, revision, deadline):
@@ -45,7 +46,8 @@ def _extract(archive, destination, revision, deadline):
     return native_source_records(destination)
 
 
-def run_video_setup(request, output, *, request_path=None, acquire=_acquire):
+def run_video_setup(request, output, *, request_path=None, acquire=_acquire,
+                    environment_runner=None):
     """Acquire one pinned source archive and checkpoint, preserving all failures."""
     started = time.monotonic()
     candidate = request.get('candidate')
@@ -90,6 +92,8 @@ def run_video_setup(request, output, *, request_path=None, acquire=_acquire):
     deadline = started + allocation['setup_seconds']
     output = Path(output)
     if request.get('record_kind') == 'actual':
+        if not isinstance(request.get('runtime_environment'), dict) or environment_runner is not None:
+            raise ValueError('actual video setup requires frozen runtime environment without fixture runner')
         run_root, config = _active_reservation(request, request_path, output)
     elif request.get('record_kind') == 'fixture':
         run_root = output.parent
@@ -116,6 +120,13 @@ def run_video_setup(request, output, *, request_path=None, acquire=_acquire):
             raise ValueError('video source and checkpoint exceed transfer allocation')
         source_dir = output / 'source'
         source_files = _extract(archive, source_dir, source['revision'], deadline)
+        runtime = None
+        if 'runtime_environment' in request:
+            environment = bind_source_environment(request['runtime_environment'], source_dir,
+                source['revision'], candidate=candidate, record_kind=request['record_kind'])
+            if request['record_kind'] == 'actual':
+                environment.update(ledger_path=request['ledger_path'],
+                                   setup_request=file_record(request_path))
         checkpoint = output / expected_name
         checkpoint_record = acquire(
             weights['url'] + '/resolve/' + weights['revision'] + '/' + expected_name,
@@ -125,6 +136,11 @@ def run_video_setup(request, output, *, request_path=None, acquire=_acquire):
         if (checkpoint_record['bytes'] != assets[0]['bytes'] or
                 checkpoint_record['sha256'] != assets[0]['lfs_sha256']):
             raise ValueError('video checkpoint differs from pinned LFS object')
+        if 'runtime_environment' in request:
+            from .depth_environment import provision_depth_environment
+            runtime = provision_depth_environment(environment, output / 'runtime', config,
+                run_root=run_root, deadline=deadline, download_limit=download_limit,
+                artifact_limit=artifact_limit, runner=environment_runner)
         received = budget_snapshot(run_root)['download_bytes'] - baseline
         if received > allocation['download_bytes'] or time.monotonic() >= deadline:
             raise ValueError('video setup allocation exceeded')
@@ -136,6 +152,11 @@ def run_video_setup(request, output, *, request_path=None, acquire=_acquire):
             source_dir=str(source_dir), source_files=source_files,
             checkpoint=file_record(checkpoint), bytes_received=received,
             elapsed_seconds=time.monotonic() - started)
+        if runtime is not None:
+            result.update(runtime_environment=file_record(output / 'runtime/result.json'),
+                python_executable=runtime['python_executable'], python=runtime['python'],
+                dependency_lock=runtime['dependency_lock'], inventory=runtime['inventory'],
+                media_tools=environment['media_tools'], xformers=environment['xformers'])
         write_json(output / 'result.json', result)
         return result
     except BaseException as error:

@@ -40,8 +40,10 @@ LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py',
     D8=('moge_metric.py', 'depth_metric_scale.py', 'depth_single_run.py', 'depth_single_publish.py', 'native_d8.py', 'depth_native_packages.py', 'depth_source_integrity.py',
         'depth_native_runtime.py', 'depth_environment.py', 'runtime_inventory.py',
         'depth_setup.py', 'depth_setup_other.py'),
-    D9=('video_depth.py', 'video_native.py', 'video_setup.py'),
-    D10=('video_depth.py', 'video_native.py', 'video_setup.py'),
+    D9=('video_depth.py', 'video_native.py', 'video_setup.py',
+        'video_environment.py', 'depth_environment.py', 'runtime_inventory.py'),
+    D10=('video_depth.py', 'video_native.py', 'video_setup.py',
+        'video_environment.py', 'depth_environment.py', 'runtime_inventory.py'),
     D11=('marigold_relative.py', 'native_d11.py', 'depth_native_packages.py', 'depth_source_integrity.py',
         'depth_native_runtime.py', 'depth_environment.py', 'runtime_inventory.py',
          'depth_setup.py', 'depth_setup_other.py'))
@@ -72,6 +74,7 @@ def local_source_records(candidate):
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_single_maps.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_single_publish.py'))
     if candidate in ('D9', 'D10'):
+        records.append(file_record(ROOT / 'configs/vipe-alternatives/video-environment-v1.json'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_setup.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_setup_dispatch.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_actual.py'))

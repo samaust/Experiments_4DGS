@@ -10,6 +10,7 @@ from vipe_benchmark.execution import resources
 from vipe_benchmark.files import file_record, read_json, verify_record, write_json
 from vipe_benchmark.ledger import Ledger
 from vipe_benchmark.supervisor import supervise
+from vipe_benchmark.video_environment import environment_request
 
 
 DO = ROOT / 'docs/research/vipe-alternatives/plan031-execution/depth-approval-001.json'
@@ -55,7 +56,8 @@ def dispatch(candidate, run_id='plan031-20260913T032700Z'):
         raise ValueError('GPU owner active before video setup')
     request = dict(schema='plan069-depth-setup-request/v1',
         record_kind='actual', candidate=candidate, job_id=job_id,
-        ledger_path=str(ledger.path), review=review, authorization=authorization)
+        ledger_path=str(ledger.path), review=review, authorization=authorization,
+        runtime_environment=environment_request(candidate, local))
     write_json(request_path, request)
     ledger.authorize_depth_setup(candidate, review, authorization, source_review)
     worker = ROOT / 'scripts/basketball_vipe_video_setup.py'
@@ -68,6 +70,11 @@ def dispatch(candidate, run_id='plan031-20260913T032700Z'):
         for record in result['source_files']:
             verify_record(record)
         verify_record(result['source_archive'])
+        runtime = read_json(verify_record(result['runtime_environment'])['path'])
+        for key in ('python', 'dependency_lock', 'inventory'):
+            verify_record(runtime[key])
+        for record in result['media_tools'].values():
+            verify_record(record)
         if (result.get('schema') != 'plan069-video-setup-result/v1' or
                 result.get('status') != 'complete' or
                 result.get('record_kind') != 'actual' or
@@ -75,6 +82,13 @@ def dispatch(candidate, run_id='plan031-20260913T032700Z'):
                 result.get('job_id') != job_id or
                 result.get('review') != review or
                 result.get('authorization') != authorization or
+                runtime.get('status') != 'complete' or runtime.get('candidate') != candidate or
+                runtime.get('python_executable') != result.get('python_executable') or
+                result.get('python_executable') != str(output / 'runtime/environment/bin/python') or
+                result.get('python') != runtime['python'] or
+                result.get('dependency_lock') != runtime['dependency_lock'] or
+                result.get('inventory') != runtime['inventory'] or
+                result.get('media_tools') != request['runtime_environment']['media_tools'] or
                 result.get('source_revision') != proposal['candidate_config']['code']['revision'] or
                 result.get('weight_revision') != proposal['candidate_config']['weights']['revision'] or
                 checkpoint['bytes'] != asset['bytes'] or
