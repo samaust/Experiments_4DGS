@@ -1,0 +1,159 @@
+{
+  "schema": "plan069-video-setup-readiness/v1",
+  "candidate": "D9",
+  "status": "blocked",
+  "scope": "CPU setup preparation; neither reservation nor execution admission",
+  "canonical_revision": "ea9810e9631e02f7766a41fe0e42e31fecaae5e7",
+  "authorization": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/depth-approval-001.json",
+    "sha256": "6026870067801494627766daeaaa1708e8bef89f87f241aa30162a66952938be",
+    "bytes": 3190
+  },
+  "proposal_sha256": "e913f4522a472241a5b7d429e1ad3cf3d382ce25a72eb923484a938c4bb53da0",
+  "profile_inventory": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-runtime-profiles-v1.json",
+    "sha256": "7cd68706984e7d00a708d6217c1bcdc0814d83cd56b58589e4007b76cb0490ca",
+    "bytes": 4064
+  },
+  "required_assets": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-required-assets-v1.json",
+    "sha256": "6eb36eabb298b3c525af98d34a75a1c79d036ba2c48bf5a9e31efd7aba42e117",
+    "bytes": 6414
+  },
+  "runtime_environment": {
+    "schema": "plan069-depth-environment-request/v1",
+    "candidate": "D9",
+    "record_kind": "actual",
+    "python_version": "3.11",
+    "python_seed_executable": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/E5-setup/environment/bin/python",
+    "python_seed": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/managed-python/cpython-3.11.15-linux-x86_64-gnu/bin/python3.11",
+      "sha256": "8deffe5dd9ebcf98a062917a4e73bb8fbb7d5846f83dec01fb7506fd5d41c54e",
+      "bytes": 21721984
+    },
+    "uv": {
+      "path": "/home/auss/.local/bin/uv",
+      "sha256": "da15297d6879b2cfbe5ea3cb03725c1613d51ba72892cc996468d871f0a532fb",
+      "bytes": 66081208
+    },
+    "requirements": [
+      "numpy==1.24.0",
+      "torch==2.1.1",
+      "torchvision==0.16.1",
+      "opencv-python",
+      "matplotlib",
+      "pillow",
+      "imageio==2.37.0",
+      "imageio-ffmpeg==0.4.7",
+      "decord",
+      "einops==0.4.1",
+      "easydict",
+      "tqdm",
+      "OpenEXR==3.3.1"
+    ],
+    "constraints": [
+      "torch==2.1.1+cu121",
+      "torchvision==0.16.1+cu121",
+      "numpy==1.24.0"
+    ],
+    "indexes": [
+      "https://pypi.org/simple",
+      "https://download.pytorch.org/whl/cu121"
+    ],
+    "sources": [],
+    "recipe": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/configs/vipe-alternatives/video-environment-v1.json",
+      "sha256": "214e47f16c437378b08bdfced34678260fe3ed7f2e0fa1c7bba39711bdab2b2e",
+      "bytes": 1955
+    },
+    "requirement_sources": [
+      {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/configs/vipe-alternatives/video-environment-v1.json",
+        "sha256": "214e47f16c437378b08bdfced34678260fe3ed7f2e0fa1c7bba39711bdab2b2e",
+        "bytes": 1955
+      }
+    ],
+    "media_tools": {
+      "ffmpeg": {
+        "path": "/usr/bin/ffmpeg",
+        "sha256": "ed16af623947494a72e284b6eb8ff225f2da22b38b5d5069c2fd4b4ba3384e41",
+        "bytes": 342488
+      },
+      "ffprobe": {
+        "path": "/usr/bin/ffprobe",
+        "sha256": "272f6ebc634a63d9c8b4ca68e964119d980f25154e5aa2c35e5487da48e9a58f",
+        "bytes": 191888
+      }
+    },
+    "xformers": "absent; native torch attention fallback"
+  },
+  "allocation": {
+    "download_bytes": 2263924404,
+    "artifact_bytes": 5368709120,
+    "gpu_seconds": 12000,
+    "cpu_seconds": 3600,
+    "setup_seconds": 2400,
+    "device_bytes": 22548578304
+  },
+  "package_headroom": {
+    "approved_transfer_bytes": 2263924404,
+    "checkpoint_bytes": 116440756,
+    "maximum_source_archive_bytes": 134217728,
+    "remaining_after_checkpoint_and_maximum_archive_bytes": 2013265920,
+    "exact_package_closure_lock": null,
+    "exact_package_wheel_sizes": null,
+    "conclusion": "Local evidence does not establish the Torch 2.1.1+cu121 package closure fits the remaining candidate transfer budget."
+  },
+  "observed_local": {
+    "python_seed_version": "3.11.15",
+    "setup_job_exists": false,
+    "setup_request_exists": false,
+    "installed_torch_versions": [
+      "2.0.1+cu118",
+      "2.5.1+cu124",
+      "2.10.0+cu128",
+      "2.13.0+cu130"
+    ],
+    "exact_cu121_environment_or_wheel_found": false
+  },
+  "commercial": {
+    "status": "unverified",
+    "survey_evidence": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/depth-model-survey-data/licenses.csv",
+      "sha256": "d87c5fe2ee92b8fe970544edd11123a7254e005370cef8f29c73f482e556e740",
+      "bytes": 97314
+    },
+    "surveyed_release": {
+      "model_id": "i40-vda-small",
+      "code_license": "Apache-2.0",
+      "code_commercial": "allowed",
+      "weights_license": "Apache-2.0",
+      "weights_commercial": "allowed",
+      "inference_and_output_terms": "Commercial inference allowed subject to Apache terms; no separate output restrictions stated",
+      "commercial_offer": "business cooperation invitation; no published alternative grant",
+      "commercial_contact": "Hengkai Guo: guohengkaighk@gmail.com",
+      "dependency_notes": "Depth Anything V2 backbone; same size-specific license distinction; dependencies not exhaustively audited",
+      "code_license_url": "https://github.com/DepthAnything/Video-Depth-Anything/blob/4f5ae23172ba60fd7bc11ef671cca678842c7072/LICENSE",
+      "weights_license_url": "https://huggingface.co/depth-anything/Video-Depth-Anything-Small/blob/256875362cff76724b920335dfb4b29dd611f66e/README.md",
+      "terms_source_urls": "https://github.com/DepthAnything/Video-Depth-Anything/blob/4f5ae23172ba60fd7bc11ef671cca678842c7072/LICENSE;https://huggingface.co/depth-anything/Video-Depth-Anything-Small/blob/256875362cff76724b920335dfb4b29dd611f66e/README.md",
+      "accessed_at": "2026-09-30",
+      "notes": "Metric and relative checkpoints inspected separately"
+    },
+    "code": "Apache-2.0 per pinned survey",
+    "weights": "Apache-2.0 for this exact Small release per pinned survey",
+    "inference_outputs": "Allowed subject to Apache terms per survey; no separate output restrictions recorded.",
+    "installed_dependency_notice_inventory": null,
+    "blocker": "Exact provisioned package/binary versions and applicable notices must be inventoried and assessed after setup before GPU admission."
+  },
+  "remaining_inputs": [
+    "Independent current canonical source receipt after helper closure fix.",
+    "Exact package lock and transfer-size evidence for the frozen cu121 recipe, within candidate and shared budgets.",
+    "Root live reservation/budget/ownership recheck before the one approved setup attempt.",
+    "Actual acquired pinned source and checkpoint hashes; isolated installed dependency inventory and commercial assessment; native CPU qualification before maps admission."
+  ],
+  "restrictions": [
+    "No network/install/provision/native inference/GPU operations performed.",
+    "No live ledger changes.",
+    "Do not retry or work around the root D8 Torch host denial."
+  ]
+}
