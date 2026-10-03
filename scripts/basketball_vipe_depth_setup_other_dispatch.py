@@ -6,6 +6,7 @@ import subprocess
 import sys
 
 from vipe_benchmark.config import ROOT, load
+from vipe_benchmark.depth_authorization import execution_authorization
 from vipe_benchmark.execution import resources
 from vipe_benchmark.depth_native_runtime import recipe, verify_runtime
 from vipe_benchmark.depth_source_integrity import verify_source
@@ -14,8 +15,6 @@ from vipe_benchmark.ledger import Ledger
 from vipe_benchmark.supervisor import supervise
 
 
-REVIEW = ROOT / 'docs/specs/plan031-execution/depth-execution-review-001.json'
-DO = ROOT / 'docs/research/vipe-alternatives/plan031-execution/depth-approval-001.json'
 
 
 def shared_run_root():
@@ -40,12 +39,10 @@ def dispatch(candidate, run_id):
     job_id = f'plan069-{candidate}-setup-001'
     config = dict(load(), new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
     ledger = Ledger(local / 'ledger.jsonl', config)
-    review, authorization = file_record(REVIEW), file_record(DO)
+    review, authorization, proposal, _ = execution_authorization(candidate)
     source_path = (ROOT / 'docs/research/vipe-alternatives' / run_id /
                    f'depth-{candidate}-source-review-001.json')
     source_review = file_record(source_path)
-    proposal = next(row for row in read_json(REVIEW)['proposals']
-                    if row['candidate'] == candidate)
     output = local / 'jobs' / job_id
     request_path = local / 'requests' / (job_id + '.json')
     if output.exists() or request_path.exists():

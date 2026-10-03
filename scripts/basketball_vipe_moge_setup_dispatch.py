@@ -6,6 +6,7 @@ import subprocess
 import sys
 
 from vipe_benchmark.config import ROOT, load
+from vipe_benchmark.depth_authorization import execution_authorization
 from vipe_benchmark.execution import resources
 from vipe_benchmark.files import file_record, read_json, verify_record, write_json
 from vipe_benchmark.ledger import Ledger
@@ -13,8 +14,6 @@ from vipe_benchmark.moge_setup import source_tree_records
 from vipe_benchmark.supervisor import supervise
 
 
-REVIEW = ROOT / 'docs/specs/plan031-execution/depth-execution-review-001.json'
-DO = ROOT / 'docs/research/vipe-alternatives/plan031-execution/depth-approval-001.json'
 
 
 def shared_run_root():
@@ -47,7 +46,7 @@ def dispatch(candidate, run_id, runtime_environment):
     requirement_record = environment['requirement_sources'][0]
     validate_environment_request(environment, Path(requirement_record['path']).parent,
                                  candidate, 'actual')
-    review, authorization = file_record(REVIEW), file_record(DO)
+    review, authorization, proposal, _ = execution_authorization(candidate)
     source_review_path = (ROOT / 'docs/research/vipe-alternatives/plan031-execution' /
                           f'depth-{candidate}-source-review-001.json')
     source_review = file_record(source_review_path)
@@ -57,13 +56,12 @@ def dispatch(candidate, run_id, runtime_environment):
         'scripts/vipe_benchmark/moge_native.py',
         'scripts/vipe_benchmark/moge_environment.py',
         'scripts/vipe_benchmark/depth_environment.py',
+        'scripts/vipe_benchmark/depth_authorization.py',
         'scripts/vipe_benchmark/runtime_inventory.py',
         'scripts/basketball_vipe_moge_setup.py',
         'scripts/basketball_vipe_moge_setup_dispatch.py')]
     if source_evidence.get('setup_sources') != setup_sources:
         raise ValueError('current MoGe setup source review required')
-    proposal = next(row for row in read_json(REVIEW)['proposals']
-                    if row['candidate'] == candidate)
     output = local / 'jobs' / job_id
     request_path = local / 'requests' / (job_id + '.json')
     if output.exists() or request_path.exists():

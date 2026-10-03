@@ -58,6 +58,15 @@ class SingleDispatchTest(unittest.TestCase):
             runtime=dict(receipt=runtime_receipt)))
         return do, qualified_path, setup_path, source_review
 
+    def authorization(self, path):
+        def selected(candidate):
+            approved = read_json(path)
+            review = approved['review']
+            proposal = next(row for row in read_json(review['path'])['proposals'] if row['candidate'] == candidate)
+            grant = next(row for row in approved['candidate_approvals'] if row['candidate'] == candidate)
+            return review, file_record(path), proposal, grant
+        return selected
+
     def supervise(self, ledger, job, command, output, **kwargs):
         candidate = job.split('-')[1]
         request = read_json(command[3])
@@ -80,7 +89,7 @@ class SingleDispatchTest(unittest.TestCase):
         for candidate in ('D5', 'D6', 'D8'):
             with self.subTest(candidate=candidate):
                 do, qualified, setup, source = self.candidate(candidate)
-                with patch.object(dispatch, 'DO', do), \
+                with patch.object(dispatch, 'execution_authorization', side_effect=self.authorization(do)), \
                      patch.object(dispatch, 'supervise', side_effect=self.supervise), \
                      patch.object(dispatch, 'validate_result') as validate:
                     self.assertEqual(dispatch.dispatch(candidate, self.context_path, qualified, setup, source),
@@ -104,7 +113,7 @@ class SingleDispatchTest(unittest.TestCase):
             order.append('admit')
             self.assertEqual(kwargs['live']['ledger_head_sha256'], 'initial')
             return []
-        with patch.object(dispatch, 'DO', do), patch.object(dispatch, '_live', side_effect=live), \
+        with patch.object(dispatch, 'execution_authorization', side_effect=self.authorization(do)), patch.object(dispatch, '_live', side_effect=live), \
              patch.object(dispatch, 'admit', side_effect=admit), \
              patch.object(dispatch, 'supervise', side_effect=self.supervise), \
              patch.object(dispatch, 'validate_result'):
@@ -116,7 +125,7 @@ class SingleDispatchTest(unittest.TestCase):
     def test_uncharged_context_blocks_before_authorization(self):
         do, qualified, setup, source = self.candidate('D5')
         self.ledger.history.clear()
-        with patch.object(dispatch, 'DO', do), patch.object(dispatch, 'supervise') as supervise:
+        with patch.object(dispatch, 'execution_authorization', side_effect=self.authorization(do)), patch.object(dispatch, 'supervise') as supervise:
             with self.assertRaisesRegex(ValueError, 'ledger-charged'):
                 dispatch.dispatch('D5', self.context_path, qualified, setup, source)
             supervise.assert_not_called()
@@ -124,7 +133,7 @@ class SingleDispatchTest(unittest.TestCase):
 
     def test_wrong_candidate_source_review_blocks_before_authorization(self):
         do, qualified, setup, source = self.candidate('D6', review_candidate='D5')
-        with patch.object(dispatch, 'DO', do), patch.object(dispatch, 'supervise') as supervise:
+        with patch.object(dispatch, 'execution_authorization', side_effect=self.authorization(do)), patch.object(dispatch, 'supervise') as supervise:
             with self.assertRaisesRegex(ValueError, 'candidate source review'):
                 dispatch.dispatch('D6', self.context_path, qualified, setup, source)
             supervise.assert_not_called()
@@ -132,7 +141,7 @@ class SingleDispatchTest(unittest.TestCase):
 
     def test_unqualified_interpreter_blocks_before_authorization(self):
         do, qualified, setup, source = self.candidate('D8', interpreter='/missing/venv/bin/python')
-        with patch.object(dispatch, 'DO', do), patch.object(dispatch, 'supervise') as supervise:
+        with patch.object(dispatch, 'execution_authorization', side_effect=self.authorization(do)), patch.object(dispatch, 'supervise') as supervise:
             with self.assertRaisesRegex(ValueError, 'qualified setup runtime'):
                 dispatch.dispatch('D8', self.context_path, qualified, setup, source)
             supervise.assert_not_called()
@@ -141,7 +150,7 @@ class SingleDispatchTest(unittest.TestCase):
     def test_setup_ledger_result_must_match(self):
         do, qualified, setup, source = self.candidate('D5')
         self.ledger.current['plan069-D5-setup-001']['result'] = {}
-        with patch.object(dispatch, 'DO', do), patch.object(dispatch, 'supervise') as supervise:
+        with patch.object(dispatch, 'execution_authorization', side_effect=self.authorization(do)), patch.object(dispatch, 'supervise') as supervise:
             with self.assertRaisesRegex(ValueError, 'ledger-bound'):
                 dispatch.dispatch('D5', self.context_path, qualified, setup, source)
             supervise.assert_not_called()
@@ -149,7 +158,7 @@ class SingleDispatchTest(unittest.TestCase):
 
     def test_failed_fresh_admission_never_authorizes(self):
         do, qualified, setup, source = self.candidate('D5')
-        with patch.object(dispatch, 'DO', do), \
+        with patch.object(dispatch, 'execution_authorization', side_effect=self.authorization(do)), \
              patch.object(dispatch, 'admit', return_value=['stale ledger head']), \
              patch.object(dispatch, 'supervise') as supervise:
             with self.assertRaisesRegex(ValueError, 'stale ledger head'):
@@ -164,7 +173,7 @@ class SingleDispatchTest(unittest.TestCase):
         self.record(qualitative, dict(schema='plan069-depth-qualitative-admission/v1',
             record_kind='actual', component='D5', inputs=self.inputs,
             purpose='qualitative-only', status='admitted'))
-        with patch.object(dispatch, 'DO', do), \
+        with patch.object(dispatch, 'execution_authorization', side_effect=self.authorization(do)), \
              patch.object(dispatch, 'supervise', side_effect=self.supervise), \
              patch.object(dispatch, 'validate_result'):
             dispatch.dispatch('D5', self.context_path, qualified, setup, source,
@@ -175,7 +184,7 @@ class SingleDispatchTest(unittest.TestCase):
     def test_added_d8_source_file_blocks_before_model_authorization(self):
         do, qualified, setup, source = self.candidate('D8')
         (self.root / 'D8/source/added.py').write_text('unreviewed native import')
-        with patch.object(dispatch, 'DO', do), patch.object(dispatch, 'supervise') as supervise:
+        with patch.object(dispatch, 'execution_authorization', side_effect=self.authorization(do)), patch.object(dispatch, 'supervise') as supervise:
             with self.assertRaisesRegex(ValueError, 'source tree changed'):
                 dispatch.dispatch('D8', self.context_path, qualified, setup, source)
             supervise.assert_not_called()
@@ -183,7 +192,7 @@ class SingleDispatchTest(unittest.TestCase):
 
     def test_prepared_attempt_cannot_be_authorized_twice(self):
         do, qualified, setup, source = self.candidate('D5')
-        with patch.object(dispatch, 'DO', do), \
+        with patch.object(dispatch, 'execution_authorization', side_effect=self.authorization(do)), \
              patch.object(dispatch, 'supervise', side_effect=self.supervise), \
              patch.object(dispatch, 'validate_result'):
             dispatch.dispatch('D5', self.context_path, qualified, setup, source)
@@ -193,7 +202,7 @@ class SingleDispatchTest(unittest.TestCase):
 
     def test_uncertain_cleanup_blocks_completed_dispatch(self):
         do, qualified, setup, source = self.candidate('D5')
-        with patch.object(dispatch, 'DO', do), patch.object(dispatch, 'supervise', return_value={}):
+        with patch.object(dispatch, 'execution_authorization', side_effect=self.authorization(do)), patch.object(dispatch, 'supervise', return_value={}):
             with self.assertRaisesRegex(ValueError, 'cleanup not confirmed'):
                 dispatch.dispatch('D5', self.context_path, qualified, setup, source)
 

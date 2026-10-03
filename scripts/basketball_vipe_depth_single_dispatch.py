@@ -6,6 +6,7 @@ import sys
 import time
 
 from vipe_benchmark.config import ROOT, load
+from vipe_benchmark.depth_authorization import execution_authorization
 from vipe_benchmark.depth_admission import review as admit, local_source_records
 from vipe_benchmark.depth_single_run import CANDIDATES, SCHEMA, validate_result
 from vipe_benchmark.depth_source_integrity import verify_source
@@ -16,7 +17,6 @@ from vipe_benchmark.moge_setup import source_tree_records
 from vipe_benchmark.supervisor import supervise
 
 RUN = 'plan031-20260913T032700Z'
-DO = ROOT / 'docs/research/vipe-alternatives/plan031-execution/depth-approval-001.json'
 CONTEXT_JOB = 'plan069-depth-context-003'
 CONTEXT_RECEIPT = ROOT / 'docs/research/vipe-alternatives' / RUN / (CONTEXT_JOB + '.json')
 
@@ -88,11 +88,8 @@ def dispatch(candidate, context, qualification, setup, source_review, *,
     local = shared_run_root() / '.local/vipe-alternatives' / run_id
     config = dict(load(), new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
     ledger = Ledger(local / 'ledger.jsonl', config)
-    authorization = file_record(DO)
-    approved = read_json(DO)
-    review = verify_record(approved['review'])
-    proposal = next(row for row in read_json(review['path'])['proposals'] if row['candidate'] == candidate)
-    grant = next(row for row in approved['candidate_approvals'] if row['candidate'] == candidate)
+    review, authorization, proposal, grant = execution_authorization(candidate)
+    approved = read_json(authorization['path'])
     source_record = file_record(source_review)
     source = read_json(source_record['path'])
     _require(source.get('schema') == 'plan069-depth-source-review/v1' and
