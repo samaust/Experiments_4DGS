@@ -9,7 +9,7 @@ import test_vipe_benchmark_depth_d11_run as fixtures
 from vipe_benchmark.depth_d11_run import run_maps
 from vipe_benchmark.depth_extension import CONFIG
 from vipe_benchmark.depth_single_publish import publish_after_gpu
-from vipe_benchmark.files import file_record, read_json, write_json
+from vipe_benchmark.files import file_record, object_hash, read_json, write_json
 from vipe_benchmark.marigold_relative import PROFILE
 
 
@@ -28,8 +28,8 @@ class D11PublishTests(unittest.TestCase):
         write_json(review, dict(proposals=[dict(candidate='D11',
             candidate_config=read_json(CONFIG)['candidates']['D11'],
             workload=dict(unique_published_maps=256, clips=4, clip_frames=50, clip_fps=25),
-            allocation=dict(cpu_seconds=120, artifact_bytes=2**30))]))
-        setup = local / 'setup.json'
+            allocation=dict(cpu_seconds=120, artifact_bytes=2**30, download_bytes=2**30))]))
+        setup = local / 'jobs/plan069-D11-setup-001/result.json'
         write_json(setup, dict(native_source=dict(test='synthetic'), source_manifest=dict(test='synthetic'),
             runtime=dict(native_qualification=dict(test='synthetic'))))
         native_map = local / 'native.npy'
@@ -53,22 +53,57 @@ class D11PublishTests(unittest.TestCase):
         state = dict(event='finish', status='complete', result=file_record(result_path), cleanup_confirmed=True)
         ledger = MagicMock()
         ledger.states.return_value = {job: state}
-        ledger.events.return_value = [dict(event='reserve', job_id=job,
-            evidence=dict(request=file_record(original_request), admission=file_record(admission)))]
+        proposal = read_json(review)['proposals'][0]
+        setup_finish = dict(event='finish',job_id='plan069-D11-setup-001',resource='setup',
+            status='complete',result=file_record(setup),cleanup_confirmed=True,
+            cleanup_uncertain=False,surviving_pids=[],deadline_exceeded=False)
+        setup_finish['event_sha256'] = object_hash(setup_finish)
+        slot_budget = dict(schema='plan069-depth-slot-byte-budget/v1',candidate='D11',
+            proposal_sha256=object_hash(proposal),setup=file_record(setup),
+            setup_finish_event_sha256=setup_finish['event_sha256'],
+            setup_baseline=dict(download_bytes=0,artifact_bytes=0),
+            absolute_limits=dict(download_bytes=proposal['allocation']['download_bytes'],
+                                 artifact_bytes=proposal['allocation']['artifact_bytes']),
+            shared_setup_artifact_bytes=0)
+        map_authorization = dict(event='depth_attempt_authorized',candidate='D11',
+            review=file_record(review),proposal_sha256=object_hash(proposal),slot_byte_budget=slot_budget,
+            map_stage_allowance=dict(setup=file_record(setup),
+                setup_finish_event_sha256=setup_finish['event_sha256']))
+        accepted_events = [dict(event='depth_setup_authorized',candidate='D11',
+            resource_snapshot=slot_budget['setup_baseline']),setup_finish,map_authorization,
+            dict(event='reserve', job_id=job,
+                evidence=dict(request=file_record(original_request), admission=file_record(admission)))]
+        ledger.events.return_value = accepted_events
         ledger.totals.return_value = dict(cpu=dict(elapsed_seconds=0))
         def render(context, candidate, domain, rows, anchors, output, provenance, **options):
             self.assertEqual((candidate, domain), ('D11', 'relative_log'))
             self.assertEqual((len(rows), sum(r['reused_anchor'] for r in rows)), (200, 4))
             self.assertEqual(options['record_kind'], 'actual')
+            options['resource_guard']()
             output.mkdir(parents=True)
             write_json(output / 'package.json', dict(status='published'))
             receipt = dict(record_kind='actual', clips=4, new_map_identities=196,
                            package=file_record(output / 'package.json'))
             write_json(output / 'result.json', receipt)
+            options['resource_guard']()
             return receipt
         output = local / 'jobs/plan069-D11-clips-001'
         with patch('vipe_benchmark.depth_single_publish.Ledger', return_value=ledger), patch(
-                'vipe_benchmark.depth_clips.publish_fixture_clips', render):
+                'vipe_benchmark.depth_clips.publish_fixture_clips',side_effect=render) as renderer:
+            ledger.events.return_value = [event for event in accepted_events if event is not map_authorization]
+            with self.assertRaisesRegex(ValueError,'whole-slot byte budget'):
+                publish_after_gpu(file_record(result_path),output)
+            renderer.assert_not_called()
+            self.assertFalse(output.exists())
+            ledger.charge_cpu_preparation.assert_not_called()
+            ledger.events.return_value = accepted_events
+            slot_budget['shared_setup_artifact_bytes'] = proposal['allocation']['artifact_bytes']
+            with self.assertRaisesRegex(ValueError,'retained candidate artifacts'):
+                publish_after_gpu(file_record(result_path),output)
+            renderer.assert_not_called()
+            self.assertFalse(output.exists())
+            ledger.charge_cpu_preparation.assert_not_called()
+            slot_budget['shared_setup_artifact_bytes'] = 0
             receipt = publish_after_gpu(file_record(result_path), output)
         self.assertEqual(receipt['clips'], 4)
         self.assertEqual(ledger.charge_cpu_preparation.call_count, 1)
