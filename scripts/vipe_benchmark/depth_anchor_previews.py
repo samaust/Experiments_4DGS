@@ -65,11 +65,13 @@ def render(request, output, *, ledger=None):
     # CPU duration is returned on the exception for the trusted caller to charge.
     try:
         actual, raw_anchors = _prepare(request, output, ledger, candidate, seconds, maximum)
+        full_guard, output_guard = _publication_guards(actual, candidate, ledger, output)
         _require(time.monotonic() < deadline, 'anchor preview CPU deadline during proof verification')
     except BaseException as error:
         error.anchor_preview_elapsed_seconds = time.monotonic() - started
         raise
     try:
+        output_guard(2**20)
         output.mkdir(parents=True, exist_ok=False)
         write_json(output / 'request.json', request)
         anchors = []
@@ -88,7 +90,10 @@ def render(request, output, *, ledger=None):
                 if DOMAINS[candidate] == 'camera_z_metres':
                     _require((values[valid] > 0).all(), 'metric anchor depth must be positive')
                 path = output / f"camera{row['camera']}-frame{row['frame']}.png"
+                # PNG's worst-case RGB bytes plus encoder/metadata headroom.
+                output_guard(960 * 540 * 3 + 2**20)
                 display = _preview_frame(values, valid, DOMAINS[candidate], path)
+                output_guard()
                 if DOMAINS[candidate] == 'camera_z_metres':
                     display.update(normalization_scope='one frozen anchor frame',
                                    invalid_color='magenta', above_20_metres_color='red')
@@ -108,15 +113,22 @@ def render(request, output, *, ledger=None):
                       artifact_bytes=retained, physical_accuracy='unverified', human_review='pending',
                       sources=dict(builder=file_record(__file__),
                                    renderer=file_record(Path(__file__).with_name('depth_extension.py'))))
+        output_guard(2**20)
         write_json(output / 'result.json', result)
+        output_guard()
         _require(directory_bytes(output) <= maximum and time.monotonic() < deadline,
                  'anchor preview CPU/disk bound exceeded')
         if actual:
             _require(budget_snapshot(ledger.path.parent)['artifact_bytes'] <=
                      ledger.config['new_artifact_disk_gib_limit'] * 2**30, 'anchor cumulative artifact cap exceeded')
+            # Full scan once at terminal publication; its CPU cost is measured.
+            # Reserve bounded receipt space before the no-download full check.
+            output_guard(2**20)
+            full_guard()
             accounting = dict(schema=ACCOUNTING, status='complete', candidate=candidate,
                               result=file_record(output / 'result.json'), elapsed_seconds=time.monotonic() - started)
             write_json(output / 'cpu-accounting.json', accounting)
+            output_guard()
             _require(directory_bytes(output) <= maximum and time.monotonic() < deadline,
                      'anchor preview CPU/disk bound exceeded')
             ledger.charge_cpu_preparation(accounting['elapsed_seconds'], file_record(output / 'cpu-accounting.json'))
@@ -180,6 +192,23 @@ def _prepare(request, output, ledger, candidate, seconds, maximum):
         _clips(slot['clips'], candidate, request['context'], raw_anchors, native_record,
                native_rows, slot['provenance']['ledger_outcome'])
     return actual, raw_anchors
+
+def _publication_guards(actual, candidate, ledger, output):
+    """Use full initial/final scans and cheap output-only checks between writes."""
+    if not actual or candidate not in ('D5', 'D6', 'D8', 'D11'):
+        return (lambda: None), (lambda additional_bytes=0: None)
+    from .depth_map_allowance import historical_slot_byte_guard
+    from .depth_single_run import _actual_output_guard
+    # Factory checks all retained revisions and forbids missing D11 slot proof.
+    full = historical_slot_byte_guard(ledger, candidate)
+    allocations = [event for event in ledger.events()
+                   if event.get('event') == 'depth_attempt_authorized' and
+                   event.get('candidate') == candidate]
+    _require(len(allocations) == 1, 'exact whole-slot preview authorization required')
+    lightweight = _actual_output_guard(dict(record_kind='actual', candidate=candidate,
+        ledger_path=str(ledger.path), review=allocations[0]['review']), output)
+    return full, lightweight
+
 
 def aggregate_request(template, preview_records):
     """Attach actual preview receipts to explicit slots; missing slots stay pending."""

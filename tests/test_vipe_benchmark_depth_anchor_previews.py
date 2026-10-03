@@ -22,6 +22,9 @@ class FakeLedger:
         self.config = dict(config, new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
         self.charges = []
 
+    def events(self):
+        return []
+
     def states(self):
         return {}
 
@@ -212,6 +215,50 @@ class AnchorPreviewTests(unittest.TestCase):
                 render(request, failed_root / 'jobs/plan069-D7-anchor-previews-002', ledger=failed_ledger)
         self.assertEqual(len(failed_ledger.charges), 1)
         self.assertEqual(read_json(failed_ledger.charges[0][1]['path'])['status'], 'failed')
+
+    def test_actual_d11_requires_whole_slot_proof_before_output(self):
+        request = self.request('D11', kind='actual')
+        ledger = FakeLedger(self.root, load())
+        output = self.root / 'jobs/plan069-D11-anchor-previews-002'
+        with patch('vipe_benchmark.depth_anchor_previews._native_result', return_value=(None, None, None)), \
+             patch('vipe_benchmark.depth_anchor_previews._clips'), \
+             patch('vipe_benchmark.budgets.budget_snapshot', return_value=dict(artifact_bytes=0)):
+            with self.assertRaisesRegex(ValueError, 'D11 diagnostics require whole-slot byte proof'):
+                render(request, output, ledger=ledger)
+        self.assertFalse(output.exists())
+        self.assertEqual(ledger.charges, [])
+
+    def test_preview_slot_guards_stop_overcap_and_stage_downloads(self):
+        request = self.request('D11', kind='actual')
+        for mode in ('before-output', 'after-png', 'download'):
+            with self.subTest(mode=mode):
+                root = self.root / mode
+                ledger = FakeLedger(root, load())
+                output = root / 'jobs/plan069-D11-anchor-previews-002'
+                def factory(*args):
+                    if mode == 'before-output':
+                        raise ValueError('retained candidate artifacts exceed whole-slot allocation')
+                    def full():
+                        if mode == 'download':
+                            raise ValueError('CPU diagnostics must not acquire new downloads')
+                    def fast(additional_bytes=0):
+                        if mode == 'after-png' and list(output.glob('*.png')):
+                            raise ValueError('next map output exceeds remaining whole-slot artifact headroom')
+                    return full, fast
+                with patch('vipe_benchmark.depth_anchor_previews._native_result', return_value=(None, None, None)), \
+                     patch('vipe_benchmark.depth_anchor_previews._clips'), \
+                     patch('vipe_benchmark.depth_anchor_previews._publication_guards', side_effect=factory), \
+                     patch('vipe_benchmark.budgets.budget_snapshot', return_value=dict(artifact_bytes=0)):
+                    with self.assertRaises(ValueError):
+                        render(request, output, ledger=ledger)
+                if mode == 'before-output':
+                    self.assertFalse(output.exists())
+                    self.assertEqual(ledger.charges, [])
+                else:
+                    self.assertFalse((output / 'cpu-accounting.json').exists())
+                    self.assertEqual(len(ledger.charges), 1)
+                    self.assertEqual(read_json(output / 'cpu-failure.json')['status'], 'failed')
+                    self.assertEqual(len(list(output.glob('*.png'))), 1 if mode == 'after-png' else 60)
 
     def test_fixture_previews_cannot_be_used_as_actual_aggregate_evidence(self):
         request = self.request()
