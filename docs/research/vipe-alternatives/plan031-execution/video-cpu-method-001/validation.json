@@ -1,0 +1,41 @@
+{
+  "schema": "plan069-video-qualification-preparation-validation/v1",
+  "record_kind": "fixture",
+  "source_base": "a9ed1351",
+  "phases": [
+    {
+      "name": "lineage_cpu_fixture",
+      "command": [
+        "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+        "-B",
+        "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/video-qualification/docs/research/vipe-alternatives/plan031-execution/video-cpu-method-001/test_lineage.py"
+      ],
+      "elapsed_seconds": 0.33872410399999353,
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "...\n----------------------------------------------------------------------\nRan 3 tests in 0.235s\n\nOK\n"
+    },
+    {
+      "name": "producer_parse_only",
+      "command": [
+        "python3",
+        "-B",
+        "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/video-qualification/docs/research/vipe-alternatives/plan031-execution/video-cpu-method-001/producer.py",
+        "--help"
+      ],
+      "elapsed_seconds": 0.04330706299879239,
+      "returncode": 0,
+      "stdout": "usage: producer.py [-h] {capture,child,finalize} ...\n\nRetained local Video Depth Anything CPU evidence method; root owns admission\nand CPU charge.\n\npositional arguments:\n  {capture,child,finalize}\n\noptions:\n  -h, --help            show this help message and exit\n",
+      "stderr": ""
+    }
+  ],
+  "total_elapsed_seconds": 0.3820638350007357,
+  "actual_model_loads": 0,
+  "gpu_operations": false,
+  "downloads": 0,
+  "ledger_modified": false,
+  "limitations": [
+    "Preparation generation and earlier fixture invocations were not instrumented as one phase; their timing is not invented.",
+    "Final validation record write is outside the measured interval."
+  ]
+}
