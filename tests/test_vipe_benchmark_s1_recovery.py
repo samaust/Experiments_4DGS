@@ -1609,8 +1609,22 @@ class ReceiptContractTests(unittest.TestCase):
                         return original_strict(row)
                     def routed_json(path):return original_json(logical_files.get(str(path),path))
                     def routed_ledger(path):return original_ledger(logical_files.get(str(path),path))
-                    for name,implementation in [('file_record',routed_record),('strict_record',routed_strict),('session_json',routed_json),('job_ledger_input',routed_ledger)]:
+                    for name,implementation in [('file_record',routed_record),('strict_record',routed_strict),('session_json',routed_json),('read_json',routed_json),('job_ledger_input',routed_ledger)]:
                         session_stack.enter_context(patch.object(c,name,side_effect=implementation))
+                    # Route a disposable dispatch copy into this checkout. Keep
+                    # the frozen original Plan049 digest and all authority checks;
+                    # only the fixture's checkout-dependent paths are relocated.
+                    dispatch=copy.deepcopy(dispatch)
+                    dispatch['plan']['path']=str(ROOT/'plans/plan_049.md')
+                    status=file_record(run/'implementation-status-049.md')
+                    authorization=file_record(run/'authorization-049.md')
+                    dispatch['implementation_status_snapshot']=status
+                    dispatch['authorization_note']=authorization
+                    dispatch_path=graph.root/'synthetic-implementation-dispatch.json'
+                    dispatch_path.write_text(json.dumps(dispatch))
+                    logical_dispatch=str(run/'implementation-dispatch-049.json')
+                    logical_files[logical_dispatch]=dispatch_path
+                    dispatch_record=routed_record(logical_dispatch)
                     logical_identity=str(run/'launch-identity-049-aggregate-1000.json');logical_files[logical_identity]=identity_path
                     identity_request=routed_record(logical_identity)
                     logical_admission=str(run/'launch-admission-049-aggregate-1000.json')
@@ -1677,6 +1691,16 @@ class ReceiptContractTests(unittest.TestCase):
                     physical_ledger.write_bytes(chain)
                     outer['end']['monotonic']=401.;outer['end']['utc']=(datetime.datetime(2026,1,1,tzinfo=datetime.timezone.utc)+datetime.timedelta(seconds=401)).isoformat();outer['elapsed_seconds']=401.
                     graph.publish();self.assertEqual(graph.validate()['provenance'],graph.provenance)
+                    # Relocating fixture paths must not accept a different plan
+                    # or a substituted original Plan049 digest.
+                    for key,value in [('path',str(ROOT/'plans/plan_050.md')),('sha256','0'*64)]:
+                        bad_dispatch=copy.deepcopy(dispatch)
+                        bad_dispatch['plan'][key]=value
+                        def substituted_dispatch(path):
+                            return bad_dispatch if str(path)==logical_dispatch else routed_json(path)
+                        with patch.object(c,'read_json',side_effect=substituted_dispatch):
+                            with self.assertRaisesRegex(ValueError,'fixed original Plan049 dispatch authority'):
+                                graph.validate()
                     valid=copy.deepcopy(outer)
                     for bad_hash in (None,'x','0'*64):
                         outer['creation']['candidate_sha256']=bad_hash;graph.publish()
