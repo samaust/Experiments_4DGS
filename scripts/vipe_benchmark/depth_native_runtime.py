@@ -2,14 +2,15 @@
 
 from pathlib import Path
 import shutil
+import re
 import sys
 
-from .depth_native_packages import D11_PINNED, D8_UTILS3D_REVISION
+from .depth_native_packages import D11_PINNED, D8_UTILS3D_REVISION, D8_CU130_PROFILE
 from .files import file_record, read_json, verify_record
 
 
 D8_REQUIREMENTS = (
-    'torch==2.4.1+cu124', 'torchvision==0.19.1+cu124', 'numpy==1.26.4',
+    'torch==2.14.1+cu130', 'torchvision==0.29.1+cu130', 'numpy==1.26.4',
     'gradio', 'click', 'opencv-python', 'scipy', 'matplotlib', 'trimesh',
     'pillow', 'huggingface-hub', 'setuptools==80.9.0', 'wheel', 'packaging',
 )
@@ -45,7 +46,8 @@ def recipe(candidate, run_root):
         uv=file_record(uv), requirements=requirements,
         constraints=[row for row in requirements if '==' in row], requirement_sources=[],
         indexes=['https://pypi.org/simple', 'https://download.pytorch.org/whl/' +
-                 ('cu124' if candidate == 'D8' else 'cu128')], sources=[],
+                 ('cu130' if candidate == 'D8' else 'cu128')], sources=[],
+        compatibility_profile=dict(D8_CU130_PROFILE) if candidate == 'D8' else None,
         setup_attempts=1, automatic_retries=0, python_downloads=False)
 
 
@@ -65,6 +67,20 @@ def prepare(request, output, config, *, run_root, deadline, acquire,
             raise ValueError('actual native environment requires original setup request')
         environment.update(ledger_path=request['ledger_path'],
                            setup_request=file_record(request_path))
+    source_dir = Path(output) / 'source'
+    requirements = (['models/student_pointmap/requirements.txt'] if candidate == 'D8'
+                    else ['pyproject.toml', 'setup/setup_env.sh'])
+    environment['requirement_sources'] = [file_record(source_dir / path) for path in requirements]
+    if candidate == 'D8':
+        from packaging.requirements import Requirement
+        raw = (source_dir / requirements[0]).read_text()
+        torch_requirements = [Requirement(line.strip()) for line in raw.splitlines()
+                              if line.strip() and not line.lstrip().startswith('#') and
+                              re.match(r'torch(?=[\s<=>!~\[;]|$)', line.strip())]
+        if [str(row) for row in torch_requirements] != ['torch<2.5.0']:
+            raise ValueError('D8 original Torch requirement differs from reviewed override')
+        if environment.get('compatibility_profile') != D8_CU130_PROFILE:
+            raise ValueError('D8 exact compatibility profile required')
     sources = []
     if candidate == 'D8':
         archive = Path(output) / 'utils3d-source.tar.gz'
@@ -81,17 +97,16 @@ def prepare(request, output, config, *, run_root, deadline, acquire,
                             record=record, source_dir=str(source), source_manifest=source_manifest(source),
                             install_local_offline=True))
     environment['sources'] = sources
-    source_dir = Path(output) / 'source'
-    requirements = (['models/student_pointmap/requirements.txt'] if candidate == 'D8'
-                    else ['pyproject.toml', 'setup/setup_env.sh'])
-    environment['requirement_sources'] = [file_record(source_dir / path) for path in requirements]
     result = provision_depth_environment(environment, Path(output) / 'runtime', config,
         run_root=run_root, deadline=deadline, download_limit=download_limit,
         artifact_limit=artifact_limit)
     result['source_packages'] = sources
+    result['compatibility_profile'] = environment.get('compatibility_profile')
+    result['requirement_sources'] = environment['requirement_sources']
     from .depth_native_packages import qualify
     result['native_qualification'] = qualify(candidate, result['python_executable'],
-                                             source_packages=sources)
+                                             source_packages=sources,
+                                             compatibility_profile=result['compatibility_profile'])
     return result
 
 
@@ -109,8 +124,15 @@ def verify_runtime(setup, interpreter=None):
             verify_record(runtime[field])
         for record in runtime['command_receipts']:
             verify_record(record)
+    if setup['candidate'] == 'D8':
+        if runtime.get('compatibility_profile') != D8_CU130_PROFILE:
+            raise ValueError('D8 exact compatibility profile required at entry')
+        expected = file_record(Path(setup['source_dir']) / 'models/student_pointmap/requirements.txt')
+        if runtime.get('requirement_sources') != [expected]:
+            raise ValueError('D8 original requirements changed since setup')
     qualification = qualify(setup['candidate'], selected,
-                            source_packages=runtime.get('source_packages', []))
+                            source_packages=runtime.get('source_packages', []),
+                            compatibility_profile=runtime.get('compatibility_profile'))
     if qualification != runtime.get('native_qualification'):
         raise ValueError('native package qualification changed since setup')
     return qualification

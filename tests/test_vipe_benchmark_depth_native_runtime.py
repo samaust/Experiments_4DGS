@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from vipe_benchmark.depth_native_runtime import prepare, D8_REQUIREMENTS
-from vipe_benchmark.depth_native_packages import D8_UTILS3D_REVISION
+from vipe_benchmark.depth_native_packages import D8_UTILS3D_REVISION, D8_CU130_PROFILE
 from vipe_benchmark.files import file_record
 
 
@@ -24,7 +24,8 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             native_requirements.write_text('torch<2.5.0\n')
             request = dict(candidate='D8', record_kind='fixture',
                            environment=dict(candidate='D8', record_kind='fixture',
-                                            requirements=list(D8_REQUIREMENTS)))
+                                            requirements=list(D8_REQUIREMENTS),
+                                            compatibility_profile=dict(D8_CU130_PROFILE)))
             transfers, calls = [], []
 
             def acquire(url, target, **bounds):
@@ -44,7 +45,7 @@ class NativeRuntimePreparationTests(unittest.TestCase):
                 calls.append(environment)
                 self.assertEqual(bounds['download_limit'], 123456789)
                 self.assertEqual(bounds['artifact_limit'], 987654321)
-                self.assertIn('torch==2.4.1+cu124', environment['requirements'])
+                self.assertIn('torch==2.14.1+cu130', environment['requirements'])
                 self.assertTrue(environment['sources'][0]['install_local_offline'])
                 self.assertEqual(environment['sources'][0]['record'], transfers[0])
                 self.assertEqual(environment['requirement_sources'], [file_record(native_requirements)])
@@ -60,6 +61,18 @@ class NativeRuntimePreparationTests(unittest.TestCase):
             self.assertEqual(len(calls), 1)
             self.assertEqual(runtime['source_packages'][0]['revision'], D8_UTILS3D_REVISION)
             self.assertEqual(runtime['native_qualification'], {'status': 'passed'})
+            self.assertEqual(runtime['compatibility_profile'], D8_CU130_PROFILE)
+            self.assertEqual(runtime['requirement_sources'], [file_record(native_requirements)])
+            self.assertEqual(native_requirements.read_text(), 'torch<2.5.0\n')
+            for raw in ['torch<2.6.0\n', 'torch<2.5.0\ntorch>=2.14\n']:
+                native_requirements.write_text(raw)
+                with patch.dict(sys.modules, {'vipe_benchmark.depth_environment': helper}):
+                    with self.assertRaisesRegex(ValueError, 'original Torch requirement differs'):
+                        prepare(request, root, {}, run_root=root, deadline=10**20,
+                                acquire=acquire, download_limit=123456789,
+                                artifact_limit=987654321)
+            self.assertEqual(len(calls), 1)
+
 
 
 if __name__ == '__main__':

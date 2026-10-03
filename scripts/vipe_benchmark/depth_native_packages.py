@@ -6,10 +6,19 @@ from pathlib import Path
 import os
 import subprocess
 import sys
+from typing import Any
 
 from packaging.version import Version
 
 from .files import file_record, object_hash
+
+
+D8_CU130_PROFILE: dict[str, Any] = dict(
+    schema='plan069-D8-runtime-compatibility-profile/v1',
+    name='D8-torch-2.14.1-cu130',
+    torch='2.14.1+cu130', torchvision='0.29.1+cu130',
+    upstream_torch_constraint='torch<2.5.0',
+    scope='local-qualified-inference', upstream_supported=False)
 
 
 D8_UTILS3D_REVISION = '3fab839f0be9931dac7c8488eb0e1600c236e183'
@@ -30,7 +39,7 @@ D11_PINNED = {
 
 def installed(names):
     """Read package metadata without importing Torch or touching a GPU."""
-    found = {}
+    found: dict[str, Any] = {}
     for name in names:
         try:
             dist = metadata.distribution(name)
@@ -42,13 +51,20 @@ def installed(names):
     return found
 
 
-def blockers(candidate, packages, source_packages=()):
+def blockers(candidate, packages, source_packages=(), compatibility_profile=None):
     if candidate == 'D8':
         problems = [f'{name} missing' for name in D8_REQUIRED if not packages.get(name)]
         torch = packages.get('torch') or {}
         version = torch.get('version', '').split('+', 1)[0]
         major_minor = version.split('.')[:2]
-        if len(major_minor) != 2 or not all(part.isdigit() for part in major_minor) or \
+        if compatibility_profile is not None:
+            if compatibility_profile != D8_CU130_PROFILE:
+                problems.append('D8 compatibility profile differs from reviewed profile')
+            for name in ('torch', 'torchvision'):
+                if (packages.get(name) or {}).get('version') != D8_CU130_PROFILE[name]:
+                    problems.append('D8 compatibility profile requires exact ' + name + ' ' +
+                                    D8_CU130_PROFILE[name])
+        elif len(major_minor) != 2 or not all(part.isdigit() for part in major_minor) or \
                 tuple(map(int, major_minor)) >= (2, 5):
             problems.append('D8 requires torch<2.5.0')
         utils = packages.get('utils3d') or {}
@@ -79,7 +95,7 @@ def blockers(candidate, packages, source_packages=()):
     raise ValueError('unsupported native dependency candidate')
 
 
-def qualify(candidate, interpreter=None, *, source_packages=()):
+def qualify(candidate, interpreter=None, *, source_packages=(), compatibility_profile=None):
     """Probe exact entry interpreter without importing models or initializing CUDA."""
     interpreter = Path(interpreter or sys.executable).absolute()
     names = D8_REQUIRED if candidate == 'D8' else tuple(D11_PINNED)
@@ -101,7 +117,7 @@ def qualify(candidate, interpreter=None, *, source_packages=()):
         from .depth_source_integrity import source_manifest
         if source_manifest(source['source_dir']) != source['source_manifest']:
             raise ValueError('native dependency source tree changed')
-    problems = blockers(candidate, packages, source_packages)
+    problems = blockers(candidate, packages, source_packages, compatibility_profile)
     if problems:
         raise ValueError('native dependency qualification failed: ' + '; '.join(problems))
     if before != file_record(interpreter):
@@ -109,4 +125,4 @@ def qualify(candidate, interpreter=None, *, source_packages=()):
     return dict(schema='plan069-depth-native-packages/v1', status='passed',
                 candidate=candidate, interpreter_path=str(interpreter),
                 interpreter=before, packages=packages, packages_sha256=object_hash(packages),
-                source_packages=list(source_packages))
+                source_packages=list(source_packages), compatibility_profile=compatibility_profile)

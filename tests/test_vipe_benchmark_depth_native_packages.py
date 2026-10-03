@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from vipe_benchmark.files import file_record
 from vipe_benchmark.depth_source_integrity import source_manifest
 from vipe_benchmark.depth_native_packages import (
-    D8_REQUIRED, D8_UTILS3D_REVISION, D11_PINNED, blockers, qualify)
+    D8_REQUIRED, D8_UTILS3D_REVISION, D8_CU130_PROFILE, D11_PINNED, blockers, qualify)
 
 
 class NativePackageTests(unittest.TestCase):
@@ -24,6 +24,23 @@ class NativePackageTests(unittest.TestCase):
         packages['torch']['version'] = '2.4.1+cu121'
         packages['utils3d']['direct_url'] = dict(vcs_info=dict(commit_id=D8_UTILS3D_REVISION))
         self.assertEqual(blockers('D8', packages), [])
+
+    def test_modern_runtime_requires_explicit_exact_override(self):
+        packages = {name: dict(version='1.0') for name in D8_REQUIRED}
+        packages['utils3d']['direct_url'] = dict(vcs_info=dict(commit_id=D8_UTILS3D_REVISION))
+        for name in ('torch', 'torchvision'):
+            packages[name]['version'] = D8_CU130_PROFILE[name]
+        self.assertIn('D8 requires torch<2.5.0', blockers('D8', packages))
+        self.assertEqual(blockers('D8', packages, compatibility_profile=D8_CU130_PROFILE), [])
+        edited = dict(D8_CU130_PROFILE, upstream_supported=True)
+        self.assertTrue(blockers('D8', packages, compatibility_profile=edited))
+        for name, wrong in [('torch', '2.14.1'), ('torch', '2.13.0+cu130'),
+                            ('torchvision', '0.29.0+cu130')]:
+            with self.subTest(name=name, wrong=wrong):
+                original = packages[name]['version']
+                packages[name]['version'] = wrong
+                self.assertTrue(blockers('D8', packages, compatibility_profile=D8_CU130_PROFILE))
+                packages[name]['version'] = original
 
     def test_d8_local_archive_requires_pinned_source_provenance(self):
         packages = {name: dict(version='1.0', direct_url=None) for name in D8_REQUIRED}
