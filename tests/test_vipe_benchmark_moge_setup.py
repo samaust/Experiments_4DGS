@@ -7,6 +7,8 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import MagicMock, patch
+from types import ModuleType
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from vipe_benchmark.files import file_record, object_hash, read_json, write_json
@@ -149,6 +151,57 @@ class MoGeSetupTests(unittest.TestCase):
         (model_dir / 'v3.py').write_text('changed native code')
         with self.assertRaisesRegex(ValueError, 'extracted source differs'):
             load_adapter('D6', file_record(result_path), device='cpu')
+
+    def test_repeated_native_loads_preserve_verified_source_with_bytecode_enabled(self):
+        from vipe_benchmark.moge_native import load_adapter
+        native = ModuleType('fixture_moge_model')
+        model = MagicMock()
+        model.training = False
+        model.to.return_value = model
+        model.eval.return_value = model
+        native.MoGeModel = MagicMock(return_value=model)
+        original_path = sys.path.copy()
+        original_modules = {name: module for name, module in sys.modules.items()
+                            if name == 'moge' or name.startswith('moge.')}
+        self.addCleanup(lambda: sys.path.__setitem__(slice(None), original_path))
+        def restore_modules():
+            for name in list(sys.modules):
+                if name == 'moge' or name.startswith('moge.'):
+                    del sys.modules[name]
+            sys.modules.update(original_modules)
+        self.addCleanup(restore_modules)
+        for candidate, version in (('D5', 'v2'), ('D6', 'v3')):
+            with self.subTest(candidate=candidate):
+                restore_modules()
+                for name in original_modules:
+                    sys.modules.pop(name, None)
+                source = self.root / candidate / 'source'
+                model_dir = source / 'moge/model'
+                model_dir.mkdir(parents=True)
+                (source / 'LICENSE').write_text('MIT fixture')
+                (source / 'moge/__init__.py').write_text('')
+                (model_dir / '__init__.py').write_text('')
+                (model_dir / (version + '.py')).write_text(
+                    'from fixture_moge_model import MoGeModel\n')
+                checkpoint = source.parent / 'model.pt'
+                checkpoint.write_bytes(b'fixture checkpoint')
+                archive = source.parent / 'source.tar.gz'
+                archive.write_bytes(b'fixture archive')
+                result_path = source.parent / 'result.json'
+                records = source_tree_records(source)
+                write_json(result_path, dict(schema='plan069-depth-setup-result/v1',
+                    status='complete', candidate=candidate,
+                    source_revision='74fbce054ebed49800de42d0ad0e83495065719a',
+                    source_dir=str(source), source_archive=file_record(archive),
+                    source_tree=records, checkpoint=file_record(checkpoint)))
+                with patch.object(sys, 'dont_write_bytecode', False), patch.dict(
+                        sys.modules, {'fixture_moge_model': native}), patch(
+                        'torch.load', return_value=dict(model_config={}, model={})):
+                    for _ in range(2):
+                        adapter = load_adapter(candidate, file_record(result_path), device='cpu')
+                        self.assertIsNotNone(adapter)
+                        self.assertFalse(sys.dont_write_bytecode)
+                    self.assertEqual(source_tree_records(source), records)
 
 
 if __name__ == '__main__':

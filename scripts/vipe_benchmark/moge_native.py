@@ -35,21 +35,27 @@ def load_adapter(candidate, setup_result_record, *, device='cuda'):
         raise ValueError('MoGe source and checkpoint must share one setup output')
     if str(source) not in sys.path:
         sys.path.insert(0, str(source))
-    module = importlib.import_module('moge.model.' + version)
-    if Path(module.__file__).resolve() != expected_module:
-        raise ValueError('loaded MoGe module differs from pinned source')
-    for name, loaded in sys.modules.items():
-        if name == 'moge' or name.startswith('moge.'):
-            location = getattr(loaded, '__file__', None)
-            if location is not None and not Path(location).resolve().is_relative_to(source):
-                raise ValueError('MoGe import closure escaped pinned source')
-    import torch
-    saved = torch.load(checkpoint, map_location='cpu', weights_only=True)
-    if not isinstance(saved, dict) or not {'model_config', 'model'} <= set(saved):
-        raise ValueError('MoGe checkpoint payload lacks native config and state')
-    model = module.MoGeModel(**saved['model_config'])
-    model.load_state_dict(saved['model'], strict=True)
-    if candidate == 'D6' and not hasattr(model, 'refiner'):
-        raise ValueError('MoGe-3 checkpoint lacks required sparse refiner')
-    model = model.to(device).eval()
-    return MoGe2Adapter(model) if candidate == 'D5' else MoGe3Adapter(model)
+    # Native imports must preserve the exact extracted source receipt.
+    previous_bytecode = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        module = importlib.import_module('moge.model.' + version)
+        if Path(module.__file__).resolve() != expected_module:
+            raise ValueError('loaded MoGe module differs from pinned source')
+        for name, loaded in sys.modules.items():
+            if name == 'moge' or name.startswith('moge.'):
+                location = getattr(loaded, '__file__', None)
+                if location is not None and not Path(location).resolve().is_relative_to(source):
+                    raise ValueError('MoGe import closure escaped pinned source')
+        import torch
+        saved = torch.load(checkpoint, map_location='cpu', weights_only=True)
+        if not isinstance(saved, dict) or not {'model_config', 'model'} <= set(saved):
+            raise ValueError('MoGe checkpoint payload lacks native config and state')
+        model = module.MoGeModel(**saved['model_config'])
+        model.load_state_dict(saved['model'], strict=True)
+        if candidate == 'D6' and not hasattr(model, 'refiner'):
+            raise ValueError('MoGe-3 checkpoint lacks required sparse refiner')
+        model = model.to(device).eval()
+        return MoGe2Adapter(model) if candidate == 'D5' else MoGe3Adapter(model)
+    finally:
+        sys.dont_write_bytecode = previous_bytecode
