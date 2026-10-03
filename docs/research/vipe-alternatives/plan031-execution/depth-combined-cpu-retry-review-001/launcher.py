@@ -32,7 +32,7 @@ def main():
   for pid in branch:
    if pid in rows:owned[pid]=rows[pid]
   return rows
- 
+
  request_path=Path(a.review_request).resolve();request=json.loads(request_path.read_text())
  def verify_record(row):
   actual=record(Path(row['path']))
