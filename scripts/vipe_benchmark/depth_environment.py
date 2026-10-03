@@ -147,13 +147,25 @@ def provision_depth_environment(request, output, config, *, run_root, deadline,
         UV_CONCURRENT_DOWNLOADS='1', UV_CONCURRENT_BUILDS='1', UV_CONCURRENT_INSTALLS='7',
         OMP_NUM_THREADS='7', MAX_JOBS='7', PYTHONDONTWRITEBYTECODE='1',
         PYTHONNOUSERSITE='1', CUDA_VISIBLE_DEVICES='')
+    flex_cache = None
+    if request['candidate'] in ('D5', 'D6'):
+        from .moge_source_build import cache_path, verify_derivation
+        flex_sources = [s for s in sources if s['name'] == 'flex-gemm']
+        _require(len(flex_sources) == 1, 'one reviewed FlexGEMM derivation required')
+        verify_derivation(flex_sources[0])
+        flex_cache = str(cache_path(output))
+        _require(request.get('flex_cache_path') == flex_cache,
+                 'reviewed MoGe cache differs from reserved runtime')
+        environment.update(FLEX_GEMM_AUTOTUNE_CACHE_PATH=flex_cache,
+                           FLEX_GEMM_BUILD_CUDA='0', BUILD_CUDA='0')
     for name in ('PYTHONPATH', 'PYTHONHOME'):
         environment.pop(name, None)
     output.mkdir(parents=True, exist_ok=False)
     write_json(output / 'request.json', request)
     (output / 'requirements.txt').write_text('\n'.join(request['requirements'] + request['constraints']) + '\n')
     (output / 'constraints.txt').write_text('\n'.join(request['constraints']) + '\n')
-    env_path, receipts = output / 'environment', []
+    env_path = output / 'environment'
+    receipts: list[dict] = []
     python = str(env_path / 'bin/python')
     lock = output / 'requirements.lock'
     started = time.monotonic()
@@ -244,6 +256,8 @@ def provision_depth_environment(request, output, config, *, run_root, deadline,
             command_receipts=receipts, requirement_sources=request['requirement_sources'],
             sources=sources, source_packages=sources, elapsed_seconds=time.monotonic() - started,
             model_imports=False, gpu_operations=False, automatic_retries=0)
+        if flex_cache is not None:
+            result['flex_cache_path'] = flex_cache
         write_json(output / 'result.json', result)
         return result
     except BaseException as exception:

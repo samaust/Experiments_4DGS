@@ -55,6 +55,7 @@ def dispatch(candidate, run_id, runtime_environment):
         'scripts/vipe_benchmark/moge_setup.py',
         'scripts/vipe_benchmark/moge_native.py',
         'scripts/vipe_benchmark/moge_environment.py',
+        'scripts/vipe_benchmark/moge_source_build.py',
         'scripts/vipe_benchmark/depth_environment.py',
         'scripts/vipe_benchmark/depth_authorization.py',
         'scripts/vipe_benchmark/runtime_inventory.py',

@@ -22,14 +22,14 @@ class DepthEnvironmentTests(unittest.TestCase):
         source = self.root / 'source-requirements.txt'
         source.write_text('torch>=2\nnumpy\n')
         self.request = dict(schema='plan069-depth-environment-request/v1',
-            candidate='D5', record_kind='fixture', python_version='3.11',
+            candidate='D7', record_kind='fixture', python_version='3.11',
             python_seed_executable=str(seed.absolute()), python_seed=file_record(seed),
             uv=file_record(uv), requirements=['torch>=2', 'numpy', 'setuptools', 'wheel'],
             constraints=['torch==2.5.1+cu124', 'torchvision==0.20.1+cu124', 'numpy==1.26.4'],
             requirement_sources=[file_record(source)], indexes=['https://pypi.org/simple',
                 'https://download.pytorch.org/whl/cu124'], sources=[])
         self.config = dict(new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
-        self.output = self.root / 'jobs/plan069-D5-setup-001/runtime'
+        self.output = self.root / 'jobs/plan069-D7-setup-001/runtime'
         self.calls = []
 
     def tearDown(self):
@@ -136,8 +136,8 @@ class DepthEnvironmentTests(unittest.TestCase):
         self.assertTrue(receipt['offline'])
 
     def test_actual_environment_requires_active_parent_reservation_before_native_commands(self):
-        parent = self.root / 'requests/plan069-D5-setup-001.json'
-        write_json(parent, dict(candidate='D5', job_id='plan069-D5-setup-001',
+        parent = self.root / 'requests/plan069-D7-setup-001.json'
+        write_json(parent, dict(candidate='D7', job_id='plan069-D7-setup-001',
                                record_kind='actual'))
         request = dict(self.request, record_kind='actual',
                        ledger_path=str(self.root / 'ledger.jsonl'), setup_request=file_record(parent))
@@ -146,3 +146,36 @@ class DepthEnvironmentTests(unittest.TestCase):
                 run_root=self.root, deadline=time.monotonic() + 60,
                 download_limit=10**7, artifact_limit=10**7)
         self.assertFalse(self.output.exists())
+
+    def test_moge_install_uses_official_scoped_cache_and_disables_cuda_build(self):
+        import os
+        import io
+        import tarfile
+        from vipe_benchmark.moge_source_build import REVISION, derive_flex_archive
+        payload = (Path(__file__).parent / 'fixtures/plan069-flex-gemm/setup.py.txt').read_bytes()
+        original = self.root / 'flex-original.tar.gz'
+        with tarfile.open(original, 'w:gz') as archive:
+            info = tarfile.TarInfo('FlexGEMM-' + REVISION + '/setup.py')
+            info.size = len(payload)
+            archive.addfile(info, io.BytesIO(payload))
+        derived = derive_flex_archive(file_record(original), self.root / 'flex-derived.tar.gz')
+        request = dict(self.request, candidate='D5', sources=[derived],
+            flex_cache_path=str(self.output / 'flex-cache/autotune_cache.json'))
+        homes = {name: os.environ.get(name) for name in ('HOME', 'CODEX_HOME')}
+        def fixture(command, **kwargs):
+            environment = kwargs['environment']
+            self.assertEqual(environment['FLEX_GEMM_AUTOTUNE_CACHE_PATH'], request['flex_cache_path'])
+            self.assertEqual(environment['FLEX_GEMM_BUILD_CUDA'], '0')
+            self.assertEqual(environment['BUILD_CUDA'], '0')
+            for name, value in homes.items():
+                self.assertEqual(environment.get(name), value)
+            self.run_fixture(command, **kwargs)
+            if '--output' in command:
+                path = Path(command[command.index('--output') + 1])
+                inventory = read_json(path)
+                inventory['packages'].append(dict(name='flex_gemm', version='1.0.0', files=[]))
+                path.unlink()
+                write_json(path, inventory)
+        result = self.provision(request=request, runner=fixture)
+        self.assertEqual(result['source_packages'], [derived])
+        self.assertEqual(result['flex_cache_path'], request['flex_cache_path'])

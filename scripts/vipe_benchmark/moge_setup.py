@@ -188,6 +188,12 @@ def run_moge_setup(request, output, *, request_path=None, acquire=_acquire):
                     artifact_limit=artifact_limit)
                 dependency_archives.append(dict(name=package['name'], revision=package['revision'],
                     record=record, install_local_offline=True))
+            from .moge_source_build import verify_dependency_archives, derive_flex_archive
+            verify_dependency_archives(environment, dependency_archives)
+            dependency_archives = [derive_flex_archive(package['record'],
+                output / 'runtime-source-build/flex-gemm-derived.tar.gz')
+                if package['name'] == 'flex-gemm' else package
+                for package in dependency_archives]
         checkpoint = output / asset['path']
         weight_url = (model['weights']['url'] + '/resolve/' +
                       model['weights']['revision'] + '/' + asset['path'])

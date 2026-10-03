@@ -119,6 +119,24 @@ class MoGeSetupTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unsafe MoGe source archive'):
             run_moge_setup(request, self.root / request['job_id'], acquire=unsafe_acquire)
 
+    def runtime_fixture(self, parent, candidate):
+        from vipe_benchmark.moge_source_build import REVISION, derive_flex_archive, cache_path
+        runtime = parent / 'runtime'
+        runtime.mkdir()
+        original = parent / 'flex-original.tar.gz'
+        payload = (Path(__file__).parent / 'fixtures/plan069-flex-gemm/setup.py.txt').read_bytes()
+        with tarfile.open(original, 'w:gz') as archive:
+            info = tarfile.TarInfo('FlexGEMM-' + REVISION + '/setup.py')
+            info.size = len(payload)
+            archive.addfile(info, BytesIO(payload))
+        derived = derive_flex_archive(file_record(original), parent / 'flex-derived.tar.gz')
+        cache = cache_path(runtime)
+        cache.parent.mkdir()
+        result = runtime / 'result.json'
+        write_json(result, dict(status='complete', candidate=candidate,
+            source_packages=[derived], flex_cache_path=str(cache)))
+        return file_record(result)
+
     def test_native_loader_requires_complete_checkpoint_and_refiner(self):
         import torch
         from vipe_benchmark.moge_native import load_adapter
@@ -145,7 +163,8 @@ class MoGeSetupTests(unittest.TestCase):
             status='complete', candidate='D6',
             source_revision='74fbce054ebed49800de42d0ad0e83495065719a',
             source_dir=str(source), source_archive=file_record(archive),
-            source_tree=source_tree_records(source), checkpoint=file_record(checkpoint)))
+            source_tree=source_tree_records(source), checkpoint=file_record(checkpoint),
+            runtime_environment=self.runtime_fixture(checkpoint.parent, 'D6')))
         with self.assertRaisesRegex(RuntimeError, 'Missing key'):
             load_adapter('D6', file_record(result_path), device='cpu')
         (model_dir / 'v3.py').write_text('changed native code')
@@ -193,7 +212,8 @@ class MoGeSetupTests(unittest.TestCase):
                     status='complete', candidate=candidate,
                     source_revision='74fbce054ebed49800de42d0ad0e83495065719a',
                     source_dir=str(source), source_archive=file_record(archive),
-                    source_tree=records, checkpoint=file_record(checkpoint)))
+                    source_tree=records, checkpoint=file_record(checkpoint),
+                    runtime_environment=self.runtime_fixture(checkpoint.parent, candidate)))
                 with patch.object(sys, 'dont_write_bytecode', False), patch.dict(
                         sys.modules, {'fixture_moge_model': native}), patch(
                         'torch.load', return_value=dict(model_config={}, model={})):

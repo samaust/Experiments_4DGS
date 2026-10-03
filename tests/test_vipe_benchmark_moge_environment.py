@@ -28,6 +28,18 @@ dependencies = [
   "flex-gemm @ git+https://github.com/JeffreyXiang/FlexGEMM.git@b2fadb29d41846c7981ade6801ffc689fae119cf"
 ]
 ''')
+        self.dependencies = {}
+        for name, dependencies in (('utils3d_moge', ['moderngl', 'numpy', 'scipy']),
+                                   ('pipeline', []),
+                                   ('flex-gemm', ['torch>=2.4.0', 'triton>=3.2.0', 'filelock'])):
+            directory = self.root / name
+            directory.mkdir()
+            (directory / 'pyproject.toml').write_text(
+                '[build-system]\nrequires=["setuptools>=64", "wheel"]\n'
+                '[project]\nname="' + name + '"\ndependencies=' + repr(dependencies) + '\n')
+            if name == 'flex-gemm':
+                (directory / 'setup.py').write_bytes((Path(__file__).parent / 'fixtures/plan069-flex-gemm/setup.py.txt').read_bytes())
+            self.dependencies[name] = directory
         self.seed = self.root / 'seed-python'
         self.seed.write_bytes(b'fixture interpreter')
         self.uv = self.root / 'uv'
@@ -36,22 +48,27 @@ dependencies = [
     def test_d5_and_d6_freeze_compatible_torch_and_metered_git_sources(self):
         for candidate in ('D5', 'D6'):
             recipe = environment_request(candidate, self.source,
-                python_seed_executable=self.seed, uv=self.uv, record_kind='fixture')
+                python_seed_executable=self.seed, uv=self.uv, record_kind='fixture',
+                dependency_sources=self.dependencies, runtime_directory=self.root / 'runtime')
             validate_environment_request(recipe, self.source, candidate, 'fixture')
             self.assertIn('torch==2.6.0+cu124', recipe['constraints'])
             self.assertIn('triton==3.2.0', recipe['constraints'])
             self.assertEqual(len(recipe['sources']), 3)
             self.assertFalse(any('git+' in dependency for dependency in recipe['requirements']))
-            self.assertEqual(recipe['requirement_sources'], [file_record(self.source / 'pyproject.toml')])
+            self.assertEqual(len(recipe['requirement_sources']), 4)
+            self.assertIn('moderngl', recipe['requirements'])
+            self.assertIn('filelock', recipe['requirements'])
 
     def test_changed_requirements_or_unpinned_source_is_rejected(self):
         recipe = environment_request('D6', self.source,
-            python_seed_executable=self.seed, uv=self.uv, record_kind='fixture')
+            python_seed_executable=self.seed, uv=self.uv, record_kind='fixture',
+                dependency_sources=self.dependencies, runtime_directory=self.root / 'runtime')
         recipe['sources'][2]['revision'] = 'main'
         with self.assertRaisesRegex(ValueError, 'pinned offline source'):
             validate_environment_request(recipe, self.source, 'D6', 'fixture')
         recipe = environment_request('D6', self.source,
-            python_seed_executable=self.seed, uv=self.uv, record_kind='fixture')
+            python_seed_executable=self.seed, uv=self.uv, record_kind='fixture',
+                dependency_sources=self.dependencies, runtime_directory=self.root / 'runtime')
         recipe['requirements'].append('unreviewed-dependency')
         with self.assertRaisesRegex(ValueError, 'source requirements'):
             validate_environment_request(recipe, self.source, 'D6', 'fixture')
@@ -67,8 +84,22 @@ dependencies = [
         setup = fixtures.MoGeSetupTests()
         setup.setUp()
         self.addCleanup(setup.tearDown)
+        from vipe_benchmark.files import object_hash
+        for candidate, saved in setup.requests.items():
+            reviewed = read_json(saved['review']['path'])
+            reviewed['proposals'][0]['allocation']['download_bytes'] = 100000
+            review_path = setup.root / (candidate + '-environment-review.json')
+            write_json(review_path, reviewed)
+            authorized = read_json(saved['authorization']['path'])
+            authorized['review'] = file_record(review_path)
+            authorized['candidate_approvals'][0]['proposal_sha256'] = object_hash(reviewed['proposals'][0])
+            auth_path = setup.root / (candidate + '-environment-approval.json')
+            write_json(auth_path, authorized)
+            saved.update(review=file_record(review_path), authorization=file_record(auth_path))
+
         recipe = environment_request('D6', self.source,
-            python_seed_executable=self.seed, uv=self.uv, record_kind='fixture')
+            python_seed_executable=self.seed, uv=self.uv, record_kind='fixture',
+                dependency_sources=self.dependencies, runtime_directory=self.root / 'runtime')
         request = dict(setup.requests['D6'], runtime_environment=recipe)
         downloaded = []
         revision = '74fbce054ebed49800de42d0ad0e83495065719a'
@@ -81,8 +112,24 @@ dependencies = [
                 info.size = len(payload)
                 archive.addfile(info, BytesIO(payload))
         def acquire(url, path, **options):
-            payload = buffer.getvalue() if 'microsoft/MoGe' in url else (
-                setup.weight if path.name == 'model.pt' else b'pinned dependency archive')
+            if 'microsoft/MoGe' in url:
+                payload = buffer.getvalue()
+            elif path.name == 'model.pt':
+                payload = setup.weight
+            else:
+                name = path.name.removesuffix('.tar.gz')
+                package = next(row for row in recipe['sources'] if row['name'] == name)
+                packed = BytesIO()
+                with tarfile.open(fileobj=packed, mode='w:gz') as archive:
+                    for filename in ('pyproject.toml', 'setup.py'):
+                        original = self.dependencies[name] / filename
+                        if not original.exists():
+                            continue
+                        data = original.read_bytes()
+                        info = tarfile.TarInfo(name + '-' + package['revision'] + '/' + filename)
+                        info.size = len(data)
+                        archive.addfile(info, BytesIO(data))
+                payload = packed.getvalue()
             path.write_bytes(payload)
             downloaded.append((url, options))
             transfers = options['run_root'] / 'transfers'
@@ -132,7 +179,8 @@ dependencies = [
         approval_path = setup.root / 'cap-approval.json'
         write_json(approval_path, approved)
         cap_recipe = environment_request('D5', self.source,
-            python_seed_executable=self.seed, uv=self.uv, record_kind='fixture')
+            python_seed_executable=self.seed, uv=self.uv, record_kind='fixture',
+                dependency_sources=self.dependencies, runtime_directory=self.root / 'runtime')
         cap_request = dict(setup.requests['D5'], review=file_record(review_path),
             authorization=file_record(approval_path), runtime_environment=cap_recipe)
         cap_output = setup.root / cap_request['job_id']
@@ -148,3 +196,28 @@ dependencies = [
         self.assertLess(before_receipt[0], cap)
         self.assertGreater(directory_bytes(cap_output), cap)
         self.assertTrue((cap_output / 'failure.json').is_file())
+
+    def test_inherited_cuda_build_flags_are_rejected_before_recipe(self):
+        from unittest.mock import patch
+        for name in ('FLEX_GEMM_BUILD_CUDA', 'BUILD_CUDA'):
+            with self.subTest(name=name), patch.dict('os.environ', {name: '1'}):
+                with self.assertRaisesRegex(ValueError, 'inherited FlexGEMM'):
+                    environment_request('D5', self.source, python_seed_executable=self.seed,
+                        uv=self.uv, record_kind='fixture', dependency_sources=self.dependencies, runtime_directory=self.root / 'runtime')
+
+    def test_changed_vcs_pyproject_is_rejected_at_validation(self):
+        recipe = environment_request('D6', self.source,
+            python_seed_executable=self.seed, uv=self.uv, record_kind='fixture',
+            dependency_sources=self.dependencies, runtime_directory=self.root / 'runtime')
+        project = self.dependencies['utils3d_moge'] / 'pyproject.toml'
+        project.write_text(project.read_text().replace('moderngl', 'unexpected'))
+        with self.assertRaises(ValueError):
+            validate_environment_request(recipe, self.source, 'D6', 'fixture')
+
+    def test_inherited_official_cache_escape_is_rejected_before_recipe(self):
+        from unittest.mock import patch
+        with patch.dict('os.environ', {'FLEX_GEMM_AUTOTUNE_CACHE_PATH': '/outside/cache.json'}):
+            with self.assertRaisesRegex(ValueError, 'escapes'):
+                environment_request('D5', self.source, python_seed_executable=self.seed,
+                    uv=self.uv, record_kind='fixture', dependency_sources=self.dependencies,
+                    runtime_directory=self.root / 'runtime')

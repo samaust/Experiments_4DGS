@@ -1,6 +1,7 @@
 """Load the exact local MoGe checkpoint through its pinned native model class."""
 
 import importlib
+import os
 from pathlib import Path
 import sys
 
@@ -35,12 +36,30 @@ def load_adapter(candidate, setup_result_record, *, device='cuda'):
         raise ValueError('MoGe source and checkpoint must share one setup output')
     if str(source) not in sys.path:
         sys.path.insert(0, str(source))
+    from .moge_source_build import cache_path, verify_derivation
+    runtime_record = verify_record(setup['runtime_environment'])
+    if Path(runtime_record['path']).parent != source.parent / 'runtime':
+        raise ValueError('MoGe runtime escaped owned setup directory')
+    runtime = read_json(runtime_record['path'])
+    flex_sources = [row for row in runtime.get('source_packages', []) if row['name'] == 'flex-gemm']
+    if len(flex_sources) != 1:
+        raise ValueError('verified installed FlexGEMM derivation required')
+    verify_derivation(flex_sources[0])
+    scoped_cache = str(cache_path(Path(runtime_record['path']).parent))
+    if (runtime.get('candidate') != candidate or runtime.get('status') != 'complete' or
+            runtime.get('flex_cache_path') != scoped_cache or not Path(scoped_cache).parent.is_dir()):
+        raise ValueError('owned FlexGEMM runtime cache binding required')
+    cached_config = sys.modules.get('flex_gemm.config')
+    if cached_config is not None and getattr(cached_config, 'AUTOTUNE_CACHE_PATH', None) != scoped_cache:
+        raise ValueError('previous FlexGEMM import used an unowned cache')
+    previous_cache = os.environ.get('FLEX_GEMM_AUTOTUNE_CACHE_PATH')
+    os.environ['FLEX_GEMM_AUTOTUNE_CACHE_PATH'] = scoped_cache
     # Native imports must preserve the exact extracted source receipt.
     previous_bytecode = sys.dont_write_bytecode
     sys.dont_write_bytecode = True
     try:
         module = importlib.import_module('moge.model.' + version)
-        if Path(module.__file__).resolve() != expected_module:
+        if module.__file__ is None or Path(module.__file__).resolve() != expected_module:
             raise ValueError('loaded MoGe module differs from pinned source')
         for name, loaded in sys.modules.items():
             if name == 'moge' or name.startswith('moge.'):
@@ -59,3 +78,7 @@ def load_adapter(candidate, setup_result_record, *, device='cuda'):
         return MoGe2Adapter(model) if candidate == 'D5' else MoGe3Adapter(model)
     finally:
         sys.dont_write_bytecode = previous_bytecode
+        if previous_cache is None:
+            os.environ.pop('FLEX_GEMM_AUTOTUNE_CACHE_PATH', None)
+        else:
+            os.environ['FLEX_GEMM_AUTOTUNE_CACHE_PATH'] = previous_cache

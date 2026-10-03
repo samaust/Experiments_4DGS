@@ -1,0 +1,87 @@
+{
+  "schema": "plan069-moge-administrative-build-review/v1",
+  "status": "CPU-reviewed-native-pending",
+  "candidates": [
+    "D5",
+    "D6"
+  ],
+  "original_flex_revision": "b2fadb29d41846c7981ade6801ffc689fae119cf",
+  "original_setup_sha256": "9c0c166b6fac4375b7f29644fff29bda8fd2e77915ab47dd5af4159b8ba62e4d",
+  "change_scope": "Exactly two setup.py cache-path expressions; pristine source archive retained and rehashed, derived archive clearly identified. No runtime, kernel or model source edits; no HOME override.",
+  "existing_official_runtime_option": "FLEX_GEMM_AUTOTUNE_CACHE_PATH",
+  "cache_location": "owned setup job/runtime/flex-cache/autotune_cache.json, including .lock and .tmp siblings",
+  "setup_expressions": [
+    {
+      "before": "os.path.expanduser(\"~/.flex_gemm\")",
+      "after": "os.path.dirname(os.environ[\"FLEX_GEMM_AUTOTUNE_CACHE_PATH\"])"
+    },
+    {
+      "before": "os.path.expanduser('~/.flex_gemm/autotune_cache.json')",
+      "after": "os.environ[\"FLEX_GEMM_AUTOTUNE_CACHE_PATH\"]"
+    }
+  ],
+  "build_environment": {
+    "FLEX_GEMM_BUILD_CUDA": "0",
+    "BUILD_CUDA": "0",
+    "preserve_variables": [
+      "HOME",
+      "CODEX_HOME"
+    ],
+    "preflight": "Reject inherited build flags and a cache path outside the owned runtime before dispatch; require exact frozen cache path again before provisioning."
+  },
+  "recipe_correction": "Include ordinary and build dependencies from MoGe plus all three pinned VCS pyprojects; includes moderngl and filelock, preserves platform markers. Bind all four pyproject records and original Flex setup.py. Compare acquired VCS archive metadata against reviewed records before deriving/installing.",
+  "lineage": "Keep original_record and upstream revision alongside derived record, derivation manifest, exact patch list and original/derived file inventories. Verify actual installed-source record before model imports. Native runtime inventory and source review must reflect the derivative honestly.",
+  "local_sources": [
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/moge_environment.py",
+      "sha256": "1601fd1a365ca2eb2b7a40c7338b0a292e12f003381ead31d03221a0142ac4ab",
+      "bytes": 7786
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/moge_source_build.py",
+      "sha256": "bc3eb19d23c28978bf1dc238f40e887f9222b0e1e08e9fd3ced39755e4d1ae2b",
+      "bytes": 8314
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/moge_setup.py",
+      "sha256": "3fb12acac4138ee072850508386d3bac75b39dad98aa8b5a0fd842963796a2c8",
+      "bytes": 13946
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/depth_environment.py",
+      "sha256": "5f04a8b8816ace11603f22aab8b0ca2e1addbe71429ec96d716717f8a58f7571",
+      "bytes": 15653
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/moge_native.py",
+      "sha256": "8e8ce7d610d7be54c2095a36ae067b8e9f2590b0585911cc63e4c6ff2cfd71b6",
+      "bytes": 4758
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/depth_admission.py",
+      "sha256": "1edc5465f8a75cb0a83d42652dbc2f1cd6195402d7a9806e6b25a3671d2e64d4",
+      "bytes": 16917
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/basketball_vipe_moge_setup_dispatch.py",
+      "sha256": "58818133c5807c31fda599aec9902825d6d4c2dfe93b79a8e20cb3ee1a9cf84d",
+      "bytes": 7226
+    }
+  ],
+  "validation": {
+    "cpu_source_recipe_provision_tests": 16,
+    "cpu_source_recipe_provision_status": "passed",
+    "mypy_sources": 5,
+    "mypy_status": "passed",
+    "independent_review": "authorization_review: no blockers; independently16tests passed; native qualification not established",
+    "broader_native_setup_tests": {
+      "count": 22,
+      "elapsed_seconds": 41.169,
+      "status": "passed",
+      "scope": "MoGe setup/native loader, single map runtime, D8/D11 setup/runtime and video setup CPU fixtures"
+    }
+  },
+  "authority": "Implementation correction within existing candidate scope and approved budgets; no new attempts, timeout or global cap increase. Exact post-install source/dependency/commercial/native qualification and live ledger checks remain required.",
+  "integration_hold": "Do not integrate shared moge_setup.py or depth_environment.py while D11 setup/qualification is using their frozen hashes. Refresh affected source reviews after integration.",
+  "actual_operations": "No setup, transfer, model, GPU or live ledger operations performed."
+}
