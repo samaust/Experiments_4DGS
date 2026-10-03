@@ -68,7 +68,113 @@ def _anchors(rows, cameras, candidate, *, source=False):
     return media
 
 
-def _clips(record, candidate, context, anchors):
+def _verify_published_clips(package):
+    # Reuse the publisher's live ledger and admission checks. A copied manifest
+    # or a terminal disposition must never substitute for completed inference.
+    from .depth_clips import validate_actual_depth_package
+    validate_actual_depth_package(package)
+
+
+def _verify_historical_anchors(native_record, historical_records):
+    from .config import load
+    from .ledger import Ledger
+    root = Path(native_record['path']).resolve().parents[2]
+    config = dict(load(), new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
+    events = Ledger(root / 'ledger.jsonl', config).events()
+    for role, record in historical_records.items():
+        _require(any(event.get('event') == 'finish' and event.get('status') == 'complete' and
+                     event.get('job_id') == 'D2-' + role and event.get('result') == record
+                     for event in events), 'D2: historical anchor result absent from accepted ledger')
+
+
+def _native_result(slot, candidate, context, inputs, cameras):
+    record = slot['provenance']['source_result']
+    _require(slot['evidence'].get('generation') == record and
+             slot['evidence'].get('ledger') == slot['provenance']['ledger_outcome'],
+             f'{candidate}: generation/ledger provenance differs')
+    result = _record(record)
+    schemas = {'D2': 'plan069-d2-maps-result/v1',
+               'D7': 'plan069-D7-maps-result/v1',
+               'D9': 'plan069-video-depth-result/v1',
+               'D10': 'plan069-video-depth-result/v1'}
+    schema = schemas.get(candidate, 'plan069-depth-single-maps-result/v1')
+    _require(result.get('schema') == schema and result.get('status') == 'complete' and
+             result.get('record_kind') == 'actual' and
+             result.get('candidate', result.get('component')) == candidate and
+             result.get('context') == context,
+             f'{candidate}: actual completed native result required')
+    if candidate != 'D2':
+        _require(result.get('inputs', result.get('original_inputs')) == inputs,
+                 f'{candidate}: native input binding changed')
+    rows = result.get('rows', [])
+    expected_clips = {(camera, frame) for camera in CLIP_CAMERAS for frame in CLIP_FRAMES}
+    expected_anchors = {(camera, frame) for camera in cameras for frame in ANCHOR_FRAMES}
+    expected = expected_clips if candidate == 'D2' else expected_clips | expected_anchors
+    identities = [(row['camera'], row['frame']) for row in rows]
+    _require(len(identities) == len(expected) and set(identities) == expected,
+             f'{candidate}: native map membership changed')
+    native = dict(zip(identities, rows))
+    for row in rows:
+        _require(row.get('domain') == DOMAINS[candidate],
+                 f'{candidate}: native depth domain changed')
+        verify_record(row.get('prediction', row.get('depth')))
+        verify_record(row['source_rgb'])
+    anchors = native
+    if candidate == 'D2':
+        _require(result.get('new_maps') == 196 and result.get('reused_anchors') == 4 and
+                 all(row.get('reused_anchor') is (row['frame'] == 175) for row in rows),
+                 'D2: frozen anchor reuse count changed')
+        anchors = {}
+        historical_records = {role: slot['evidence']['historical_' + role]
+                              for role in ('fit', 'check')}
+        _verify_historical_anchors(record, historical_records)
+        for role, frame in (('fit', 100), ('check', 175)):
+            historical_record = historical_records[role]
+            historical = _record(historical_record)
+            configuration = _record(historical['configuration'])
+            _require(historical.get('status') == 'complete' and historical.get('component') == 'D2' and
+                     configuration.get('role') == role and len(historical.get('rows', [])) == 30,
+                     'D2: complete historical fit/check anchors required')
+            if role == 'check':
+                _require(result.get('historical_check') == historical_record,
+                         'D2: frozen historical check result changed')
+            for row in historical['rows']:
+                identity = row['identity']
+                key = (identity['camera'], identity['frame'])
+                _require(identity['frame'] == frame and key not in anchors,
+                         'D2: historical anchor membership changed')
+                _require(row.get('grid') == 'scale-opencv-integer',
+                         'D2: historical anchor grid changed')
+                anchors[key] = dict(prediction=row['depth'], source_rgb_sha256=row['source_rgb_sha256'])
+        _require(set(anchors) == expected_anchors, 'D2: historical anchor membership changed')
+    for row in slot['anchors']:
+        original = anchors[row['camera'], row['frame']]
+        _require(row['prediction'] == original.get('prediction', original.get('depth')),
+                 f'{candidate}: anchor differs from completed native result')
+        _require(original.get('source_rgb_sha256') == row['source_rgb']['sha256'] if candidate == 'D2'
+                 else original.get('source_rgb') == row['source_rgb'],
+                 f'{candidate}: native anchor source differs from accepted context')
+    eligibility = 'ineligible' if candidate in ('D9', 'D11') else 'unverified'
+    if candidate in ('D5', 'D6', 'D7', 'D8', 'D10'):
+        scales = result.get('scales', result.get('scale', {}))
+        _require(set(scales) == {'fit', 'check'}, f'{candidate}: frozen scale receipts required')
+        fit, check = _record(scales['fit']), _record(scales['check'])
+        _require(fit.get('component') == candidate and check.get('component') == candidate and
+                 fit.get('role') == 'fit' and check.get('role') == 'selection' and
+                 check.get('frozen_fit') == scales['fit'] and
+                 fit.get('status') in ('passed', 'blocked') and
+                 check.get('status') in ('passed', 'blocked'),
+                 f'{candidate}: frozen fit/check scale lineage changed')
+        eligibility = 'passed' if fit['status'] == check['status'] == 'passed' else 'blocked'
+        claimed = (result.get('eligibility', {}).get('metric_scale') if candidate == 'D10'
+                   else result.get('engineering_eligibility'))
+        _require(claimed == eligibility, f'{candidate}: scale disposition manufactures eligibility')
+        _require(slot['evidence'].get('scale') == scales['check'],
+                 f'{candidate}: scale evidence differs from frozen check')
+    return record, native, eligibility
+
+
+def _clips(record, candidate, context, anchors, native_result, native_rows, finish):
     receipt = _record(record)
     _require(receipt.get('schema') == 'plan069-depth-clips-result/v1' and
              receipt.get('status') == 'complete' and receipt.get('record_kind') == 'actual' and
@@ -76,6 +182,11 @@ def _clips(record, candidate, context, anchors):
              receipt.get('clips') == 4 and receipt.get('new_map_identities') == 196,
              f'{candidate}: actual four-clip receipt required')
     package = _record(receipt['package'])
+    _require(package.get('bindings', {}).get('depth_context') == context and
+             package['bindings'].get('depth_result') == native_result and
+             package['bindings'].get('depth_finish') == finish,
+             f'{candidate}: clip package native/context binding changed')
+    _verify_published_clips(package)
     _require(package.get('schema') == 'plan067-qualitative-package/v1' and
              package.get('record_kind') == 'actual' and
              package.get('settings', {}).get('fps') == 25 and
@@ -104,6 +215,9 @@ def _clips(record, candidate, context, anchors):
                 verify_record(source)
             if key == candidate:
                 camera = int(selection['camera_id'])
+                _require(lineage == [native_rows[camera, frame].get('prediction',
+                    native_rows[camera, frame].get('depth')) for frame in CLIP_FRAMES],
+                    f'{candidate}: clip maps differ from completed native result')
                 _require(lineage[25] == anchor_maps[camera, 175],
                          f'{candidate}: frame-175 map differs from frozen anchor')
     display = package['settings']['depth_display']
@@ -165,6 +279,7 @@ def assemble(request):
         for record in evidence.values():
             _record(record)
         media = []
+        eligibility = 'unverified'
         if status == 'available':
             _require(set(EVIDENCE) <= set(evidence),
                      f'{candidate}: generation/runtime/asset/commercial/ledger/resource evidence required')
@@ -180,8 +295,11 @@ def assemble(request):
                          f'{candidate}: raw anchor map lineage required')
                 for row in anchors:
                     verify_record(row['prediction'])
+                native_result, native_rows, eligibility = _native_result(
+                    slot, candidate, context_record, request['bindings']['inputs'], cameras)
                 clips_source, clips_depth, display = _clips(
-                    slot['clips'], candidate, context_record, anchors)
+                    slot['clips'], candidate, context_record, anchors, native_result, native_rows,
+                    slot['provenance']['ledger_outcome'])
                 media += clips_depth
                 if source_clips is None:
                     source_clips = clips_source
@@ -195,12 +313,6 @@ def assemble(request):
                      f'{candidate}: package provenance missing')
             for record in slot['provenance'].values():
                 verify_record(record)
-            if candidate in ADDITIONS:
-                result = _record(slot['provenance']['source_result'])
-                _require(result.get('record_kind') == 'actual' and
-                         result.get('status') == 'complete' and
-                         result.get('component') == candidate,
-                         f'{candidate}: actual completed native result required')
         elif status != 'missing':
             terminal = _record(slot['terminal_authorization'])
             _require(terminal.get('candidate') == candidate and
@@ -211,6 +323,7 @@ def assemble(request):
             is_control=candidate == 'D0', stage='depth component diagnostic',
             output_type='component', status=status, reason=slot['reason'],
             provenance=slot.get('provenance', {}), media=media,
+            engineering_eligibility=eligibility, physical_accuracy='unverified',
             **({'depth_display': display} if status == 'available' and candidate in CLIP_CANDIDATES else {})))
     _require(source_clips is not None or all(slots[key]['status'] != 'available'
              for key in CLIP_CANDIDATES), 'available clip arm must provide source RGB')
@@ -222,6 +335,7 @@ def assemble(request):
         verify_record(source['provenance'][name])
     return dict(schema='plan067-qualitative-package/v1',
         id=request['id'], mode='qualitative', record_kind='actual',
+        review_status='awaiting_human_review',
         bindings=dict(request['bindings']),
         settings=dict(fps=25, resolution=[960, 540], color_handling='sRGB',
             crop=[0, 0, 960, 540], detail_regions=[
