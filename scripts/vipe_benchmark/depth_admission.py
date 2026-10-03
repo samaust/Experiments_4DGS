@@ -35,7 +35,8 @@ LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py',
     D7=('dav2_metric.py', 'depth_setup.py'),
     D8=('moge_metric.py', 'native_d8.py', 'depth_native_packages.py',
         'depth_setup.py', 'depth_setup_other.py'),
-    D9=('video_depth.py',), D10=('video_depth.py',),
+    D9=('video_depth.py', 'video_native.py', 'video_setup.py'),
+    D10=('video_depth.py', 'video_native.py', 'video_setup.py'),
     D11=('marigold_relative.py', 'native_d11.py', 'depth_native_packages.py',
          'depth_setup.py', 'depth_setup_other.py'))
 
@@ -55,6 +56,13 @@ def local_source_records(candidate):
     if candidate in ('D5', 'D6'):
         records.append(file_record(ROOT / 'scripts/basketball_vipe_moge_setup.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_moge_setup_dispatch.py'))
+    if candidate in ('D9', 'D10'):
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_video_setup.py'))
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_video_setup_dispatch.py'))
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_video_actual.py'))
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_video_actual_dispatch.py'))
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_video_publish.py'))
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_video_dependencies.py'))
     return records
 
 

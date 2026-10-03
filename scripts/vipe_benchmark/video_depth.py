@@ -17,6 +17,31 @@ KEYFRAMES = [0, 12, 24, 25, 26, 27, 28, 29, 30, 31]
 INTERP_LEN = 8
 
 
+def _check_support(rows, predictions):
+    """Report check-frame support without fitting a replacement metric scale."""
+    from .contracts import depth as validate_depth, sample_depth
+    from .files import load_array
+    cameras = []
+    blockers = ['No passing frozen fit; check scale is unavailable']
+    for row in sorted(rows, key=lambda row: row['identity']['camera']):
+        camera = row['identity']['camera']
+        with load_array(row['samples']) as geometry, load_array(predictions[camera]) as output:
+            image_valid = geometry['valid'] > 0
+            validate_depth(output['depth'], output['valid'], image_valid)
+            if not np.array_equal(geometry['K'], row['K']):
+                raise ValueError('check support intrinsic provenance mismatch')
+            _, good = sample_depth(output['depth'], output['valid'], geometry['uv'])
+            good &= np.isfinite(geometry['camera_z']) & (geometry['camera_z'] > 0)
+            cells = np.floor(geometry['uv'][good] / [240, 135]).astype(int)
+            cameras.append(dict(camera_id=camera, points=int(good.sum()),
+                occupied_grid_cells=len(set(map(tuple, cells))),
+                positive_depth_fraction=float(output['valid'][image_valid].mean())))
+            if not good.any():
+                blockers.append(f'camera {camera}: zero valid depth support')
+    return dict(status='blocked', role='selection', scale=None,
+                blockers=blockers, cameras=cameras, estimator='not invoked')
+
+
 def native_window_plan(length, *, metric=False):
     """Audit the pinned native 32/10 offline work, including repeated tail frames."""
     if type(length) is not int or length <= 0:
@@ -110,16 +135,73 @@ class MetricVideoDepthAdapter(VideoDepthAdapter):
 
 def run_video_fixture(request, output, config, *, backend, ledger):
     """CPU-only D9/D10 sequences through accepted context and clip package."""
+    return _run_video(request, output, config, backend=backend, ledger=ledger,
+                      record_kind='fixture')
+
+
+def run_video_actual(request, output, config, *, backend, ledger, request_path):
+    """Run one GPU-reserved native video attempt with exact admission evidence."""
+    admitted_video_request(request, output, config, ledger=ledger,
+                           request_path=request_path)
+    if backend.device != 'cuda' or backend.component != request['component']:
+        raise ValueError('exact CUDA video backend required')
+    return _run_video(request, output, config, backend=backend, ledger=ledger,
+                      record_kind='actual')
+
+
+def admitted_video_request(request, output, config, *, ledger, request_path):
+    """Recheck the exact live reservation before importing model code or CUDA."""
+    from .depth_setup import _active_reservation
+    if (request.get('schema') != 'plan069-video-depth-request/v1' or
+            request.get('record_kind') != 'actual' or
+            request.get('component') not in ('D9', 'D10') or
+            request.get('id') != f"plan069-{request.get('component')}-maps-001" or
+            request.get('job_id') != request.get('id')):
+        raise ValueError('actual D9/D10 video request required')
+    run_root, effective = _active_reservation(request, request_path, Path(output))
+    if config != effective or ledger.path != Path(request['ledger_path']).resolve():
+        raise ValueError('actual video ledger/configuration binding changed')
+    state = ledger.states().get(request['id'], {})
+    admission = read_json(verify_record(request['admission'])['path'])
+    if (state.get('event') != 'reserve' or state.get('resource') != 'gpu' or
+            state.get('evidence', {}).get('admission') != request['admission'] or
+            request.get('max_seconds', 10**30) > state.get('seconds', 0) or
+            admission.get('candidate') != request['component'] or
+            admission.get('status') != 'passed' or
+            admission.get('schema') != 'plan069-depth-admission-result/v1'):
+        raise ValueError('passed exact video admission and GPU reservation required')
+    setup = read_json(verify_record(request['setup'])['path'])
+    if (setup.get('schema') != 'plan069-video-setup-result/v1' or
+            setup.get('status') != 'complete' or
+            setup.get('record_kind') != 'actual' or
+            setup.get('candidate') != request['component'] or
+            setup.get('review') != request['review'] or
+            setup.get('authorization') != request['authorization']):
+        raise ValueError('exact completed native video setup required')
+    setup_state = ledger.states().get(f"plan069-{request['component']}-setup-001", {})
+    if (setup_state.get('event') != 'finish' or
+            setup_state.get('status') != 'complete' or
+            setup_state.get('result') != request['setup']):
+        raise ValueError('video setup is not ledger-complete')
+    if Path(output).resolve().parent != (run_root / 'jobs').resolve():
+        raise ValueError('actual video output outside shared run')
+    return setup
+
+
+def _run_video(request, output, config, *, backend, ledger, record_kind):
+    """Process every fit/check context before publishing 60 anchors and clips."""
     component = request.get('component')
     if (request.get('schema') != 'plan069-video-depth-request/v1' or
-            request.get('record_kind') != 'fixture' or component not in ('D9', 'D10') or
-            request.get('id') != f'{component}-video-fixture-001' or
+            request.get('record_kind') != record_kind or component not in ('D9', 'D10') or
+            request.get('id') != (f'{component}-video-fixture-001' if record_kind == 'fixture'
+                                 else f'plan069-{component}-maps-001') or
             backend.component != component or
-            backend.device != 'cpu'):
-        raise ValueError('video fixture identity/CPU mode required')
+            backend.device != ('cpu' if record_kind == 'fixture' else 'cuda')):
+        raise ValueError('video request identity/device mode required')
     seconds = request.get('max_seconds')
-    if type(seconds) not in (int, float) or not math.isfinite(seconds) or not 0 < seconds <= 600:
-        raise ValueError('bounded CPU video fixture deadline required')
+    ceiling = 600 if record_kind == 'fixture' else 12000
+    if type(seconds) not in (int, float) or not math.isfinite(seconds) or not 0 < seconds <= ceiling:
+        raise ValueError('bounded video deadline required')
     cameras = request.get('cameras')
     if (not isinstance(cameras, list) or cameras != training_cameras(config)):
         raise ValueError('video fixture requires every training camera')
@@ -128,7 +210,11 @@ def run_video_fixture(request, output, config, *, backend, ledger):
     context = read_json(request['context']['path'])
     if context.get('schema') != 'plan069-depth-context/v1':
         raise ValueError('accepted context required')
-    if (read_json(request['configuration']['path']) != config or
+    frozen_config = read_json(request['configuration']['path'])
+    expected_config = (frozen_config if record_kind == 'fixture' else
+        dict(frozen_config, new_download_gib_limit=110,
+             new_artifact_disk_gib_limit=210))
+    if (expected_config != config or
             request['extension_configuration'] != file_record(
                 ROOT / 'configs/vipe-alternatives/depth-extension-v1.json') or
             ledger.config != config):
@@ -144,18 +230,19 @@ def run_video_fixture(request, output, config, *, backend, ledger):
                 '4f5ae23172ba60fd7bc11ef671cca678842c7072/run.py#L76-L86'):
         raise ValueError('D10 camera-z convention evidence unverified')
     events = ledger.events()
-    if (any(row['event'] == 'reserve' for row in ledger.states(events).values()) or
-            ledger.totals(events)['cpu']['elapsed_seconds'] + seconds >
-            config['cpu_prepare_score_report_seconds_limit']):
-        raise ValueError('CPU video fixture allocation unavailable')
-    for event in events:
-        if event['event'] == 'cpu_preparation_charge':
-            evidence = read_json(verify_record(event['evidence'])['path'])
-            if evidence.get('id') == request['id']:
-                raise ValueError('video fixture identity already consumed')
+    if record_kind == 'fixture':
+        if (any(row['event'] == 'reserve' for row in ledger.states(events).values()) or
+                ledger.totals(events)['cpu']['elapsed_seconds'] + seconds >
+                config['cpu_prepare_score_report_seconds_limit']):
+            raise ValueError('CPU video fixture allocation unavailable')
+        for event in events:
+            if event['event'] == 'cpu_preparation_charge':
+                evidence = read_json(verify_record(event['evidence'])['path'])
+                if evidence.get('id') == request['id']:
+                    raise ValueError('video fixture identity already consumed')
     output = Path(output)
     if output.name != request['id'] or output.exists():
-        raise ValueError('immutable video fixture output identity changed or exists')
+        raise ValueError('immutable video output identity changed or exists')
     start = time.monotonic()
     output.mkdir(parents=True, exist_ok=False)
     write_json(output / 'request.json', request)
@@ -163,6 +250,7 @@ def run_video_fixture(request, output, config, *, backend, ledger):
     charged_elapsed = 0.
     try:
         map_rows, result_rows, sequences, anchors = [], [], [], {}
+        anchor_rows = []
         settings = object_hash(candidate)
         schedule = ([(camera, role) for role in ('fit', 'check') for camera in cameras]
                     if component == 'D10' else
@@ -204,6 +292,10 @@ def run_video_fixture(request, output, config, *, backend, ledger):
                 result_rows.append(dict(camera=camera, frame=frame,
                     role=role, depth=record, source_rgb=row['source_rgb'],
                     context_sha256=sequence['context_sha256'], domain=domain))
+                if frame in (100, 175):
+                    anchor_rows.append(dict(camera=camera, frame=frame,
+                        role=role, depth=record,
+                        context_sha256=sequence['context_sha256']))
                 if role == 'check' and camera in (1, 11, 21, 31):
                     if frame == 175:
                         anchors[camera] = record
@@ -217,15 +309,27 @@ def run_video_fixture(request, output, config, *, backend, ledger):
                 fit['component'] = 'D10'
                 write_json(output / 'scale-fit.json', fit)
                 if fit['status'] != 'passed':
-                    admission = request.get('qualitative_admission')
-                    if not isinstance(admission, dict):
+                    qualitative = request.get('qualitative_admission')
+                    if not isinstance(qualitative, dict):
                         raise ValueError('failed D10 scale fit requires separate qualitative admission')
-                    verify_record(admission)
-                    proof = read_json(admission['path'])
+                    verify_record(qualitative)
+                    proof = read_json(qualitative['path'])
                     if proof != dict(schema='plan069-depth-qualitative-admission/v1',
-                            record_kind='fixture', component='D10', inputs=context['inputs'],
+                            record_kind=record_kind, component='D10', inputs=context['inputs'],
                             purpose='qualitative-only', status='admitted'):
                         raise ValueError('D10 qualitative admission binding changed')
+                # The complete fit decision and any qualitative-only authority
+                # precede the first check-context inference and publication.
+                write_json(output / 'fit-gate.json', dict(
+                    schema='plan069-video-fit-gate/v1', component='D10',
+                    status=fit['status'], qualitative_admission=
+                        request.get('qualitative_admission') if fit['status'] != 'passed' else None,
+                    fit=file_record(output / 'scale-fit.json')))
+        expected_anchors = {(camera, frame) for camera in cameras for frame in (100, 175)}
+        if (len(anchor_rows) != 60 or
+                {(row['camera'], row['frame']) for row in anchor_rows} != expected_anchors or
+                len(result_rows) != 256 or len(sequences) != 60):
+            raise ValueError('all 30 camera fit/check anchors and context sequences required')
         scales = {}
         if component == 'D10':
             if fit is None:
@@ -235,44 +339,52 @@ def run_video_fixture(request, output, config, *, backend, ledger):
                 check = evaluate(check_rows, check_predictions, config,
                     provenance=provenance, frozen_fit=scales['fit'])
             else:
-                diagnostics = evaluate(check_rows, check_predictions,
-                    dict(config, scale_fit_frame=config['scale_check_frame']),
-                    provenance=provenance)
+                diagnostics = _check_support(check_rows, check_predictions)
                 check = dict(status='blocked', role='selection', scale=None,
                     blockers=['No passing frozen fit; qualitative-only admission'],
                     fit_blockers=fit.get('blockers', []), frozen_fit=scales['fit'],
                     fit_cameras=fit.get('cameras', []),
                     check_blockers=diagnostics.get('blockers', []),
-                    provenance=provenance, cameras=diagnostics['cameras'])
+                    provenance=provenance, cameras=diagnostics['cameras'],
+                    check_diagnostics=diagnostics)
             check['component'] = 'D10'
             write_json(output / 'scale-check.json', check)
             scales['check'] = file_record(output / 'scale-check.json')
         result = dict(schema='plan069-video-depth-result/v1', id=request['id'],
-            status='complete', record_kind='fixture', component=component,
-            domain=domain, sequences=sequences, rows=result_rows, scale=scales,
+            status='complete', record_kind=record_kind, component=component,
+            domain=domain, sequences=sequences, rows=result_rows,
+            anchor_rows=anchor_rows, scale=scales,
             context=request['context'], original_inputs=context['inputs'],
             eligibility=dict(metric_scale=check['status'] if component == 'D10'
                 else 'ineligible', downstream='blocked',
-                             commercial='unverified', runtime='fixture-only'))
-        write_json(output / 'result.json', result)
+                             commercial='unverified' if record_kind == 'fixture' else 'admitted',
+                             runtime='fixture-only' if record_kind == 'fixture' else 'actual-native'))
+        map_result_path = output / 'result.json'
+        write_json(map_result_path, result)
         inference_elapsed = time.monotonic() - start
         if inference_elapsed > seconds:
             raise TimeoutError('video fixture deadline exceeded')
-        charge = ledger.charge_cpu_preparation(inference_elapsed,
-            file_record(output / 'result.json'))
-        charged_elapsed = inference_elapsed
-        write_json(output / 'ledger-outcome.json', charge)
+        if record_kind == 'actual':
+            # The supervisor must finish the GPU attempt before a separate CPU
+            # stage may publish an actual package with trusted finish evidence.
+            return result
+        if record_kind == 'fixture':
+            charge = ledger.charge_cpu_preparation(inference_elapsed,
+                file_record(map_result_path))
+            charged_elapsed = inference_elapsed
+            write_json(output / 'ledger-outcome.json', charge)
+        provenance = dict(source_result=file_record(map_result_path),
+            configuration=file_record(output / 'request.json'))
+        provenance['ledger_outcome'] = file_record(output / 'ledger-outcome.json')
         clips = publish_fixture_clips(request['context'], component, domain,
-            map_rows, anchors, output / 'clips', dict(
-                source_result=file_record(output / 'result.json'),
-                ledger_outcome=file_record(output / 'ledger-outcome.json'),
-                configuration=file_record(output / 'request.json')),
-            max_seconds=max(.001, seconds - charged_elapsed))
+            map_rows, anchors, output / 'clips', provenance,
+            max_seconds=max(.001, seconds - inference_elapsed))
         elapsed = time.monotonic() - start
         if elapsed > seconds:
             raise TimeoutError('video fixture deadline exceeded')
         receipt = dict(schema='plan069-video-depth-transaction/v1', id=request['id'],
-            status='complete', worker=file_record(output / 'result.json'),
+            status='complete', record_kind=record_kind,
+            worker=file_record(map_result_path),
             package=clips['package'], elapsed_seconds=elapsed)
         write_json(output / 'transaction.json', receipt)
         ledger.charge_cpu_preparation(elapsed - charged_elapsed,
@@ -283,6 +395,7 @@ def run_video_fixture(request, output, config, *, backend, ledger):
         write_json(output / 'failure.json', dict(schema='plan069-video-depth-failure/v1',
             id=request['id'], status='failed', error=f'{type(error).__name__}: {error}',
             elapsed_seconds=elapsed))
-        ledger.charge_cpu_preparation(max(0., elapsed - charged_elapsed),
-            file_record(output / 'failure.json'))
+        if record_kind == 'fixture':
+            ledger.charge_cpu_preparation(max(0., elapsed - charged_elapsed),
+                file_record(output / 'failure.json'))
         raise

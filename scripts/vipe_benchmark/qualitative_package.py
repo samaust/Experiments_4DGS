@@ -86,13 +86,17 @@ def validate(manifest, *, deadline=None):
         if 'depth_aggregate_request' in manifest['bindings']:
             _record(manifest['bindings']['depth_aggregate_request'])
             from .depth_aggregate import validate_actual_package
+            validate_actual_package(manifest, deadline=deadline)
+        elif 'depth_context' in manifest['bindings']:
+            from .depth_clips import validate_actual_depth_package
+            validate_actual_depth_package(manifest)
         else:
             for key in ('request','generation_result','generation_manifest'):
                 if key not in manifest['bindings']:
                     raise ValueError('actual package requires trusted generation receipts')
                 _record(manifest['bindings'][key])
             from .qualitative_generation import validate_actual_package
-        validate_actual_package(manifest, deadline=deadline)
+            validate_actual_package(manifest, deadline=deadline)
     settings = manifest['settings']
     resolution = settings['resolution']
     if len(resolution) != 2 or any(type(x) is not int or x <= 0 for x in resolution) or settings['fps'] != 25 or not settings['color_handling'].strip():

@@ -79,7 +79,7 @@ class DepthContextTests(unittest.TestCase):
         self.assertEqual(context['roles']['check'], [150, 199])
         self.assertEqual({row['camera'] for row in context['rows']},
                          set(training_cameras(self.config)))
-        self.assertEqual(context['anchors'][0]['remapped_sha256'],
+        self.assertEqual(context['anchors'][0]['decoded_remapped_sha256'],
                          context['anchors'][0]['accepted_rgb']['sha256'])
         frames, valid, rows = materialize_role(record, 1, 'check')
         self.assertEqual(frames.shape, (50, 540, 960, 3))
@@ -87,6 +87,32 @@ class DepthContextTests(unittest.TestCase):
         self.assertEqual(valid.shape, (540, 960))
         with self.assertRaisesRegex(ValueError, 'membership'):
             materialize_role(record, 0, 'check')
+
+    def test_decoded_drift_reuses_exact_accepted_anchor_without_second_remap(self):
+        image = cv2.imread(self.rows[0]['rgb']['path'])
+        image[100:120, 100:120] += 3
+        cv2.imwrite(str(self.root / 'drift.png'), image)
+        drift = file_record(self.root / 'drift.png')
+        source_rows = [dict(row, rgb=drift) if row['identity']['frame'] in (100, 175)
+                       else row for row in self.rows]
+        write_json(self.root / 'drift-inputs.json', dict(self.inputs, rgb=source_rows))
+        context_record = prepare_context(file_record(self.root / 'drift-inputs.json'),
+                                        self.root / 'drift-context', self.config)
+        context = read_json(context_record['path'])
+        anchor = next(row for row in context['rows']
+                      if row['camera'] == 1 and row['frame'] == 175)
+        accepted = next(row for row in self.inputs['depth']
+                        if row['identity']['camera'] == 1 and row['identity']['frame'] == 175)
+        self.assertEqual(anchor['source_rgb'], accepted['rgb'])
+        self.assertEqual(anchor['source_rgb_grid'], 'scale-opencv-integer')
+        self.assertEqual(anchor['decoded_source_rgb'], drift)
+        self.assertTrue(anchor['accepted_anchor'])
+        proof = next(row for row in context['anchors']
+                     if row['camera'] == 1 and row['frame'] == 175)
+        self.assertGreater(proof['decoded_drift']['max_absolute_pixel_difference'], 0)
+        frames, _, _ = materialize_role(context_record, 1, 'check')
+        np.testing.assert_array_equal(frames[25], cv2.cvtColor(
+            cv2.imread(accepted['rgb']['path']), cv2.COLOR_BGR2RGB))
 
     def test_missing_context_and_changed_anchor_are_rejected(self):
         missing = dict(self.inputs, rgb=self.rows[:-1])
@@ -101,9 +127,9 @@ class DepthContextTests(unittest.TestCase):
                 self.root / 'final-window', self.config)
         changed_depth = list(self.inputs['depth'])
         cv2.imwrite(str(self.root / 'wrong-anchor.png'), np.zeros((540, 960, 3), np.uint8))
-        changed_depth[0] = dict(changed_depth[0], rgb=file_record(self.root / 'wrong-anchor.png'))
+        changed_depth[0] = dict(changed_depth[0], K=np.eye(3).tolist())
         write_json(self.root / 'changed.json', dict(self.inputs, depth=changed_depth))
-        with self.assertRaisesRegex(ValueError, 'anchor bytes'):
+        with self.assertRaisesRegex(ValueError, 'anchor grid/intrinsics'):
             prepare_context(file_record(self.root / 'changed.json'), self.root / 'changed', self.config)
 
     def test_four_matched_clips_reuse_check_anchors_and_freeze_display(self):
@@ -206,6 +232,10 @@ class DepthContextTests(unittest.TestCase):
         package = read_json(receipt['package']['path'])
         self.assertEqual(len(worker['sequences']), 60)
         self.assertEqual(len(worker['rows']), 256)
+        self.assertEqual(len(worker['anchor_rows']), 60)
+        self.assertEqual({(row['camera'], row['frame']) for row in worker['anchor_rows']},
+                         {(camera, frame) for camera in training_cameras(self.config)
+                          for frame in (100, 175)})
         self.assertEqual(worker['eligibility']['metric_scale'], 'ineligible')
         self.assertEqual([len(c['media']) for c in package['candidates']], [4, 4])
         self.assertEqual(runtime.resets, [(c, role) for c in training_cameras(self.config)
@@ -236,6 +266,7 @@ class DepthContextTests(unittest.TestCase):
         worker = read_json(receipt['worker']['path'])
         self.assertEqual(len(worker['sequences']), 60)
         self.assertEqual(len(worker['rows']), 256)
+        self.assertEqual(len(worker['anchor_rows']), 60)
         self.assertEqual(worker['eligibility']['metric_scale'], 'passed')
         fit = read_json(worker['scale']['fit']['path'])
         check = read_json(worker['scale']['check']['path'])
@@ -283,6 +314,7 @@ class DepthContextTests(unittest.TestCase):
         self.assertEqual(fit['status'], 'blocked')
         self.assertIn('camera 1', str(fit['blockers']))
         self.assertFalse((self.root / request['id'] / 'scale-check.json').exists())
+        self.assertFalse((self.root / request['id'] / 'fit-gate.json').exists())
         self.assertTrue((self.root / request['id'] / 'failure.json').is_file())
         write_json(self.root / 'qualitative-admission.json', dict(
             schema='plan069-depth-qualitative-admission/v1', record_kind='fixture',
@@ -298,6 +330,12 @@ class DepthContextTests(unittest.TestCase):
         self.assertEqual(len(check['fit_cameras']), 30)
         self.assertEqual(len(check['cameras']), 30)
         self.assertEqual(check['fit_cameras'][0]['points'], 0)
+        self.assertEqual(check['check_diagnostics']['status'], 'blocked')
+        self.assertIsNone(check['check_diagnostics']['scale'])
+        self.assertEqual(check['check_diagnostics']['estimator'], 'not invoked')
+        gate = read_json(self.root / 'admitted' / request['id'] / 'fit-gate.json')
+        self.assertEqual(gate['status'], 'blocked')
+        self.assertEqual(gate['qualitative_admission'], admitted['qualitative_admission'])
 
 
 if __name__ == '__main__':
