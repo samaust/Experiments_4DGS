@@ -20,7 +20,11 @@ def publish_after_gpu(map_result_record, output):
     map_path = Path(map_result_record['path']).resolve()
     result = read_json(map_path)
     candidate = result.get('candidate')
-    _require(candidate in CANDIDATES, 'single-image publisher candidate changed')
+    _require(candidate in (*CANDIDATES, 'D11'), 'single-image publisher candidate changed')
+    domain = 'relative_log' if candidate == 'D11' else 'camera_z_metres'
+    expected_schema = RESULT
+    if candidate == 'D11':
+        from .depth_d11_run import RESULT as expected_schema
     JOB = f'plan069-{candidate}-maps-001'
     CLIPS_JOB = f'plan069-{candidate}-clips-001'
     local = map_path.parents[2]
@@ -47,7 +51,7 @@ def publish_after_gpu(map_result_record, output):
         write_json(outcome_path, state)
     outcome_record = file_record(outcome_path)
     result = read_json(map_path)
-    _require(result.get('schema') == RESULT and result.get('status') == 'complete' and
+    _require(result.get('schema') == expected_schema and result.get('status') == 'complete' and
              result.get('record_kind') == 'actual' and result.get('candidate') == candidate and
              result.get('job_id') == JOB and len(result.get('rows', [])) == 256,
              'complete actual single-image maps required')
@@ -75,7 +79,10 @@ def publish_after_gpu(map_result_record, output):
     _require(result.get('admission') == request.get('admission') and
              result.get('setup') == request.get('setup'),
              'single-image finished request/setup binding changed')
-    from .depth_single_run import validate_result
+    if candidate == 'D11':
+        from .depth_d11_run import validate_result
+    else:
+        from .depth_single_run import validate_result
     validate_result(result, request)
     rows = result['rows']
     keys = [(row['camera'], row['frame']) for row in rows]
@@ -93,7 +100,7 @@ def publish_after_gpu(map_result_record, output):
     for camera, frame in sorted(expected_clips):
         row = by_key[camera, frame]
         _require(row['kind'] == ('anchor' if frame == 175 else 'clip-extra') and
-                 row['domain'] == 'camera_z_metres' and
+                 row['domain'] == domain and
                  row['grid'] == 'scale-opencv-integer' and
                  row['context'] == result['context'] and row['inputs'] == result['inputs'],
                  'single-image clip row source or grid changed')
@@ -120,7 +127,7 @@ def publish_after_gpu(map_result_record, output):
     try:
         from .depth_clips import publish_fixture_clips
         receipt = publish_fixture_clips(result['context'], candidate,
-            'camera_z_metres', clip_rows, anchors, output, provenance,
+            domain, clip_rows, anchors, output, provenance,
             max_seconds=seconds, record_kind='actual')
         elapsed = time.monotonic() - started
         _require(elapsed <= seconds and receipt.get('clips') == 4 and
@@ -136,7 +143,7 @@ def publish_after_gpu(map_result_record, output):
         write_json(output / 'publication.json', dict(
             schema='plan069-depth-single-publication/v1', status='complete',
             record_kind='actual', candidate=candidate, source_result=map_result_record,
-            context=result['context'], inputs=result['inputs'], scales=result['scales'],
+            context=result['context'], inputs=result['inputs'], scales=result.get('scales'), domain=domain,
             engineering_eligibility=result['engineering_eligibility'],
             physical_accuracy='unverified', package=receipt['package'],
             clips_result=file_record(output / 'result.json')))

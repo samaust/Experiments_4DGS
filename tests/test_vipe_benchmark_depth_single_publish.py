@@ -13,10 +13,11 @@ class SinglePublishTests(unittest.TestCase):
     def test_unaccounted_actual_result_never_creates_clip_output(self):
         with tempfile.TemporaryDirectory() as directory:
             local = Path(directory)
-            for candidate in ('D5', 'D6', 'D8'):
+            for candidate in ('D5', 'D6', 'D8', 'D11'):
                 with self.subTest(candidate=candidate):
                     result = local / f'jobs/plan069-{candidate}-maps-001/result.json'
-                    write_json(result, dict(schema='plan069-depth-single-maps-result/v1',
+                    write_json(result, dict(schema=('plan069-D11-maps-result/v1' if candidate == 'D11' else
+                                          'plan069-depth-single-maps-result/v1'),
                         status='complete', record_kind='actual', candidate=candidate))
                     output = local / f'jobs/plan069-{candidate}-clips-001'
                     with self.assertRaisesRegex(ValueError, 'supervised single-image GPU result'):
