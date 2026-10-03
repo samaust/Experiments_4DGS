@@ -3,6 +3,8 @@
 The historical Plan 067 review format is unchanged. Fixture mode can exercise
 this boundary but never establishes an actual human decision or execution right.
 """
+from pathlib import Path
+
 from . import qualitative_review as historical
 from .depth_admission import D2_SPEC, INVENTORY, PROFILES, HISTORICAL
 from .depth_extension import CONFIG
@@ -82,12 +84,83 @@ def _metric_evidence(candidate, slot, package, actual):
     blockers = []
     if fit.get('status') != 'passed' or check.get('status') != 'passed':
         blockers.append('frozen fit/check scale gates blocked')
-    blockers.extend(_qualification_blockers(candidate, evidence, generation, actual))
+    proof = _completed_qualification(candidate, slot, generation, actual)
+    if proof is not None:
+        normalized['completed_qualification'] = proof
+    blockers.extend(_qualification_blockers(candidate, evidence, generation, actual, proof))
     return dict(eligible=not blockers, reason='; '.join(blockers) if blockers else
         'Exact commercial/runtime/generation and frozen fit/check gates passed', evidence=normalized)
 
 
-def _qualification_blockers(candidate, evidence, generation, actual):
+def _completed_qualification(candidate, slot, generation, actual):
+    """Bind historical source inventories to completed, admitted native output.
+
+    Local worktree paths are mutable. Their hashes remain metadata inside the
+    immutable reviewed receipts; native archives and all receipt files are still
+    rehashed. This grants no current-source or active-execution authorization.
+    """
+    provenance = slot.get('provenance', {})
+    if not {'configuration','ledger_outcome'} <= provenance.keys():
+        return None
+    request = _record(provenance['configuration'])
+    finish = _record(provenance['ledger_outcome'])
+    evidence = slot['evidence']
+    if (finish.get('event') != 'finish' or finish.get('status') != 'complete' or
+        finish.get('result') != evidence['generation'] or
+        finish.get('job_id') != generation.get('job_id', generation.get('id')) or
+        request.get('job_id', request.get('id')) != finish['job_id'] or
+        request.get('candidate',request.get('component')) != candidate or
+        request.get('context') != generation.get('context') or
+        not {'admission','qualification','source_review'} <= request.keys()):
+        return None
+    admission = _record(request['admission'])
+    qualification = _record(request['qualification'])
+    source_review = _record(request['source_review'])
+    runtime = _record(evidence['runtime']) if 'runtime' in evidence else {}
+    if (admission.get('schema') != 'plan069-depth-admission-result/v1' or
+        admission.get('status') != 'passed' or admission.get('candidate') != candidate or
+        admission.get('qualification') != request['qualification'] or
+        admission.get('source_review') != request['source_review'] or
+        admission.get('runtime', {}).get('receipt') != evidence.get('runtime') or
+        admission.get('commercial', {}).get('assessment') != evidence.get('commercial') or
+        qualification.get('status') != 'passed' or qualification.get('candidate') != candidate or
+        qualification.get('runtime', {}).get('receipt') != evidence.get('runtime') or
+        qualification.get('commercial', {}).get('assessment') != evidence.get('commercial') or
+        qualification.get('source_review') != request['source_review'] or
+        source_review.get('status') != 'passed' or source_review.get('candidate') != candidate or
+        source_review.get('source_revision') != runtime.get('source_revision') or
+        not runtime.get('local_sources') or source_review.get('local_sources') != runtime['local_sources'] or
+        not runtime.get('source_archive') or
+        qualification.get('source_archive') != runtime['source_archive'] or
+        source_review.get('source_archive') != runtime['source_archive'] or
+        not runtime.get('source_files') or
+        qualification.get('source_files') != runtime['source_files'] or
+        source_review.get('source_files') != runtime['source_files']):
+        return None
+    _verify_file(runtime['source_archive'])
+    if actual:
+        from .config import load
+        from .ledger import Ledger
+        root = Path(evidence['generation']['path']).resolve().parents[2]
+        events = Ledger(root/'ledger.jsonl', dict(load(),new_download_gib_limit=110,
+            new_artifact_disk_gib_limit=210)).events()
+        reserves = [event for event in events if event.get('event') == 'reserve' and
+            event.get('job_id') == finish['job_id']]
+        if finish not in events or len(reserves) != 1:
+            return None
+        reserved_request = reserves[0].get('evidence', {}).get('request')
+        if (reserved_request is None or
+            reserves[0].get('evidence', {}).get('admission') != request['admission'] or
+            any(reserved_request[key] != provenance['configuration'][key] for key in ('sha256','bytes')) or
+            _record(reserved_request) != request):
+            return None
+    return dict(request=provenance['configuration'],finish=provenance['ledger_outcome'],
+        admission=request['admission'],qualification=request['qualification'],
+        source_review=request['source_review'],source_archive=runtime['source_archive'],
+        source_files=runtime['source_files'],local_sources=runtime['local_sources'])
+
+
+def _qualification_blockers(candidate, evidence, generation, actual, completed):
     """Missing/failed engineering gates block D*, not visual observations."""
     blockers = []
     def check(condition, message):
@@ -125,8 +198,13 @@ def _qualification_blockers(candidate, evidence, generation, actual):
     check(runtime_config == read_json(HISTORICAL if candidate == 'D2' and actual else CONFIG),
         'runtime configuration changed')
     check(bool(runtime.get('local_sources')), 'runtime source evidence missing')
-    for record in runtime.get('local_sources', []):
-        _verify_file(record)
+    if completed is None:
+        if actual:
+            blockers.append(candidate + ': completed historical source qualification binding missing')
+        else:
+            # CPU fixtures without completed-job lineage still exercise fresh-file checks.
+            for record in runtime.get('local_sources', []):
+                _verify_file(record)
     for row in runtime.get('assets', []):
         _verify_file(row['record'])
     if actual:

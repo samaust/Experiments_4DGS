@@ -35,3 +35,11 @@ aggregate request. Historical reviews and their validator remain unchanged.
 CPU fixtures use `record_kind: fixture` and explicit `actual=False`; their
 reviews and decisions never satisfy actual human feedback or authorize execution.
 A ready human metric decision is evidence, not an execution reservation.
+
+Completed execution keeps its original qualification through the exact native
+result, ledger reserve/finish, admission, qualification and source-review chain.
+The immutable native archive, receipts, assets and dependency files are rehashed.
+Local worktree source hashes remain historical metadata in those bound receipts;
+later publication edits do not become authorization for another execution. If the
+completed chain cannot establish historical qualification, D* stays blocked.
+Fresh downstream execution still requires its own current source qualification.

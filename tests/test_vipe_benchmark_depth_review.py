@@ -214,3 +214,51 @@ class DepthReviewTests(unittest.TestCase):
         self.assertIn('Separate metric depth choice D*',html)
         self.assertIn("review.metric_choice={outcome:",html)
         self.assertIn("m.record_kind==='fixture'?'fixture':'human'",html)
+
+    def completed_fixture(self):
+        """Model a completed admission chain, never an actual execution receipt."""
+        slot = self.slots['D5']
+        self.code = self.root/'publication.py'
+        self.code.write_text('original qualified publication code')
+        self.archive = self.root/'native.tar.gz'
+        self.archive.write_bytes(b'immutable native source fixture')
+        runtime = read_json(slot['evidence']['runtime']['path'])
+        runtime.update(local_sources=[file_record(self.code)],source_archive=file_record(self.archive),
+            source_files=[{'path':'native.py','sha256':'a'*64,'bytes':5}])
+        slot['evidence']['runtime'] = self.record(runtime)
+        source_review = self.record(dict(status='passed',candidate='D5',source_revision=runtime['source_revision'],
+            local_sources=runtime['local_sources'],source_archive=runtime['source_archive'],source_files=runtime['source_files']))
+        self.qualification = self.record(dict(candidate='D5',status='passed',
+            runtime={'receipt':slot['evidence']['runtime']},commercial={'assessment':slot['evidence']['commercial']},
+            source_review=source_review,source_archive=runtime['source_archive'],source_files=runtime['source_files']))
+        admission = self.record(dict(schema='plan069-depth-admission-result/v1',status='passed',candidate='D5',
+            runtime={'receipt':slot['evidence']['runtime']},commercial={'assessment':slot['evidence']['commercial']},
+            source_review=source_review,qualification=self.qualification))
+        generation = dict(read_json(slot['evidence']['generation']['path']),job_id='fixture-D5')
+        slot['evidence']['generation'] = self.record(generation)
+        request = self.record(dict(job_id='fixture-D5',candidate='D5',context=self.context,
+            admission=admission,source_review=source_review,qualification=self.qualification))
+        finish = self.record(dict(event='finish',status='complete',job_id='fixture-D5',
+            result=slot['evidence']['generation'],cleanup_confirmed=True,cleanup_uncertain=False))
+        slot['provenance'] = dict(configuration=request,ledger_outcome=finish)
+        package = read_json(self.package['path'])
+        package['bindings']['depth_aggregate_request'] = self.record({'candidates':self.slots})
+        self.form['package'] = self.record(package)
+
+    def test_completed_qualification_survives_later_publication_source_edit(self):
+        self.completed_fixture()
+        self.code.write_text('new publication UI after the completed fixture job')
+        decision = depth_review.freeze_decision(self.record(self.form),self.root/'historical.json',actual=False)
+        self.assertEqual(decision['status'],'ready')
+        proof = decision['engineering_eligibility']['D5']['evidence']['completed_qualification']
+        self.assertEqual(proof['qualification'],self.qualification)
+        self.assertEqual(proof['local_sources'][0]['sha256'],
+            read_json(self.slots['D5']['evidence']['runtime']['path'])['local_sources'][0]['sha256'])
+
+    def test_completed_binding_rejects_tampered_qualification_and_native_archive(self):
+        self.completed_fixture()
+        self.archive.write_bytes(b'changed native source archive')
+        with self.assertRaises(ValueError): depth_review.validate_review(self.form,actual=False)
+        self.archive.write_bytes(b'immutable native source fixture')
+        Path(self.qualification['path']).write_text('{}')
+        with self.assertRaises(ValueError): depth_review.validate_review(self.form,actual=False)
