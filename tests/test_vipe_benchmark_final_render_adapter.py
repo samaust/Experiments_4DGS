@@ -91,6 +91,29 @@ class NativeInputTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'transform'):
             prepare_model_input(self.request, 'QF-B', receipt, self.arrays)
 
+    def test_extended_depth_uses_new_choice_validator_and_retains_rotation(self):
+        fixture = importlib.import_module('test_vipe_benchmark_extended_final_render_contract').AdmissionTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        request = fixture.request
+        names = ('S2','D_fit','D_check','depth_decision','M0','N0')
+        receipt = dict(request['initializer_contract'], arm='QF-B',
+            composition=request['compositions']['QF-B'], arrays_sha256=initializer_arrays_hash(self.arrays),
+            scene_manifest=request['bindings']['scene_manifest'],
+            prerequisites={name:request['bindings'][name] for name in names})
+        data, result = prepare_model_input(request, 'QF-B', receipt, self.arrays)
+        self.assertEqual(result['composition']['depth'], 'D5')
+        self.assertEqual(result['initializer_receipt']['normalization'],
+            {'transform':[[0,-2,0,1],[2,0,0,2],[0,0,2,3],[0,0,0,1]]})
+        self.assertEqual(result['initializer_receipt']['prerequisites']['depth_decision'],
+            request['bindings']['depth_decision'])
+        self.assertFalse(result['execution_authorized'])
+        self.assertEqual(validate_model_input(data, result), result['native_arrays_sha256'])
+        altered = copy.deepcopy(receipt)
+        altered['prerequisites']['D4_fit'] = altered['prerequisites'].pop('D_fit')
+        with self.assertRaisesRegex(ValueError, 'lineage'):
+            prepare_model_input(request, 'QF-B', altered, self.arrays)
+
 
 if __name__ == '__main__':
     unittest.main()
