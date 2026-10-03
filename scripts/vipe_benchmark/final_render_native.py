@@ -12,6 +12,7 @@ import numpy as np
 from .extended_final_render_contract import parse_request, validate_scene_bindings
 from .files import file_record, object_hash, read_json, safe_path, verify_record
 from .final_render_adapter import prepare_model_input, validate_model_input
+from .final_render_inventory import validate_inventory
 
 
 def prepare_camera(request, camera, frame):
@@ -70,31 +71,12 @@ authority is supplied by this module. Never call GPU methods in CPU qualificatio
         if file_record(trainer) != self.request['bindings']['preset']:
             raise ValueError('native checkout differs from exact bound preset')
         self.inventory = read_json(self.request['bindings']['runtime']['path'])
-        required = {'schema','record_kind','status','environment_prefix','interpreter',
-            'source_files','binaries','resolved_config','lpips_checkpoint'}
-        if (set(self.inventory) != required or self.inventory['schema'] != 'plan069-final-render-native-runtime/v1' or
-                self.inventory['record_kind'] != 'actual' or self.inventory['status'] != 'prepared' or
-                safe_path(self.inventory['environment_prefix']).resolve() != Path(sys.prefix).resolve() or
-                self.inventory['interpreter'] != file_record(sys.executable)):
-            raise ValueError('exact prepared native runtime inventory required')
-        sources = self.inventory['source_files']
-        if type(sources) is not list:
-            raise ValueError('native source inventory required')
-        scripts = Path(__file__).resolve().parents[1]
-        names = ('freetimegs_training.py','freetimegs_model.py','freetimegs_source.py',
-            'freetimegs_checkpoint.py','atgs_sampler.py','training_rng.py','stg_checkpoint.py',
-            'offline-python.py')
-        expected = [file_record(scripts/name) for name in names]
-        expected += [file_record(__file__),file_record(self.checkout/'src/utils.py'),file_record(trainer)]
-        if not all(record in sources for record in expected) or set(self.inventory['binaries']) != {'gsplat','fused_ssim'}:
-            raise ValueError('complete native adapter/source/binary inventory required')
-        for record in [*sources,*self.inventory['binaries'].values(),self.inventory['resolved_config'],
-                self.inventory['lpips_checkpoint']]:
-            if verify_record(record) != record:
-                raise ValueError('native inventory file changed')
-        checkpoint = safe_path(self.inventory['lpips_checkpoint']['path'])
-        if checkpoint.name != 'alexnet-owt-7be5be79.pth' or checkpoint.parent.name != 'checkpoints':
-            raise ValueError('offline AlexNet checkpoint location required')
+        scene = read_json(self.request['bindings']['scene_freeze']['path'])
+        validate_inventory(self.inventory,checkout=self.checkout,
+            environment_prefix=sys.prefix,interpreter=sys.executable,
+            normalization=self.request['initializer_contract']['normalization'],
+            scene_scale=scene['historical_reference']['normalization']['scene_scale'],
+            installed_dependencies=True)
         self.model = self.sampler = self.torch = None
         self.is_fresh = True
         self.closed = False
@@ -110,10 +92,12 @@ authority is supplied by this module. Never call GPU methods in CPU qualificatio
                 provenance.get('arm') != arm or provenance.get('native_input_sha256') != object_hash(receipt)):
             raise ValueError('fresh exact native runtime/input/provenance required')
         parse_request(request)
-        for record in [*self.inventory['source_files'],*self.inventory['binaries'].values(),
-                self.inventory['resolved_config'],self.inventory['lpips_checkpoint']]:
-            if verify_record(record) != record:
-                raise ValueError('native inventory changed before preparation')
+        verify_record(self.request['bindings']['runtime'])
+        validate_inventory(self.inventory,checkout=self.checkout,
+            environment_prefix=sys.prefix,interpreter=sys.executable,
+            normalization=request['initializer_contract']['normalization'],
+            scene_scale=self.scene['historical_reference']['normalization']['scene_scale'],
+            installed_dependencies=True)
         validate_model_input(data,receipt)
         if receipt.get('record_kind') != 'actual' or receipt.get('arm') != arm or receipt.get('request_sha256') != object_hash(request):
             raise ValueError('actual same-arm native input required')
