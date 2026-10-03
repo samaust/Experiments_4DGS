@@ -376,12 +376,16 @@ def monitored_call(function, deadline, sampler, config, peak, *, worker=None,
 
 def supervise(ledger, job_id, command, output, *, evidence, sample_resources=None,
               validate_result=None, poll_seconds=.1, seconds_limit=None,
-              checkpoint=False, resume_checkpoint=False, terminal_publisher=None, terminal_docs=None):
+              checkpoint=False, resume_checkpoint=False, terminal_publisher=None, terminal_docs=None,
+              cpu_workers_limit=None):
     """The worker owns a fresh output directory; logs are siblings, not results.
 
     Resource injection is for disposable CPU tests. Real GPU dispatch always
     supplies gpu_reading plus the experiment storage/download monitor.
     """
+    if cpu_workers_limit is not None and (type(cpu_workers_limit) is not int or
+            not 1 <= cpu_workers_limit <= ledger.config['cpu_max_workers']):
+        raise ValueError('bounded numerical CPU worker limit required')
     output = safe_path(output)
     if output.exists() or output.with_suffix('.log').exists():
         raise ValueError('refusing to overwrite incomplete or previous output')
@@ -450,8 +454,11 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
     try:
         for sig in (signal.SIGTERM, signal.SIGINT):
             old_handlers[sig] = signal.signal(sig, interrupted)
-        env = dict(os.environ, VIPE_RESERVATION_START=str(start), OMP_NUM_THREADS='1' if is_s1 else '8', OPENBLAS_NUM_THREADS='1' if is_s1 else '8',
+        threads=str(1 if is_s1 else (cpu_workers_limit if cpu_workers_limit is not None else 8))
+        env = dict(os.environ, VIPE_RESERVATION_START=str(start), OMP_NUM_THREADS=threads, OPENBLAS_NUM_THREADS=threads,
                    HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1')
+        if cpu_workers_limit is not None:
+            env.update(MKL_NUM_THREADS=threads,NUMEXPR_NUM_THREADS=threads,OPENCV_FOR_THREADS_NUM=threads)
         if is_s1:
             env.update(MKL_NUM_THREADS='1', NUMEXPR_NUM_THREADS='1', OPENCV_FOR_THREADS_NUM='1')
             import json

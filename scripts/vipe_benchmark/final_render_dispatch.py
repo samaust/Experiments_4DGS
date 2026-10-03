@@ -106,7 +106,8 @@ class FixtureDispatcher:
             return proof
         supervise(self.ledger,job,command,output,evidence=dict(record_kind='fixture',
             invocation=invocation_record,entry=file_record(entry),interpreter=file_record(sys.executable)),
-            sample_resources=sample,validate_result=accept,seconds_limit=seconds_limit,poll_seconds=.02)
+            sample_resources=sample,validate_result=accept,seconds_limit=seconds_limit,poll_seconds=.02,
+            cpu_workers_limit=request['cpu_workers_limit'])
         state=self.ledger.states()[job]
         _require(state['status']=='complete' and state['cleanup_confirmed'] is True and
             state['cleanup_uncertain'] is False,'fixture dispatch cleanup/terminal accounting failed')

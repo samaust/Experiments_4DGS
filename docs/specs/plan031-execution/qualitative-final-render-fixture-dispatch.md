@@ -27,7 +27,10 @@ that would require a GPU in an actual run. The historical CPU cumulative cap and
 the narrower caller deadline apply; prospective phase caps are never increased.
 
 Worker processes hide CUDA devices, use offline flags and constrain numerical
-thread settings to the request's CPU allowance. Device/download values are
+thread settings to the request's CPU allowance. Limits are set before process
+launch and before any numerical imports, via the supervisor's
+optional bounded `cpu_workers_limit`; other callers retain their existing defaults.
+Device/download values are
 explicit simulated fixture readings; artifact bytes include real private files,
 logs and temporary caches. CPU process-group counts and simulated CPU usage must
 fit the request. No resource callback or live device probe is supplied by this API.

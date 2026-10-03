@@ -19,13 +19,13 @@ class DispatchTests(unittest.TestCase):
         path=self.root/'fixture-worker.py';path.write_text(code)
         return file_record(path)
 
-    def test_complete_fixture_is_bound_and_charged_with_confirmed_cleanup(self):
-        from vipe_benchmark.final_render_dispatch import FixtureDispatcher
-        worker=self.worker('''import json,os,sys
+    def complete_worker(self,extra=''):
+        return self.worker('''import json,os,sys
 from pathlib import Path
 from vipe_benchmark.files import file_record,object_hash,write_json
 p=Path(sys.argv[1]);request=json.loads(Path(sys.argv[2]).read_text());p.mkdir()
 assert os.environ['CUDA_VISIBLE_DEVICES']==''
+'''+extra+'''
 (p/'artifact.bin').write_bytes(b'fixture')
 result=dict(schema='plan069-final-render-worker-result/v1',record_kind='fixture',status='complete',
 arm='QF-B',phase='geometry',composition=request['compositions']['QF-B'],request_sha256=object_hash(request),
@@ -35,6 +35,10 @@ native_adapter_qualified=False,artifacts=[file_record(p/'artifact.bin')])
 write_json(p/'result.json',result)
 sys.exit(0)
 ''')
+
+    def test_complete_fixture_is_bound_and_charged_with_confirmed_cleanup(self):
+        from vipe_benchmark.final_render_dispatch import FixtureDispatcher
+        worker=self.complete_worker()
         dispatcher=FixtureDispatcher(self.request,self.root/'dispatch')
         receipt=dispatcher.dispatch('QF-B','geometry',worker,seconds_limit=5.)
         self.assertEqual(receipt['status'],'complete')
@@ -47,6 +51,16 @@ sys.exit(0)
         self.assertGreater(ledger.totals()['cpu']['elapsed_seconds'],0.)
         self.assertEqual(receipt['worker_result'],file_record(dispatcher.root/'QF-B-geometry/result.json'))
         self.assertEqual(read_json(receipt['worker_result']['path'])['artifacts'][0]['bytes'],7)
+
+    def test_numerical_pool_obeys_one_cpu_allowance_before_import(self):
+        from vipe_benchmark.final_render_dispatch import FixtureDispatcher
+        self.request['cpu_workers_limit']=1
+        self.fixture.fixture.rebind_proposal()
+        worker=self.complete_worker("import numpy as np\nnp.ones((4,4))@np.ones((4,4))\nassert len(list(Path('/proc/self/task').iterdir()))<=1\n")
+        dispatcher=FixtureDispatcher(self.request,self.root/'one-cpu-dispatch')
+        result=dispatcher.dispatch('QF-B','geometry',worker,seconds_limit=5.)
+        self.assertEqual(result['status'],'complete')
+        self.assertEqual(result['cpu_workers_used'],1)
 
     def test_fixture_resource_overrun_is_charged_and_stops_owned_group(self):
         from vipe_benchmark.final_render_dispatch import FixtureDispatcher
