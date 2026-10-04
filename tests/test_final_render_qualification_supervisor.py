@@ -31,7 +31,7 @@ class QualificationSupervisorTests(unittest.TestCase):
         from vipe_benchmark.final_render_qualification_supervisor import QualificationSupervisionFailure
         reservation = dict(event='reserve',job_id='test',event_sha256='a'*64,
             command=['/approved/command'],monotonic_start=time.monotonic(),
-            evidence=dict(record_kind='actual',execution_authorized=True,native_adapter_qualified=False,role='native-qualification',schema='qualification-reservation-binding/v1'))
+            evidence=dict(record_kind='actual',execution_authorized=True,native_adapter_qualified=False,role='native-qualification',schema='plan069-final-render-qualification-reservation-binding/v1'))
         class LedgerFixture:
             def __init__(self):
                 self.finished = []
@@ -78,7 +78,7 @@ class QualificationSupervisorTests(unittest.TestCase):
             reservation = dict(event='reserve',job_id='test',event_sha256='b'*64,
                 command=command,seconds=10.,monotonic_start=time.monotonic(),
                 boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
-                evidence=dict(record_kind='actual',execution_authorized=True,native_adapter_qualified=False,role='native-qualification',schema='qualification-reservation-binding/v1'))
+                evidence=dict(record_kind='actual',execution_authorized=True,native_adapter_qualified=False,role='native-qualification',schema='plan069-final-render-qualification-reservation-binding/v1'))
             ledger = LedgerFixture(reservation)
             write_json(root/'request.json',{})
             write_json(root/'invocation.json',dict(request=file_record(root/'request.json'),output=str(root/'output')))
@@ -121,7 +121,7 @@ class QualificationSupervisorTests(unittest.TestCase):
             reservation = dict(event='reserve',job_id='test',event_sha256='c'*64,
                 command=command,seconds=10.,monotonic_start=time.monotonic(),
                 boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
-                evidence=dict(schema='qualification-reservation-binding/v1',record_kind='actual',
+                evidence=dict(schema='plan069-final-render-qualification-reservation-binding/v1',record_kind='actual',
                     role='native-qualification',execution_authorized=True,native_adapter_qualified=False))
             ledger = LedgerFixture(reservation)
             write_json(root/'request.json',dict(device_bytes_limit=20*2**30,
@@ -166,7 +166,7 @@ class QualificationSupervisorTests(unittest.TestCase):
                     reservation = dict(event='reserve',job_id='test',event_sha256='d'*64,
                         command=command,seconds=4.,monotonic_start=time.monotonic(),
                         boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
-                        evidence=dict(schema='qualification-reservation-binding/v1',record_kind='actual',
+                        evidence=dict(schema='plan069-final-render-qualification-reservation-binding/v1',record_kind='actual',
                             role='native-qualification',execution_authorized=True,native_adapter_qualified=False))
                     ledger = LedgerFixture(reservation)
                     write_json(root/'request.json',dict(device_bytes_limit=20*2**30,

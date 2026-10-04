@@ -9,7 +9,7 @@ were used.
 
 `final_render_qualification_supervisor.supervise_reserved(ledger, reservation,
 command, output, invocation_record, release_path=...)` requires an exact active
-reservation whose evidence has schema `qualification-reservation-binding/v1`,
+reservation whose evidence has schema `plan069-final-render-qualification-reservation-binding/v1`,
 role `native-qualification`, actual record kind, authorized execution and
 `native_adapter_qualified: false`. Production DO and fixture reservations fail
 before process launch. The separate authority module supplies

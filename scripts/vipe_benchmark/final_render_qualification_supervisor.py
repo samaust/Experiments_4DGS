@@ -42,7 +42,7 @@ def _check_sample(sample, request, config):
 
 def _supervise_reserved(ledger, reservation, command, output, invocation_record, *, release_path, lifecycle):
     evidence = reservation.get('evidence', {})
-    if reservation.get('event') != 'reserve' or evidence.get('record_kind') != 'actual' or evidence.get('execution_authorized') is not True or evidence.get('native_adapter_qualified') is not False or evidence.get('role') != 'native-qualification' or evidence.get('schema') != 'qualification-reservation-binding/v1':
+    if reservation.get('event') != 'reserve' or evidence.get('record_kind') != 'actual' or evidence.get('execution_authorized') is not True or evidence.get('native_adapter_qualified') is not False or evidence.get('role') != 'native-qualification' or evidence.get('schema') != 'plan069-final-render-qualification-reservation-binding/v1':
         raise ValueError('checked qualification reservation required')
     if command != reservation['command']:
         raise ValueError('exact reserved command required')
@@ -201,7 +201,7 @@ def _supervise_reserved(ledger, reservation, command, output, invocation_record,
 def supervise_reserved(ledger, reservation, command, output, invocation_record, *, release_path):
     """Consume one exact reservation, including charging prelaunch failures."""
     evidence = reservation.get('evidence', {})
-    if reservation.get('event') != 'reserve' or evidence.get('record_kind') != 'actual' or evidence.get('execution_authorized') is not True or evidence.get('native_adapter_qualified') is not False or evidence.get('role') != 'native-qualification' or evidence.get('schema') != 'qualification-reservation-binding/v1':
+    if reservation.get('event') != 'reserve' or evidence.get('record_kind') != 'actual' or evidence.get('execution_authorized') is not True or evidence.get('native_adapter_qualified') is not False or evidence.get('role') != 'native-qualification' or evidence.get('schema') != 'plan069-final-render-qualification-reservation-binding/v1':
         raise ValueError('checked qualification reservation required')
     lifecycle = dict(launch_attempted=False,cleanup_confirmed=True)
     try:
