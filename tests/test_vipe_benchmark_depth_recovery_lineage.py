@@ -196,13 +196,45 @@ class RecoveryLineageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'changed file'):
             self.accepted()
 
+    def test_completed_recovery_keeps_immutable_source_review_after_helper_change(self):
+        # The authority seam still validates saved request/DO/helper records;
+        # only comparison with today's helper closure is historical here.
+        def checked_authority(*args, historical=False, **kwargs):
+            if not historical:
+                raise ValueError('current helper differs from completed source review')
+            return self.normalized
+        self.validator.side_effect = checked_authority
+        self.assertEqual(self.accepted()['setup'], self.setup)
+        self.validator.assert_called_once_with(self.request, self.events, self.root,
+            require_reservation=False, verifier=ANY, historical=True)
+
+    def test_unfinished_failed_or_uncertain_recovery_never_uses_historical_mode(self):
+        for key, value in [('status', 'failed'), ('cleanup_confirmed', False),
+                           ('cleanup_uncertain', True), ('surviving_pids', [123])]:
+            with self.subTest(key=key):
+                previous = self.finish[key]; self.finish[key] = value
+                with self.assertRaisesRegex(ValueError, 'clean independently'):
+                    self.accepted()
+                self.validator.assert_not_called()
+                self.finish[key] = previous
+        self.events.remove(self.finish)
+        with self.assertRaisesRegex(ValueError, 'unique accepted recovery finish'):
+            self.accepted()
+        self.validator.assert_not_called()
+
+    def test_changed_protected_request_binding_never_uses_historical_mode(self):
+        self.reserve['evidence'] = dict(request=dict(self.request, sha256='foreign'), **self.authority)
+        with self.assertRaisesRegex(ValueError, 'request'):
+            self.accepted()
+        self.validator.assert_not_called()
+
     def test_accepted_recovery_normalizes_without_failed_setup_promotion(self):
         result = self.accepted()
         self.assertEqual(result['accepted_result'], self.result)
         self.assertEqual(result['job'], JOB)
         self.assertEqual(result['setup'], self.setup)
         self.validator.assert_called_once_with(self.request, self.events, self.root,
-            require_reservation=False, verifier=ANY)
+            require_reservation=False, verifier=ANY, historical=True)
 
     def test_maps_credit_paid_model_once_and_preserve_original_caps(self):
         original = deepcopy(self.maps)

@@ -113,9 +113,14 @@ def accepted_setup_lineage(setup_record, events, run_root, *, verifier=verify_re
                  map_grant['sequence'] < active[0]['sequence'],
                  'protected passed recovery map admission required')
     request_record = result['request']
+    _require(grant.get('request') == reserve.get('evidence', {}).get('request') == request_record,
+             'exact completed recovery request binding required')
+    for key in ('review', 'authorization', 'source_review'):
+        _require(result.get(key) == grant.get(key) == reserve.get('evidence', {}).get(key),
+                 'completed recovery approval binding changed: ' + key)
     from .depth_setup_recovery import validate_recovery_request
     normalized = validate_recovery_request(request_record, events, root,
-        require_reservation=False, verifier=verifier)
+        require_reservation=False, verifier=verifier, historical=True)
     request = read_json(request_record['path'])
     _require(normalized.get('job_id', JOB) == job_id, 'normalized recovery job changed')
     failed_recoveries = checked_failed_recoveries(job_id, normalized.get('failed_recoveries', []),
