@@ -1,0 +1,67 @@
+{
+  "schema": "plan069-video-recovery-profile-repair-validation/v1",
+  "status": "passed",
+  "commands": [
+    {
+      "name": "unittest",
+      "command": [
+        "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_vipe_benchmark_video_setup_recovery.py",
+        "-q"
+      ],
+      "elapsed_monotonic_outer_seconds": 0.2807117339980323,
+      "exit_code": 0
+    },
+    {
+      "name": "mypy",
+      "command": [
+        "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+        "-B",
+        "-m",
+        "mypy",
+        "--follow-imports=skip",
+        "--ignore-missing-imports",
+        "--check-untyped-defs",
+        "--cache-dir",
+        "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/video-recovery-profile-fix/.local/recovery-profile-mypy",
+        "scripts/vipe_benchmark/video_setup_recovery.py"
+      ],
+      "elapsed_monotonic_outer_seconds": 0.3855521760015108,
+      "exit_code": 0
+    }
+  ],
+  "unique_final_outer_seconds": 0.6662639099995431,
+  "earlier_exploration": {
+    "unittest_internal_seconds": 0.23,
+    "actual_outer_measured": false
+  },
+  "modified_sources": [
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/video-recovery-profile-fix/scripts/vipe_benchmark/video_setup_recovery.py",
+      "sha256": "25681dd9c3f5a88f248f38ea149a2f95c0652b2e08a1d63a3ee7ebbe931f50c7",
+      "bytes": 21749
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/video-recovery-profile-fix/tests/test_vipe_benchmark_video_setup_recovery.py",
+      "sha256": "eb7d439d3851b46a1856e37a7fd12ffd9e538161f5b30c3a0e4ddee684a16a14",
+      "bytes": 16244
+    }
+  ],
+  "independent_reviews": {
+    "standards": "No actionable findings",
+    "spec": "No actionable findings"
+  },
+  "production_ledger_mutation": false,
+  "model_imports": false,
+  "gpu": false,
+  "network": false,
+  "environment_install": false,
+  "attempts_reset": false
+}

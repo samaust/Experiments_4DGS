@@ -13,7 +13,7 @@ from .files import file_record, read_json, safe_path, verify_record, write_json
 
 JOB='plan069-D9-setup-recovery-001'
 SCHEMA='plan069-video-setup-recovery-request/v1'
-PROFILE='D9-D10-torch-2.14.1-pypi-frame-input'
+PROFILE_ID='D9-D10-torch-2.14.1-pypi-frame-input'
 
 
 def _require(condition,message):
@@ -31,12 +31,23 @@ def _old_snapshot(root):
     return {path:(s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns) for path,s in _inventory(root).items()}
 
 
+def _runtime_profile(environment):
+    """Bind the complete frozen profile; the identifier is only one field."""
+    recipe=_bound(environment['recipe'])
+    profile=recipe.get('runtime_profile')
+    _require(isinstance(profile,dict) and profile.get('id')==PROFILE_ID and
+        environment.get('runtime_profile')==profile,
+        'exact recipe-bound recovery runtime profile dictionary required')
+    return profile
+
+
 def _environment(request,output,binding,deadline,check,runner):
     started=time.monotonic()
     recipe=_bound(request['recipe'])
+    profile=_runtime_profile(request)
     _require(request.get('constraints')==recipe.get('constraints') and
         request.get('requirements')==recipe.get('requirements') and len(request['constraints'])==48 and
-        request.get('runtime_profile')==PROFILE and request.get('python_version')==recipe.get('python_version')=='3.11',
+        request.get('python_version')==recipe.get('python_version')=='3.11',
         'exact reviewed 48-pin frame-input recovery recipe required')
     pins=_requirements(request['constraints'])
     _require(len(pins)==48 and all(r.url is None and str(r.specifier).startswith('==') and
@@ -103,7 +114,7 @@ def _environment(request,output,binding,deadline,check,runner):
         dependency_lock=file_record(lock),inventory=file_record(inventory),command_receipts=receipts,
         requirement_sources=request.get('requirement_sources',[]),sources=[],source_packages=[],
         model_imports=False,gpu_operations=False,automatic_retries=0,offline=True,
-        excluded_distributions=['decord','xformers'],runtime_recipe=request['recipe'],runtime_profile=PROFILE,
+        excluded_distributions=['decord','xformers'],runtime_recipe=request['recipe'],runtime_profile=profile,
         elapsed_seconds=time.monotonic()-started)
     write_json(output/'result.json',result)
     return result
@@ -178,7 +189,8 @@ def run_video_setup_recovery(request,output,*,request_path=None,environment_runn
             original_setup=original,source_archive=archive,source_dir=str(oldroot/'source'),source_files=original['source_files'],
             checkpoint=file_record(new_checkpoint),runtime_environment=file_record(output/'runtime/result.json'),
             python_executable=runtime['python_executable'],python=runtime['python'],dependency_lock=runtime['dependency_lock'],
-            inventory=runtime['inventory'],runtime_recipe=binding['runtime_environment']['recipe'],runtime_profile=PROFILE,
+            inventory=runtime['inventory'],runtime_recipe=binding['runtime_environment']['recipe'],
+            runtime_profile=runtime['runtime_profile'],
             excluded_distributions=['decord','xformers'],media_tools=binding['runtime_environment'].get('media_tools',{}),
             xformers=binding['runtime_environment'].get('xformers'),bytes_received=0,elapsed_seconds=time.monotonic()-started,
             offline_guard=guard,original_failure_preserved=True,model_imports=False,gpu_operations=False,automatic_retries=0)
@@ -216,6 +228,7 @@ def validate_recovery_result(result_record,request_record,events,run_root):
     for key in ('review','authorization','source_review'):
         _require(result.get(key)==request.get(key)==binding[key],'recovery approval binding changed: '+key)
     original=binding['original'];maps=binding['map_proposal'];environment=binding['runtime_environment']
+    profile=_runtime_profile(environment)
     _require(result.get('original_setup')==request.get('original_setup')==original and
         result.get('source_revision')==maps['candidate_config']['code']['revision'] and
         result.get('weight_revision')==maps['candidate_config']['weights']['revision'] and
@@ -240,7 +253,7 @@ def validate_recovery_result(result_record,request_record,events,run_root):
         result.get('python_executable')==runtime.get('python_executable')==python and
         result.get('python')==runtime.get('python') and file_record(python)==result['python'] and
         Path(python).resolve()==Path(result['python']['path']), 'exact fresh recovery interpreter required')
-    for key,expected in (('runtime_recipe',environment['recipe']),('runtime_profile',PROFILE),
+    for key,expected in (('runtime_recipe',environment['recipe']),('runtime_profile',profile),
                          ('excluded_distributions',['decord','xformers'])):
         _require(result.get(key)==runtime.get(key)==expected,'recovery runtime binding changed: '+key)
     _require(runtime.get('python_seed')==environment['python_seed'] and
@@ -256,7 +269,7 @@ def validate_recovery_result(result_record,request_record,events,run_root):
         record=result[key]
         _require(runtime.get(key)==record and Path(record['path'])==job/'runtime'/name and verify_record(record)==record,
             'exact recovery runtime file required: '+key)
-    _require(len(environment['constraints'])==48 and environment['runtime_profile']==PROFILE,'reviewed 48-pin recovery required')
+    _require(len(environment['constraints'])==48 and environment['runtime_profile']==profile,'reviewed 48-pin recovery required')
     inventory=read_json(result['inventory']['path']);_validate_inventory(inventory,environment,python)
     packages=[row['name'].lower().replace('_','-') for row in inventory['packages']]
     _require(len(packages)==len(set(packages)) and set(packages).isdisjoint({'decord','xformers'}),
