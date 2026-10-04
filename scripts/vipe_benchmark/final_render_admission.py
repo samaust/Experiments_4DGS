@@ -65,9 +65,26 @@ def required_sources():
         ('final-render-actual-worker.py','final-render-actual-control.py'))
     return required
 
+
+def interpreter_invocation(interpreter, path, *, environment_prefix=None):
+    """Verify executable bytes while retaining the approved venv launch path."""
+    from .files import safe_path
+    _verified(interpreter)
+    _require(type(path) is str and bool(path), 'explicit interpreter invocation required')
+    launch = safe_path(path)
+    _require(launch.is_absolute() and str(launch) == path and '..' not in launch.parts,
+        'canonical absolute interpreter invocation required')
+    _require(file_record(launch) == interpreter, 'interpreter invocation binary differs')
+    if environment_prefix is not None:
+        environment = safe_path(environment_prefix).resolve()
+        _require(launch.parent.resolve() == environment/'bin',
+            'interpreter invocation outside bound environment bin')
+    return path
+
+
 def _actual_evidence(envelope, request, events):
     fields = {'schema','record_kind','mode','request','approval','qualification','commercial',
-        'source_review','commands','interpreter','checkout','source_files','ledger_head_sha256','matcher_runtime'}
+        'source_review','commands','interpreter','interpreter_invocation','checkout','source_files','ledger_head_sha256','matcher_runtime'}
     _require(set(envelope) == fields, 'exact DO authority envelope required')
     _require(envelope['record_kind'] == 'actual' and envelope['mode'] == 'DO', 'actual DO authority required')
     approval = _bound(envelope['approval'])
@@ -78,11 +95,17 @@ def _actual_evidence(envelope, request, events):
         approval.get('proposal_sha256') == object_hash(proposal) and
         approval.get('request') == envelope['request'] and approval.get('allocations') == request['allocations'],
         'explicit frozen human approval for exact allocations required')
+    runtime = _bound(request['bindings']['runtime'])
+    matcher = _bound(envelope['matcher_runtime'])
+    for inventory in (runtime, matcher):
+        _require(inventory['interpreter'] == envelope['interpreter'], 'runtime interpreter bytes differ')
+        interpreter_invocation(envelope['interpreter'], envelope['interpreter_invocation'],
+            environment_prefix=inventory['environment_prefix'])
     commands = envelope['commands']
     _require(type(commands) is dict and set(commands) ==
         {a['arm']+'/'+a['phase'] for a in request['allocations'] if a['phase'] in PHASES} and
         all(type(argv) is list and len(argv) >= 3 and
-            all(type(arg) is str and arg for arg in argv) and argv[0] == envelope['interpreter']['path']
+            all(type(arg) is str and arg for arg in argv) and argv[0] == envelope['interpreter_invocation']
             for argv in commands.values()), 'all exact approved native commands required')
     sources = envelope['source_files']
     required = required_sources()
@@ -101,7 +124,7 @@ def _actual_evidence(envelope, request, events):
     runtime_record = request['bindings']['runtime']
     runtime = _bound(runtime_record)
     from .final_render_inventory import validate_inventory
-    validate_inventory(runtime,checkout=envelope['checkout'],interpreter=envelope['interpreter']['path'],
+    validate_inventory(runtime,checkout=envelope['checkout'],interpreter=envelope['interpreter_invocation'],
         normalization=request['initializer_contract']['normalization'])
     _require(qualification.get('schema') == 'plan069-final-render-native-qualification/v1' and
         qualification.get('record_kind') == 'actual' and qualification.get('status') == 'passed' and
@@ -138,7 +161,7 @@ def _actual_evidence(envelope, request, events):
             starts[0]['evidence'].get('source_files') == sources and
             starts[0].get('command') == run.get('command') and
             type(run.get('command')) is list and bool(run['command']) and
-            run['command'][0] == envelope['interpreter']['path'],
+            run['command'][0] == envelope['interpreter_invocation'],
             'independently allocated actual qualification command/source lineage required')
     commercial = _bound(envelope['commercial'])
     _require(commercial.get('schema') == 'plan069-final-render-commercial-assessment/v1' and
@@ -235,7 +258,7 @@ def _reserve(envelope_record, ledger, arm, phase, command, probe, parent_result,
                 envelope.get('ledger_head_sha256') == head), 'DO grant missing or initial approval ledger head changed')
             qualification = _actual_evidence(envelope,request,events)
             expected = envelope['commands'].get(arm+'/'+phase)
-            _require(command == expected and command[0] == envelope['interpreter']['path'],
+            _require(command == expected and command[0] == envelope['interpreter_invocation'],
                 'exact approved command/interpreter required')
         else:
             qualification = None
@@ -333,7 +356,8 @@ def invocation_binding(invocation_record, request, arm, phase, *, require_worker
         _actual_evidence(envelope,request,events[:reservation['sequence']])
         expected = envelope['commands'].get(arm+'/'+phase)
         _require(reservation['command'] == expected and invocation['interpreter'] == envelope['interpreter'] and
-            expected[0] == invocation['interpreter']['path'] and invocation_record['path'] in expected,
+            invocation.get('interpreter_invocation') == envelope['interpreter_invocation'] and
+            expected[0] == invocation['interpreter_invocation'] and invocation_record['path'] in expected,
             'invocation command/interpreter not reserved')
         _require(invocation['source_files'] == envelope['source_files'], 'invocation control source pins differ')
         for record in [invocation['worker'],invocation['interpreter'],*invocation['source_files']]:
@@ -341,6 +365,9 @@ def invocation_binding(invocation_record, request, arm, phase, *, require_worker
         _require(invocation['worker']['path'] in expected and invocation['worker'] in invocation['source_files'],
             'pinned worker entry not in exact command/control sources')
         if require_worker:
+            import sys
+            _require(os.path.abspath(sys.executable) == invocation['interpreter_invocation'],
+                'active interpreter invocation differs')
             state = ledger.states(events).get(job,{})
             starts = [e for e in events if e.get('event') == 'started' and e.get('job_id') == job]
             _require(state.get('event') == 'reserve' and len(starts) == 1 and

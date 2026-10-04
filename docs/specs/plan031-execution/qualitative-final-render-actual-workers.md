@@ -1,6 +1,7 @@
 # Guarded native final-render stage workers (#34)
 
-The actual entry is the exact pinned interpreter followed by
+The actual entry is the separately approved `interpreter_invocation` path
+(its resolved executable bytes remain pinned by `interpreter`) followed by
 `scripts/final-render-actual-worker.py --invocation PATH --release-file PATH`.
 The wrapper binds numerical CPU thread defaults before importing NumPy. It waits at most 30 seconds for the
 parent's exact `plan069-final-render-actual-release/v1` record binding that

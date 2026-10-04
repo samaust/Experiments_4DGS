@@ -131,7 +131,8 @@ def run_control(operation, invocation_record, root, *, worker_pgid=None,
     invocation = bounded_json(invocation_record['path'])
     worker = invocation['interpreter']
     # Interpreter is verified again inside the source-bound invocation gate.
-    interpreter = worker['path'] if type(worker) is dict else worker
+    from .final_render_admission import interpreter_invocation
+    interpreter = interpreter_invocation(worker, invocation['interpreter_invocation'])
     entry = Path(__file__).resolve().parents[1]/'final-render-actual-control.py'
     command = [interpreter, str(entry), operation, '--invocation', invocation_record['path']]
     if worker_pgid is not None:

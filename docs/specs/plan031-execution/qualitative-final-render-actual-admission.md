@@ -19,11 +19,19 @@ storage, CPU and cumulative ceilings are checked before a ledger append.
 The actual DO envelope schema is `plan069-final-render-do/v1`. Exact fields are
 `schema`, `record_kind: actual`, `mode: DO`, `request`, `approval`,
 `qualification`, `commercial`, `source_review`, `commands`, `interpreter`,
+`interpreter_invocation`,
 `checkout`, `source_files`, `ledger_head_sha256`, and `matcher_runtime`.
 `request` is an immutable existing Plan 069 REVIEW request record, rather than a
 rewritten REVIEW document. Commands map every arm/phase to its literal argv.
 Interpreter, matcher runtime and all other evidence are exact path/hash/size file
 records. Each command includes the already determined invocation pathname.
+`interpreter` binds the resolved executable bytes. `interpreter_invocation` is
+its separately approved absolute launch path in the bound runtime environment's
+`bin` directory; preserve its symlink spelling to retain the virtual environment.
+Both native and matcher inventories must bind that environment and executable.
+Every native/qualification command and control helper launches this exact path;
+registered workers also check `sys.executable`. A different executable, host launch
+path, invocation spelling or changed symlink target is rejected.
 Publish approval/envelope before invocation bytes to avoid a hash cycle.
 
 The separate human approval (`plan069-final-render-do-approval/v1`) binds the
@@ -49,7 +57,7 @@ request/runtime/matcher runtime records, and the exact reservation.
 Invocations have schema `plan069-final-render-actual-invocation/v1`,
 `record_kind: actual`, and bind `envelope`, `request`, `arm`, `phase`,
 `parent_result`, `output`, `initializer`, `worker`, `interpreter`, `source_files`,
-and `ledger_path`; stage-specific settings are covered by immutable invocation
+`interpreter_invocation`, and `ledger_path`; stage-specific settings are covered by immutable invocation
 bytes. Worker entry must appear in the approved command and source inventory.
 
 ## Independent evidence

@@ -16,9 +16,11 @@ def _bound(record):
     return read_json(record['path'])
 
 
-def native_command(interpreter, worker, invocation_path, release_path):
+def native_command(interpreter, worker, invocation_path, release_path, *, interpreter_invocation):
     """Literal approved worker command, including the registration handshake."""
-    return [str(safe_path(interpreter['path']).resolve()), str(safe_path(worker['path']).resolve()),
+    from .final_render_admission import interpreter_invocation as checked_launch
+    launch = checked_launch(interpreter, interpreter_invocation)
+    return [launch, str(safe_path(worker['path']).resolve()),
             '--invocation', str(safe_path(invocation_path).resolve()),
             '--release-file', str(safe_path(release_path).resolve())]
 
@@ -77,7 +79,8 @@ class ActualDispatcher:
         if phase in ('train','render'):
             _bound(initializer)
         worker = file_record(Path(__file__).resolve().parents[1]/'final-render-actual-worker.py')
-        command = native_command(envelope['interpreter'],worker,invocation_path,release_path)
+        command = native_command(envelope['interpreter'],worker,invocation_path,release_path,
+            interpreter_invocation=envelope['interpreter_invocation'])
         if envelope['commands'].get(arm+'/'+phase) != command:
             raise ValueError('fixed native command differs from approved command')
         if worker not in envelope['source_files']:
@@ -89,6 +92,7 @@ class ActualDispatcher:
             envelope=self.envelope_record,request=envelope['request'],arm=arm,phase=phase,
             parent_result=parent_result,initializer=initializer,voxel_width=voxel_width,
             output=str(output),worker=worker,interpreter=envelope['interpreter'],
+            interpreter_invocation=envelope['interpreter_invocation'],
             source_files=envelope['source_files'],ledger_path=str(self.ledger.path.resolve()),
             run_root=str(run_root),release_path=str(release_path))
         write_json(invocation_path,invocation)
