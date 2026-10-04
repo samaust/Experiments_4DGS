@@ -28,7 +28,10 @@ def execution_authorization(candidate, *, root=ROOT, authorization_path=None):
             reviewed.get('schema') != 'plan069-depth-execution-review/v1' or
             reviewed.get('status') != 'REVIEW'):
         raise ValueError('exact approved depth authorization required')
-    if authorization_path is not None and approved.get("video_frame_amendment") is not None:
+    if reviewed.get('setup_recovery_proposal') is not None or approved.get('setup_recovery_approval') is not None:
+        from .depth_recovery_authorization import validate_recovery_authorization
+        validate_recovery_authorization(candidate, approved, reviewed, root=root)
+    elif authorization_path is not None and approved.get("video_frame_amendment") is not None:
         from .depth_video_frame_authorization import validate_frame_amendment
         validate_frame_amendment(candidate, approved, reviewed, root=root)
     elif authorization_path is not None:
