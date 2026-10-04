@@ -17,6 +17,7 @@ SUPPLEMENTAL = (
     'scripts/basketball_vipe_depth_driver_diagnostic_worker.py',
     'docs/research/vipe-alternatives/plan031-execution/video-cpu-method-003/producer.py',
     'docs/research/vipe-alternatives/plan069-D9-recovery-dispatch-002/prepare_recovery.py',
+    'docs/research/vipe-alternatives/plan069-D9-recovery-causal-001/prepare_reconciliation_admission.py',
     'docs/research/vipe-alternatives/plan031-execution/video-native-wrapper-001/wrapper.py',
     'docs/research/vipe-alternatives/plan031-execution/video-native-wrapper-001/prepare_admission.py',
     'docs/research/vipe-alternatives/plan031-execution/video-native-wrapper-001/prepare_request.py',
