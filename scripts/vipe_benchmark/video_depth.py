@@ -188,14 +188,17 @@ def admitted_video_request(request, output, config, *, ledger, request_path):
             admission.get('schema') != 'plan069-depth-admission-result/v1'):
         raise ValueError('passed exact video admission and GPU reservation required')
     setup = read_json(verify_record(request['setup'])['path'])
-    if (setup.get('schema') != 'plan069-video-setup-result/v1' or
+    recovery = setup.get('schema') == 'plan069-video-setup-recovery-result/v1'
+    if ((recovery and request['component'] != 'D9') or
+            setup.get('schema') not in ('plan069-video-setup-result/v1', 'plan069-video-setup-recovery-result/v1') or
             setup.get('status') != 'complete' or
             setup.get('record_kind') != 'actual' or
             setup.get('candidate') != request['component'] or
             setup.get('review') != request['review'] or
             setup.get('authorization') != request['authorization']):
         raise ValueError('exact completed native video setup required')
-    setup_state = ledger.states().get(f"plan069-{request['component']}-setup-001", {})
+    setup_job = 'plan069-D9-setup-recovery-001' if recovery else f"plan069-{request['component']}-setup-001"
+    setup_state = ledger.states().get(setup_job, {})
     if (setup_state.get('event') != 'finish' or
             setup_state.get('status') != 'complete' or
             setup_state.get('result') != request['setup']):
@@ -228,14 +231,16 @@ def video_slot_guard(request, ledger):
             request.get('max_seconds') != proposal['allocation']['gpu_seconds']):
         raise ValueError('video whole-slot admission binding changed')
     stage = remaining_map_allocation(proposal, request['setup'], events,
-                                    ledger.path.parent, admission['assets'])
+                                    ledger.path.parent, admission['assets'],
+                                    active_map_admission=request['admission'])
     budget = grant['slot_byte_budget']
     setup_grants = [event for event in events if event.get('event') == 'depth_setup_authorized'
                     and event.get('candidate') == request['component']]
     if len(setup_grants) != 1 or budget.get('setup_baseline') != setup_grants[0].get('resource_snapshot'):
         raise ValueError('video whole-slot setup baseline changed')
     if (grant.get('map_stage_allowance') != stage or budget.get('setup') != stage['setup'] or
-            budget.get('setup_finish_event_sha256') != stage['setup_finish_event_sha256']):
+            budget.get('setup_finish_event_sha256') != stage['setup_finish_event_sha256'] or
+            budget.get('recovery_lineage') != stage.get('recovery_lineage')):
         raise ValueError('video whole-slot setup lineage changed')
     def guard():
         check_slot_byte_budget(proposal, budget, ledger.path.parent,

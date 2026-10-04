@@ -9,7 +9,8 @@ def _require(condition, reason):
         raise ValueError(reason)
 
 
-def remaining_map_allocation(proposal, setup, events, run_root, assets, *, verifier=verify_record):
+def remaining_map_allocation(proposal, setup, events, run_root, assets, *, verifier=verify_record,
+                              active_map_admission=None):
     """Credit only verified required assets already included in live used totals.
 
     Callers must supply events from the checked ledger; the allocator recomputes
@@ -19,6 +20,10 @@ def remaining_map_allocation(proposal, setup, events, run_root, assets, *, verif
     candidate = proposal['candidate']
     job = f'plan069-{candidate}-setup-001'
     root = Path(run_root).resolve()
+    if Path(setup['path']) == root / 'jobs/plan069-D9-setup-recovery-001/result.json':
+        from .depth_recovery_lineage import recovery_map_allocation
+        return recovery_map_allocation(proposal, setup, events, root, assets,
+            verifier=verifier, active_map_admission=active_map_admission)
     setup_record = verifier(setup)
     _require(setup_record == setup and Path(setup_record['path']) == root / 'jobs' / job / 'result.json',
              'owned completed setup result required for map allowance')
@@ -105,16 +110,59 @@ def remaining_map_allocation(proposal, setup, events, run_root, assets, *, verif
                 setup=setup_record, setup_finish_event_sha256=finish['event_sha256'])
 
 
-def owned_slot_bytes(run_root, candidate):
+def owned_slot_bytes(run_root, candidate, *, recovery_lineage=None):
     """Count all retained candidate job revisions, including preserved failures."""
-    from .budgets import directory_bytes
+    from .budgets import directory_bytes, _inventory, _footprint
     jobs = Path(run_root).resolve() / 'jobs'
     total = 0
+    union = {}
+    _require(recovery_lineage is None or candidate == 'D9', 'only D9 has retained setup recovery')
     for path in jobs.glob(f'plan069-{candidate}-*'):
         _require(not path.is_symlink(), 'owned candidate job must not be a symlink')
         if path.is_dir():
-            total += directory_bytes(path)
-    return total
+            if recovery_lineage is not None and path.name in (
+                    'plan069-D9-setup-001', 'plan069-D9-setup-recovery-001'):
+                union.update(_inventory(path))
+            else:
+                total += directory_bytes(path)
+    return total + _footprint(union)
+
+
+def _recovery_marker(budget, events, run_root):
+    """Check the protected accepted pair before its narrowly scoped inode union.
+
+    Native/historical entry independently rehashes full accepted ancestry. Repeated
+    byte guards recheck immutable receipts without repeatedly reading the model.
+    """
+    marker = budget.get('recovery_lineage')
+    if marker is None:
+        return None
+    _require(budget.get('candidate') == 'D9' and marker.get('job_id') ==
+             'plan069-D9-setup-recovery-001', 'exact D9 recovery marker required')
+    grants = [row for row in events if row.get('event') == 'depth_setup_recovery_authorized' and
+              row.get('event_sha256') == marker.get('grant_event_sha256')]
+    reserves = [row for row in events if row.get('event') == 'reserve' and
+                row.get('event_sha256') == marker.get('reserve_event_sha256')]
+    finishes = [row for row in events if row.get('event') == 'finish' and
+                row.get('event_sha256') == marker.get('finish_event_sha256')]
+    _require(len(grants) == len(reserves) == len(finishes) == 1 and
+             grants[0].get('candidate') == 'D9' and all(row.get('job_id') == marker['job_id']
+                 for row in (grants[0], reserves[0], finishes[0])) and
+             grants[0]['sequence'] < reserves[0]['sequence'] < finishes[0]['sequence'] and
+             grants[0].get('request') == reserves[0].get('evidence', {}).get('request') == marker.get('request') and
+             finishes[0].get('result') == budget.get('setup') and
+             finishes[0].get('event_sha256') == budget.get('setup_finish_event_sha256') and
+             finishes[0].get('status') == 'complete' and finishes[0].get('cleanup_confirmed') is True and
+             finishes[0].get('cleanup_uncertain') is False and finishes[0].get('surviving_pids') == [] and
+             finishes[0].get('deadline_exceeded') is False,
+             'protected accepted recovery marker changed')
+    record = verify_record(budget['setup'])
+    _require(record == budget['setup'] and Path(record['path']) == Path(run_root).resolve() /
+             'jobs/plan069-D9-setup-recovery-001/result.json', 'owned accepted recovery marker required')
+    _require(verify_record(marker['request']) == marker['request'] and
+             verify_record(marker['paid_asset_receipt']) == marker['paid_asset_receipt'],
+             'recovery request or paid asset evidence changed')
+    return marker
 
 
 def bind_slot_byte_budget(proposal, stage, events, run_root, reading):
@@ -140,7 +188,11 @@ def bind_slot_byte_budget(proposal, stage, events, run_root, reading):
                  'accounted monotonic setup baseline required for whole-slot budget')
         limits[key] = baseline[key] + proposal['allocation'][key]
         _require(effective[key] <= limits[key], key + ' whole-slot allocation exceeded')
-    owned = owned_slot_bytes(run_root, candidate)
+    marker = stage.get('recovery_lineage')
+    if marker is not None:
+        _recovery_marker(dict(candidate=candidate, setup=stage['setup'],
+            setup_finish_event_sha256=stage['setup_finish_event_sha256'], recovery_lineage=marker), events, run_root)
+    owned = owned_slot_bytes(run_root, candidate, **({'recovery_lineage': marker} if marker else {}))
     overhead = max(0, effective['artifact_bytes'] - baseline['artifact_bytes'] - owned)
     _require(owned + overhead <= proposal['allocation']['artifact_bytes'],
              'retained setup artifacts exceed whole-slot allocation')
@@ -153,6 +205,8 @@ def bind_slot_byte_budget(proposal, stage, events, run_root, reading):
         budget.update(schema='plan069-depth-slot-byte-budget/v2',
             setup_grant_sha256=grants[0]['event_sha256'],
             causal_reconciliation_events=credits['protected_events'])
+    if marker is not None:
+        budget['recovery_lineage'] = marker
     return budget
 
 
@@ -175,6 +229,11 @@ def check_slot_byte_budget(proposal, budget, run_root, reading, *, historical=Fa
                  for key in ('download_bytes', 'artifact_bytes')),
              'exact approved whole-slot byte budget required')
     effective = dict(reading)
+    marker = None
+    if budget.get('recovery_lineage') is not None:
+        from .config import load
+        from .ledger import Ledger
+        marker = _recovery_marker(budget, Ledger(Path(run_root) / 'ledger.jsonl', load()).events(), run_root)
     if not historical and budget['schema'] == 'plan069-depth-slot-byte-budget/v2':
         from .config import load
         from .ledger import Ledger
@@ -194,7 +253,8 @@ def check_slot_byte_budget(proposal, budget, run_root, reading, *, historical=Fa
             _require(type(effective.get(key)) is int and
                      budget['setup_baseline'][key] <= effective[key] <= budget['absolute_limits'][key],
                      key + ' whole-slot allocation exceeded')
-    _require(owned_slot_bytes(run_root, proposal['candidate']) +
+    _require(owned_slot_bytes(run_root, proposal['candidate'], **(
+             {'recovery_lineage': marker} if marker else {})) +
              budget['shared_setup_artifact_bytes'] <= proposal['allocation']['artifact_bytes'],
              'retained candidate artifacts exceed whole-slot allocation')
 
@@ -215,9 +275,17 @@ def historical_slot_byte_guard(ledger, candidate):
     budget = allocation['slot_byte_budget']
     setup_grants = [event for event in events if event.get('event') == 'depth_setup_authorized'
                     and event.get('candidate') == candidate]
+    recovery = budget.get('recovery_lineage')
+    setup_job = recovery['job_id'] if recovery else f'plan069-{candidate}-setup-001'
     finishes = [event for event in events if event.get('event') == 'finish'
-                and event.get('job_id') == f'plan069-{candidate}-setup-001']
+                and event.get('job_id') == setup_job]
     stage = allocation.get('map_stage_allowance') or {}
+    if recovery:
+        admission = read_json(verify_record(allocation['admission'])['path'])
+        current = remaining_map_allocation(proposal, budget['setup'], events, ledger.path.parent,
+            admission['assets'], active_map_admission=allocation['admission'])
+        _require(stage == current and stage.get('recovery_lineage') == recovery,
+                 'historical accepted recovery lineage changed')
     _require(len(setup_grants) == len(finishes) == 1 and
              setup_grants[0].get('resource_snapshot') == budget.get('setup_baseline') and
              allocation.get('proposal_sha256') == budget.get('proposal_sha256') == object_hash(proposal) and
@@ -267,7 +335,11 @@ def historical_slot_output_guard(ledger, candidate, output):
     proposal = next(row for row in read_json(review['path'])['proposals']
                     if row['candidate'] == candidate)
     check_slot_byte_budget(proposal, budget, root, {}, historical=True)
-    other_owned = owned_slot_bytes(root, candidate) - directory_bytes(output)
+    recovery = budget.get('recovery_lineage')
+    if recovery:
+        historical_slot_byte_guard(ledger, candidate)
+    other_owned = owned_slot_bytes(root, candidate, **(
+        {'recovery_lineage': recovery} if recovery else {})) - directory_bytes(output)
     available = proposal['allocation']['artifact_bytes'] - budget['shared_setup_artifact_bytes'] - other_owned
 
     def check(additional_bytes=0):

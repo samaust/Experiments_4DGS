@@ -24,7 +24,8 @@ def _one(events, event, job=None):
     return rows[0]
 
 
-def accepted_setup_lineage(setup_record, events, run_root, *, verifier=verify_record):
+def accepted_setup_lineage(setup_record, events, run_root, *, verifier=verify_record,
+                           active_map_admission=None):
     """Validate exact immutable recovery and its separately checked DO ancestry."""
     root = Path(run_root).resolve()
     job = root / 'jobs' / JOB
@@ -46,16 +47,39 @@ def accepted_setup_lineage(setup_record, events, run_root, *, verifier=verify_re
              finish.get('cleanup_confirmed') is True and finish.get('cleanup_uncertain') is False and
              finish.get('surviving_pids') == [] and finish.get('deadline_exceeded') is False,
              'clean independently authorized recovery completion required')
-    _require(not any(row.get('event') == 'reserve' and not any(
+    active = [row for row in events if row.get('event') == 'reserve' and not any(
         end.get('event') in ('finish', 'account') and end.get('job_id') == row.get('job_id') and
-        end['sequence'] > row['sequence'] for end in events) for row in events),
-        'active attempt prevents accepted recovery lineage')
+        end['sequence'] > row['sequence'] for end in events)]
+    map_grant = None
+    if active:
+        _require(active_map_admission is not None and len(active) == 1 and
+                 active[0].get('job_id') == 'plan069-D9-maps-001' and
+                 active[0].get('resource') == 'gpu' and
+                 active[0].get('evidence', {}).get('admission') == active_map_admission,
+                 'active attempt prevents accepted recovery lineage')
+        _require(verifier(active_map_admission) == active_map_admission,
+                 'exact active recovery map admission required')
+        admission = read_json(active_map_admission['path'])
+        map_grant = _one([row for row in events if row.get('candidate') == CANDIDATE],
+                         'depth_attempt_authorized')
+        _require(admission.get('schema') == 'plan069-depth-admission-result/v1' and
+                 admission.get('status') == 'passed' and admission.get('candidate') == CANDIDATE and
+                 admission.get('completed_setup') == setup_record and
+                 map_grant.get('candidate') == CANDIDATE and
+                 map_grant.get('admission') == active_map_admission and
+                 map_grant['sequence'] < active[0]['sequence'],
+                 'protected passed recovery map admission required')
     request_record = result['request']
     from .depth_setup_recovery import validate_recovery_request
     normalized = validate_recovery_request(request_record, events, root,
         require_reservation=False, verifier=verifier)
     request = read_json(request_record['path'])
     proposal, maps, original = (normalized[key] for key in ('proposal', 'map_proposal', 'original'))
+    if map_grant is not None:
+        _require(map_grant.get('proposal_sha256') == object_hash(maps) and all(
+            map_grant.get(key) == normalized[key] == active[0].get('evidence', {}).get(key)
+            for key in ('review', 'authorization', 'source_review')),
+            'active recovery map authority binding changed')
     _require(grant.get('request') == request_record == normalized['request'] and
              grant.get('proposal_sha256') == object_hash(proposal) and
              reserve.get('evidence', {}).get('request') == request_record and
@@ -136,9 +160,11 @@ def accepted_setup_lineage(setup_record, events, run_root, *, verifier=verify_re
         result_record=setup_record, grant=grant, reserve=reserve, finish=finish, job=JOB)
 
 
-def recovery_map_allocation(proposal, setup, events, run_root, assets, *, verifier=verify_record):
+def recovery_map_allocation(proposal, setup, events, run_root, assets, *, verifier=verify_record,
+                            active_map_admission=None):
     """Credit only the retained model after accepted recovery; preserve all caps."""
-    accepted = accepted_setup_lineage(setup, events, run_root, verifier=verifier)
+    accepted = accepted_setup_lineage(setup, events, run_root, verifier=verifier,
+        active_map_admission=active_map_admission)
     _require(proposal == accepted['map_proposal'], 'exact approved recovered map proposal required')
     original = accepted['lineage']
     allocation = dict(original['proposal']['allocation'])
