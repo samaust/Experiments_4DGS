@@ -1,0 +1,109 @@
+{
+  "schema": "plan069-D10-frame-cpu-validation/v1",
+  "record_kind": "CPU preparation only",
+  "status": "passed",
+  "commands": [
+    {
+      "name": "unittest",
+      "command": [
+        "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_vipe_benchmark_video*py",
+        "-q"
+      ],
+      "elapsed_monotonic_seconds": 1.1307374940006412,
+      "exit_code": 0
+    },
+    {
+      "name": "mypy",
+      "command": [
+        "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+        "-B",
+        "-m",
+        "mypy",
+        "--follow-imports=skip",
+        "--ignore-missing-imports",
+        "--check-untyped-defs",
+        "--cache-dir",
+        "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/video-budget-review/.local/D10-frame-mypy",
+        "scripts/vipe_benchmark/depth_video_frame_authorization.py",
+        "scripts/vipe_benchmark/depth_authorization.py",
+        "scripts/vipe_benchmark/depth_admission.py",
+        "scripts/vipe_benchmark/video_setup.py"
+      ],
+      "elapsed_monotonic_seconds": 0.40554242500002147,
+      "exit_code": 1
+    },
+    {
+      "name": "mypy annotation correction",
+      "command": [
+        "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+        "-B",
+        "-m",
+        "mypy",
+        "--follow-imports=skip",
+        "--ignore-missing-imports",
+        "--check-untyped-defs",
+        "--cache-dir",
+        "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/video-budget-review/.local/D10-frame-mypy",
+        "scripts/vipe_benchmark/depth_video_frame_authorization.py",
+        "scripts/vipe_benchmark/depth_authorization.py",
+        "scripts/vipe_benchmark/depth_admission.py",
+        "scripts/vipe_benchmark/video_setup.py"
+      ],
+      "elapsed_monotonic_seconds": 0.1105164769996918,
+      "exit_code": 0
+    },
+    {
+      "name": "final authority receipt-chain fixtures",
+      "command": [
+        "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-p",
+        "test_vipe_benchmark_video_frame_authorization.py",
+        "-q"
+      ],
+      "elapsed_monotonic_seconds": 0.30288962699887634,
+      "exit_code": 0
+    },
+    {
+      "name": "final scoped mypy",
+      "command": [
+        "/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python",
+        "-B",
+        "-m",
+        "mypy",
+        "--follow-imports=skip",
+        "--ignore-missing-imports",
+        "--check-untyped-defs",
+        "--cache-dir",
+        "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/video-budget-review/.local/D10-frame-mypy",
+        "scripts/vipe_benchmark/depth_video_frame_authorization.py",
+        "scripts/vipe_benchmark/depth_authorization.py",
+        "scripts/vipe_benchmark/depth_admission.py",
+        "scripts/vipe_benchmark/video_setup.py"
+      ],
+      "elapsed_monotonic_seconds": 0.10800072100028046,
+      "exit_code": 0
+    }
+  ],
+  "no_install": true,
+  "no_model_import": true,
+  "no_gpu": true,
+  "no_production_ledger_write": true,
+  "independent_reviews": {
+    "standards": "No unresolved findings; two initial gaps fixed and rechecked.",
+    "spec": "No unresolved findings; actual D9 prerequisite chain gap fixed and rechecked."
+  }
+}

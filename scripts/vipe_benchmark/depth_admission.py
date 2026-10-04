@@ -120,6 +120,7 @@ def local_source_records(candidate):
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_setup_recovery.py'))
     if candidate in ('D9', 'D10'):
         records.append(file_record(ROOT / 'scripts/vipe_benchmark/depth_authorization.py'))
+        records.append(file_record(ROOT / 'scripts/vipe_benchmark/depth_video_frame_authorization.py'))
         records.append(file_record(ROOT / 'configs/vipe-alternatives/video-environment-v1.json'))
         records.append(file_record(ROOT / 'configs/vipe-alternatives/video-environment-v2.json'))
         records.append(file_record(VIDEO_PROFILES))

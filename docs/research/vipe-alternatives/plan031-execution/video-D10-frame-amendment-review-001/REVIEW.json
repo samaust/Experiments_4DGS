@@ -1,0 +1,122 @@
+{
+  "schema": "plan069-depth-execution-review/v1",
+  "status": "REVIEW",
+  "scope": "D10 unstarted optional CLI decoder omission only; preserve approved original attempt and all bounds",
+  "asset_inventory": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-required-assets-v1.json",
+    "sha256": "6eb36eabb298b3c525af98d34a75a1c79d036ba2c48bf5a9e31efd7aba42e117",
+    "bytes": 6414
+  },
+  "proposals": [
+    {
+      "schema": "plan069-depth-execution-proposal/v1",
+      "status": "REVIEW",
+      "candidate": "D10",
+      "candidate_config": {
+        "model": "Metric Video Depth Anything Small",
+        "mode": "native_offline_sequence_metric",
+        "domain": "camera_z_metres",
+        "convention": {
+          "kind": "camera_z",
+          "conversion_count": 0,
+          "evidence": "https://github.com/DepthAnything/Video-Depth-Anything/blob/4f5ae23172ba60fd7bc11ef671cca678842c7072/run.py#L76-L86"
+        },
+        "survey_id": "i40-vda-metric-small",
+        "code": {
+          "url": "https://github.com/DepthAnything/Video-Depth-Anything",
+          "revision": "4f5ae23172ba60fd7bc11ef671cca678842c7072"
+        },
+        "weights": {
+          "url": "https://huggingface.co/depth-anything/Metric-Video-Depth-Anything-Small",
+          "revision": "273d090f2ce17df50c2872d82c8322c45da5b4dd"
+        }
+      },
+      "required_assets": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-required-assets-v1.json",
+        "sha256": "6eb36eabb298b3c525af98d34a75a1c79d036ba2c48bf5a9e31efd7aba42e117",
+        "bytes": 6414
+      },
+      "max_attempts": 1,
+      "workload": {
+        "anchor_maps": 60,
+        "unique_published_maps": 256,
+        "native_context_frames": 4500,
+        "clips": 4,
+        "clip_frames": 50,
+        "clip_fps": 25
+      },
+      "allocation": {
+        "download_bytes": 6558895007,
+        "artifact_bytes": 9663676416,
+        "gpu_seconds": 12000,
+        "cpu_seconds": 3600,
+        "setup_seconds": 2400,
+        "device_bytes": 22548578304
+      },
+      "profile": {
+        "mode": "native offline metric video",
+        "input": "30 cameras; fit frames 50-149; check frames 150-199; input_size=518; windows 32/overlap10",
+        "precision": "fp16 autocast",
+        "seed": "native eval, no stochastic sampling",
+        "dependency_sources": [
+          "requirements.txt; native video_depth_anything metric import closure"
+        ],
+        "runtime_profile": {
+          "id": "D9-D10-torch-2.14.1-pypi-frame-input",
+          "upstream_supported": false,
+          "original_core_requirements": [
+            "torch==2.1.1",
+            "torchvision==0.16.1"
+          ],
+          "selected_core_requirements": [
+            "torch==2.14.1",
+            "torchvision==0.29.1"
+          ],
+          "compatibility": "unqualified until actual metered native qualification",
+          "distribution": "official PyPI Linux cp311 wheels; distinct from indexed +cu130",
+          "observed_runtime_required": true,
+          "input_adapter": "native frame arrays; upstream CLI video decoder is not executed"
+        }
+      },
+      "profile_inventory": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-runtime-profiles-video-v4.json",
+        "sha256": "2ff2c8854d7bc752a2aaf27b5a5469469b1442e1f9783378ba9dca89caab583f",
+        "bytes": 5368
+      },
+      "runtime_recipe": {
+        "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/configs/vipe-alternatives/video-environment-v4.json",
+        "sha256": "0eb4571601cb36587a99a802da0608d8b77180fdfba5498bd23376e0fe2de22f",
+        "bytes": 4653
+      }
+    }
+  ],
+  "unstarted_ledger_prefix": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/video-D10-frame-amendment-review-001/unstarted-ledger-prefix.jsonl",
+    "sha256": "0c28a1c3358058238b82ac2d44ed318da4f5b71d5fe0df9a263481bc0cb1082d",
+    "bytes": 674253
+  },
+  "previous_authorization": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/depth-approval-003.json",
+    "sha256": "48fdb2c3fa3df8423307d1cdc1ac68fa05a5ae677d9aad9927667e49526e104c",
+    "bytes": 3194
+  },
+  "readiness_at_publication": {
+    "D10": {
+      "source_review": "pending combined source freeze",
+      "D9_frame_runtime_qualification": "required before D10; not yet passed",
+      "allocation_approval": "new explicit optional decoder amendment approval required",
+      "runtime_qualification": "pending actual D10 setup/native qualification",
+      "commercial_assessment": "pending installed v4 closure"
+    }
+  },
+  "optional_decoder_exception": {
+    "dependency": "decord",
+    "approval": "pending",
+    "reason": "Native RGB frame-array path does not import optional upstream CLI utils.dc_utils; preserve upstream requirements and strict uv pip check.",
+    "evidence": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/video-frame-recovery-review-001/native-import-evidence.json",
+      "sha256": "d0c689b500d179d31b2781199a23da3d2549e2224280d0ffd776190e51b21939",
+      "bytes": 8877
+    }
+  }
+}

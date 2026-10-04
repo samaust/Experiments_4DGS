@@ -91,8 +91,8 @@ def run_video_setup(request, output, *, request_path=None, acquire=_acquire,
     pypi_runtime = False
     if proposal.get('runtime_recipe') is not None:
         from .depth_admission import selected_profile_inventory
-        from .depth_admission import VIDEO_PYPI_PROFILES
-        pypi_runtime = selected_profile_inventory(proposal) == VIDEO_PYPI_PROFILES
+        from .depth_admission import VIDEO_PYPI_PROFILES, VIDEO_FRAME_PROFILES
+        pypi_runtime = selected_profile_inventory(proposal) in (VIDEO_PYPI_PROFILES, VIDEO_FRAME_PROFILES)
         if pypi_runtime:
             from .depth_authorization import execution_authorization
             exact_review, exact_auth, exact_proposal, _ = execution_authorization(
