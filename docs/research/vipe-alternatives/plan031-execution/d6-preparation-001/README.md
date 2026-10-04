@@ -116,3 +116,20 @@ cover independent capture/finalize method bindings, archive/tree retention,
 failed capture rejection, D5/D6 separation and admitted setup substitution.
 All retained Python files parse successfully. The selected bootstrap has no mypy installed; no installation was attempted. These checks load no model and
 use no GPU. The final canonical combined qualification remains root's gate.
+
+
+## Completed post-setup static review006
+
+Root's actual D6 setup completed. Adjacent `depth-D6-source-review-006.json`
+binds the accepted archive and complete 123-source tree and is independently
+passed on both axes. The checkpoint metadata matches pinned D6 weights and
+differs from D5; this review did not read model bytes. Helpers remain identical
+to source005, including the canonical metadata integrations. Use source006 for
+actual CPU capture and finalization if its exact records still match.
+
+`verify_postsetup.py` preserves the audit boundary: accepted complete supervised
+setup, pinned weight metadata, common code tree and exact current helpers. The
+source-draft generation and audit took 0.056781364 seconds; the retained
+`postsetup-audit.json` leaves the one CPU charge to root. Receipt assembly and
+interactive/independent review time were not measured. Actual CPU runtime and
+commercial qualification remain required.
