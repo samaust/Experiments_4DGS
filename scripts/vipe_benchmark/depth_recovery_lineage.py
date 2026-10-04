@@ -143,6 +143,12 @@ def accepted_setup_lineage(setup_record, events, run_root, *, verifier=verify_re
                  ('proposal_sha256' not in admission or admission['proposal_sha256'] == object_hash(maps)),
                  'active recovery map authority source or admission binding changed')
         from .depth_admission import local_source_records
+        from .depth_d9_continuation import active_phase_evidence
+        continued = active_phase_evidence(events, active[0])
+        if continued is not None:
+            source_record, admission = continued
+            _require(verifier(source_record) == source_record,
+                     'current continuation source review record changed')
         source = read_json(source_record['path'])
         _require(source.get('schema') == 'plan069-depth-source-review/v1' and
                  source.get('status') == 'passed' and source.get('candidate') == CANDIDATE and

@@ -189,16 +189,22 @@ class Ledger:
                 self._depth_recovery_reservation(events, evidence, command, job_id=job_id)
             if re.fullmatch(r'plan069-(D2|D5|D6|D7|D8|D9|D10|D11)-maps-001', job_id):
                 candidate = job_id.split('-')[1]
+                continuation = None
+                if candidate == 'D9':
+                    from .depth_d9_continuation import protected_continuation
+                    continuation = protected_continuation(events, self.config, self.path.parent,
+                        phase='reserve')
                 authorized = [row for row in events if
                     row['event'] == 'depth_attempt_authorized' and
                     row['candidate'] == candidate]
-                if len(authorized) != 1 or events[-1] != authorized[0] or \
-                        time.time() - authorized[0]['recorded_unix'] > 30:
+                if len(authorized) != 1 or (continuation is None and
+                        (events[-1] != authorized[0] or
+                         time.time() - authorized[0]['recorded_unix'] > 30)):
                     raise ValueError('fresh exact depth authorization required')
                 bound = authorized[0]
                 from .depth_admission import local_source_records
                 source = read_json(verify_record(bound['source_review'])['path'])
-                if source.get('local_sources') != local_source_records(candidate):
+                if continuation is None and source.get('local_sources') != local_source_records(candidate):
                     raise ValueError('depth sources changed after review')
                 if not isinstance(evidence, dict) or any(
                         evidence.get(key) != bound[key] for key in
@@ -207,6 +213,13 @@ class Ledger:
                 if command != bound.get('command') or any(evidence.get(key) != bound.get(key)
                         for key in ('request', 'worker', 'executable')):
                     raise ValueError('depth command differs from authorization')
+                if continuation is not None:
+                    expected = dict(**{key: bound[key] for key in ('review', 'authorization',
+                        'source_review', 'admission', 'request', 'worker', 'executable')},
+                        continuation=continuation['request'])
+                    if evidence != expected:
+                        raise ValueError('exact original evidence plus protected continuation required')
+                    self._depth_d9_continuation_resources(events)
                 self._depth_command(candidate, bound, source, evidence, command)
             if job_id == 'plan069-D6-driver-qualification-004':
                 from .depth_driver_qualification_local_listen import check_predecessor as local_listen_predecessor, validate_request as local_listen_request
@@ -248,11 +261,11 @@ class Ledger:
                 if command != request['command'] or evidence != dict(request=grants[0]['request']):
                     raise ValueError('driver qualification command/evidence differs')
             if is_recovery_job(job_id):
-                from .s1_recovery import reservation_binding
-                reservation_binding(self.path.parent, self.config, events, evidence, command=command)
+                from .s1_recovery import reservation_binding as s1_reservation_binding
+                s1_reservation_binding(self.path.parent, self.config, events, evidence, command=command)
             if job_id in ('E5-setup-recovery-001', 'E5-setup-recovery-002', 'E5-setup-recovery-003', 'E5-setup-recovery-004'):
-                from .e5_recovery import reservation_binding
-                reservation_binding(self.path.parent, self.config, events, command, evidence, job_id=job_id)
+                from .e5_recovery import reservation_binding as e5_reservation_binding
+                e5_reservation_binding(self.path.parent, self.config, events, command, evidence, job_id=job_id)
             spec = allocated[job_id]
             resource = spec['resource']
             total = self.totals(events)[resource]['elapsed_seconds']
@@ -700,6 +713,39 @@ class Ledger:
                 slot_byte_budget=slot_budget,
                 command=command, **binding))
 
+    def continue_depth_d9_attempt(self, request_record):
+        """Continue only the already allocated, unstarted grant851."""
+        from .depth_d9_continuation import EVENT, JOB, validate_request
+        with self.locked() as (stream, events):
+            validate_request(request_record, events, self.config, self.path.parent)
+            if any(row.get('event') == EVENT for row in events):
+                raise ValueError('D9 allocation already continued; no automatic replay')
+            self._depth_d9_continuation_resources(events)
+            return self._append(stream, events, dict(event=EVENT, job_id=JOB,
+                candidate='D9', request=request_record))
+
+    def _depth_d9_continuation_resources(self, events):
+        """Recheck the original allowance against a fresh host GPU sample."""
+        from .depth_d9_continuation import original_grant
+        from .depth_map_allowance import check_slot_byte_budget
+        from .execution import resources
+        grant = original_grant(events)
+        reading = resources(self.path.parent, gpu=True)
+        proposal = next(row for row in read_json(grant['review']['path'])['proposals']
+                        if row['candidate'] == 'D9')
+        if reading['gpu_pids'] or reading.get('device_uuid') != grant['resource_snapshot'].get('device_uuid'):
+            raise ValueError('original single GPU identity/ownership changed before D9 continuation')
+        check_slot_byte_budget(proposal, grant['slot_byte_budget'], self.path.parent, reading, events=events)
+        if (reading['device_bytes'] + proposal['allocation']['device_bytes'] >
+                self.config['gpu_peak_device_gib_limit'] * 2**30 or
+                self.totals(events)['gpu']['elapsed_seconds'] + grant['seconds'] >
+                self.config['gpu_total_seconds_limit']):
+            raise ValueError('unchanged D9 GPU allocation exceeds live global ceiling')
+        for key, cap in (('download_bytes', 'new_download_gib_limit'),
+                         ('artifact_bytes', 'new_artifact_disk_gib_limit')):
+            if reading[key] + grant['map_stage_allowance']['allocation'][key] > self.config[cap] * 2**30:
+                raise ValueError(key + ' D9 continuation exceeds unchanged global cap')
+
     def charge_cpu_preparation(self, elapsed_seconds, evidence):
         """Charge separately retriable input acquisition without a model attempt."""
         from .files import verify_record
@@ -750,7 +796,7 @@ class Ledger:
     def note(self, event, **fields):
         if event in ('reserve', 'finish', 'account', 'resume_unstarted', 'checkpoint',
                      'checkpoint_resume', 'depth_driver_qualification_local_listen_authorized', 'depth_driver_qualification_local_bind_authorized', 'depth_driver_qualification_recovery_authorized', 'depth_driver_diagnostic_authorized', 'depth_driver_qualification_authorized',
-                     'depth_setup_authorized', 'depth_attempt_authorized', 'depth_setup_bytes_reconciled',
+                     'depth_setup_authorized', 'depth_attempt_authorized', 'depth_d9_attempt_continued', 'depth_setup_bytes_reconciled',
                      'depth_setup_recovery_authorized',
                      'native_qualification_authorized', 'final_render_do_authorized', 'cpu_preparation_charge', 'setup_recovery_authorized', 'component_recovery_authorized',
                      'reconstruction_recovery_authorized', 'memory_diagnostic_authorized'):
@@ -765,6 +811,18 @@ class Ledger:
             state = self.states(events).get(job_id)
             if not state or state['event'] != 'reserve':
                 raise ValueError('attempt not reserved or already finished')
+            if job_id == 'plan069-D9-maps-001' and status == 'complete':
+                from .depth_d9_continuation import EVENT, protected_continuation
+                if any(row.get('event') == EVENT for row in events):
+                    try:
+                        protected_continuation(events, self.config, self.path.parent, phase='finish')
+                    except Exception as error:
+                        status = 'failed'
+                        fields['continuation_validation_error'] = f'{type(error).__name__}: {error}'
+                    elapsed_seconds = max(elapsed_seconds, time.monotonic() - state['monotonic_start'])
+                    if elapsed_seconds > state['seconds']:
+                        status = 'failed'
+                        fields['continuation_validation_deadline_exceeded'] = True
             return self._append(stream, events, dict(event='finish', job_id=job_id, status=status,
                 resource=state['resource'], elapsed_seconds=elapsed_seconds,
                 deadline_exceeded=elapsed_seconds > state['seconds'], **fields))

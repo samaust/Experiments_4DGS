@@ -36,6 +36,9 @@ def publish(candidate, run_id='plan031-20260913T032700Z'):
         raise ValueError('completed 60-context video map attempt required')
     request_record = file_record(local / 'requests' / (job_id + '.json'))
     request = read_json(request_record['path'])
+    if candidate == 'D9':
+        from vipe_benchmark.depth_d9_continuation import protected_continuation
+        protected_continuation(ledger.events(), config, local, phase='publish')
     if (request.get('context') != result['context'] or
             request.get('admission') is None or
             request.get('component') != candidate):

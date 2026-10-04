@@ -236,6 +236,53 @@ def dispatch(candidate, admission_path, context_path,
         validate_result=validate, poll_seconds=2.)
 
 
+def dispatch_continued(continuation_path, run_id='plan031-20260913T032700Z'):
+    """Supervise grant851 with its original immutable command and request."""
+    from vipe_benchmark.depth_d9_continuation import JOB, original_grant, protected_continuation
+    if run_id != 'plan031-20260913T032700Z':
+        raise ValueError('only protected D9 native run continuation')
+    if Path('/proc/1/comm').read_text().strip() != 'systemd':
+        raise PermissionError('native video supervision requires host PID visibility')
+    local = shared_run_root() / '.local/vipe-alternatives' / run_id
+    config = dict(load(), new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
+    ledger = Ledger(local / 'ledger.jsonl', config)
+    grant = original_grant(ledger.events())
+    request = read_json(verify_record(grant['request'])['path'])
+    if sys.executable != grant['command'][0]:
+        raise ValueError('continuation must invoke original qualified venv interpreter')
+    record = file_record(continuation_path)
+    ledger.continue_depth_d9_attempt(record)
+    proposal = next(row for row in read_json(grant['review']['path'])['proposals']
+                    if row['candidate'] == 'D9')
+    from vipe_benchmark.depth_map_allowance import check_slot_byte_budget
+    def sample():
+        reading = resources(local, gpu=True)
+        if reading.get('device_uuid') != grant['resource_snapshot']['device_uuid']:
+            raise ValueError('continued attempt GPU identity changed')
+        check_slot_byte_budget(proposal, grant['slot_byte_budget'], local, reading)
+        return reading
+    def validate(out):
+        protected_continuation(ledger.events(), config, local, phase='finish')
+        result = read_json(file_record(out / 'result.json')['path'])
+        if (result.get('schema') != 'plan069-video-depth-result/v1' or
+                result.get('status') != 'complete' or result.get('record_kind') != 'actual' or
+                result.get('component') != 'D9' or result.get('id') != JOB or
+                result.get('context') != request['context'] or
+                len(result.get('rows', [])) != 256 or len(result.get('anchor_rows', [])) != 60 or
+                len(result.get('sequences', [])) != 60):
+            raise ValueError('continued D9 result lacks original context/anchors/sequences')
+    evidence = dict(**{key: grant[key] for key in ('review', 'authorization', 'source_review',
+        'admission', 'request', 'worker', 'executable')}, continuation=record)
+    result = supervise(ledger, JOB, grant['command'], Path(grant['command'][-1]),
+        evidence=evidence, sample_resources=sample, validate_result=validate, poll_seconds=2.)
+    finish = ledger.states().get(JOB, {})
+    if (finish.get('event') != 'finish' or finish.get('status') != 'complete' or
+            finish.get('cleanup_confirmed') is not True or finish.get('cleanup_uncertain') is not False or
+            finish.get('surviving_pids') != [] or finish.get('deadline_exceeded') is not False):
+        raise ValueError('continued D9 attempt failed final validation, deadline or cleanup')
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--candidate', required=True, choices=('D9', 'D10'))

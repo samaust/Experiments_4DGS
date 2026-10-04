@@ -224,7 +224,7 @@ def bind_slot_byte_budget(proposal, stage, events, run_root, reading):
     return budget
 
 
-def check_slot_byte_budget(proposal, budget, run_root, reading, *, historical=False):
+def check_slot_byte_budget(proposal, budget, run_root, reading, *, historical=False, events=None):
     """Check active whole-slot caps; late CPU diagnostics check retained scope.
 
     Historical CPU callers separately prove no new downloads during their stage.
@@ -247,12 +247,15 @@ def check_slot_byte_budget(proposal, budget, run_root, reading, *, historical=Fa
     if budget.get('recovery_lineage') is not None:
         from .config import load
         from .ledger import Ledger
-        marker = _recovery_marker(budget, Ledger(Path(run_root) / 'ledger.jsonl', load()).events(), run_root)
+        if events is None:
+            events = Ledger(Path(run_root) / 'ledger.jsonl', load()).events()
+        marker = _recovery_marker(budget, events, run_root)
     if not historical and budget['schema'] == 'plan069-depth-slot-byte-budget/v2':
         from .config import load
         from .ledger import Ledger
         from .depth_budget_reconciliation import causal_credits
-        events = Ledger(Path(run_root) / 'ledger.jsonl', load()).events()
+        if events is None:
+            events = Ledger(Path(run_root) / 'ledger.jsonl', load()).events()
         grants = [row for row in events if row.get('event') == 'depth_setup_authorized' and
                   row.get('event_sha256') == budget.get('setup_grant_sha256')]
         _require(len(grants) == 1 and grants[0].get('candidate') == proposal['candidate'] and

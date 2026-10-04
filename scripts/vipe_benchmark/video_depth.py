@@ -149,11 +149,13 @@ def run_video_actual(request, output, config, *, backend, ledger, request_path):
                       record_kind='actual')
 
 
-def validate_runtime_interpreter(runtime, executable):
+def validate_runtime_interpreter(runtime, executable, *, executable_record=None):
     """Keep the qualified virtual environment path, including its invocation spelling."""
     qualification = read_json(verify_record(runtime['receipt'])['path'])
     if qualification.get('python_executable') != str(Path(executable).absolute()):
         raise ValueError('video qualified virtual environment interpreter differs')
+    if executable_record is not None and executable_record != file_record(executable):
+        raise ValueError('video resolved executable record differs')
 
 
 def admitted_video_request(request, output, config, *, ledger, request_path):
@@ -170,6 +172,9 @@ def admitted_video_request(request, output, config, *, ledger, request_path):
     run_root, effective = _active_reservation(request, request_path, Path(output))
     if config != effective or ledger.path != Path(request['ledger_path']).resolve():
         raise ValueError('actual video ledger/configuration binding changed')
+    if request['component'] == 'D9':
+        from .depth_d9_continuation import protected_continuation
+        protected_continuation(ledger.events(), config, run_root, phase='worker')
     state = ledger.states().get(request['id'], {})
     admission = read_json(verify_record(request['admission'])['path'])
     qualification = admission.get('qualification', admission.get('runtime', {}).get('receipt'))

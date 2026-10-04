@@ -288,6 +288,22 @@ class VideoDispatchBindingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'interpreter differs'):
             validate_runtime_interpreter(runtime, self.root / 'another-env/bin/python')
 
+    def test_grant_records_resolved_bytes_but_invocation_keeps_qualified_venv(self):
+        base = self.root / 'managed-python'
+        base.write_bytes(b'CPU fixture interpreter')
+        venv = self.root / 'environment/bin/python'
+        venv.parent.mkdir(parents=True)
+        venv.symlink_to(base)
+        runtime_path = self.root / 'venv-runtime.json'
+        write_json(runtime_path, dict(python_executable=str(venv)))
+        runtime = dict(receipt=file_record(runtime_path))
+        validate_runtime_interpreter(runtime, str(venv), executable_record=file_record(base))
+        with self.assertRaisesRegex(ValueError, 'interpreter differs'):
+            validate_runtime_interpreter(runtime, str(base), executable_record=file_record(base))
+        changed = dict(file_record(base), bytes=999)
+        with self.assertRaisesRegex(ValueError, 'executable record differs'):
+            validate_runtime_interpreter(runtime, str(venv), executable_record=changed)
+
     def test_worker_rechecks_admission_qualification_and_source_bindings(self):
         job = 'plan069-D9-maps-001'
         source_path = self.root / 'source-review.json'
