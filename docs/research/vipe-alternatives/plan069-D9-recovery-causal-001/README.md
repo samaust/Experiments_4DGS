@@ -43,3 +43,9 @@ DO and failed attempt cannot authorize it. Only a clean accepted recovery can
 support a fresh reconciliation-specific CPU admission and protected proof.
 Native maps still require their existing admission, commercial checks and
 qualification. Issues #3, #34 and #35 remain open.
+
+D10's separately approved frame amendment must bind the actual D9 runtime
+qualification and its immutable ledger prefix containing the exact protected
+finalization CPU charge. Both D10 setup and maps grants recheck this prerequisite
+under the existing ledger lock, using current events and rejecting every active
+attempt before allocating authority. Ordinary authorizations remain unchanged.

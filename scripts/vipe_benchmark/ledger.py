@@ -274,6 +274,15 @@ class Ledger:
             return self._append(stream, events, dict(event='depth_driver_qualification_authorized',
                 job_id=JOB, request=request_record, seconds=proposal['seconds']))
 
+    def _depth_frame_prerequisite(self, candidate, approved, events):
+        """Recheck a D10 frame prerequisite while owning the current ledger lock."""
+        amendment = approved.get('video_frame_amendment')
+        if candidate == 'D10' and amendment is not None:
+            from .depth_video_frame_authorization import validate_D9_prerequisite
+            validate_D9_prerequisite(amendment['D9_runtime_qualification'],
+                ledger_prefix=amendment.get('D9_qualification_ledger_prefix'),
+                approved=approved, current_events=events, allow_owned_active=False)
+
     def authorize_depth_setup(self, candidate, review, authorization, source_review, *,
                               prospective_byte_checkpoint=False):
         """Allocate one bounded setup attempt from exact user-approved proposals."""
@@ -334,6 +343,7 @@ class Ledger:
                     f"plan069-{row['candidate']}-setup-001" not in states
                     for row in events):
                 raise ValueError('unstarted depth setup authorization prevents another allocation')
+            self._depth_frame_prerequisite(candidate, approved, events)
             if self.totals(events)['setup']['elapsed_seconds'] + seconds > self.config['setup_wall_seconds_limit']:
                 raise ValueError('setup allocation exceeds cumulative cap')
             from .execution import resources
@@ -506,6 +516,7 @@ class Ledger:
             if any(row['event'] == 'depth_attempt_authorized' and
                    f"plan069-{row['candidate']}-maps-001" not in states for row in events):
                 raise ValueError('unstarted depth GPU allocation prevents another')
+            self._depth_frame_prerequisite(candidate, approved, events)
             head = events[-1]['event_sha256'] if events else '0' * 64
             live = evidence.get('live', {})
             if live.get('ledger_head_sha256') != head:
