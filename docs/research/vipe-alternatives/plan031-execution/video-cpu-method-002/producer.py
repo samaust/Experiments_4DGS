@@ -127,6 +127,7 @@ def capture_child(args):
             'setup records changed during qualification')
     write(out / 'native-cpu.json', dict(schema='plan069-video-native-cpu-qualification/v1',
         record_kind='actual', candidate=candidate, status='passed', setup=setup_record,
+        review=review, authorization=authorization,
         setup_dispatch=dispatch_record, setup_request=request_record, runtime_environment=runtime_record,
         python_executable=str(Path(sys.executable).absolute()), python=record(sys.executable),
         source_revision=revision, weights_revision=setup['weight_revision'], local_sources=before_sources,
@@ -274,7 +275,9 @@ def finalize(args):
     require(reviewed.get('schema') == 'plan069-depth-source-review/v1' and
             reviewed.get('candidate') == args.candidate and reviewed.get('status') == 'passed' and reviewed.get('source_revision') == native['source_revision'] and
             reviewed.get('local_sources') == native['local_sources'], 'current independent source review required')
-    _, _, proposal, _ = execution_authorization(args.candidate, authorization_path=args.authorization)
+    review, authorization, proposal, _ = execution_authorization(args.candidate, authorization_path=args.authorization)
+    require(native.get('review') == review and native.get('authorization') == authorization, 'approved runtime authority changed since CPU capture')
+    from vipe_benchmark.files import object_hash
     require(native['profile'] == proposal['profile'], 'approved profile changed since CPU capture')
     from vipe_benchmark.depth_admission import INVENTORY
     inventory = read(INVENTORY)['candidates'][args.candidate]['files']
@@ -300,6 +303,7 @@ def finalize(args):
     runtime_binding['python_executable'] = runtime['python_executable']
     write(out / 'qualification.json', dict(schema=f'plan069-depth-{args.candidate}-qualification/v1',
         record_kind='actual', candidate=args.candidate, status='passed', setup=native['setup'],
+        review=review, authorization=authorization, proposal_sha256=object_hash(proposal),
         source_archive=setup['source_archive'], source_files=setup['source_files'], assets=assets, commercial=commercial, runtime=runtime_binding, source_review=source_review))
 
 

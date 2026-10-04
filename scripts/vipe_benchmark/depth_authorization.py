@@ -30,7 +30,7 @@ def execution_authorization(candidate, *, root=ROOT, authorization_path=None):
         raise ValueError('exact approved depth authorization required')
     if authorization_path is not None:
         import copy
-        from .depth_admission import selected_profile_inventory
+        from .depth_admission import VIDEO_PROFILES, selected_profile_inventory
         prior_record = verify_record(approved['previous_authorization'])
         local_prior = file_record(root / 'docs/research/vipe-alternatives/plan031-execution/depth-approval-001.json')
         if any(prior_record[key] != local_prior[key] for key in ('sha256', 'bytes')):
@@ -41,7 +41,8 @@ def execution_authorization(candidate, *, root=ROOT, authorization_path=None):
         original = {row['candidate']: row for row in baseline['proposals']}
         for proposal in restored.get('proposals', []):
             if proposal.get('candidate') in ('D9', 'D10'):
-                selected_profile_inventory(proposal)
+                if selected_profile_inventory(proposal) != VIDEO_PROFILES:
+                    raise ValueError('explicit video runtime amendment requires its new profile')
                 for key in ('profile', 'profile_inventory'):
                     proposal[key] = original[proposal['candidate']][key]
                 proposal.pop('runtime_recipe', None)

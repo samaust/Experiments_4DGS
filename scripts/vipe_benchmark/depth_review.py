@@ -192,11 +192,29 @@ def _qualification_blockers(candidate, evidence, generation, actual, completed):
     expected_profile = read_json(PROFILES)['profiles'][candidate]
     if candidate == 'D10' and completed is not None and runtime.get('profile') != expected_profile:
         from .depth_admission import selected_profile_inventory
+        from .files import object_hash
         request = _record(completed['request'])
         review = _record(request['review'])
+        authorization = _record(request['authorization'])
+        admission = _record(completed['admission'])
+        qualification = _record(completed['qualification'])
         proposals = [row for row in review['proposals'] if row.get('candidate') == candidate]
         if len(proposals) != 1:
             return blockers + [candidate + ': exact completed runtime proposal missing']
+        proposal_hash = object_hash(proposals[0])
+        grants = [row for row in authorization.get('candidate_approvals', [])
+                  if row.get('candidate') == candidate]
+        if (authorization.get('schema') != 'plan069-depth-user-authorization/v1' or
+                authorization.get('status') != 'DO' or authorization.get('review') != request['review'] or
+                review.get('schema') != 'plan069-depth-execution-review/v1' or review.get('status') != 'REVIEW' or
+                len(grants) != 1 or grants[0].get('schema') != 'plan069-depth-execution-approval/v1' or
+                grants[0].get('status') != 'approved' or grants[0].get('max_attempts') != 1 or
+                grants[0].get('proposal_sha256') != proposal_hash or proposals[0].get('max_attempts') != 1 or
+                any(document.get('review') != request['review'] or
+                    document.get('authorization') != request['authorization'] or
+                    document.get('proposal_sha256') != proposal_hash
+                    for document in (admission, qualification))):
+            return blockers + [candidate + ': completed versioned runtime authority lineage differs']
         profile_inventory = selected_profile_inventory(proposals[0])
         expected_profile = read_json(profile_inventory)['profiles'][candidate]
         check(proposals[0]['profile'] == expected_profile,

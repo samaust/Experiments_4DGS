@@ -84,7 +84,7 @@ class VideoCu130Tests(unittest.TestCase):
         return path
     def test_versioned_profile_selection_is_video_only(self):
         from vipe_benchmark.depth_admission import VIDEO_PROFILES, selected_profile_inventory
-        proposal = dict(candidate='D10', profile_inventory=file_record(VIDEO_PROFILES), runtime_recipe=file_record(environment.CU130_RECIPE))
+        proposal = dict(candidate='D10', profile_inventory=file_record(VIDEO_PROFILES), runtime_recipe=file_record(environment.CU130_RECIPE), profile=read_json(VIDEO_PROFILES)['profiles']['D10'])
         self.assertEqual(selected_profile_inventory(proposal), VIDEO_PROFILES)
         with self.assertRaisesRegex(ValueError, 'exact video runtime'):
             selected_profile_inventory(dict(proposal, candidate='D8'))
@@ -103,11 +103,54 @@ class VideoCu130Tests(unittest.TestCase):
         path = self.amended_authorization(change)
         with self.assertRaisesRegex(ValueError, 'scope or lineage'):
             execution_authorization('D9', root=self.root, authorization_path=path)
+    def test_runtime_amendment_cannot_hide_scientific_profile_changes(self):
+        from vipe_benchmark.depth_authorization import execution_authorization
+        def change(review):
+            next(row for row in review['proposals'] if row['candidate']=='D9')['profile']['precision'] = 'wrong'
+        path = self.amended_authorization(change)
+        with self.assertRaisesRegex(ValueError, 'scientific profile'):
+            execution_authorization('D9', root=self.root, authorization_path=path)
+
+    def test_explicit_amendment_cannot_erase_changes_via_old_inventory(self):
+        from vipe_benchmark.depth_authorization import execution_authorization
+        from vipe_benchmark.depth_admission import PROFILES
+        def change(review):
+            row = next(row for row in review['proposals'] if row['candidate']=='D9')
+            row['profile_inventory'] = file_record(PROFILES); row.pop('runtime_recipe')
+            row['profile'] = dict(read_json(PROFILES)['profiles']['D9'], precision='wrong')
+        path = self.amended_authorization(change)
+        with self.assertRaisesRegex(ValueError, 'requires its new profile'):
+            execution_authorization('D9', root=self.root, authorization_path=path)
+
     def test_cli_authorization_selection_is_explicit(self):
         import basketball_vipe_video_setup_dispatch as setup
         with patch.object(sys, 'argv', ['video-setup', '--candidate', 'D9', '--authorization', '/tmp/new-do.json']), patch.object(setup, 'dispatch') as launch:
             setup.main()
         launch.assert_called_once_with('D9', 'plan031-20260913T032700Z', source_review_path=None, authorization_path='/tmp/new-do.json')
+
+    def test_completed_metric_profile_requires_exact_authority_chain(self):
+        import test_vipe_benchmark_depth_review as fixtures
+        from vipe_benchmark.depth_review import _qualification_blockers
+        f = fixtures.DepthReviewTests(); f.setUp(); self.addCleanup(f.doCleanups)
+        authorization = file_record(self.amended_authorization())
+        approved = read_json(authorization['path']); review = approved['review']
+        proposal = next(row for row in read_json(review['path'])['proposals'] if row['candidate']=='D10')
+        binding = dict(review=review, authorization=authorization, proposal_sha256=object_hash(proposal))
+        admission = f.record(binding); qualification = f.record(binding)
+        request = f.record(dict(review=review, authorization=authorization))
+        completed = dict(request=request, admission=admission, qualification=qualification)
+        evidence = copy.deepcopy(f.slots['D10']['evidence'])
+        runtime = read_json(evidence['runtime']['path']); runtime['profile'] = proposal['profile']
+        evidence['runtime'] = f.record(runtime)
+        generation = read_json(evidence['generation']['path'])
+        self.assertEqual(_qualification_blockers('D10', evidence, generation, False, completed), [])
+        for where in ('request', 'admission', 'qualification'):
+            with self.subTest(where=where):
+                broken = dict(completed); document = read_json(broken[where]['path'])
+                document['authorization'] = f.record(dict(approved, review=f.record({'unrelated':'review'})))
+                broken[where] = f.record(document)
+                result = _qualification_blockers('D10', evidence, generation, False, broken)
+                self.assertTrue(any('authority lineage' in value for value in result), result)
 
     def test_setup_keeps_original_source_and_new_profile_binding(self):
         import test_vipe_benchmark_video_setup as fixtures

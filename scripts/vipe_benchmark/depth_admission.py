@@ -37,6 +37,8 @@ def selected_profile_inventory(proposal):
             raise ValueError('video runtime profile exception changed')
     if restored != original:
         raise ValueError('video runtime profile changes unrelated frozen settings')
+    if proposal.get('profile') != selected['profiles'][proposal['candidate']]:
+        raise ValueError('video runtime proposal changes the selected scientific profile')
     return VIDEO_PROFILES
 HISTORICAL = ROOT / 'configs/vipe-alternatives/components-v1.json'
 BENCHMARK = ROOT / 'configs/vipe-alternatives/benchmark-v1.json'

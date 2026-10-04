@@ -38,7 +38,10 @@ def _extract(archive, destination, revision, deadline):
                 path.mkdir(parents=True, exist_ok=True)
             else:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                with stream.extractfile(member) as source, path.open('xb') as target:
+                source = stream.extractfile(member)
+                if source is None:
+                    raise ValueError('video source archive file has no payload')
+                with source, path.open('xb') as target:
                     while chunk := source.read(2**20):
                         if time.monotonic() >= deadline:
                             raise TimeoutError('video source extraction deadline')

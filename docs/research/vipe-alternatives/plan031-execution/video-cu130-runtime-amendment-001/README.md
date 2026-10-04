@@ -26,7 +26,10 @@ manylinux_2_28 x86_64 wheels. Index evidence and digests are retained here.
   Completed D10 eligibility accepts only the profile bound to its completed
   reviewed proposal; current execution checks remain separate.
 - `depth-video-runtime-review-001.json` is a prospective REVIEW with unchanged
-  allocations. It grants no DO or execution authority. Root must finalize
+  allocations. Its new records bind the existing preparation worktree. After integration,
+  create a fresh versioned REVIEW against the intended execution checkout; do
+  not overwrite this preparation artifact. It grants no DO or execution
+  authority. Root must finalize
   authorization only after review, exact closure/budget evidence and user
   distribution selection. Fresh source reviews are required after integration.
 
@@ -72,3 +75,12 @@ finalize reviewed DO, refresh independent source receipts and use the one
 approved metered setup per candidate. Then actual CPU/native qualification and
 one admitted serial GPU attempt can proceed under unchanged limits. #57/#44
 remain open.
+
+### Independent review follow-up
+
+Two independent axes are clear after scientific-profile and historical-authority
+lineage corrections. **49 targeted CPU cases pass; mypy with
+`--check-untyped-defs` passes all nine changed source files.** The private
+typechecking tool does not alter model environments. Original failed/missing
+tool captures remain; follow-up002 retains passing output and measured scope.
+The full combined checkout must still be qualified by root.

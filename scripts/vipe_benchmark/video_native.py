@@ -70,7 +70,7 @@ def native_source_records(source_dir):
 
 def installed_dependency_versions():
     """Inventory direct native inference distributions; this is not clearance."""
-    versions = {}
+    versions: dict[str, str | None] = {}
     for name in REQUIRED_DISTRIBUTIONS:
         try:
             versions[name] = importlib.metadata.version(name)
@@ -146,10 +146,10 @@ def load_native_video(candidate, setup_result, *, device='cuda'):
         sys.path.insert(0, str(source_dir))
     import torch
     native = importlib.import_module('video_depth_anything.video_depth')
-    if not Path(native.__file__).resolve().is_relative_to(source_dir):
+    if native.__file__ is None or not Path(native.__file__).resolve().is_relative_to(source_dir):
         raise ValueError('native video import resolved outside pinned source')
     util = importlib.import_module('utils.util')
-    if not Path(util.__file__).resolve().is_relative_to(source_dir):
+    if util.__file__ is None or not Path(util.__file__).resolve().is_relative_to(source_dir):
         raise ValueError('native video utility resolved outside pinned source')
     model = native.VideoDepthAnything(encoder='vits', features=64,
         out_channels=[48, 96, 192, 384], metric=candidate == 'D10')
