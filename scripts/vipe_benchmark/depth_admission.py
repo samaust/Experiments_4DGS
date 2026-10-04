@@ -118,6 +118,7 @@ def local_source_records(candidate):
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_single_publish.py'))
     if candidate == 'D9':
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_setup_recovery.py'))
+        records.append(file_record(ROOT / 'scripts/vipe_benchmark/depth_recovery_authorization.py'))
     if candidate in ('D9', 'D10'):
         records.append(file_record(ROOT / 'scripts/offline-python.py'))
         records.append(file_record(ROOT / 'scripts/vipe_benchmark/depth_authorization.py'))

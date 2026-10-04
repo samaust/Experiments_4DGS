@@ -14,6 +14,14 @@ class RecoveryAuthorityTests(unittest.TestCase):
         for candidate in ('D9','D10'):
             self.assertIn(file_record(ROOT/'scripts/offline-python.py'),local_source_records(candidate))
 
+    def test_recovery_source_closure_includes_checked_execution_selection(self):
+        from vipe_benchmark.config import ROOT
+        from vipe_benchmark.depth_admission import local_source_records
+        from vipe_benchmark.files import file_record
+        records=local_source_records('D9')
+        for name in ('depth_authorization.py','depth_recovery_authorization.py'):
+            self.assertIn(file_record(ROOT/'scripts/vipe_benchmark'/name),records)
+
     def test_ordinary_note_cannot_mint_recovery_authority(self):
         with tempfile.TemporaryDirectory() as directory:
             ledger=Ledger(Path(directory)/'ledger.jsonl',load())
