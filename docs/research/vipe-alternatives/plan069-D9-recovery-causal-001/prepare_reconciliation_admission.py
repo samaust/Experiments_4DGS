@@ -44,6 +44,52 @@ def preservation_charge_owner(event):
         raise ValueError('exact historical D9 preservation receipt required')
     return 'D9'
 
+def current_public_sources(checkout):
+    """Load the public metadata closure only from the explicit checkout."""
+    import sys
+    sys.path.insert(0, str(checkout / 'scripts'))
+    from vipe_benchmark.config import ROOT
+    if ROOT.resolve() != checkout.resolve():
+        raise ValueError('public source closure belongs to a different checkout')
+    from vipe_benchmark.depth_admission import local_source_records
+    return local_source_records('D9')
+
+
+def validate_phase_source(source, grant, result, checkout):
+    """Keep accepted setup authority historical; validate fresh CPU phase bytes."""
+    historical = grant.get('source_review')
+    if not isinstance(historical, dict) or result.get('source_review') != historical or record(historical['path']) != historical:
+        raise ValueError('exact historical grant/result source review required')
+    for key in ('review', 'authorization'):
+        binding = grant.get(key)
+        if not isinstance(binding, dict) or result.get(key) != binding or record(binding['path']) != binding:
+            raise ValueError('exact accepted recovery '+key+' required')
+    reviewed = read(grant['review']['path'])
+    maps = [row for row in reviewed.get('proposals', []) if row.get('candidate') == 'D9']
+    if len(maps) != 1:
+        raise ValueError('unique accepted recovery D9 proposal required')
+    maps = maps[0]
+    proposal_hash = hashlib.sha256(json.dumps(maps,sort_keys=True,separators=(',', ':'),allow_nan=False).encode()).hexdigest()
+    approved = read(grant['authorization']['path'])
+    if not (approved.get('schema') == 'plan069-depth-user-authorization/v1' and approved.get('status') == 'DO' and
+            approved.get('review') == grant['review'] and any(
+                row.get('candidate') == 'D9' and row.get('status') == 'approved' and row.get('max_attempts') == 1 and
+                row.get('proposal_sha256') == proposal_hash for row in approved.get('candidate_approvals', []))):
+        raise ValueError('exact accepted map proposal DO required')
+    profile = maps['profile_inventory']
+    if record(profile['path']) != profile:
+        raise ValueError('accepted profile inventory changed')
+    if not (source.get('schema') == 'plan069-depth-source-review/v1' and source.get('status') == 'passed' and
+            source.get('candidate') == 'D9' and isinstance(source.get('reviewer'), str) and source['reviewer'].strip() and
+            source.get('local_sources') == current_public_sources(checkout) and
+            source.get('proposal_sha256') == proposal_hash and
+            source.get('source_revision') == result.get('source_revision') == maps['candidate_config']['code']['revision'] and
+            source.get('profile_inventory') == profile and
+            isinstance(result.get('source_archive'), dict) and source.get('source_archive') == result['source_archive'] and
+            isinstance(result.get('source_files'), list) and source.get('source_files') == result['source_files']):
+        raise ValueError('fresh phase source must match current helpers and accepted scientific bindings')
+
+
 def main():
     began = time.monotonic()
     parser = argparse.ArgumentParser(description=__doc__)
@@ -65,7 +111,7 @@ def main():
     source_record = record(args.source_review)
     source = read(args.source_review)
     helpers = source.get('local_sources', source.get('local_source_records'))
-    if source.get('status') != 'passed' or source.get('candidate') != 'D9' or not isinstance(helpers, list) or not helpers or len({row['path'] for row in helpers}) != len(helpers):
+    if source.get('schema') != 'plan069-depth-source-review/v1' or source.get('status') != 'passed' or source.get('candidate') != 'D9' or not isinstance(helpers, list) or not helpers or len({row['path'] for row in helpers}) != len(helpers):
         raise ValueError('exact declared D9 recovery helper review required')
     for helper in helpers:
         if record(helper['path']) != helper:
@@ -117,11 +163,12 @@ def main():
     grant, finish = grants[0], finishes[0]
     if not (grant['sequence'] < finish['sequence'] and finish.get('status') == 'complete' and finish.get('cleanup_confirmed') is True and finish.get('cleanup_uncertain') is False and finish.get('surviving_pids') == [] and finish.get('deadline_exceeded') is False and finish.get('resource') == 'setup'):
         raise ValueError('clean accepted recovery required')
-    if grant.get('source_review') != source_record or record(finish['result']['path']) != finish['result']:
-        raise ValueError('accepted recovery must bind exact current source review/result')
+    if record(finish['result']['path']) != finish['result']:
+        raise ValueError('accepted recovery must bind exact immutable result')
     result = read(finish['result']['path'])
-    if result.get('schema') != schemas[recovery_job] or result.get('job_id') != recovery_job or result.get('status') != 'complete' or result.get('record_kind') != 'actual' or result.get('candidate') != 'D9' or result.get('request') != grant.get('request') or result.get('source_review') != source_record:
+    if result.get('schema') != schemas[recovery_job] or result.get('job_id') != recovery_job or result.get('status') != 'complete' or result.get('record_kind') != 'actual' or result.get('candidate') != 'D9' or result.get('request') != grant.get('request') :
         raise ValueError('actual reviewed accepted recovery required')
+    validate_phase_source(source, grant, result, root)
     if any(row.get('event') == 'depth_setup_bytes_reconciled' and row.get('candidate') == 'D9' for row in events):
         raise ValueError('D9 reconciliation already protected')
     attributed = []
