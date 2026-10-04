@@ -23,6 +23,11 @@ class Ledger:
     def _jobs(self, events):
         allocated = jobs(self.config)
         for event in events:
+            if event['event'] == 'depth_driver_diagnostic_authorized':
+                from .depth_driver_diagnostic import JOB, validate_request
+                _, proposal = validate_request(event['request'], completed=True)
+                allocated[JOB] = dict(id=JOB, resource='gpu', seconds=proposal['seconds'],
+                    scope='separately approved D6 driver-only syscall diagnostic')
             if event['event'] == 'depth_driver_qualification_authorized':
                 from .depth_driver_qualification import JOB, validate_request
                 _, proposal = validate_request(event['request'], completed=True)
@@ -142,6 +147,15 @@ class Ledger:
             if job_id not in allocated:
                 raise ValueError('unallocated job identity')
             states = self.states(events)
+            if job_id == 'plan069-D6-driver-diagnostic-001':
+                from .depth_driver_diagnostic import validate_request as diagnostic_request
+                grants = [row for row in events if row['event'] == 'depth_driver_diagnostic_authorized']
+                if len(grants) != 1 or time.time() - grants[0]['recorded_unix'] > 30:
+                    raise ValueError('fresh checked diagnostic authority required')
+                from .depth_admission import local_source_records
+                request, _ = diagnostic_request(grants[0]['request'], current_sources=local_source_records('D6'))
+                if command != request['command'] or evidence != dict(request=grants[0]['request']):
+                    raise ValueError('diagnostic command/evidence differs')
             if job_id in states:
                 raise ValueError('job already consumed or accounted for; no automatic retry')
             if any(r['event'] == 'reserve' for r in states.values()):
@@ -200,6 +214,30 @@ class Ledger:
             return self._append(stream, events, dict(event='reserve', job_id=job_id, resource=resource,
                 seconds=seconds, command=command, evidence=evidence, monotonic_start=time.monotonic(),
                 boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
+
+    def authorize_depth_driver_diagnostic(self, request_record):
+        """Allocate exactly one newly approved driver-only diagnostic."""
+        from .depth_driver_diagnostic import JOB, check_predecessor, validate_request
+        from .depth_admission import local_source_records
+        request, proposal = validate_request(request_record, current_sources=local_source_records('D6'))
+        if Path(request['ledger_path']).absolute() != self.path.absolute():
+            raise ValueError('diagnostic ledger binding differs')
+        from .execution import resources
+        with self.locked() as (stream, events):
+            check_predecessor(events, request)
+            if any(row['event'] == 'depth_driver_diagnostic_authorized' for row in events) or JOB in self.states(events):
+                raise ValueError('diagnostic already authorized or consumed')
+            if any(row['event'] == 'reserve' for row in self.states(events).values()):
+                raise ValueError('unreconciled active attempt')
+            live = resources(self.path.parent, gpu=True)
+            if live['gpu_pids'] or live['device_bytes'] > proposal['device_bytes']:
+                raise ValueError('diagnostic GPU owner/device bound')
+            if self.config['gpu_total_seconds_limit'] - self.totals(events)['gpu']['elapsed_seconds'] < proposal['seconds']:
+                raise ValueError('insufficient diagnostic GPU allocation')
+            if live['download_bytes'] > self.config['new_download_gib_limit'] * 1024**3 or live['artifact_bytes'] > self.config['new_artifact_disk_gib_limit'] * 1024**3:
+                raise ValueError('global diagnostic disk/download bound')
+            return self._append(stream, events, dict(event='depth_driver_diagnostic_authorized',
+                job_id=JOB, request=request_record, seconds=proposal['seconds']))
 
     def authorize_depth_driver_qualification(self, request_record):
         """Allocate only the separately approved one-use D6 driver qualification."""
@@ -479,7 +517,7 @@ class Ledger:
 
     def note(self, event, **fields):
         if event in ('reserve', 'finish', 'account', 'resume_unstarted', 'checkpoint',
-                     'checkpoint_resume', 'depth_driver_qualification_authorized',
+                     'checkpoint_resume', 'depth_driver_diagnostic_authorized', 'depth_driver_qualification_authorized',
                      'depth_setup_authorized', 'depth_attempt_authorized',
                      'native_qualification_authorized', 'final_render_do_authorized', 'cpu_preparation_charge', 'setup_recovery_authorized', 'component_recovery_authorized',
                      'reconstruction_recovery_authorized', 'memory_diagnostic_authorized'):

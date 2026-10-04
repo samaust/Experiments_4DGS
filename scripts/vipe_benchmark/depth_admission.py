@@ -128,6 +128,9 @@ def local_source_records(candidate):
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_publish.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_dependencies.py'))
     if candidate == 'D6':
+        records.append(file_record(ROOT / 'scripts/vipe_benchmark/depth_driver_diagnostic.py'))
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_driver_diagnostic.py'))
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_driver_diagnostic_worker.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_driver_qualification.py'))
         records.append(file_record(ROOT / 'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-004/producer.py'))
     return records
