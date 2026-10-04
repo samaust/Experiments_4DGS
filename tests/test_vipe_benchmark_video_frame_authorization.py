@@ -142,3 +142,97 @@ class FrameAuthorityTests(unittest.TestCase):
                 run_video_setup(request,f.root/request['job_id'],acquire=f.acquire)
         self.assertEqual(provision.call_count,1)
         self.assertEqual(provision.call_args.args[0]['recipe'],file_record(FRAME_RECIPE))
+    def recovery_prerequisite_fixture(self):
+        """Rebind tiny qualification receipts to a recovery-shaped private setup."""
+        qualified=read_json(self.qual_path)
+        old_setup=read_json(qualified['setup']['path'])
+        job=self.root/'jobs/plan069-D9-setup-recovery-001';job.mkdir(parents=True)
+        setup_path=job/'result.json'
+        write_json(setup_path,dict(old_setup,schema='plan069-video-setup-recovery-result/v1',job_id=job.name))
+        setup_record=file_record(setup_path);qualified['setup']=setup_record
+        dependency_path=Path(qualified['dependency_manifest']['path']);dependencies=read_json(dependency_path)
+        dependencies['setup']=setup_record;write_json(dependency_path,dependencies);qualified['dependency_manifest']=file_record(dependency_path)
+        native_path=Path(qualified['native_cpu']['path']);native=read_json(native_path)
+        native.update(setup=setup_record,dependency_manifest=qualified['dependency_manifest']);write_json(native_path,native);qualified['native_cpu']=file_record(native_path)
+        capture_path=Path(qualified['capture']['path']);capture=read_json(capture_path)
+        capture['native_cpu']=qualified['native_cpu'];write_json(capture_path,capture);qualified['capture']=file_record(capture_path)
+        write_json(self.qual_path,qualified);qualification_record=file_record(self.qual_path)
+        rows=[]
+        for data in (dict(event='finish',job_id=job.name,status='complete'),
+                     dict(event='cpu_preparation_charge',resource='cpu',evidence=qualification_record,elapsed_seconds=.001)):
+            row=dict(data,sequence=len(rows),previous_sha256=rows[-1]['event_sha256'] if rows else None)
+            row['event_sha256']=object_hash(row);rows.append(row)
+        ledger=self.root/'ledger.jsonl';ledger.write_text(''.join(json.dumps(row)+'\n' for row in rows))
+        prefix=self.root/'qualification-prefix.jsonl';prefix.write_bytes(ledger.read_bytes())
+        return qualification_record,file_record(prefix),rows
+    def test_recovery_requires_checked_protected_ancestry_not_schema(self):
+        from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
+        record,prefix,_=self.recovery_prerequisite_fixture()
+        with self.assertRaisesRegex(ValueError,'unique accepted recovery'):
+            validate_D9_prerequisite(record,ledger_prefix=prefix)
+    def test_accepted_recovery_delegates_to_strict_no_active_lineage(self):
+        from unittest.mock import patch
+        from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
+        record,prefix,rows=self.recovery_prerequisite_fixture()
+        # Accepted lineage itself has independent full producer fixtures. This
+        # seam test verifies the prerequisite delegates with exact checked rows.
+        with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value=dict(finish=rows[0])) as accept:
+            validate_D9_prerequisite(record,ledger_prefix=prefix)
+        self.assertEqual(accept.call_args.args[0],read_json(self.qual_path)['setup'])
+        self.assertEqual(accept.call_args.args[1],rows)
+        self.assertEqual(accept.call_args.kwargs,{})
+    def test_missing_charge_or_changed_live_prefix_rejected(self):
+        from unittest.mock import patch
+        from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
+        record,prefix,rows=self.recovery_prerequisite_fixture()
+        with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value=dict(finish=rows[0])):
+            short=self.root/'no-charge.jsonl';short.write_text(json.dumps(rows[0])+'\n')
+            with self.assertRaisesRegex(ValueError,'finalization charge'):
+                validate_D9_prerequisite(record,ledger_prefix=file_record(short))
+            (self.root/'ledger.jsonl').write_text(json.dumps(rows[0])+'\n')
+            with self.assertRaisesRegex(ValueError,'differs from protected'):
+                validate_D9_prerequisite(record,ledger_prefix=prefix)
+    def test_unrelated_active_or_faked_locked_events_rejected(self):
+        from unittest.mock import patch
+        from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
+        record,prefix,rows=self.recovery_prerequisite_fixture()
+        active=dict(event='reserve',job_id='foreign-gpu',resource='gpu',sequence=2,previous_sha256=rows[-1]['event_sha256'])
+        active['event_sha256']=object_hash(active);ledger=self.root/'ledger.jsonl'
+        ledger.write_text(ledger.read_text()+json.dumps(active)+'\n')
+        with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value=dict(finish=rows[0])):
+            with self.assertRaisesRegex(ValueError,'active attempt'):
+                validate_D9_prerequisite(record,ledger_prefix=prefix,allow_owned_active=False)
+            with self.assertRaisesRegex(ValueError,'locked current'):
+                validate_D9_prerequisite(record,ledger_prefix=prefix,current_events=rows)
+    def test_only_exact_protected_own_d10_reservation_can_revalidate(self):
+        from unittest.mock import patch
+        from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
+        record,prefix,rows=self.recovery_prerequisite_fixture()
+        review_path=self.root/'active-D10-review.json';write_json(review_path,dict(proposals=[self.proposal]))
+        approved=dict(schema='plan069-depth-user-authorization/v1',status='DO',review=file_record(review_path))
+        authority_path=self.root/'active-D10-DO.json';write_json(authority_path,approved)
+        authority=file_record(authority_path);source_review=read_json(self.qual_path)['source_review']
+        grant=dict(event='depth_setup_authorized',candidate='D10',authorization=authority,review=approved['review'],source_review=source_review,proposal_sha256=object_hash(self.proposal))
+        reserve=dict(event='reserve',job_id='plan069-D10-setup-001',resource='setup',evidence=dict(authorization=authority,review=approved['review'],source_review=source_review))
+        for data in (grant,reserve):
+            row=dict(data,sequence=len(rows),previous_sha256=rows[-1]['event_sha256']);row['event_sha256']=object_hash(row);rows.append(row)
+        ledger=self.root/'ledger.jsonl';ledger.write_text(''.join(json.dumps(row)+'\n' for row in rows))
+        with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value=dict(finish=rows[0])):
+            validate_D9_prerequisite(record,ledger_prefix=prefix,approved=approved)
+            with self.assertRaisesRegex(ValueError,'active attempt'):
+                validate_D9_prerequisite(record,ledger_prefix=prefix,approved=approved,current_events=rows,allow_owned_active=False)
+            wrong=dict(approved,status='REVIEW')
+            with self.assertRaisesRegex(ValueError,'differs from protected exact'):
+                validate_D9_prerequisite(record,ledger_prefix=prefix,approved=wrong)
+
+    def test_unrelated_resumed_checkpoint_remains_active(self):
+        from unittest.mock import patch
+        from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
+        record,prefix,rows=self.recovery_prerequisite_fixture()
+        for event in ('reserve','checkpoint','checkpoint_resume'):
+            row=dict(event=event,job_id='foreign-aggregate',resource='cpu',sequence=len(rows),previous_sha256=rows[-1]['event_sha256'])
+            row['event_sha256']=object_hash(row);rows.append(row)
+        (self.root/'ledger.jsonl').write_text(''.join(json.dumps(row)+'\n' for row in rows))
+        with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value=dict(finish=rows[0])):
+            with self.assertRaisesRegex(ValueError,'unrelated active'):
+                validate_D9_prerequisite(record,ledger_prefix=prefix,approved={})

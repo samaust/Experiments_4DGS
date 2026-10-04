@@ -1,5 +1,6 @@
 """D10-only optional decoder amendment; preserve prior attempts and budgets."""
 import copy
+import fcntl
 import json
 from pathlib import Path
 
@@ -66,10 +67,13 @@ def validate_frame_amendment(candidate, approved, reviewed, *, root):
     amendment = approved.get('video_frame_amendment')
     if not isinstance(amendment, dict):
         raise ValueError('explicit optional Decord omission approval required')
+    if 'D9_qualification_ledger_prefix' in amendment:
+        expected['D9_qualification_ledger_prefix'] = amendment['D9_qualification_ledger_prefix']
     qualification_record = amendment.get('D9_runtime_qualification')
     if dict(amendment, D9_runtime_qualification=None) != dict(expected, D9_runtime_qualification=None):
         raise ValueError('exact D10 frame amendment approval required')
-    validate_D9_prerequisite(qualification_record)
+    validate_D9_prerequisite(qualification_record,
+        ledger_prefix=amendment.get('D9_qualification_ledger_prefix'), approved=approved)
     if (reviewed.get('asset_inventory') != baseline.get('asset_inventory') or
             approved.get('reset_previous_consumption') is not False or
             any(approved.get(key) != prior.get(key) for key in ('cap_amendment', 'cap_approval', 'video_amendment')) or
@@ -78,7 +82,8 @@ def validate_frame_amendment(candidate, approved, reviewed, *, root):
         raise ValueError('D10 frame amendment differs from approved budget or lineage')
 
 
-def validate_D9_prerequisite(record):
+def validate_D9_prerequisite(record, *, ledger_prefix=None, approved=None,
+                             current_events=None, allow_owned_active=True):
     """Validate retained actual native CPU qualification and its receipt chain."""
     from .depth_admission import VIDEO_FRAME_PROFILES, local_source_records
     from .depth_extension import CONFIG
@@ -102,11 +107,16 @@ def validate_D9_prerequisite(record):
     validate_runtime_versions(environment, dependencies.get('versions', {}))
     validate_runtime_observation(environment, dependencies.get('runtime_observation'))
     setup = read_json(verify_record(qualified['setup'])['path'])
+    recovery = setup.get('schema') == 'plan069-video-setup-recovery-result/v1'
+    if recovery:
+        validate_recovery_qualification_lineage(qualified['setup'], ledger_prefix, approved,
+            qualification_record=record, current_events=current_events, allow_owned_active=allow_owned_active)
     runtime = read_json(verify_record(setup['runtime_environment'])['path'])
     native = read_json(verify_record(qualified['native_cpu'])['path'])
     capture = read_json(verify_record(qualified['capture'])['path'])
     source = read_json(verify_record(qualified['source_review'])['path'])
-    if (setup.get('schema') != 'plan069-video-setup-result/v1' or
+    if (setup.get('schema') not in ('plan069-video-setup-result/v1',
+                                  'plan069-video-setup-recovery-result/v1') or
             setup.get('record_kind') != 'actual' or setup.get('status') != 'complete' or
             setup.get('candidate') != 'D9' or setup.get('source_revision') != revision or
             setup.get('weight_revision') != candidate_config['weights']['revision'] or
@@ -138,3 +148,91 @@ def validate_D9_prerequisite(record):
             any(document.get(key) != setup.get(key) for document in (qualified, native, source)
                 for key in ('source_archive', 'source_files'))):
         raise ValueError('actual D9 native capture, setup and source qualification chain required')
+
+
+def checked_events(data):
+    """Decode a complete immutable ledger byte sequence without mutating it."""
+    events: list[dict] = []
+    previous = None
+    for line in data.decode().splitlines():
+        row = json.loads(line)
+        stored = row.pop('event_sha256')
+        if (row.get('sequence') != len(events) or row.get('previous_sha256') != previous or
+                object_hash(row) != stored):
+            raise ValueError('qualification ledger ancestry corrupt')
+        row['event_sha256'] = stored
+        events.append(row)
+        previous = stored
+    if not events:
+        raise ValueError('nonempty qualification ledger ancestry required')
+    return events
+
+
+def validate_recovery_qualification_lineage(setup_record, prefix, approved, *,
+                                           qualification_record, current_events=None, allow_owned_active=True):
+    """Check an accepted recovery at a no-active prefix and exact live authority.
+
+    Protected grant code supplies its locked current_events and disables the
+    owned-active exception. Worker revalidation may observe only its exact
+    already-protected D10 reservation; unrelated active work always blocks.
+    """
+    from .depth_recovery_lineage import accepted_setup_lineage
+    setup_path = Path(setup_record['path']).resolve()
+    run_root = setup_path.parents[2]
+    prefix_data = Path(verify_record(prefix)['path']).read_bytes()
+    prefix_events = checked_events(prefix_data)
+    ledger_path = run_root / 'ledger.jsonl'
+    if current_events is None:
+        with ledger_path.open('rb') as stream:
+            fcntl.flock(stream, fcntl.LOCK_SH)
+            live_data = stream.read()
+        events = checked_events(live_data)
+    else:
+        # Caller owns the ledger lock; reopening a flock would deadlock.
+        live_data = ledger_path.read_bytes()
+        events = checked_events(live_data)
+        if events != current_events:
+            raise ValueError('locked current qualification ledger mismatch')
+    if not live_data.startswith(prefix_data):
+        raise ValueError('qualification ledger prefix differs from protected live ancestry')
+    accepted = accepted_setup_lineage(setup_record, prefix_events, run_root)
+    charges = [row for row in prefix_events if row.get('event') == 'cpu_preparation_charge' and
+               row.get('evidence') == qualification_record]
+    if (len(charges) != 1 or charges[0].get('resource') != 'cpu' or
+            charges[0]['sequence'] <= accepted['finish']['sequence']):
+        raise ValueError('exact protected D9 qualification finalization charge required in prefix')
+    states: dict[str, dict] = {}
+    for row in events:
+        # Match Ledger.states transitions without constructing a writable ledger.
+        if row.get('event') in ('reserve', 'finish', 'account', 'checkpoint'):
+            states[row['job_id']] = row
+        elif row.get('event') == 'checkpoint_resume':
+            states[row['job_id']] = dict(row, event='reserve')
+        elif row.get('event') == 'resume_unstarted':
+            for job_id in row['job_ids']:
+                states.pop(job_id, None)
+    active = [row for row in states.values() if row.get('event') == 'reserve']
+    if not active:
+        return
+    if not allow_owned_active or len(active) != 1 or not isinstance(approved, dict):
+        raise ValueError('active attempt prevents D9 recovery qualification prerequisite')
+    reserve = active[0]
+    selections = {'plan069-D10-setup-001': ('setup', 'depth_setup_authorized'),
+                  'plan069-D10-maps-001': ('gpu', 'depth_attempt_authorized')}
+    if reserve.get('job_id') not in selections:
+        raise ValueError('unrelated active attempt prevents D9 recovery qualification prerequisite')
+    resource, event = selections[reserve['job_id']]
+    grants = [row for row in events if row.get('event') == event and row.get('candidate') == 'D10']
+    if len(grants) != 1:
+        raise ValueError('exact protected D10 reservation authority required')
+    grant = grants[0]
+    authority = grant.get('authorization')
+    reviewed = read_json(verify_record(approved['review'])['path'])
+    proposals = [row for row in reviewed.get('proposals', []) if row.get('candidate') == 'D10']
+    if (reserve.get('resource') != resource or grant['sequence'] >= reserve['sequence'] or
+            read_json(verify_record(authority)['path']) != approved or
+            grant.get('review') != approved['review'] or len(proposals) != 1 or
+            grant.get('proposal_sha256') != object_hash(proposals[0]) or
+            any(reserve.get('evidence', {}).get(key) != grant.get(key)
+                for key in ('authorization', 'review', 'source_review'))):
+        raise ValueError('active D10 reservation differs from protected exact qualification authority')
