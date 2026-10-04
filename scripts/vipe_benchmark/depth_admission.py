@@ -70,7 +70,7 @@ LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py',
     D5=('depth_authorization.py', 'moge_metric.py', 'moge_native.py', 'moge_setup.py',
         'depth_metric_scale.py', 'depth_single_run.py', 'depth_single_publish.py',
         'moge_environment.py', 'depth_environment.py', 'moge_source_build.py', 'runtime_inventory.py'),
-    D6=('depth_driver_qualification_recovery.py', 'depth_driver_qualification.py', 'depth_authorization.py', 'moge_metric.py', 'moge_native.py', 'moge_setup.py',
+    D6=('depth_driver_qualification_local_bind.py', 'depth_driver_qualification_recovery.py', 'depth_driver_qualification.py', 'depth_authorization.py', 'moge_metric.py', 'moge_native.py', 'moge_setup.py',
         'depth_metric_scale.py', 'depth_single_run.py', 'depth_single_publish.py',
         'moge_environment.py', 'depth_environment.py', 'moge_source_build.py', 'runtime_inventory.py'),
     D7=('dav2_metric.py', 'moge_metric.py', 'depth_setup.py', 'depth_metric_scale.py', 'depth_d7_run.py', 'depth_d7_publish.py'),
@@ -139,6 +139,10 @@ def local_source_records(candidate):
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_dependencies.py'))
     if candidate == 'D6':
         records.extend(file_record(ROOT / path) for path in (
+            'scripts/basketball_vipe_depth_driver_qualification_local_bind.py',
+            'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-006/producer.py',
+            'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-006/network_guard.py',
+            'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-006/startup.py',
             'scripts/basketball_vipe_depth_driver_qualification_recovery.py',
             'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-005/producer.py',
             'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-005/network_guard.py'))
@@ -319,7 +323,10 @@ def review(proposal, *, config, commercial, assets, runtime, live,
         try:
             receipt = qualification.get('driver_qualification', {})
             finish = read_json(verify_record(receipt['finish'])['path'])
-            if finish.get('job_id') == 'plan069-D6-driver-qualification-002':
+            if finish.get('job_id') == 'plan069-D6-driver-qualification-003':
+                from .depth_driver_qualification_local_bind import qualification_exception as local_bind_exception
+                local_bind_exception(qualification, events=setup_events, run_root=run_root)
+            elif finish.get('job_id') == 'plan069-D6-driver-qualification-002':
                 from .depth_driver_qualification_recovery import qualification_exception as recovery_exception
                 recovery_exception(qualification, events=setup_events, run_root=run_root)
             else:
