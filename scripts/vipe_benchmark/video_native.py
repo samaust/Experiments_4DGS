@@ -139,15 +139,25 @@ def write_dependency_inventory(candidate, setup_result, output):
     return file_record(output)
 
 
-def load_native_video(candidate, setup_result, *, device='cuda'):
+def load_native_video(candidate, setup_result, *, device='cuda', ledger=None, active_map_admission=None):
     """Construct the exact Small architecture and load one strict state dict."""
     if candidate not in ('D9', 'D10') or device not in ('cuda', 'cpu'):
         raise ValueError('D9/D10 native candidate and explicit device required')
     setup = read_json(verify_record(setup_result)['path'])
-    if (setup.get('schema') != 'plan069-video-setup-result/v1' or
-            setup.get('status') != 'complete' or setup.get('candidate') != candidate or
-            setup.get('record_kind') != 'actual'):
+    recovered = setup.get('schema') == 'plan069-video-setup-recovery-result/v1'
+    if (setup.get('status') != 'complete' or setup.get('candidate') != candidate or
+            setup.get('record_kind') != 'actual' or
+            (recovered and candidate != 'D9') or
+            (not recovered and setup.get('schema') != 'plan069-video-setup-result/v1')):
         raise ValueError('completed actual video setup required')
+    if recovered:
+        if ledger is None:
+            raise ValueError('explicit ledger required for recovered native video setup')
+        from .depth_recovery_lineage import accepted_setup_lineage
+        options = {} if active_map_admission is None else dict(active_map_admission=active_map_admission)
+        accepted = accepted_setup_lineage(setup_result, ledger.events(), ledger.path.parent, **options)
+        if accepted['accepted_result'] != setup:
+            raise ValueError('accepted recovery lineage differs from exact native setup')
     source_dir = Path(setup['source_dir']).resolve()
     setup_environment(setup)
     if setup.get('source_files') != native_source_records(source_dir):

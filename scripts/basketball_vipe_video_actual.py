@@ -25,7 +25,8 @@ def main():
     admitted_video_request(request, args.output, config, ledger=ledger,
                            request_path=args.request)
     candidate = request['component']
-    model = load_native_video(candidate, request['setup'], device='cuda')
+    model = load_native_video(candidate, request['setup'], device='cuda', ledger=ledger,
+                              active_map_admission=request['admission'])
     adapter = (MetricVideoDepthAdapter if candidate == 'D10' else VideoDepthAdapter)(
         model, device='cuda')
     run_video_actual(request, args.output, config, backend=adapter, ledger=ledger,
