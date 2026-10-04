@@ -13,6 +13,12 @@ original checkpoint. Original/recovery model hardlinks receive one inode credit.
 Unknown or preexisting growth remains charged; global and candidate caps remain
 unchanged. The new environment and preserved old environment must both fit.
 
+Offline recovery requires unchanged actual direct and UV transfer totals.
+Expanded cache and resolver metadata can grow within the original byte ceilings;
+the aggregate download accounting metric also counts these retained bytes.
+The executed `offline-python.py` network guard is part of the enforced D9/D10
+public source closure. Missing or stale guard records block recovery authority.
+
 The producer hashes each distinct evidence record once within its deadline and
 compares the complete retained metadata snapshot before publication. Live credit
 checks validate protected recovery bindings and retained inode metadata without

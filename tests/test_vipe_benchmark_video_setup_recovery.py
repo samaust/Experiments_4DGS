@@ -67,6 +67,30 @@ class VideoRecoveryTests(unittest.TestCase):
         self.assertFalse(self.output.exists())
         self.assertEqual(self.commands,[])
 
+    def test_offline_cache_expansion_uses_remaining_bytes_without_network_acquisition(self):
+        from vipe_benchmark.video_setup_recovery import run_video_setup_recovery
+        self.request['fixture_allocation']['download_bytes']=1000
+        def expanded(command,**kwargs):
+            self.runner(command,**kwargs)
+            if 'compile' in command:
+                cache=self.root/'setup-cache/resolver-metadata';cache.parent.mkdir()
+                cache.write_bytes(b'x'*100)
+        result=run_video_setup_recovery(self.request,self.output,environment_runner=expanded)
+        self.assertEqual(result['bytes_received'],0)
+        self.assertEqual(result['status'],'complete')
+
+    def test_direct_acquisition_is_rejected_even_within_remaining_byte_cap(self):
+        from vipe_benchmark.video_setup_recovery import run_video_setup_recovery
+        self.request['fixture_allocation']['download_bytes']=1000
+        def acquired(command,**kwargs):
+            self.runner(command,**kwargs)
+            if 'compile' in command:
+                path=self.root/'transfers/transfer-fixture.json';path.parent.mkdir()
+                write_json(path,dict(transfer_id='fixture',bytes_received=1,error=None))
+        with self.assertRaisesRegex(ValueError,'acquired new downloads'):
+            run_video_setup_recovery(self.request,self.output,environment_runner=acquired)
+        self.assertFalse((self.output/'result.json').exists())
+
     def test_failed_dependency_check_is_retained_without_rewriting_original(self):
         from vipe_benchmark.video_setup_recovery import run_video_setup_recovery
         before={p:p.read_bytes() for p in self.old.rglob('*') if p.is_file()}

@@ -6,7 +6,7 @@ import runpy
 import subprocess
 import time
 
-from .budgets import budget_snapshot, _inventory
+from .budgets import budget_snapshot, _inventory, _snapshot
 from .config import ROOT
 from .depth_environment import _validate_inventory, _requirements
 from .files import file_record, read_json, safe_path, verify_record, write_json
@@ -141,7 +141,7 @@ def run_video_setup_recovery(request,output,*,request_path=None,environment_runn
         binding=dict(original=request['original_setup'],runtime_environment=request['runtime_environment'],
             allocation=request['fixture_allocation'],run_root=str(root),record_kind='fixture')
         baseline=budget_snapshot(root)
-        binding['byte_limits']=dict(download_bytes=baseline['download_bytes'],
+        binding['byte_limits']=dict(download_bytes=baseline['download_bytes']+binding['allocation']['download_bytes'],
             artifact_bytes=baseline['artifact_bytes']+binding['allocation']['artifact_bytes'])
         deadline=started+binding['allocation']['setup_seconds']
     _require(output==root/'jobs'/JOB and not output.exists() and not output.is_symlink(),
@@ -154,12 +154,13 @@ def run_video_setup_recovery(request,output,*,request_path=None,environment_runn
     for record in original['source_files']:
         _require(verify_record(record)==record and safe_path(record['path']).is_relative_to(oldroot/'source'),
             'retained exact original source files required')
-    preserved=_old_snapshot(oldroot);baseline=budget_snapshot(root)
+    preserved=_old_snapshot(oldroot);baseline=_snapshot(root)
     limits=binding['byte_limits']
     def check():
-        current=budget_snapshot(root)
+        current=_snapshot(root)
         _require(time.monotonic()<deadline,'recovery setup deadline exceeded')
-        _require(current['download_bytes']==baseline['download_bytes'] and
+        _require(current['direct_download_bytes']==baseline['direct_download_bytes'] and
+            current['uv_metered_bytes']==baseline['uv_metered_bytes'] and
             current['download_bytes']<=limits['download_bytes'] and current['artifact_bytes']<=limits['artifact_bytes'],
             'offline recovery byte allocation exceeded or acquired new downloads')
     check();output.mkdir(parents=True,exist_ok=False);write_json(output/'request.json',request)

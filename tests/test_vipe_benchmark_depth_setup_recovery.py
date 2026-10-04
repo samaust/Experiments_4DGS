@@ -7,6 +7,13 @@ from vipe_benchmark.ledger import Ledger
 
 
 class RecoveryAuthorityTests(unittest.TestCase):
+    def test_video_source_closure_includes_the_executed_network_guard(self):
+        from vipe_benchmark.config import ROOT
+        from vipe_benchmark.depth_admission import local_source_records
+        from vipe_benchmark.files import file_record
+        for candidate in ('D9','D10'):
+            self.assertIn(file_record(ROOT/'scripts/offline-python.py'),local_source_records(candidate))
+
     def test_ordinary_note_cannot_mint_recovery_authority(self):
         with tempfile.TemporaryDirectory() as directory:
             ledger=Ledger(Path(directory)/'ledger.jsonl',load())
@@ -107,6 +114,22 @@ class RecoveryRequestTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'separately approved'):
             validate_recovery_request(file_record(self.request_path),self.ledger.events(),self.root)
         self.assertEqual(self.ledger.path.read_bytes(),before)
+
+    def test_missing_or_mutated_network_guard_source_record_blocks_authority(self):
+        original_source=read_json(self.source_review['path'])
+        for missing in (True,False):
+            with self.subTest(missing=missing):
+                source=copy.deepcopy(original_source)
+                guard=next(row for row in source['local_sources'] if Path(row['path']).name=='offline-python.py')
+                if missing:source['local_sources'].remove(guard)
+                else:guard['sha256']='0'*64
+                path=Path(self.source_review['path']);path.unlink();write_json(path,source)
+                self.request['source_review']=file_record(path)
+                self.request_path.unlink();write_json(self.request_path,self.request)
+                before=self.ledger.path.read_bytes()
+                with self.assertRaisesRegex(ValueError,'source closure'):
+                    validate_recovery_request(file_record(self.request_path),self.ledger.events(),self.root)
+                self.assertEqual(self.ledger.path.read_bytes(),before)
 
     def test_active_request_requires_checked_new_reservation(self):
         with self.assertRaisesRegex(ValueError,'checked recovery grant'):
