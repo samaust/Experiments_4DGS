@@ -19,3 +19,19 @@ Independent Spec/security and Standards audits both PASS with no actionable
 findings. Reviewers inspected physical records read-only. PASS is limited to the
 proposal milestone. Execution readiness remains NOT READY until the documented
 v4 public contracts, source review, CPU qualification and new explicit approval.
+
+## Versioned004 public seams
+
+The isolated implementation now provides v4 worker/request/result/dispatcher and
+protected ledger/admission support. An initial request fixture exposed the absent
+v4 authority, then8 public-boundary tests passed (tool wall2.069146701s). A new
+negative fixture initially attempted to overwrite immutable fixture JSON with the
+production writer; corrected only the disposable fixture (failed test command
+wall2.622560798s). Final47 focused v4 and historicalv3 boundary/dispatcher tests
+pass in3.902046702s. Scoped mypy passed five owned sources in0.471624867s.
+Measured command wall for these four runs totals9.065379068s; the initial missing
+module RED parent was not separately metered. No live resource charge was written.
+
+Root will arrange independent implementation review after its actual CUDA
+experiment. The earlier independent PASS applies only to the guard/proposal
+milestone. No actual004 request, DO, qualification result or source receipt exists.

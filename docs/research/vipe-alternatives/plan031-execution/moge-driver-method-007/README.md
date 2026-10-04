@@ -40,12 +40,13 @@ socket/backlog behavior. These support the assumptions; they do not validate CUD
 
 ## Contract and integration gates
 
-The REVIEW004 proposal is not execution ready. Its unchanged006 worker,
-authority and dispatcher records are reuse references. They still accept only003.
-Before execution, implement distinct v4 public request/result/authority/dispatcher
-bindings for job `plan069-D6-driver-qualification-004`, and protected ledger
-validation of exact failed finish842 plus trace. Validate the new startup proof
-and listen exception in the public result seam. Do not relabel003 records.
+The REVIEW004 proposal is not execution ready. Versioned v4 worker, public
+request/result authority and dispatcher implement job
+`plan069-D6-driver-qualification-004`. The protected ledger validates exact
+consumed003 grant/reservation/failed finish and its trace through the unchanged
+v3 checker, preserving all earlier ancestry. The result requires the new
+`unix_listen_allowed` startup proof and exact listen exception. Historical006
+worker and v3 authority remain unchanged. Fixture approvals grant no actual authority.
 
 Limits stay: one attempt,180 seconds including30 cleanup,2GiB device,64MiB owned
 artifacts, zero downloads, two strict CPU weight loads; no inference, benchmarks,
@@ -54,6 +55,6 @@ CPU qualification and fresh live slot/global resource checks before obtaining a
 new exact v4 DO. This proposal grants no new attempt.
 
 Changed proposed source closure now contains007/network_guard.py and007/startup.py.
-The eventual v4 worker, authority, dispatcher and protected ledger changes must
-also join the exact reviewed CPU/source closure. Integration is deferred while
+The v4 worker, authority, dispatcher and protected ledger/admission changes
+join the exact reviewed CPU/source closure. Integration is deferred while
 root's D9/D10 source freezes are protected.
