@@ -344,3 +344,119 @@ class RetainedCausalTests(unittest.TestCase):
         receipt = read_json(output / 'receipt.json')
         self.assertEqual(receipt['status'], 'failed')
         self.assertEqual(self.ledger.events()[-1]['evidence'], file_record(output / 'receipt.json'))
+
+
+import test_vipe_benchmark_depth_recovery_lineage as recovery_fixtures
+from vipe_benchmark.depth_budget_reconciliation import prepare_reconciliation, causal_credits
+
+
+class RecoveryCausalTests(recovery_fixtures.RecoveryLineageTests):
+    """Exercise retained inode accounting through the producer's public boundary."""
+    def build_recovery(self, *, preexisting=False):
+        from vipe_benchmark.depth_budget_reconciliation import _files
+        # The authority seam is independently covered by checked-ledger tests.
+        # Its normalized ancestor binds the same real before inventory here.
+        before_files = _files(self.root) if preexisting else {}
+        snapshot = budget_snapshot(self.root)
+        baseline = dict(snapshot)
+        baseline.update(download_bytes=0, artifact_bytes=0, direct_download_bytes=0,
+                        uv_metered_bytes=0, retained_package_bytes=0)
+        self.maps['allocation'].update(download_bytes=2**20, artifact_bytes=2**20)
+        checkpoint = self.document(self.root / 'prepare/plan069-D9-setup-byte-checkpoint.json',
+            dict(schema='plan069-depth-setup-byte-checkpoint/v1', candidate='D9',
+                 resource_snapshot=baseline, files=before_files, uv_progress=[]))
+        original_grant = dict(event='depth_setup_authorized', candidate='D9', sequence=2,
+            event_sha256='original-grant', resource_snapshot=baseline, byte_checkpoint=checkpoint)
+        failed = dict(event='finish', job_id='plan069-D9-setup-001', sequence=3,
+            event_sha256='failed', status='failed', cleanup_confirmed=True,
+            cleanup_uncertain=False, surviving_pids=[], deadline_exceeded=False)
+        failure = self.document(self.old / 'runtime/failure.json', dict(command_receipts=[]))
+        self.original.update(grant_event_sha256='original-grant', failed_finish_event_sha256='failed',
+            byte_checkpoint=checkpoint, runtime_failure=failure)
+        self.normalized['lineage'].update(grant=original_grant, finish=failed,
+            checkpoint=read_json(checkpoint['path']))
+        self.proposal['original_setup'] = self.original
+        self.grant['proposal_sha256'] = object_hash(self.proposal)
+        Path(self.request['path']).unlink()
+        self.request = self.document(Path(self.request['path']), dict(self.authority,
+            schema='plan069-video-setup-recovery-request/v1', original_setup=self.original))
+        self.normalized['request'] = self.request
+        self.grant.update(request=self.request, original_setup=self.original)
+        self.reserve['evidence']['request'] = self.request
+        self.result.update(request=self.request, original_setup=self.original)
+        # An expanded package is retained both in cache and the new environment.
+        cache = self.root / 'setup-cache/package.so'; cache.parent.mkdir()
+        cache.write_bytes(b'x' * 16384)
+        installed = self.job / 'runtime/environment/lib/package.so'
+        installed.parent.mkdir(); os.link(cache, installed)
+        inventory_path = Path(self.result['inventory']['path']); inventory_path.unlink()
+        self.result['inventory'] = self.document(inventory_path, dict(inventory_only=True,
+            model_imports=False, gpu_operations=False, executable=self.result['python_executable'],
+            packages=[dict(name='fixture-package', files=[file_record(installed)])]))
+        runtime_path = Path(self.result['runtime_environment']['path'])
+        runtime = read_json(runtime_path); runtime_path.unlink()
+        runtime['inventory'] = self.result['inventory']; runtime['command_receipts'] = []
+        self.result['runtime_environment'] = self.document(runtime_path, runtime)
+        self.publish()
+        self.events = [original_grant, failed, self.grant, self.reserve, self.finish]
+        self.subject = dict(candidate='D6', sequence=1, event_sha256='subject')
+
+    def protect_proof(self):
+        proof = prepare_reconciliation(self.root, 'D9', self.events)
+        self.events.append(dict(event='depth_setup_bytes_reconciled', candidate='D9',
+            sequence=7, event_sha256='reconciled', proof=proof))
+        return read_json(proof['path'])
+
+    def test_recovery_reconciles_expanded_new_cache_using_original_checkpoint(self):
+        self.build_recovery()
+        proof = self.protect_proof()
+        self.assertEqual(proof['checkpoint'], self.original['byte_checkpoint'])
+        self.assertEqual(proof['recovery_lineage']['failed_finish_event_sha256'], 'failed')
+        credit = causal_credits(self.root, self.subject, self.events)
+        self.assertEqual(credit['download_bytes'], 16388)
+        # A recovery model hardlink is credited once, even though both paths own it.
+        self.assertEqual(len({(row['device'], row['inode']) for row in proof['owned_files'].values()}),
+                         len(proof['owned_files']) - 1)
+
+    def test_recovery_keeps_preexisting_model_and_source_inodes_uncredited(self):
+        self.build_recovery(preexisting=True)
+        # A paid receipt for an inode in the protected before snapshot must fail.
+        with self.assertRaisesRegex(ValueError, 'newly retained accepted setup data'):
+            prepare_reconciliation(self.root, 'D9', self.events)
+
+    def test_failed_recovery_cannot_publish_attribution(self):
+        self.build_recovery(); self.finish['status'] = 'failed'
+        with self.assertRaisesRegex(ValueError, 'authorized recovery completion'):
+            prepare_reconciliation(self.root, 'D9', self.events)
+        self.assertFalse((self.root / 'prepare/plan069-D9-setup-byte-reconciliation.json').exists())
+
+    def test_original_successful_uv_receipt_credits_expanded_recovery_cache_once(self):
+        self.build_recovery()
+        identifier = 'c' * 32
+        receipt = self.document(self.root / 'uv-transfers' / ('transfer-' + identifier + '.json'),
+            dict(transfer_id=identifier, bytes_received=1024, reserved_bytes=0,
+                 complete=True, error=None))
+        command = self.document(self.old / 'runtime/commands/01-install.json',
+            dict(record_kind='actual', error=None, package_transfer_proxy=True,
+                 uv_transfer_receipt=receipt))
+        failure_path = Path(self.original['runtime_failure']['path']); failure_path.unlink()
+        self.original['runtime_failure'] = self.document(failure_path,
+            dict(command_receipts=[command]))
+        self.grant['proposal_sha256'] = object_hash(self.proposal)
+        request_path = Path(self.request['path']); request_path.unlink()
+        self.request = self.document(request_path, dict(self.authority,
+            schema='plan069-video-setup-recovery-request/v1', original_setup=self.original))
+        self.normalized['request'] = self.request
+        self.grant.update(request=self.request, original_setup=self.original)
+        self.reserve['evidence']['request'] = self.request
+        self.result.update(request=self.request, original_setup=self.original)
+        self.publish()
+        proof = self.protect_proof()
+        self.assertEqual(proof['uv_transfers'], [dict(command=command, receipt=receipt)])
+        self.assertEqual(causal_credits(self.root, self.subject, self.events)['download_bytes'], 16388)
+
+    def test_recovery_causal_credit_requires_protected_original_failed_binding(self):
+        self.build_recovery(); self.protect_proof()
+        self.events[1]['event_sha256'] = 'changed'
+        with self.assertRaisesRegex(ValueError, 'unique protected recovery causal event'):
+            causal_credits(self.root, self.subject, self.events)

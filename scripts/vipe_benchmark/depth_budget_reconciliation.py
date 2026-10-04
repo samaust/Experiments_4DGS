@@ -94,6 +94,15 @@ def _checkpoint(root, grant, *, verifier=verify_record):
 def _accepted(root, candidate, events, *, verifier=verify_record):
     """Use the existing exact approval/request/asset/clean-finish validator."""
     from .depth_map_allowance import remaining_map_allocation
+    recovery_finishes = [row for row in events if row.get('event') == 'finish' and
+                         row.get('job_id') == 'plan069-D9-setup-recovery-001']
+    if candidate == 'D9' and recovery_finishes:
+        _require(len(recovery_finishes) == 1, 'unique accepted recovery finish required')
+        from .depth_recovery_lineage import accepted_setup_lineage
+        accepted = accepted_setup_lineage(recovery_finishes[0]['result'], events, root,
+                                          verifier=verifier)
+        return (accepted['lineage']['grant'], accepted['finish'],
+                accepted['accepted_result'], accepted['map_proposal'])
     grants = [row for row in events if row.get('event') == 'depth_setup_authorized' and
               row.get('candidate') == candidate]
     finishes = [row for row in events if row.get('event') == 'finish' and
@@ -119,22 +128,32 @@ def _accepted(root, candidate, events, *, verifier=verify_record):
 def prepare_reconciliation(run_root, candidate, events, *, deadline=None):
     """Build attribution only after accepted finish; caller protects its record."""
     root = safe_path(run_root).resolve()
+    verified = {}
     def verifier(record):
-        return _timed_verify(record, deadline)
+        _check_deadline(deadline)
+        key = object_hash(record)
+        if key not in verified:
+            verified[key] = _timed_verify(record, deadline)
+        return verified[key]
     _check_deadline(deadline)
     grant, finish, result, proposal = _accepted(root, candidate, events, verifier=verifier)
     checkpoint = _checkpoint(root, grant, verifier=verifier)
     prior = {_key(row) for row in checkpoint['files'].values()}
-    job = root / 'jobs' / f'plan069-{candidate}-setup-001'
+    recovery = result.get('schema') == 'plan069-video-setup-recovery-result/v1'
+    original_job = root / 'jobs' / f'plan069-{candidate}-setup-001'
+    job = root / 'jobs' / (result['job_id'] if recovery else f'plan069-{candidate}-setup-001')
     files = _files(root, deadline)
     snapshot = _snapshot(root)
     for key in ('download_bytes', 'artifact_bytes'):
         _require(checkpoint['resource_snapshot'][key] <= snapshot[key] <=
                  checkpoint['resource_snapshot'][key] + proposal['allocation'][key],
                  'accepted setup exceeds unchanged whole-slot allocation')
-    _require(result.get('bytes_received') == snapshot['download_bytes'] -
-             checkpoint['resource_snapshot']['download_bytes'],
-             'accepted setup acquisition differs from prospective checkpoint')
+    if recovery:
+        _require(result.get('bytes_received') == 0, 'offline recovery cannot acquire bytes')
+    else:
+        _require(result.get('bytes_received') == snapshot['download_bytes'] -
+                 checkpoint['resource_snapshot']['download_bytes'],
+                 'accepted setup acquisition differs from prospective checkpoint')
     declared = []
     for row in result.get('assets', []):
         declared.append(row['record'])
@@ -142,6 +161,10 @@ def prepare_reconciliation(run_root, candidate, events, *, deadline=None):
         if result.get(key) is not None:
             declared.append(result[key])
     declared.extend(result.get('source_files', []))
+    if recovery:
+        declared.append(result['original_setup']['checkpoint'])
+    retained_paths = ({row['path'] for row in [result['original_setup']['checkpoint'],
+                      result['source_archive'], *result['source_files']]} if recovery else set())
     runtime_record = result.get('runtime_environment')
     _require(isinstance(runtime_record, dict) and verifier(runtime_record) == runtime_record and
              Path(runtime_record['path']) == job / 'runtime/result.json',
@@ -165,7 +188,9 @@ def prepare_reconciliation(run_root, candidate, events, *, deadline=None):
     owned = {}
     for record in declared:
         path = safe_path(record['path'])
-        _require(path.is_relative_to(job) and not path.is_symlink(), 'declared setup file outside owned job')
+        _require((path.is_relative_to(job) or (record['path'] in retained_paths and
+                  path.is_relative_to(original_job))) and not path.is_symlink(),
+                 'declared setup file outside approved owned lineage')
         relative = str(path.relative_to(root))
         info = files.get(relative)
         _require(info is not None and info['logical_bytes'] == record['bytes'],
@@ -185,9 +210,14 @@ def prepare_reconciliation(run_root, candidate, events, *, deadline=None):
                 cache[path] = info
                 seen.add(_key(info))
     uv = []
-    for command_record in runtime.get('command_receipts', []):
+    commands = [(record, job) for record in runtime.get('command_receipts', [])]
+    if recovery:
+        failure = read_json(verifier(result['original_setup']['runtime_failure'])['path'])
+        commands.extend((record, original_job) for record in failure['command_receipts']
+                        if read_json(verifier(record)['path']).get('uv_transfer_receipt') is not None)
+    for command_record, command_job in commands:
         _require(verifier(command_record) == command_record and
-                 Path(command_record['path']).is_relative_to(job / 'runtime/commands'),
+                 Path(command_record['path']).is_relative_to(command_job / 'runtime/commands'),
                  'owned accepted runtime command required')
         command = read_json(command_record['path'])
         _require(command.get('record_kind') == 'actual' and command.get('error') is None,
@@ -205,7 +235,7 @@ def prepare_reconciliation(run_root, candidate, events, *, deadline=None):
         uv.append(dict(command=command_record, receipt=receipt))
     _require(len({row['receipt']['path'] for row in uv}) == len(uv), 'duplicate owned UV session')
     direct = []
-    direct_paths = {row['path'] for row in declared if Path(row['path']).parent == job}
+    direct_paths = {row['path'] for row in declared if Path(row['path']).parent in (job, original_job)}
     for path in (root / 'transfers').glob('transfer-*.json'):
         document = read_json(path)
         if document.get('output') not in direct_paths:
@@ -228,6 +258,13 @@ def prepare_reconciliation(run_root, candidate, events, *, deadline=None):
         setup=finish['result'], checkpoint=grant['byte_checkpoint'],
         runtime=runtime_record, inventory=inventory_record,
         owned_files=owned, retained_cache_files=cache, uv_transfers=uv, direct_transfers=direct)
+    if recovery:
+        from .depth_recovery_lineage import accepted_setup_lineage
+        accepted = accepted_setup_lineage(finish['result'], events, root, verifier=verifier)
+        document['recovery_lineage'] = dict(grant_event_sha256=accepted['grant']['event_sha256'],
+            reserve_event_sha256=accepted['reserve']['event_sha256'],
+            failed_finish_event_sha256=accepted['lineage']['finish']['event_sha256'],
+            request=accepted['request'])
     _check_deadline(deadline)
     _require(files == _files(root, deadline), 'setup ownership inventory changed during reconciliation')
     _check_deadline(deadline)
@@ -236,6 +273,51 @@ def prepare_reconciliation(run_root, candidate, events, *, deadline=None):
     record = file_record(path)
     _check_deadline(deadline)
     return record
+
+
+def _recovery_proof_lineage(proof, events, original_grant, finish):
+    """Recheck small protected bindings; retained large files use inode metadata."""
+    lineage = proof.get('recovery_lineage')
+    _require(isinstance(lineage, dict) and proof.get('candidate') == 'D9',
+             'checked D9 recovery causal lineage required')
+    def event(kind, digest):
+        rows = [row for row in events if row.get('event') == kind and
+                row.get('event_sha256') == digest]
+        _require(len(rows) == 1, 'unique protected recovery causal event required')
+        return rows[0]
+    grant = event('depth_setup_recovery_authorized', lineage['grant_event_sha256'])
+    reserve = event('reserve', lineage['reserve_event_sha256'])
+    failed = event('finish', lineage['failed_finish_event_sha256'])
+    _require(original_grant['sequence'] < failed['sequence'] < grant['sequence'] <
+             reserve['sequence'] < finish['sequence'] and
+             grant.get('candidate') == 'D9' and
+             grant.get('job_id') == reserve.get('job_id') == finish.get('job_id') ==
+             'plan069-D9-setup-recovery-001' and
+             failed.get('job_id') == 'plan069-D9-setup-001' and failed.get('status') == 'failed' and
+             failed.get('cleanup_confirmed') is True and failed.get('cleanup_uncertain') is False and
+             failed.get('surviving_pids') == [] and failed.get('deadline_exceeded') is False and
+             reserve.get('resource') == finish.get('resource') == 'setup',
+             'causal recovery did not preserve failed setup and checked completion')
+    request = lineage['request']
+    _require(verify_record(request) == request and grant.get('request') == request and
+             reserve.get('evidence', {}).get('request') == request,
+             'checked recovery causal request changed')
+    document = read_json(request['path'])
+    original = document['original_setup']
+    _require(document.get('schema') == 'plan069-video-setup-recovery-request/v1' and
+             original.get('grant_event_sha256') == original_grant['event_sha256'] and
+             original.get('failed_finish_event_sha256') == failed['event_sha256'] and
+             original.get('byte_checkpoint') == proof['checkpoint'] and
+             grant.get('original_setup') == original,
+             'original prospective recovery checkpoint binding changed')
+    for key in ('review', 'authorization', 'source_review'):
+        _require(verify_record(document[key]) == document[key] == grant.get(key) ==
+                 reserve.get('evidence', {}).get(key), 'recovery causal authority changed')
+    accepted = read_json(proof['setup']['path'])
+    _require(accepted.get('schema') == 'plan069-video-setup-recovery-result/v1' and
+             accepted.get('original_setup') == original and accepted.get('request') == request and
+             accepted.get('bytes_received') == 0 and accepted.get('original_failure_preserved') is True,
+             'accepted recovery causal result changed')
 
 
 def causal_credits(run_root, subject_grant, events, proofs=None):
@@ -273,6 +355,11 @@ def causal_credits(run_root, subject_grant, events, proofs=None):
                  finishes[0].get('cleanup_uncertain') is False and finishes[0].get('surviving_pids') == [] and
                  finishes[0].get('deadline_exceeded') is False,
                  'causal proof lacks later accepted setup lineage')
+        if proof.get('recovery_lineage') is not None:
+            _recovery_proof_lineage(proof, events, grants[0], finishes[0])
+        else:
+            _require(finishes[0].get('job_id') == f"plan069-{proof['candidate']}-setup-001",
+                     'recovery causal proof requires protected ancestry')
         for key in ('setup', 'runtime', 'inventory'):
             _require(verify_record(proof[key]) == proof[key], 'accepted causal evidence changed')
         accepted = read_json(proof['setup']['path'])
