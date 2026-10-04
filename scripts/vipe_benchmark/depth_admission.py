@@ -15,6 +15,7 @@ INVENTORY = CONFIG.parents[2] / 'docs/specs/plan031-execution/depth-required-ass
 PROFILES = CONFIG.parents[2] / 'docs/specs/plan031-execution/depth-runtime-profiles-v1.json'
 VIDEO_PROFILES = CONFIG.parents[2] / 'docs/specs/plan031-execution/depth-runtime-profiles-video-v2.json'
 VIDEO_PYPI_PROFILES = CONFIG.parents[2] / 'docs/specs/plan031-execution/depth-runtime-profiles-video-v3.json'
+VIDEO_FRAME_PROFILES = CONFIG.parents[2] / 'docs/specs/plan031-execution/depth-runtime-profiles-video-v4.json'
 
 
 def selected_profile_inventory(proposal):
@@ -23,8 +24,8 @@ def selected_profile_inventory(proposal):
         if proposal.get('runtime_recipe') is not None:
             raise ValueError('video runtime recipe requires its versioned profile')
         return PROFILES
-    from .video_environment import CU130_RECIPE, PYPI_RECIPE
-    pairs = ((VIDEO_PROFILES, CU130_RECIPE), (VIDEO_PYPI_PROFILES, PYPI_RECIPE))
+    from .video_environment import CU130_RECIPE, PYPI_RECIPE, FRAME_RECIPE
+    pairs = ((VIDEO_PROFILES, CU130_RECIPE), (VIDEO_PYPI_PROFILES, PYPI_RECIPE), (VIDEO_FRAME_PROFILES, FRAME_RECIPE))
     matches = [(inventory, recipe) for inventory, recipe in pairs
         if proposal.get("profile_inventory") == file_record(inventory) and
            proposal.get("runtime_recipe") == file_record(recipe)]
@@ -121,6 +122,9 @@ def local_source_records(candidate):
         records.append(file_record(ROOT / 'configs/vipe-alternatives/video-environment-v2.json'))
         records.append(file_record(VIDEO_PROFILES))
         records.append(file_record(VIDEO_PYPI_PROFILES))
+        records.append(file_record(VIDEO_FRAME_PROFILES))
+        from .video_environment import FRAME_RECIPE
+        records.append(file_record(FRAME_RECIPE))
         records.append(file_record(ROOT / "configs/vipe-alternatives/video-environment-v3.json"))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_setup.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_setup_dispatch.py'))
@@ -239,7 +243,7 @@ def review(proposal, *, config, commercial, assets, runtime, live,
     dependencies = evidence(dependency_record,
         'plan069-depth-installed-dependencies/v1',
         'installed dependency closure changed or unverified')
-    if candidate in ('D9', 'D10') and profile_inventory == VIDEO_PYPI_PROFILES:
+    if candidate in ('D9', 'D10') and profile_inventory in (VIDEO_PYPI_PROFILES, VIDEO_FRAME_PROFILES):
         try:
             from .video_environment import validate_runtime_versions, validate_runtime_observation
             environment = dict(recipe=proposal['runtime_recipe'], runtime_profile=proposal['profile']['runtime_profile'])

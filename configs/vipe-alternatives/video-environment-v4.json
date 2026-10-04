@@ -1,0 +1,142 @@
+{
+  "schema": "plan069-video-environment-recipe/v1",
+  "source_revision": "4f5ae23172ba60fd7bc11ef671cca678842c7072",
+  "python_version": "3.11",
+  "upstream_requirements": [
+    "numpy==1.24.0",
+    "torch==2.1.1",
+    "torchvision==0.16.1",
+    "opencv-python",
+    "matplotlib",
+    "pillow",
+    "imageio==2.37.0",
+    "imageio-ffmpeg==0.4.7",
+    "decord",
+    "xformers==0.0.23",
+    "einops==0.4.1",
+    "easydict",
+    "tqdm",
+    "OpenEXR==3.3.1"
+  ],
+  "requirements": [
+    "numpy==1.24.0",
+    "torch==2.14.1",
+    "torchvision==0.29.1",
+    "opencv-python",
+    "matplotlib",
+    "pillow",
+    "imageio==2.37.0",
+    "imageio-ffmpeg==0.4.7",
+    "einops==0.4.1",
+    "easydict",
+    "tqdm",
+    "OpenEXR==3.3.1"
+  ],
+  "constraints": [
+    "contourpy==1.3.2",
+    "cuda-bindings==13.0.3",
+    "cuda-pathfinder==1.8.3",
+    "cuda-toolkit==13.0.3.0",
+    "cycler==0.12.1",
+    "easydict==1.13",
+    "einops==0.4.1",
+    "filelock==4.0.9",
+    "fonttools==4.66.1",
+    "fsspec==2026.9.0",
+    "imageio==2.37.0",
+    "imageio-ffmpeg==0.4.7",
+    "jinja2==3.1.6",
+    "kiwisolver==1.5.1",
+    "markupsafe==3.0.4",
+    "matplotlib==3.10.8",
+    "mpmath==1.3.0",
+    "networkx==3.6.1",
+    "numpy==1.24.0",
+    "nvidia-cublas==13.1.1.3",
+    "nvidia-cuda-cupti==13.0.85",
+    "nvidia-cuda-nvrtc==13.0.88",
+    "nvidia-cuda-runtime==13.0.96",
+    "nvidia-cudnn-cu13==9.24.0.43",
+    "nvidia-cufft==12.0.0.61",
+    "nvidia-cufile==1.15.1.6",
+    "nvidia-curand==10.4.0.35",
+    "nvidia-cusolver==12.0.4.66",
+    "nvidia-cusparse==12.6.3.3",
+    "nvidia-cusparselt-cu13==0.8.1",
+    "nvidia-nccl-cu13==2.30.7",
+    "nvidia-nvjitlink==13.4.92",
+    "nvidia-nvshmem-cu13==3.4.5",
+    "nvidia-nvtx==13.0.85",
+    "opencv-python==4.11.0.86",
+    "openexr==3.3.1",
+    "packaging==26.3",
+    "pillow==12.3.0",
+    "pyparsing==3.3.3",
+    "python-dateutil==2.9.0.post0",
+    "setuptools==84.0.0",
+    "six==1.17.0",
+    "sympy==1.14.0",
+    "torch==2.14.1",
+    "torchvision==0.29.1",
+    "tqdm==4.70.1",
+    "triton==3.8.0",
+    "typing-extensions==4.16.0"
+  ],
+  "indexes": [
+    "https://pypi.org/simple"
+  ],
+  "source_requirement": "requirements.txt",
+  "fallback_sources": [
+    "video_depth_anything/dinov2_layers/attention.py",
+    "video_depth_anything/motion_module/motion_module.py",
+    "video_depth_anything/motion_module/attention.py",
+    "utils/dc_utils.py",
+    "utils/util.py",
+    "video_depth_anything/video_depth.py"
+  ],
+  "optional_dependencies": {
+    "xformers==0.0.23": "Omitted; pinned native attention modules implement the torch fallback when xformers is absent. Qualification must record this runtime path.",
+    "decord": "Omitted; only upstream CLI utils.dc_utils imports Decord. The selected native frame-array model path does not import that module. Preserve upstream requirements and strict uv pip check; record Decord absence."
+  },
+  "primary_sources": [
+    "https://github.com/DepthAnything/Video-Depth-Anything/blob/4f5ae23172ba60fd7bc11ef671cca678842c7072/requirements.txt",
+    "https://github.com/DepthAnything/Video-Depth-Anything/blob/4f5ae23172ba60fd7bc11ef671cca678842c7072/video_depth_anything/dinov2_layers/attention.py",
+    "https://github.com/DepthAnything/Video-Depth-Anything/blob/4f5ae23172ba60fd7bc11ef671cca678842c7072/video_depth_anything/motion_module/motion_module.py",
+    "https://github.com/DepthAnything/Video-Depth-Anything/blob/4f5ae23172ba60fd7bc11ef671cca678842c7072/video_depth_anything/motion_module/attention.py",
+    "https://pytorch.org/get-started/previous-versions/#v211",
+    "https://github.com/pytorch/pytorch/releases/tag/v2.14.1",
+    "https://github.com/pytorch/vision/releases/tag/v0.29.1",
+    "https://github.com/DepthAnything/Video-Depth-Anything/blob/4f5ae23172ba60fd7bc11ef671cca678842c7072/utils/dc_utils.py"
+  ],
+  "runtime_profile": {
+    "id": "D9-D10-torch-2.14.1-pypi-frame-input",
+    "upstream_supported": false,
+    "original_core_requirements": [
+      "torch==2.1.1",
+      "torchvision==0.16.1"
+    ],
+    "selected_core_requirements": [
+      "torch==2.14.1",
+      "torchvision==0.29.1"
+    ],
+    "compatibility": "unqualified until actual metered native qualification",
+    "distribution": "official PyPI Linux cp311 wheels; distinct from indexed +cu130",
+    "observed_runtime_required": true,
+    "input_adapter": "native frame arrays; upstream CLI video decoder is not executed"
+  },
+  "runtime_observation": {
+    "torch_versions": [
+      "2.14.1",
+      "2.14.1+cu130"
+    ],
+    "torchvision_versions": [
+      "0.29.1",
+      "0.29.1+cu130"
+    ],
+    "cuda_version": "13.0"
+  },
+  "excluded_distributions": [
+    "decord",
+    "xformers"
+  ]
+}

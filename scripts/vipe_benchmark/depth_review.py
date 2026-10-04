@@ -193,14 +193,15 @@ def _qualification_blockers(candidate, evidence, generation, actual, completed):
         bool(dependencies.get('files')), 'installed dependency closure required')
     for record in dependencies.get('files', []):
         _verify_file(record)
-    if candidate == 'D10' and runtime.get('profile', {}).get('runtime_profile', {}).get('id') == 'D9-D10-torch-2.14.1-pypi-cuda13':
-        from .video_environment import PYPI_RECIPE, validate_runtime_versions, validate_runtime_observation
+    if candidate == 'D10' and runtime.get('profile', {}).get('runtime_profile', {}).get('id') in ('D9-D10-torch-2.14.1-pypi-cuda13', 'D9-D10-torch-2.14.1-pypi-frame-input'):
+        from .video_environment import PYPI_RECIPE, FRAME_RECIPE, validate_runtime_versions, validate_runtime_observation
         from .files import file_record
         try:
-            environment = dict(recipe=file_record(PYPI_RECIPE), runtime_profile=runtime['profile']['runtime_profile'])
+            recipe = FRAME_RECIPE if runtime['profile']['runtime_profile']['id'] == 'D9-D10-torch-2.14.1-pypi-frame-input' else PYPI_RECIPE
+            environment = dict(recipe=file_record(recipe), runtime_profile=runtime['profile']['runtime_profile'])
             validate_runtime_versions(environment, dependencies.get('versions', {}))
             validate_runtime_observation(environment, dependencies.get('runtime_observation'))
-            check(dependencies.get('runtime_recipe') == file_record(PYPI_RECIPE), 'PyPI dependency recipe binding changed')
+            check(dependencies.get('runtime_recipe') == file_record(recipe), 'PyPI dependency recipe binding changed')
         except (KeyError, TypeError, ValueError, OSError):
             check(False, 'actual PyPI video runtime observation required')
     expected_profile = read_json(PROFILES)['profiles'][candidate]

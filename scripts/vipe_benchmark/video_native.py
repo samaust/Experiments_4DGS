@@ -41,8 +41,8 @@ def setup_environment(setup):
         raise ValueError('exact provisioned video environment interpreter required')
     for key in ('python', 'dependency_lock', 'inventory'):
         verify_record(runtime[key])
-    from .video_environment import CU130_RECIPE, PYPI_RECIPE
-    selected = [path for path in (CU130_RECIPE, PYPI_RECIPE)
+    from .video_environment import CU130_RECIPE, PYPI_RECIPE, FRAME_RECIPE
+    selected = [path for path in (CU130_RECIPE, PYPI_RECIPE, FRAME_RECIPE)
         if file_record(path) in runtime.get("requirement_sources", [])]
     if len(selected) > 1:
         raise ValueError("video runtime contains mixed versioned recipe bindings")
@@ -74,21 +74,27 @@ def native_source_records(source_dir):
 
 def installed_dependency_versions(setup=None):
     """Inventory direct native inference distributions; this is not clearance."""
+    from .video_environment import FRAME_RECIPE
     versions: dict[str, str | None] = {}
     names = list(REQUIRED_DISTRIBUTIONS)
     if setup and 'runtime_recipe' in setup:
         from .video_environment import PYPI_RECIPE
-        if setup['runtime_recipe'] == file_record(PYPI_RECIPE):
-            names = [constraint.split('==')[0] for constraint in read_json(PYPI_RECIPE)['constraints']]
+        for path in (PYPI_RECIPE, FRAME_RECIPE):
+            if setup['runtime_recipe'] == file_record(path):
+                names = [constraint.split('==')[0] for constraint in read_json(path)['constraints']]
     for name in names:
         try:
             versions[name] = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError as error:
             raise ValueError('native video dependency missing: ' + name) from error
-    try:
-        versions['xformers'] = importlib.metadata.version('xformers')
-    except importlib.metadata.PackageNotFoundError:
-        versions['xformers'] = None
+    excluded = ['xformers']
+    if setup and setup.get('runtime_recipe') == file_record(FRAME_RECIPE):
+        excluded.append('decord')
+    for name in excluded:
+        try:
+            versions[name] = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            versions[name] = None
     return versions
 
 

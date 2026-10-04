@@ -9,11 +9,12 @@ from .files import file_record, read_json, verify_record
 RECIPE = ROOT / 'configs/vipe-alternatives/video-environment-v1.json'
 CU130_RECIPE = ROOT / 'configs/vipe-alternatives/video-environment-v2.json'
 PYPI_RECIPE = ROOT / 'configs/vipe-alternatives/video-environment-v3.json'
+FRAME_RECIPE = ROOT / 'configs/vipe-alternatives/video-environment-v4.json'
 
 
 def selected_recipe(path=None):
     path = RECIPE if path is None else Path(path).absolute()
-    if path not in (RECIPE, CU130_RECIPE, PYPI_RECIPE):
+    if path not in (RECIPE, CU130_RECIPE, PYPI_RECIPE, FRAME_RECIPE):
         raise ValueError('exact versioned video recipe required')
     return path
 
@@ -28,6 +29,9 @@ def validate_runtime_versions(environment, versions):
         name, version = constraint.split('==')
         if versions.get(name) != version:
             raise ValueError('video runtime version differs: ' + name)
+    for name in recipe.get('excluded_distributions', []):
+        if name not in versions or versions[name] is not None:
+            raise ValueError('excluded video distribution present or absence unrecorded: ' + name)
     if (versions.get('xformers') is not None or
             environment.get('runtime_profile') != recipe.get('runtime_profile')):
         raise ValueError('video runtime profile or attention fallback differs')
@@ -95,7 +99,7 @@ def bind_source_environment(environment, source_dir, revision, *, candidate, rec
 def validate_runtime_observation(environment, observation):
     """Require actual imported module observations for the distinct PyPI build."""
     path = selected_recipe(environment['recipe']['path'])
-    if path != PYPI_RECIPE:
+    if path not in (PYPI_RECIPE, FRAME_RECIPE):
         return
     recipe = read_json(path)
     expected = recipe['runtime_observation']
@@ -112,7 +116,7 @@ def validate_runtime_observation(environment, observation):
 
 def observe_runtime(environment):
     """Observe imported versions without allocating a CUDA context or loading weights."""
-    if selected_recipe(environment['recipe']['path']) != PYPI_RECIPE:
+    if selected_recipe(environment['recipe']['path']) not in (PYPI_RECIPE, FRAME_RECIPE):
         return None
     import torch
     import torchvision
