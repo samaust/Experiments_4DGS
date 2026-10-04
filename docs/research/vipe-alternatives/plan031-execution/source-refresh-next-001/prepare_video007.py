@@ -51,8 +51,9 @@ def prepare(expected_head, output, D9_review, accepted_D9_setup, extra_supplemen
     review_relative = Path(D9_review)
     if (review_relative.is_absolute() or '..' in review_relative.parts or
             'prompts' in review_relative.parts or review_relative.suffix != '.json' or
-            not review_relative.is_relative_to('docs/research/vipe-alternatives')):
-        raise ValueError('D9 REVIEW must be a canonical research JSON metadata path')
+            not (review_relative.is_relative_to('docs/research/vipe-alternatives') or
+                 review_relative.is_relative_to('docs/specs/plan031-execution'))):
+        raise ValueError('D9 REVIEW must be canonical research/spec JSON metadata')
     start = time.perf_counter()
     head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=CANONICAL, text=True).strip()
     if head != expected_head:
