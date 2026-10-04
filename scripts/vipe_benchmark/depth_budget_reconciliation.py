@@ -24,8 +24,15 @@ def _check_deadline(deadline):
 
 
 def _timed_verify(record, deadline):
+    declared_path = safe_path(record['path'])
+    _require(declared_path.is_absolute() and not any(
+             component.is_symlink() for component in (declared_path, *declared_path.parents)),
+             'reconciliation file symlink or relative path rejected')
     if deadline is None:
-        return verify_record(record)
+        actual = verify_record(record)
+        actual['path'] = record['path']
+        _require(actual == record, 'changed file during reconciliation: ' + record['path'])
+        return actual
     path = safe_path(record['path']).resolve()
     checksum = hashlib.sha256()
     with path.open('rb') as stream:
@@ -35,7 +42,7 @@ def _timed_verify(record, deadline):
             if not block:
                 break
             checksum.update(block)
-    actual = dict(path=str(path), sha256=checksum.hexdigest(), bytes=path.stat().st_size)
+    actual = dict(path=record['path'], sha256=checksum.hexdigest(), bytes=path.stat().st_size)
     _require(actual == record, 'changed file during bounded reconciliation: ' + str(path))
     return actual
 
@@ -189,7 +196,11 @@ def prepare_reconciliation(run_root, candidate, events, *, deadline=None):
     installed_keys = set()
     owned = {}
     for record in declared:
-        path = safe_path(record['path'])
+        declared_path = safe_path(record['path'])
+        _require(declared_path.is_absolute() and not any(
+                 component.is_symlink() for component in (declared_path, *declared_path.parents)),
+                 'declared setup file symlink or relative path rejected')
+        path = declared_path.resolve(strict=True)
         _require((path.is_relative_to(job) or (record['path'] in retained_paths and
                   path.is_relative_to(original_job))) and not path.is_symlink(),
                  'declared setup file outside approved owned lineage')

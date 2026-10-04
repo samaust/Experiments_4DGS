@@ -64,7 +64,7 @@ class RetainedCausalTests(unittest.TestCase):
     prepare_completed_setup = fixtures.MapAllowanceTests.prepare_completed_setup
     """Use the existing accepted setup boundary, with real temp ledger/inodes."""
     def build_causal(self, *, baseline_cache=False, extra_unowned=False, reconcile=True,
-                     finish_changes=None):
+                     finish_changes=None, installed_spelling=None, duplicate_installed=False):
         self.proposal['allocation'].update(download_bytes=2**20, artifact_bytes=2**20, cpu_seconds=1000)
         self.approval['proposal_sha256'] = object_hash(self.proposal)
         self.prepare_completed_setup()
@@ -90,8 +90,11 @@ class RetainedCausalTests(unittest.TestCase):
         installed.parent.mkdir(parents=True)
         os.link(cache, installed)
         inventory = self.setup_root / 'runtime/inventory.json'
+        installed_record = file_record(installed)
+        if installed_spelling is not None:
+            installed_record['path'] = str(installed_spelling(installed))
         write_json(inventory, dict(inventory_only=True, model_imports=False, gpu_operations=False,
-            packages=[dict(name='fixture-library', files=[file_record(installed)])]))
+            packages=[dict(name='fixture-library', files=[installed_record, file_record(installed)] if duplicate_installed else [installed_record])]))
         identifier = 'a' * 32
         transfer = self.root / 'uv-transfers' / ('transfer-' + identifier + '.json')
         write_json(transfer, dict(transfer_id=identifier, bytes_received=131084 if baseline_cache else 8192,
@@ -476,3 +479,86 @@ class RecoveryCausalTests(recovery_fixtures.RecoveryLineageTests):
         self.events[1]['event_sha256'] = 'changed'
         with self.assertRaisesRegex(ValueError, 'unique protected recovery causal event'):
             causal_credits(self.root, self.subject, self.events)
+
+
+class InstalledDeclaredPathTests(unittest.TestCase):
+    setUp = RetainedCausalTests.setUp
+    tearDown = RetainedCausalTests.tearDown
+    prepare_completed_setup = RetainedCausalTests.prepare_completed_setup
+    build_causal = RetainedCausalTests.build_causal
+    def test_lexical_parent_console_path_matches_owned_file_and_bounded_hash(self):
+        from vipe_benchmark.depth_budget_reconciliation import prepare_reconciliation
+        import time
+        def spelling(path):
+            nested=path.parent/'nested';nested.mkdir()
+            return nested/'..'/path.name
+        cache,installed=self.build_causal(reconcile=False,installed_spelling=spelling)
+        before=read_json(self.setup)['inventory']
+        proof=prepare_reconciliation(self.root,'D5',self.ledger.events(),deadline=time.monotonic()+30)
+        proof=read_json(proof['path'])
+        relative=str(installed.relative_to(self.root))
+        self.assertIn(relative,proof['owned_files'])
+        self.assertIn(str(cache.relative_to(self.root)),proof['retained_cache_files'])
+        self.assertEqual(read_json(self.setup)['inventory'],before)
+
+    def test_bounded_verifier_preserves_literal_record_with_parent_segments(self):
+        from vipe_benchmark.depth_budget_reconciliation import _timed_verify
+        import time
+        path=self.root/'owned/value';path.parent.mkdir();path.write_bytes(b'fixture')
+        nested=path.parent/'nested';nested.mkdir()
+        literal=dict(file_record(path),path=str(nested/'..'/path.name))
+        self.assertNotEqual(literal['path'],str(path))
+        self.assertEqual(_timed_verify(literal,time.monotonic()+1),literal)
+        with self.assertRaises(TimeoutError):_timed_verify(literal,time.monotonic()-1)
+
+    def test_lexical_parent_escape_does_not_produce_owned_credit(self):
+        def spelling(path):
+            outside=self.root/'outside.bin';outside.write_bytes(path.read_bytes())
+            return path.parent/'..'/'..'/'..'/'..'/'..'/outside.name
+        self.build_causal(reconcile=False,installed_spelling=spelling)
+        with self.assertRaisesRegex(ValueError,'outside approved owned lineage'):
+            prepare_reconciliation(self.root,'D5',self.ledger.events())
+
+    def test_parent_symlink_inside_owned_job_is_rejected(self):
+        def spelling(path):
+            alias=path.parent/'alias';alias.symlink_to(path.parent,target_is_directory=True)
+            return alias/path.name
+        self.build_causal(reconcile=False,installed_spelling=spelling)
+        with self.assertRaisesRegex(ValueError,'symlink'):
+            prepare_reconciliation(self.root,'D5',self.ledger.events())
+
+    def test_forbidden_lexical_prompt_component_is_rejected(self):
+        def spelling(path):return path.parent/'prompts'/'..'/path.name
+        self.build_causal(reconcile=False,installed_spelling=spelling)
+        with self.assertRaisesRegex(ValueError,'prompts'):
+            prepare_reconciliation(self.root,'D5',self.ledger.events())
+
+    def test_canonical_and_lexical_aliases_credit_one_owned_inode(self):
+        def spelling(path):
+            nested=path.parent/'nested';nested.mkdir()
+            return nested/'..'/path.name
+        cache,installed=self.build_causal(reconcile=False,installed_spelling=spelling,duplicate_installed=True)
+        proof=read_json(prepare_reconciliation(self.root,'D5',self.ledger.events())['path'])
+        identity=(installed.stat().st_dev,installed.stat().st_ino)
+        matching=[row for row in proof['owned_files'].values() if (row['device'],row['inode'])==identity]
+        self.assertEqual(len(matching),1)
+        self.assertEqual(len(proof['retained_cache_files']),1)
+
+    def test_bounded_verifier_rejects_changed_hash_or_byte_count(self):
+        from vipe_benchmark.depth_budget_reconciliation import _timed_verify
+        import time
+        path=self.root/'owned-value';path.write_bytes(b'fixture');record=file_record(path)
+        for changed in [dict(record,sha256='0'*64),dict(record,bytes=record['bytes']+1)]:
+            with self.subTest(record=changed),self.assertRaisesRegex(ValueError,'changed file'):
+                _timed_verify(changed,time.monotonic()+1)
+
+    def test_generic_evidence_verifier_rejects_symlink_and_relative_aliases(self):
+        from vipe_benchmark.depth_budget_reconciliation import _timed_verify
+        import time
+        target=self.root/'evidence';target.write_bytes(b'fixture')
+        alias=self.root/'evidence-alias';alias.symlink_to(target)
+        record=file_record(target)
+        for path in [str(alias),'relative-evidence']:
+            for deadline in [None,time.monotonic()+1]:
+                with self.subTest(path=path,deadline=deadline),self.assertRaisesRegex(ValueError,'symlink or relative'):
+                    _timed_verify(dict(record,path=path),deadline)
