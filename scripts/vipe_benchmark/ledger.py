@@ -265,7 +265,8 @@ class Ledger:
             return self._append(stream, events, dict(event='depth_driver_qualification_authorized',
                 job_id=JOB, request=request_record, seconds=proposal['seconds']))
 
-    def authorize_depth_setup(self, candidate, review, authorization, source_review):
+    def authorize_depth_setup(self, candidate, review, authorization, source_review, *,
+                              prospective_byte_checkpoint=False):
         """Allocate one bounded setup attempt from exact user-approved proposals."""
         if candidate not in ('D2', 'D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11'):
             raise ValueError('unknown approved depth setup candidate')
@@ -332,11 +333,33 @@ class Ledger:
                                ('artifact_bytes', 'new_artifact_disk_gib_limit')):
                 if reading[key] + proposal['allocation'][key] > self.config[limit] * 2**30:
                     raise ValueError(key + ' setup allocation exceeds live cumulative cap')
+            from .depth_budget_reconciliation import capture_checkpoint
+            byte_checkpoint = (capture_checkpoint(self.path.parent, candidate, reading)
+                               if prospective_byte_checkpoint else None)
             return self._append(stream, events, dict(event='depth_setup_authorized',
                 candidate=candidate, seconds=seconds,
                 proposal_sha256=object_hash(proposal), review=review,
                 authorization=authorization, source_review=source_review,
-                resource_snapshot=reading))
+                resource_snapshot=reading, byte_checkpoint=byte_checkpoint))
+
+    def reconcile_depth_setup_bytes(self, candidate):
+        """Protect prospective attribution after exact accepted cleanup."""
+        from .depth_budget_reconciliation import prepare_reconciliation
+        with self.locked() as (stream, events):
+            if any(row['event'] == 'reserve' for row in self.states(events).values()):
+                raise ValueError('active attempt prevents setup byte reconciliation')
+            if any(row.get('event') == 'depth_setup_bytes_reconciled' and
+                   row.get('candidate') == candidate for row in events):
+                raise ValueError('setup byte reconciliation already protected')
+            from .budgets import budget_snapshot
+            reading = budget_snapshot(self.path.parent)
+            for key, cap in (('download_bytes', 'new_download_gib_limit'),
+                             ('artifact_bytes', 'new_artifact_disk_gib_limit')):
+                if reading[key] > self.config[cap] * 2**30:
+                    raise ValueError(key + ' reconciliation exceeds global cap')
+            proof = prepare_reconciliation(self.path.parent, candidate, events)
+            return self._append(stream, events, dict(event='depth_setup_bytes_reconciled',
+                candidate=candidate, proof=proof))
 
     def _depth_command(self, candidate, bound, source, evidence, command):
         """Rehash the exact authorized worker, interpreter and immutable request."""
@@ -518,7 +541,7 @@ class Ledger:
     def note(self, event, **fields):
         if event in ('reserve', 'finish', 'account', 'resume_unstarted', 'checkpoint',
                      'checkpoint_resume', 'depth_driver_diagnostic_authorized', 'depth_driver_qualification_authorized',
-                     'depth_setup_authorized', 'depth_attempt_authorized',
+                     'depth_setup_authorized', 'depth_attempt_authorized', 'depth_setup_bytes_reconciled',
                      'native_qualification_authorized', 'final_render_do_authorized', 'cpu_preparation_charge', 'setup_recovery_authorized', 'component_recovery_authorized',
                      'reconstruction_recovery_authorized', 'memory_diagnostic_authorized'):
             raise ValueError('use the checked ledger transition')

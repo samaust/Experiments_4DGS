@@ -124,22 +124,36 @@ def bind_slot_byte_budget(proposal, stage, events, run_root, reading):
               and event.get('candidate') == candidate]
     _require(len(grants) == 1, 'exact setup baseline required for whole-slot budget')
     baseline = grants[0]['resource_snapshot']
+    from .depth_budget_reconciliation import causal_credits
+    later = [row for row in events if row.get('event') == 'depth_setup_bytes_reconciled'
+             and row.get('sequence', -1) > grants[0].get('sequence', len(events))
+             and row.get('candidate') != candidate]
+    credits = causal_credits(run_root, grants[0], events) if later else None
+    effective = dict(reading)
+    if credits is not None:
+        for key in ('download_bytes', 'artifact_bytes'):
+            effective[key] = max(reading[key], credits['snapshot'][key]) - credits[key]
     limits = {}
     for key in ('download_bytes', 'artifact_bytes'):
         _require(type(baseline.get(key)) is int and baseline[key] >= 0 and
-                 type(reading.get(key)) is int and reading[key] >= baseline[key],
+                 type(effective.get(key)) is int and effective[key] >= baseline[key],
                  'accounted monotonic setup baseline required for whole-slot budget')
         limits[key] = baseline[key] + proposal['allocation'][key]
-        _require(reading[key] <= limits[key], key + ' whole-slot allocation exceeded')
+        _require(effective[key] <= limits[key], key + ' whole-slot allocation exceeded')
     owned = owned_slot_bytes(run_root, candidate)
-    overhead = max(0, reading['artifact_bytes'] - baseline['artifact_bytes'] - owned)
+    overhead = max(0, effective['artifact_bytes'] - baseline['artifact_bytes'] - owned)
     _require(owned + overhead <= proposal['allocation']['artifact_bytes'],
              'retained setup artifacts exceed whole-slot allocation')
-    return dict(schema='plan069-depth-slot-byte-budget/v1', candidate=candidate,
+    budget = dict(schema='plan069-depth-slot-byte-budget/v1', candidate=candidate,
                 proposal_sha256=object_hash(proposal), setup=stage['setup'],
                 setup_finish_event_sha256=stage['setup_finish_event_sha256'],
                 setup_baseline=baseline, absolute_limits=limits,
                 shared_setup_artifact_bytes=overhead)
+    if credits is not None:
+        budget.update(schema='plan069-depth-slot-byte-budget/v2',
+            setup_grant_sha256=grants[0]['event_sha256'],
+            causal_reconciliation_events=credits['protected_events'])
+    return budget
 
 
 def check_slot_byte_budget(proposal, budget, run_root, reading, *, historical=False):
@@ -149,7 +163,7 @@ def check_slot_byte_budget(proposal, budget, run_root, reading, *, historical=Fa
     Their artifact guard retains frozen shared setup overhead without charging
     unrelated later jobs to the old candidate.
     """
-    _require(budget.get('schema') == 'plan069-depth-slot-byte-budget/v1' and
+    _require(budget.get('schema') in ('plan069-depth-slot-byte-budget/v1', 'plan069-depth-slot-byte-budget/v2') and
              budget.get('candidate') == proposal['candidate'] and
              budget.get('proposal_sha256') == object_hash(proposal) and
              type(budget.get('shared_setup_artifact_bytes')) is int and
@@ -160,10 +174,25 @@ def check_slot_byte_budget(proposal, budget, run_root, reading, *, historical=Fa
                     budget['setup_baseline'][key] + proposal['allocation'][key]
                  for key in ('download_bytes', 'artifact_bytes')),
              'exact approved whole-slot byte budget required')
+    effective = dict(reading)
+    if not historical and budget['schema'] == 'plan069-depth-slot-byte-budget/v2':
+        from .config import load
+        from .ledger import Ledger
+        from .depth_budget_reconciliation import causal_credits
+        events = Ledger(Path(run_root) / 'ledger.jsonl', load()).events()
+        grants = [row for row in events if row.get('event') == 'depth_setup_authorized' and
+                  row.get('event_sha256') == budget.get('setup_grant_sha256')]
+        _require(len(grants) == 1 and grants[0].get('candidate') == proposal['candidate'] and
+                 grants[0].get('resource_snapshot') == budget['setup_baseline'],
+                 'exact protected v2 setup baseline required')
+        credits = causal_credits(run_root, grants[0], events, budget.get('causal_reconciliation_events'))
+        for key in ('download_bytes', 'artifact_bytes'):
+            _require(type(reading.get(key)) is int, 'accounted live byte reading required')
+            effective[key] = max(reading[key], credits['snapshot'][key]) - credits[key]
     if not historical:
         for key in ('download_bytes', 'artifact_bytes'):
-            _require(type(reading.get(key)) is int and
-                     budget['setup_baseline'][key] <= reading[key] <= budget['absolute_limits'][key],
+            _require(type(effective.get(key)) is int and
+                     budget['setup_baseline'][key] <= effective[key] <= budget['absolute_limits'][key],
                      key + ' whole-slot allocation exceeded')
     _require(owned_slot_bytes(run_root, proposal['candidate']) +
              budget['shared_setup_artifact_bytes'] <= proposal['allocation']['artifact_bytes'],

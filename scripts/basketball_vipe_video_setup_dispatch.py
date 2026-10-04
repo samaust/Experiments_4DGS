@@ -67,7 +67,8 @@ def dispatch(candidate, run_id='plan031-20260913T032700Z', *, source_review_path
         runtime_environment=environment_request(candidate, local,
             recipe_path=proposal.get('runtime_recipe', {}).get('path')))
     write_json(request_path, request)
-    ledger.authorize_depth_setup(candidate, review, authorization, source_review)
+    ledger.authorize_depth_setup(candidate, review, authorization, source_review,
+                                 prospective_byte_checkpoint=True)
     worker = ROOT / 'scripts/basketball_vipe_video_setup.py'
     command = [sys.executable, str(worker), '--request', str(request_path),
                '--output', str(output)]
