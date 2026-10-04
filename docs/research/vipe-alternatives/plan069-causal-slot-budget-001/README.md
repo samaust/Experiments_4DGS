@@ -59,11 +59,55 @@ protected diagnostic event and `_jobs` additions when merging ledger changes.
 Add `depth_budget_reconciliation.py` to shared source inventory after the module
 is integrated, regenerate source reviews and qualify combined sources before setup.
 
-A follow-on bounded CPU producer must reserve remaining candidate/global CPU time,
-preserve qualification/maps headroom, enforce its hash deadline while streaming,
-preserve cleanup and success/failure receipts, and charge actual elapsed time.
-The protected reconciliation is not automatically run after setup. No actual byte
-headroom or full attribution has been measured yet. If retained cache entries lack
-accepted installed-inode ownership, that residual remains a blocker rather than
-receiving fabricated credit. Actual D9 setup, reconciliation and D6 maps need the
-integration owner's checked execution path and applicable approvals.
+## Bounded CPU reconciliation producer
+
+`run_reconciliation` and the same helper's module CLI now execute a fresh named
+`plan069-root-cpu-fixture-admission/v1` record. The default limit is 120 seconds,
+including five seconds for cleanup/receipt publication. A caller may select a
+limit only within the admission's explicit bound, current candidate allowance and
+global remainder, preserving 180 seconds for qualification and 160 for maps CPU.
+The independently checked admission must name D9 and source review 004 for D9;
+D6's capture admission is unsuitable. It binds the current ledger head, exact
+effective configuration, passing current source closure and separately checked
+candidate CPU totals. Prepare that fresh admission after the accepted setup finish;
+its candidate allowance may conservatively narrow the approved 3,600-second cap.
+
+The timer begins at entry. Admitted configuration/source preflight, hashes and
+reconciliation are included in the immutable success/failure receipt and its exact
+elapsed CPU charge. SHA checks enforce the deadline per 1 MiB, ownership inventory
+checks it per entry, and final scan, proof publication and protected append recheck
+it. No child process, model or GPU is created; cleanup receipts reflect that.
+An invalid/stale admission is rejected before owned output creation. Once admitted,
+failed preflight or reconciliation preserves its receipt and measured charge.
+
+After integration and fresh qualification, the execution owner can invoke:
+
+```sh
+PYTHONPATH=scripts CUDA_VISIBLE_DEVICES='' \
+  /home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python -B \
+  -m vipe_benchmark.depth_budget_reconciliation \
+  --candidate D9 \
+  --ledger /home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/ledger.jsonl \
+  --admission /ABSOLUTE/PATH/TO/FRESH-D9-RECONCILIATION-CPU-ADMISSION.json \
+  --output /home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/prepare/plan069-D9-setup-byte-reconciliation-001 \
+  --seconds-limit 120
+```
+
+The admission path is deliberately a placeholder; no actual accepted D9 setup or
+fresh reconciliation admission exists yet. Source inventories bind the whole
+module, including its CLI; no private execution code is hidden from that review.
+
+Final focused validation: **81 CPU tests passed in 1.267 seconds**, including
+existing budget/UV receipt regressions and new timeout/preflight/headroom/replay
+cases. Four changed accounting/ledger/dispatch modules pass meaningful mypy.
+Expanding that check to existing `budgets.py` exposed six preexisting untyped-body
+errors (unannotated containers and an existing optional identity narrowing); the
+new optional deadline callback introduces no new reported error. Both independent
+wrapper reviewers found the timer/final-publication gap, then confirmed its fix
+and reported no remaining actionable findings.
+
+No actual byte headroom or full attribution has been measured yet. If retained
+cache entries lack accepted installed-inode ownership, the residual remains a
+blocker. Actual D9 setup, bounded reconciliation and D6 maps require the execution
+owner's checked path, fresh source inventories/qualification and applicable
+approvals. Keep #3/#34/#35 open.

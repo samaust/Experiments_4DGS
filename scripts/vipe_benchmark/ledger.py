@@ -342,10 +342,12 @@ class Ledger:
                 authorization=authorization, source_review=source_review,
                 resource_snapshot=reading, byte_checkpoint=byte_checkpoint))
 
-    def reconcile_depth_setup_bytes(self, candidate):
+    def reconcile_depth_setup_bytes(self, candidate, *, deadline=None, expected_head=None):
         """Protect prospective attribution after exact accepted cleanup."""
         from .depth_budget_reconciliation import prepare_reconciliation
         with self.locked() as (stream, events):
+            if expected_head is not None and (not events or events[-1]['event_sha256'] != expected_head):
+                raise ValueError('CPU reconciliation admission ledger head changed')
             if any(row['event'] == 'reserve' for row in self.states(events).values()):
                 raise ValueError('active attempt prevents setup byte reconciliation')
             if any(row.get('event') == 'depth_setup_bytes_reconciled' and
@@ -357,7 +359,9 @@ class Ledger:
                              ('artifact_bytes', 'new_artifact_disk_gib_limit')):
                 if reading[key] > self.config[cap] * 2**30:
                     raise ValueError(key + ' reconciliation exceeds global cap')
-            proof = prepare_reconciliation(self.path.parent, candidate, events)
+            proof = prepare_reconciliation(self.path.parent, candidate, events, deadline=deadline)
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError('setup byte reconciliation CPU deadline exceeded before protected append')
             return self._append(stream, events, dict(event='depth_setup_bytes_reconciled',
                 candidate=candidate, proof=proof))
 

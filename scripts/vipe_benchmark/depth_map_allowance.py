@@ -9,7 +9,7 @@ def _require(condition, reason):
         raise ValueError(reason)
 
 
-def remaining_map_allocation(proposal, setup, events, run_root, assets):
+def remaining_map_allocation(proposal, setup, events, run_root, assets, *, verifier=verify_record):
     """Credit only verified required assets already included in live used totals.
 
     Callers must supply events from the checked ledger; the allocator recomputes
@@ -19,7 +19,7 @@ def remaining_map_allocation(proposal, setup, events, run_root, assets):
     candidate = proposal['candidate']
     job = f'plan069-{candidate}-setup-001'
     root = Path(run_root).resolve()
-    setup_record = verify_record(setup)
+    setup_record = verifier(setup)
     _require(setup_record == setup and Path(setup_record['path']) == root / 'jobs' / job / 'result.json',
              'owned completed setup result required for map allowance')
     result = read_json(setup_record['path'])
@@ -41,8 +41,8 @@ def remaining_map_allocation(proposal, setup, events, run_root, assets):
     grant, reserve, finish = authorized[0], reserves[0], finishes[0]
     _require(events.index(grant) < events.index(reserve) < events.index(finish),
              'accepted setup ledger transition order required')
-    review = verify_record(result['review'])
-    authorization = verify_record(result['authorization'])
+    review = verifier(result['review'])
+    authorization = verifier(result['authorization'])
     reviewed = read_json(review['path'])
     approved = read_json(authorization['path'])
     _require(proposal.get('max_attempts') == 1 and
@@ -57,7 +57,7 @@ def remaining_map_allocation(proposal, setup, events, run_root, assets):
              grant.get('review') == review and grant.get('authorization') == authorization and
              grant.get('proposal_sha256') == object_hash(proposal),
              'setup allocation approval lineage differs from map proposal')
-    request_record = verify_record(reserve['evidence']['request'])
+    request_record = verifier(reserve['evidence']['request'])
     request = read_json(request_record['path'])
     _require(request_record == reserve['evidence']['request'] and
              Path(request_record['path']) == root / 'requests' / (job + '.json') and
@@ -73,7 +73,7 @@ def remaining_map_allocation(proposal, setup, events, run_root, assets):
              finish.get('cleanup_uncertain') is False and finish.get('surviving_pids') == [] and
              finish.get('deadline_exceeded') is False,
              'clean exact setup completion required for map allowance')
-    inventory = read_json(verify_record(proposal['required_assets'])['path'])['candidates'][candidate]['files']
+    inventory = read_json(verifier(proposal['required_assets'])['path'])['candidates'][candidate]['files']
     expected = {(r['repository'], r['path']): r for r in inventory}
     by_key = {(r['repository'], r['path']): r for r in assets}
     _require(len(expected) == len(inventory) == len(by_key) == len(assets) and set(expected) == set(by_key),
@@ -85,7 +85,7 @@ def remaining_map_allocation(proposal, setup, events, run_root, assets):
                  'map checkpoint differs from accepted setup')
     sizes: dict[tuple[int, int], int] = {}
     for key, row in by_key.items():
-        record = verify_record(row['record'])
+        record = verifier(row['record'])
         path = Path(record['path'])
         required = expected[key]
         _require(record == row['record'] and path.is_relative_to(root / 'jobs' / job) and

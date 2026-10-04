@@ -65,7 +65,7 @@ class RetainedCausalTests(unittest.TestCase):
     """Use the existing accepted setup boundary, with real temp ledger/inodes."""
     def build_causal(self, *, baseline_cache=False, extra_unowned=False, reconcile=True,
                      finish_changes=None):
-        self.proposal['allocation'].update(download_bytes=2**20, artifact_bytes=2**20)
+        self.proposal['allocation'].update(download_bytes=2**20, artifact_bytes=2**20, cpu_seconds=1000)
         self.approval['proposal_sha256'] = object_hash(self.proposal)
         self.prepare_completed_setup()
         self.ledger = Ledger(self.root / 'ledger.jsonl', load())
@@ -109,7 +109,7 @@ class RetainedCausalTests(unittest.TestCase):
         write_json(self.setup, result)
         with self.ledger.locked() as (stream, events):
             self.ledger._append(stream, events, dict({k:v for k,v in self.events[2].items() if k != 'event_sha256'},
-                **dict(dict(result=file_record(self.setup)), **(finish_changes or {}))))
+                **dict(dict(result=file_record(self.setup), elapsed_seconds=1.), **(finish_changes or {}))))
         if extra_unowned:
             (self.root / 'unowned.bin').write_bytes(b'z' * 131072)
         if reconcile:
@@ -235,3 +235,112 @@ class RetainedCausalTests(unittest.TestCase):
             self.ledger.reconcile_depth_setup_bytes('D5')
         self.assertEqual(self.ledger.path.read_bytes(), before)
         self.assertEqual(budget_snapshot(self.root), reading)
+
+    def cpu_admission(self, *, remaining=1000, seconds=120):
+        from vipe_benchmark.depth_admission import local_source_records
+        source = self.root / 'cpu-source-review.json'
+        write_json(source, dict(status='passed', candidate='D5', local_sources=local_source_records('D5')))
+        config = self.root / 'cpu-effective-config.json'
+        write_json(config, self.ledger.config)
+        events = self.ledger.events()
+        elapsed = self.ledger.totals(events)['cpu']['elapsed_seconds']
+        admission = self.root / 'cpu-admission.json'
+        write_json(admission, dict(schema='plan069-root-cpu-fixture-admission/v1',candidate='D5',
+            cpu_accounting_owner='D5', ledger_head_sequence=events[-1]['sequence'],
+            ledger_head_sha256=events[-1]['event_sha256'],ledger_event_count=len(events),
+            candidate_cpu_allocation_seconds=1000,candidate_cpu_elapsed_seconds=1000-remaining,
+            candidate_cpu_remaining_seconds=remaining, global_cpu_elapsed_seconds=elapsed,
+            global_cpu_remaining_seconds=self.ledger.config['cpu_prepare_score_report_seconds_limit']-elapsed,
+            seconds=seconds,effective_configuration=file_record(config),source_review=file_record(source)))
+        return file_record(admission), self.root / 'prepare/plan069-D5-setup-byte-reconciliation-001'
+
+    def test_bounded_cpu_producer_charges_once_with_receipt_and_preserves_future_headroom(self):
+        from vipe_benchmark.depth_budget_reconciliation import run_reconciliation
+        self.build_causal(reconcile=False)
+        admission, output = self.cpu_admission()
+        result = run_reconciliation(self.ledger, 'D5', admission, output)
+        self.assertEqual(result['status'], 'complete')
+        self.assertTrue(result['cleanup_confirmed'])
+        self.assertEqual(result['surviving_pids'], [])
+        self.assertFalse(result['gpu_operations'])
+        charges = [row for row in self.ledger.events() if row['event'] == 'cpu_preparation_charge']
+        self.assertEqual(len(charges), 1)
+        self.assertEqual(charges[0]['evidence'], file_record(output / 'receipt.json'))
+        self.assertEqual(charges[0]['elapsed_seconds'], result['elapsed_seconds'])
+        with self.assertRaisesRegex(ValueError, 'fresh named CPU'):
+            run_reconciliation(self.ledger, 'D5', admission, output)
+        self.assertEqual(len([row for row in self.ledger.events() if row['event'] == 'cpu_preparation_charge']), 1)
+
+    def test_cpu_producer_rejects_insufficient_future_headroom_before_writes(self):
+        from vipe_benchmark.depth_budget_reconciliation import run_reconciliation
+        self.build_causal(reconcile=False)
+        admission, output = self.cpu_admission(remaining=459)
+        before = self.ledger.path.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'preserve qualification and maps headroom'):
+            run_reconciliation(self.ledger, 'D5', admission, output)
+        self.assertEqual(self.ledger.path.read_bytes(), before)
+        self.assertFalse(output.exists())
+
+    def test_cpu_timeout_preserves_failed_receipt_and_actual_charge_without_credit(self):
+        from vipe_benchmark.depth_budget_reconciliation import run_reconciliation
+        self.build_causal(reconcile=False)
+        admission, output = self.cpu_admission()
+        from unittest.mock import patch
+        from vipe_benchmark.depth_budget_reconciliation import _timed_verify
+        def timed(record, deadline):
+            if record['path'] == str(self.asset):
+                raise TimeoutError('fixture streaming deadline')
+            return _timed_verify(record, deadline)
+        with patch('vipe_benchmark.depth_budget_reconciliation._timed_verify', side_effect=timed):
+            with self.assertRaisesRegex(TimeoutError, 'streaming deadline'):
+                run_reconciliation(self.ledger, 'D5', admission, output)
+        receipt = read_json(output / 'receipt.json')
+        self.assertEqual(receipt['status'], 'failed')
+        self.assertTrue(receipt['cleanup_confirmed'])
+        events = self.ledger.events()
+        self.assertFalse(any(row['event'] == 'depth_setup_bytes_reconciled' for row in events))
+        self.assertEqual(events[-1]['event'], 'cpu_preparation_charge')
+        self.assertEqual(events[-1]['evidence'], file_record(output / 'receipt.json'))
+
+    def test_streamed_hash_enforces_deadline_between_blocks(self):
+        from vipe_benchmark.depth_budget_reconciliation import _timed_verify
+        from unittest.mock import patch
+        self.build_causal(reconcile=False)
+        path = self.root / 'large-fixture.bin'
+        path.write_bytes(b'X' * (2**20 + 1))
+        record = file_record(path)
+        with patch('vipe_benchmark.depth_budget_reconciliation.time.monotonic',side_effect=[0., 2.]):
+            with self.assertRaisesRegex(TimeoutError, 'CPU deadline'):
+                _timed_verify(record, 1.)
+
+    def test_final_scan_deadline_cannot_leave_protected_credit(self):
+        from vipe_benchmark.depth_budget_reconciliation import run_reconciliation, _files
+        from unittest.mock import patch
+        self.build_causal(reconcile=False)
+        admission, output = self.cpu_admission()
+        calls = []
+        def inventory(root, deadline=None):
+            calls.append(root)
+            result = _files(root, deadline)
+            if len(calls) == 2:
+                raise TimeoutError('fixture final inventory deadline')
+            return result
+        with patch('vipe_benchmark.depth_budget_reconciliation._files', side_effect=inventory):
+            with self.assertRaisesRegex(TimeoutError, 'final inventory deadline'):
+                run_reconciliation(self.ledger, 'D5', admission, output)
+        events = self.ledger.events()
+        self.assertFalse(any(row['event'] == 'depth_setup_bytes_reconciled' for row in events))
+        self.assertEqual(events[-1]['event'], 'cpu_preparation_charge')
+        self.assertEqual(read_json(output / 'receipt.json')['status'], 'failed')
+
+    def test_source_preflight_failure_is_preserved_and_charged_after_fresh_admission(self):
+        from vipe_benchmark.depth_budget_reconciliation import run_reconciliation
+        self.build_causal(reconcile=False)
+        admission, output = self.cpu_admission()
+        document = read_json(admission['path'])
+        Path(document['source_review']['path']).write_text('{}\n')
+        with self.assertRaisesRegex(ValueError, 'changed file'):
+            run_reconciliation(self.ledger, 'D5', admission, output)
+        receipt = read_json(output / 'receipt.json')
+        self.assertEqual(receipt['status'], 'failed')
+        self.assertEqual(self.ledger.events()[-1]['evidence'], file_record(output / 'receipt.json'))

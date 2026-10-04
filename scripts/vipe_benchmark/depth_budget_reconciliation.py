@@ -5,6 +5,9 @@ setup can then reconcile newly retained declared files and command-bound reads.
 Old grants without this evidence retain conservative v1 accounting.
 """
 from pathlib import Path
+import hashlib
+import math
+import time
 
 from .budgets import _inventory, _snapshot
 from .files import file_record, object_hash, read_json, safe_path, verify_record, write_json
@@ -13,6 +16,28 @@ from .files import file_record, object_hash, read_json, safe_path, verify_record
 def _require(condition, reason):
     if not condition:
         raise ValueError(reason)
+
+
+def _check_deadline(deadline):
+    if deadline is not None and time.monotonic() >= deadline:
+        raise TimeoutError('setup byte reconciliation CPU deadline exceeded')
+
+
+def _timed_verify(record, deadline):
+    if deadline is None:
+        return verify_record(record)
+    path = safe_path(record['path']).resolve()
+    checksum = hashlib.sha256()
+    with path.open('rb') as stream:
+        while True:
+            _check_deadline(deadline)
+            block = stream.read(2**20)
+            if not block:
+                break
+            checksum.update(block)
+    actual = dict(path=str(path), sha256=checksum.hexdigest(), bytes=path.stat().st_size)
+    _require(actual == record, 'changed file during bounded reconciliation: ' + str(path))
+    return actual
 
 
 def _metadata(info):
@@ -24,9 +49,9 @@ def _key(row):
     return row['device'], row['inode']
 
 
-def _files(root):
+def _files(root, deadline=None):
     return {str(Path(path).relative_to(root)): _metadata(info)
-            for path, info in _inventory(root).items()}
+            for path, info in _inventory(root, deadline_check=lambda: _check_deadline(deadline)).items()}
 
 
 def capture_checkpoint(run_root, candidate, reading):
@@ -52,10 +77,10 @@ def acquisition_credit(direct, uv, cache, owned_uv, owned_cache):
     return direct + max(uv, cache) - max(uv - owned_uv, cache - owned_cache)
 
 
-def _checkpoint(root, grant):
+def _checkpoint(root, grant, *, verifier=verify_record):
     record = grant.get('byte_checkpoint')
     _require(isinstance(record, dict), 'prospective protected setup byte checkpoint required')
-    _require(verify_record(record) == record and Path(record['path']) == root / 'prepare' /
+    _require(verifier(record) == record and Path(record['path']) == root / 'prepare' /
              f"plan069-{grant['candidate']}-setup-byte-checkpoint.json",
              'owned immutable setup byte checkpoint required')
     checkpoint = read_json(record['path'])
@@ -66,7 +91,7 @@ def _checkpoint(root, grant):
     return checkpoint
 
 
-def _accepted(root, candidate, events):
+def _accepted(root, candidate, events, *, verifier=verify_record):
     """Use the existing exact approval/request/asset/clean-finish validator."""
     from .depth_map_allowance import remaining_map_allocation
     grants = [row for row in events if row.get('event') == 'depth_setup_authorized' and
@@ -75,30 +100,33 @@ def _accepted(root, candidate, events):
                 row.get('job_id') == f'plan069-{candidate}-setup-001']
     _require(len(grants) == len(finishes) == 1, 'one protected completed setup required')
     grant, finish = grants[0], finishes[0]
-    review = read_json(verify_record(grant['review'])['path'])
+    review = read_json(verifier(grant['review'])['path'])
     proposals = [row for row in review['proposals'] if row['candidate'] == candidate]
     _require(len(proposals) == 1 and object_hash(proposals[0]) == grant['proposal_sha256'],
              'exact setup proposal required for reconciliation')
     proposal = proposals[0]
-    result = read_json(verify_record(finish['result'])['path'])
+    result = read_json(verifier(finish['result'])['path'])
     assets = result.get('assets')
     if assets is None:
-        required = read_json(verify_record(proposal['required_assets'])['path'])['candidates'][candidate]['files']
+        required = read_json(verifier(proposal['required_assets'])['path'])['candidates'][candidate]['files']
         _require(len(required) == 1, 'single owned checkpoint required')
         assets = [dict(repository=required[0]['repository'], path=required[0]['path'],
                        record=result['checkpoint'])]
-    remaining_map_allocation(proposal, finish['result'], events, root, assets)
+    remaining_map_allocation(proposal, finish['result'], events, root, assets, verifier=verifier)
     return grant, finish, result, proposal
 
 
-def prepare_reconciliation(run_root, candidate, events):
+def prepare_reconciliation(run_root, candidate, events, *, deadline=None):
     """Build attribution only after accepted finish; caller protects its record."""
     root = safe_path(run_root).resolve()
-    grant, finish, result, proposal = _accepted(root, candidate, events)
-    checkpoint = _checkpoint(root, grant)
+    def verifier(record):
+        return _timed_verify(record, deadline)
+    _check_deadline(deadline)
+    grant, finish, result, proposal = _accepted(root, candidate, events, verifier=verifier)
+    checkpoint = _checkpoint(root, grant, verifier=verifier)
     prior = {_key(row) for row in checkpoint['files'].values()}
     job = root / 'jobs' / f'plan069-{candidate}-setup-001'
-    files = _files(root)
+    files = _files(root, deadline)
     snapshot = _snapshot(root)
     for key in ('download_bytes', 'artifact_bytes'):
         _require(checkpoint['resource_snapshot'][key] <= snapshot[key] <=
@@ -115,7 +143,7 @@ def prepare_reconciliation(run_root, candidate, events):
             declared.append(result[key])
     declared.extend(result.get('source_files', []))
     runtime_record = result.get('runtime_environment')
-    _require(isinstance(runtime_record, dict) and verify_record(runtime_record) == runtime_record and
+    _require(isinstance(runtime_record, dict) and verifier(runtime_record) == runtime_record and
              Path(runtime_record['path']) == job / 'runtime/result.json',
              'accepted owned actual runtime required for reconciliation')
     runtime = read_json(runtime_record['path'])
@@ -123,7 +151,7 @@ def prepare_reconciliation(run_root, candidate, events):
              runtime.get('status') == 'complete' and runtime.get('record_kind') == 'actual' and
              runtime.get('candidate') == candidate and runtime.get('inventory') == result.get('inventory'),
              'exact accepted actual runtime inventory required')
-    inventory_record = verify_record(runtime['inventory'])
+    inventory_record = verifier(runtime['inventory'])
     _require(inventory_record == runtime['inventory'] and
              Path(inventory_record['path']) == job / 'runtime/inventory.json',
              'owned runtime inventory required')
@@ -142,7 +170,7 @@ def prepare_reconciliation(run_root, candidate, events):
         info = files.get(relative)
         _require(info is not None and info['logical_bytes'] == record['bytes'],
                  'accepted setup file metadata changed')
-        _require(verify_record(record) == record, 'accepted setup file content changed')
+        _require(verifier(record) == record, 'accepted setup file content changed')
         if _key(info) not in prior:
             owned[relative] = info
             if record['path'] in installed_paths:
@@ -158,7 +186,7 @@ def prepare_reconciliation(run_root, candidate, events):
                 seen.add(_key(info))
     uv = []
     for command_record in runtime.get('command_receipts', []):
-        _require(verify_record(command_record) == command_record and
+        _require(verifier(command_record) == command_record and
                  Path(command_record['path']).is_relative_to(job / 'runtime/commands'),
                  'owned accepted runtime command required')
         command = read_json(command_record['path'])
@@ -168,7 +196,7 @@ def prepare_reconciliation(run_root, candidate, events):
         if receipt is None:
             continue
         from .transfer_proxy import completed_uv_receipt
-        _require(verify_record(receipt) == receipt, 'UV receipt changed')
+        _require(verifier(receipt) == receipt, 'UV receipt changed')
         document = read_json(receipt['path'])
         _require(command.get('package_transfer_proxy') is True and
                  Path(receipt['path']) == completed_uv_receipt(root, document['transfer_id']) and
@@ -200,10 +228,14 @@ def prepare_reconciliation(run_root, candidate, events):
         setup=finish['result'], checkpoint=grant['byte_checkpoint'],
         runtime=runtime_record, inventory=inventory_record,
         owned_files=owned, retained_cache_files=cache, uv_transfers=uv, direct_transfers=direct)
-    _require(files == _files(root), 'setup ownership inventory changed during reconciliation')
+    _check_deadline(deadline)
+    _require(files == _files(root, deadline), 'setup ownership inventory changed during reconciliation')
+    _check_deadline(deadline)
     path = root / 'prepare' / f'plan069-{candidate}-setup-byte-reconciliation.json'
     write_json(path, document)
-    return file_record(path)
+    record = file_record(path)
+    _check_deadline(deadline)
+    return record
 
 
 def causal_credits(run_root, subject_grant, events, proofs=None):
@@ -284,3 +316,107 @@ def causal_credits(run_root, subject_grant, events, proofs=None):
         download_bytes=acquisition_credit(direct, snapshot['uv_metered_bytes'],
             snapshot['retained_package_bytes'], uv, sum(cache.values())),
         protected_events=[row['event_sha256'] for row in reconciled], snapshot=snapshot)
+
+
+def run_reconciliation(ledger, candidate, admission, output, *, seconds_limit=120.):
+    """Execute a fresh named CPU admission, preserve cleanup, charge actual time.
+
+    The caller supplies the existing independently checked root CPU admission.
+    This grants no installation, download, model, GPU or native maps authority.
+    """
+    started = time.monotonic()
+    _require(type(seconds_limit) in (int, float) and math.isfinite(seconds_limit) and
+             seconds_limit > 5, 'bounded CPU reconciliation deadline required')
+    deadline = started + seconds_limit - 5
+    record = _timed_verify(admission, deadline)
+    _require(record == admission, 'exact independently checked CPU admission required')
+    approved = read_json(record['path'])
+    _require(type(seconds_limit) in (int, float) and math.isfinite(seconds_limit) and
+             seconds_limit > 5, 'bounded CPU reconciliation deadline required')
+    events = ledger.events()
+    _require(events and approved.get('schema') == 'plan069-root-cpu-fixture-admission/v1' and
+             approved.get('candidate') == approved.get('cpu_accounting_owner') == candidate and
+             approved.get('ledger_head_sequence') == events[-1]['sequence'] and
+             approved.get('ledger_head_sha256') == events[-1]['event_sha256'] and
+             approved.get('ledger_event_count') == len(events),
+             'fresh named CPU reconciliation admission required')
+    grants = [row for row in events if row.get('event') == 'depth_setup_authorized' and
+              row.get('candidate') == candidate]
+    _require(len(grants) == 1, 'exact protected setup allocation required')
+    review = read_json(verify_record(grants[0]['review'])['path'])
+    proposal = next(row for row in review['proposals'] if row['candidate'] == candidate)
+    allocation = approved.get('candidate_cpu_allocation_seconds')
+    elapsed = approved.get('candidate_cpu_elapsed_seconds')
+    remaining = approved.get('candidate_cpu_remaining_seconds')
+    _require(all(type(x) in (int, float) and math.isfinite(x) and x >= 0
+                 for x in (allocation, elapsed, remaining)) and
+             allocation <= proposal['allocation']['cpu_seconds'] and
+             math.isclose(allocation - elapsed, remaining, abs_tol=1e-6),
+             'checked candidate CPU remaining allowance required')
+    global_elapsed = ledger.totals(events)['cpu']['elapsed_seconds']
+    global_remaining = ledger.config['cpu_prepare_score_report_seconds_limit'] - global_elapsed
+    _require(approved.get('global_cpu_elapsed_seconds') == global_elapsed and
+             approved.get('global_cpu_remaining_seconds') == global_remaining and
+             type(approved.get('seconds')) in (int, float) and
+             seconds_limit <= approved['seconds'] and
+             seconds_limit + 180 + 160 <= min(remaining, global_remaining),
+             'CPU reconciliation must preserve qualification and maps headroom')
+    _require(not any(row['event'] == 'reserve' for row in ledger.states(events).values()),
+             'active attempt prevents CPU reconciliation')
+    root = ledger.path.resolve().parent
+    output = safe_path(output).resolve()
+    _require(output.parent == root / 'prepare' and
+             output.name == f'plan069-{candidate}-setup-byte-reconciliation-001' and
+             not output.exists(), 'immutable owned CPU reconciliation output required')
+    output.mkdir(parents=True, exist_ok=False)
+    receipt = dict(schema='plan069-depth-setup-byte-reconciliation-cpu/v1',
+        candidate=candidate, cpu_accounting_owner=candidate, status='failed',
+        admission=record, seconds_limit=seconds_limit, qualification_headroom_seconds=180,
+        maps_cpu_headroom_seconds=160, cleanup_confirmed=True, surviving_pids=[],
+        model_loads=False, gpu_operations=False, downloads=False, automatic_retries=0)
+    try:
+        _check_deadline(deadline)
+        _require(read_json(_timed_verify(approved['effective_configuration'], deadline)['path']) == ledger.config,
+                 'exact effective CPU configuration required')
+        from .depth_admission import local_source_records
+        source = read_json(_timed_verify(approved['source_review'], deadline)['path'])
+        _require(source.get('status') == 'passed' and source.get('candidate') == candidate and
+                 source.get('local_sources') == local_source_records(candidate),
+                 'CPU reconciliation sources differ from passing independent review')
+        _check_deadline(deadline)
+        event = ledger.reconcile_depth_setup_bytes(candidate,
+            deadline=deadline,
+            expected_head=approved['ledger_head_sha256'])
+        _check_deadline(started + seconds_limit)
+        receipt.update(status='complete', protected_reconciliation_event=event['event_sha256'],
+                       proof=event['proof'])
+        return receipt
+    except BaseException as exception:
+        receipt['error'] = f'{type(exception).__name__}: {exception}'
+        raise
+    finally:
+        receipt['elapsed_seconds'] = time.monotonic() - started
+        path = output / 'receipt.json'
+        write_json(path, receipt)
+        ledger.charge_cpu_preparation(receipt['elapsed_seconds'], file_record(path))
+
+
+def main():
+    import argparse
+    from .ledger import Ledger
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--candidate', choices=('D9', 'D10'), required=True)
+    parser.add_argument('--ledger', type=Path, required=True)
+    parser.add_argument('--admission', type=Path, required=True)
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--seconds-limit', type=float, default=120.)
+    args = parser.parse_args()
+    admission = file_record(args.admission)
+    document = read_json(admission['path'])
+    config = read_json(verify_record(document['effective_configuration'])['path'])
+    run_reconciliation(Ledger(args.ledger, config), args.candidate,
+                       admission, args.output, seconds_limit=args.seconds_limit)
+
+
+if __name__ == '__main__':
+    main()

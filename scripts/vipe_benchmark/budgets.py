@@ -49,13 +49,15 @@ class _Inventory(dict):
         self.partials = {}
 
 
-def _scan_once(root):
+def _scan_once(root, *, deadline_check=None):
     files = _Inventory()
     pending = [(str(root), '')]
     while pending:
         base, scope = pending.pop()
         with os.scandir(base) as entries:
             for entry in entries:
+                if deadline_check is not None:
+                    deadline_check()
                 name = entry.name
                 if name == 'prompts':
                     continue
@@ -74,10 +76,10 @@ def _scan_once(root):
     return files
 
 
-def _inventory(root):
+def _inventory(root, *, deadline_check=None):
     if not root.exists():
         return _Inventory()
-    return _scan_once(root)
+    return _scan_once(root, deadline_check=deadline_check)
 
 
 def directory_bytes(root):
