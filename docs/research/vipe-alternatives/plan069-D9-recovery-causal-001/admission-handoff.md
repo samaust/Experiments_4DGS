@@ -1,7 +1,7 @@
 # Future reconciliation CPU admission
 
-The private producer is in the `depth-setup-recovery` worktree:
-`.local/D9-recovery-reconciliation-admission-001/prepare.py`.
+The canonical producer is tracked alongside this handoff as
+`prepare_reconciliation_admission.py`; invoke the qualified canonical copy.
 It has passed syntax validation and independent read-only Standards review.
 Do not run it now: D9 setup failed and no accepted recovery exists.
 The reviewed file is 9,354 bytes with SHA-256
@@ -19,7 +19,7 @@ combined `plan069-delta-cpu-test-capture/v1` receipt 012. Receipt 011 is stale.
 Use the explicit root virtual environment interpreter. Arguments are:
 
 ```text
-prepare.py --checkout <clean canonical depth-extension checkout>
+prepare_reconciliation_admission.py --checkout <clean canonical depth-extension checkout>
            --run <owned benchmark run>
            --output <fresh private admission directory>
            --source-review <current passing D9 recovery source review>
