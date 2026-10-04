@@ -192,3 +192,28 @@ class QualificationOwnedArtifactTests(unittest.TestCase):
             output.with_suffix('.log').write_bytes(b'z'*300)
             self.assertGreaterEqual(module.owned_artifact_bytes(output),600)
             self.assertGreater(module.owned_artifact_bytes(output),module.owned_artifact_bytes(output/'absent'))
+
+
+class RealLocalBindEnvelopeContractTests(unittest.TestCase):
+    def test_public_envelope_matches_real003_request_and_result_contract(self):
+        from test_vipe_benchmark_depth_driver_qualification_local_bind import fixture
+        from test_vipe_benchmark_depth_driver_qualification import result_fixture
+        from vipe_benchmark.depth_driver_qualification_local_bind import validate_request,validate_result
+        from vipe_benchmark.files import read_json
+        spec=importlib.util.spec_from_file_location('real003envelope',ROOT/'scripts/basketball_vipe_depth_driver_qualification_local_bind.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as directory:
+            ledger,record,request,sources,live=fixture(Path(directory))
+            _,proposal=validate_request(record,current_sources=sources)
+            raw=result_fixture(record,request,sources)
+            out=Path(request['output']);trace=out.with_suffix('.syscalls.log');trace.write_text('completed fixture syscall trace')
+            raw.update(schema='plan069-D6-driver-qualification-result/v3',network_guard=request['network_guard'],
+                creation_exception=request['creation_exception'],bind_exception=request['bind_exception'],
+                guard_startup=request['guard_startup'],guard_startup_proof=dict(socket_descriptors=0,descriptor_count=3,
+                    single_thread=True,numeric_imports=False,unix_bind_allowed=True),trace_path=str(trace))
+            write_json(out/'worker-result.json',raw)
+            result=module.publish_result_envelope(out,record,proposal,validate_result)
+            self.assertEqual(read_json(out/'result.json'),result)
+            self.assertEqual(result['trace'],file_record(trace))
+            self.assertEqual(result['worker_result'],file_record(out/'worker-result.json'))
+            validate_result(result,record,cleanup_confirmed=True)

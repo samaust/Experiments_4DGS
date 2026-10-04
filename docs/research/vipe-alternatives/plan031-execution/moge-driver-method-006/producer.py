@@ -277,6 +277,7 @@ def driver_child(args):
         trace_path=str(out.with_suffix('.syscalls.log')),
         network_guard=network_guard, creation_exception=CREATION_EXCEPTION,
         guard_startup=early['guard_startup'],guard_startup_proof=early['guard_startup_proof'],
+        bind_exception=early['request']['bind_exception'],
         qualification_kind=KIND, request=qualification_request_record, method=record(__file__),
         all_parameters_cpu=True, all_buffers_cpu=True, gpu_model_load='not_performed',
         driver_metadata=driver_metadata, tensor_peak_allocated_bytes=0, **calls,

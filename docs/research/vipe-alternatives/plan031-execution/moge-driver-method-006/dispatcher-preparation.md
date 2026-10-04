@@ -20,9 +20,10 @@ clean finish. A failed clean trace cannot become a passing qualification.
 Fourteen CPU fake boundary cases pass; mypy passes for both executables.
 Independent Standards and Spec reviews report no actionable findings. Tests
 use fake startup execution and never install filters, create sockets, import
-models, access the GPU or write the production ledger. The new authority needs
-integration and a real public result-contract fixture before combined source
-qualification. Actual qualification003 remains separately reviewed and gated.
+models, access the GPU or write the production ledger. The new authority and public result-contract fixture pass together: 33
+focused cases cover the real authority, envelope and retained qualification002
+contract. The v3 raw result also binds the exact local bind exception. Combined
+source qualification remains required before execution. Actual qualification003 remains separately reviewed and gated.
 
 Integrate guard006 commit `8a4a259c`, the new authority/ledger hook and this
 preparation. Bind the new producer, dispatcher and startup/guard records into
