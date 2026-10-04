@@ -386,6 +386,10 @@ def worker_binding(invocation_record, request, arm, phase):
 
 def validate_dispatch_invocation(invocation_record, ledger, reservation):
     """Validate the reserved command before launch, without requiring a PID yet."""
+    with ledger.locked() as (_, events):
+        _require(ledger.states(events).get(reservation['job_id']) == reservation and not any(
+            event.get('event') == 'started' and event.get('job_id') == reservation['job_id']
+            for event in events), 'exact current active unstarted reservation required before dispatch')
     invocation = _bound(invocation_record)
     _require(Path(invocation['ledger_path']).resolve() == ledger.path.resolve(),
         'invocation shared ledger differs')

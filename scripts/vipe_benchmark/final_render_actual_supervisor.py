@@ -142,6 +142,8 @@ def _supervise_reserved(ledger, reservation, command, output, invocation_record,
             if isinstance(error,ControlFailure) and not error.cleanup_confirmed:
                 cleanup = False
                 lifecycle['cleanup_confirmed'] = False
+    if primary is None and accepted is None:
+        primary = RuntimeError('actual acceptance result missing')
     if primary is None and cleanup:
         try:
             # No retained worker group remains: every compute PID is foreign.
@@ -174,13 +176,14 @@ def _supervise_reserved(ledger, reservation, command, output, invocation_record,
         # Published evidence is never used as success when publication crosses cap.
         primary = TimeoutError('supervision publication exceeded actual allocation')
         write_json(control_root/'publication-failure.json',dict(error=repr(primary),execution_authorized=False))
+    accepted_result = accepted['result'] if primary is None and accepted is not None else None
     finish = ledger.finish(reservation['job_id'],'complete' if primary is None else 'failed',
         elapsed,invocation=invocation_record,cleanup_confirmed=cleanup,cleanup_uncertain=not cleanup,
-        result=None if primary is not None else accepted['result'],
+        result=accepted_result,
         supervision=file_record(receipt_path))
     if primary is not None:
         raise ActualSupervisionFailure(str(primary), dict(receipt=receipt,finish=finish)) from primary
-    return dict(result=accepted['result'],supervision=file_record(receipt_path),finish=finish)
+    return dict(result=accepted_result,supervision=file_record(receipt_path),finish=finish)
 
 
 def supervise_reserved(ledger, reservation, command, output, invocation_record, *, release_path):
@@ -188,6 +191,10 @@ def supervise_reserved(ledger, reservation, command, output, invocation_record, 
     evidence = reservation.get('evidence', {})
     if reservation.get('event') != 'reserve' or evidence.get('record_kind') != 'actual' or evidence.get('execution_authorized') is not True or evidence.get('native_adapter_qualified') is not True:
         raise ValueError('checked actual reservation required')
+    if ledger.states().get(reservation['job_id']) != reservation or any(
+            event.get('event') == 'started' and event.get('job_id') == reservation['job_id']
+            for event in ledger.events()):
+        raise ValueError('exact current active unstarted reservation required before supervision')
     lifecycle = dict(launch_attempted=False,cleanup_confirmed=True)
     try:
         return _supervise_reserved(ledger,reservation,command,output,invocation_record,
