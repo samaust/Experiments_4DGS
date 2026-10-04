@@ -193,7 +193,7 @@ class QualificationRecoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             ledger,record,request,sources,live=fixture(Path(directory))
             good=list(request['command'])
-            for index,value in [(0,'other-strace'),(7,'trace=none'),(11,str(Path(directory)/'unowned.log'))]:
+            for index,value in [(0,'other-strace'),(6,'trace=none'),(10,str(Path(directory)/'unowned.log'))]:
                 with self.subTest(index=index):
                     request['command']=list(good);request['command'][index]=value
                     Path(record['path']).write_text(json.dumps(request))
