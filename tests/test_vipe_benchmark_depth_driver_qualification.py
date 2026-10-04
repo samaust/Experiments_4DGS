@@ -1,5 +1,6 @@
 """D6 driver qualification authority, resource scope and retained result seams."""
 from pathlib import Path
+import json
 import sys
 import tempfile
 import unittest
@@ -54,6 +55,43 @@ def result_fixture(record, request, sources):
 
 
 class DriverQualificationTests(unittest.TestCase):
+    def test_integrated_cpu_capture_accepts_exact_pass_and_rejects_tampering(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);record,request,sources=fixture(root,'actual')
+            packet=root/'full-review.json'
+            head='a'*40
+            write_json(packet,dict(schema='plan069-final-full-cpu-review/v1',status='REVIEW',
+                base_head=head,checkout=str(root),max_seconds=1200,overlay=str(root/'overlay'),output=str(root/'full')))
+            cpu=read_json(request['cpu_validation']['path'])
+            cpu.update(schema='plan069-integrated-cpu-test-capture/v1',head=head,head_after=head,
+                head_unchanged=True,environment_bytes_unchanged=True,review_request=file_record(packet),
+                checkout=str(root),max_seconds=1200,elapsed_seconds=100,
+                environment=dict(CUDA_VISIBLE_DEVICES='',VIPE_CPU_VALIDATION='1',
+                    PYTHONDONTWRITEBYTECODE='1',PYTEST_DISABLE_PLUGIN_AUTOLOAD='1',
+                    OMP_NUM_THREADS='1',OPENBLAS_NUM_THREADS='1',MKL_NUM_THREADS='1',
+                    NUMEXPR_NUM_THREADS='1',MPLBACKEND='Agg',
+                    PYTHONPATH=f'{root}/overlay:{root}/scripts:{root}/tests',
+                    S1_VALIDATION_RUN_DIRECTORY=str(root/'full'/'disposable-results'),
+                    MPLCONFIGDIR=str(root/'full'/'matplotlib')),
+                commands=[dict(name=name,returncode=0,timed_out=False,cleanup=dict(
+                    confirmed_no_surviving_observed_processes=True,
+                    surviving_observed_owned_processes=[])) for name in ('pytest','unittest')])
+            def check(value):
+                Path(request['cpu_validation']['path']).write_text(json.dumps(value))
+                request['cpu_validation']=file_record(request['cpu_validation']['path'])
+                Path(record['path']).write_text(json.dumps(request))
+                return validate_request(file_record(record['path']),current_sources=sources)
+            self.assertEqual(check(cpu)[0]['record_kind'],'actual')
+            for key,value in (('passed',False),('head_after','b'*40),('head','b'*40),
+                              ('head_unchanged',False),('environment_bytes_unchanged',False)):
+                with self.subTest(key=key),self.assertRaises(ValueError):check(dict(cpu,**{key:value}))
+            with self.assertRaises(ValueError):
+                check(dict(cpu,environment=dict(cpu['environment'],CUDA_VISIBLE_DEVICES='0')))
+            with self.assertRaises(ValueError):
+                check(dict(cpu,environment=dict(cpu['environment'],PYTHONPATH='/unreviewed')))
+            commands=[dict(row) for row in cpu['commands']];commands[0]['returncode']=1
+            with self.assertRaises(ValueError):check(dict(cpu,commands=commands))
+
     def test_review_without_explicit_do_cannot_allocate_gpu(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);record,request,sources=fixture(root)

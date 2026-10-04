@@ -44,10 +44,40 @@ def validate_request(request_record, *, current_sources=None, completed=False):
         for item in source['local_sources']:
             verify_record(item)
     cpu = read_json(verify_record(request['cpu_validation'])['path'])
-    require(cpu.get('schema') == 'plan069-delta-cpu-test-capture/v1' and cpu.get('passed') is True and
+    require(cpu.get('schema') in ('plan069-delta-cpu-test-capture/v1',
+                                 'plan069-integrated-cpu-test-capture/v1') and cpu.get('passed') is True and
             cpu.get('record_kind') == request['record_kind'] and cpu.get('within_wall_limit') is True and
             cpu.get('source_bytes_unchanged') is True and cpu.get('sources_before') == cpu.get('sources_after'),
             'passing combined CPU qualification required')
+    if cpu['schema'] == 'plan069-integrated-cpu-test-capture/v1':
+        packet = read_json(verify_record(cpu['review_request'])['path'])
+        head = cpu.get('head')
+        require(packet.get('schema') == 'plan069-final-full-cpu-review/v1' and
+                packet.get('status') == 'REVIEW' and isinstance(head, str) and
+                len(head) == 40 and all(character in '0123456789abcdef' for character in head) and
+                head == packet.get('base_head') == cpu.get('head_after') and
+                cpu.get('head_unchanged') is True and
+                cpu.get('checkout') == packet.get('checkout') == request.get('root') and
+                cpu.get('max_seconds') == packet.get('max_seconds') and
+                0 <= cpu.get('elapsed_seconds', -1) <= cpu['max_seconds'],
+                'integrated CPU qualification checkout/head/time binding differs')
+        environment = cpu.get('environment', {})
+        expected = dict(CUDA_VISIBLE_DEVICES='', VIPE_CPU_VALIDATION='1',
+                        PYTHONDONTWRITEBYTECODE='1', PYTEST_DISABLE_PLUGIN_AUTOLOAD='1',
+                        OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1', MKL_NUM_THREADS='1',
+                        NUMEXPR_NUM_THREADS='1', MPLBACKEND='Agg',
+                        PYTHONPATH=f"{packet.get('overlay')}:{packet.get('checkout')}/scripts:{packet.get('checkout')}/tests",
+                        S1_VALIDATION_RUN_DIRECTORY=str(Path(packet.get('output', '')) / 'disposable-results'),
+                        MPLCONFIGDIR=str(Path(packet.get('output', '')) / 'matplotlib'))
+        require(cpu.get('record_kind') == 'actual' and cpu.get('environment_bytes_unchanged') is True and
+                all(environment.get(key) == value for key, value in expected.items()),
+                'integrated CPU qualification environment binding differs')
+        commands = cpu.get('commands', [])
+        require([row.get('name') for row in commands] == ['pytest', 'unittest'] and
+                all(row.get('returncode') == 0 and row.get('timed_out') is False and
+                    row.get('cleanup', {}).get('confirmed_no_surviving_observed_processes') is True and
+                    row.get('cleanup', {}).get('surviving_observed_owned_processes') == []
+                    for row in commands), 'integrated CPU qualification commands or cleanup failed')
     qualified_sources = {item['path']: item for item in cpu.get('sources_before', [])}
     require(all(qualified_sources.get(item['path']) == item for item in source['local_sources']),
             'CPU qualification does not bind reviewed driver sources')
