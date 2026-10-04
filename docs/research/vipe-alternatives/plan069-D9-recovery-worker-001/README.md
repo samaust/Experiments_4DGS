@@ -60,4 +60,36 @@ Every test, syntax and typecheck command, including the initial red and failed
 mypy runs, has an immutable measured full-command receipt and retained stdout in
 `.local/D9-recovery-worker-cpu-001` in this worktree. These captures are not yet
 charged; the owner must settle them once through the shared ledger and run its
-combined full-suite qualification after all recovery sources are integrated.
+combined source qualification after all recovery sources are integrated.
+
+Independent Standards and Spec/Safety reviews of `7da96364..c022d564` both found
+no actionable findings. Integrate `c022d564`, then this review handoff checkpoint.
+The owner must qualify combined authority, worker and v4 recipe sources before
+requesting actual recovery approval.
+
+CPU accounting inventory: private immutable
+`.local/D9-recovery-worker-cpu-001/inventory.json`, SHA256
+`0f1027c3e1dec98633464cfa3e158ad6d9a78ec0aeda128a2a3a3de2eaa47d2c`,
+3,302 bytes. Eight complete command captures total 1.1298699600029067 seconds,
+including failed red and mypy runs; none is already charged. Each receipt binds
+its actual argv, cwd, full subprocess monotonic interval, exit code and retained
+stdout file record. Capture publication follows that interval. Syntax capture
+preceded final metadata/annotation additions; final focused tests and mypy parsed
+final sources. The root's combined qualification remains required.
+
+## Prefinish acceptance callback
+
+`validate_recovery_result(result_record, request_record, events, run_root)`
+revalidates the real active reservation, exact approved request, retained sources
+and checkpoint inode, fresh runtime and interpreter, all 48 installed pins, six
+successful offline command receipts and the network restriction evidence. It
+rejects either retained failure marker. It does not fabricate a finish or expose
+accepted setup lineage; `accepted_setup_lineage` remains required after the real
+supervisor confirms cleanup and records completion.
+
+CPU validation: ten focused tests pass, including scope mutations, copied model
+bytes, substituted dependency-check command and retained failure markers. The
+first acceptance check and marker regression were observed failing before their
+implementations. Mypy passes for the worker. Commands and parent-monotonic timing
+captures are preserved privately under `.local/D9-recovery-worker-cpu-001/`;
+no actual environment, model, GPU, ledger or network operation was performed.

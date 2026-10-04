@@ -193,3 +193,97 @@ def run_video_setup_recovery(request,output,*,request_path=None,environment_runn
             job_id=JOB,error=type(error).__name__+': '+str(error),elapsed_seconds=time.monotonic()-started,
             original_setup=original,automatic_retries=0,gpu_operations=False))
         raise
+
+
+def validate_recovery_result(result_record,request_record,events,run_root):
+    """Accept worker bytes under the still-active real reservation, before finish.
+
+    This is a supervisor callback, not accepted setup lineage. The latter also
+    requires the real supervisor's clean finish and remains a separate gate.
+    """
+    from .depth_setup_recovery import validate_recovery_request
+    root=safe_path(run_root).resolve();job=root/'jobs'/JOB
+    binding=validate_recovery_request(request_record,events,root,require_reservation=True)
+    _require(not any(path.exists() or path.is_symlink() for path in
+        (job/'failure.json',job/'runtime/failure.json')), 'retained recovery failure prevents acceptance')
+    result=_bound(result_record);request=_bound(request_record)
+    _require(Path(result_record['path'])==job/'result.json' and
+        result.get('schema')=='plan069-video-setup-recovery-result/v1' and
+        result.get('record_kind')=='actual' and result.get('status')=='complete' and
+        result.get('candidate')=='D9' and result.get('job_id')==JOB and
+        result.get('request')==request_record==binding['request'], 'exact actual recovery result required')
+    for key in ('review','authorization','source_review'):
+        _require(result.get(key)==request.get(key)==binding[key],'recovery approval binding changed: '+key)
+    original=binding['original'];maps=binding['map_proposal'];environment=binding['runtime_environment']
+    _require(result.get('original_setup')==request.get('original_setup')==original and
+        result.get('source_revision')==maps['candidate_config']['code']['revision'] and
+        result.get('weight_revision')==maps['candidate_config']['weights']['revision'] and
+        result.get('source_archive')==original['source_archive'] and result.get('source_files')==original['source_files'] and
+        result.get('source_dir')==str(root/'jobs/plan069-D9-setup-001/source') and
+        type(result.get('bytes_received')) is int and result['bytes_received']==0 and
+        result.get('original_failure_preserved') is True and result.get('model_imports') is False and
+        result.get('gpu_operations') is False and type(result.get('automatic_retries')) is int and result['automatic_retries']==0,
+        'recovery changed original inputs or offline scope')
+    for record in [original['source_archive'],*original['source_files']]:verify_record(record)
+    checkpoint=verify_record(result['checkpoint']);old=verify_record(original['checkpoint'])
+    path,oldpath=Path(checkpoint['path']),Path(old['path'])
+    _require(path==job/oldpath.name and not path.is_symlink() and checkpoint['sha256']==old['sha256'] and
+        checkpoint['bytes']==old['bytes'],'exact retained checkpoint required')
+    newstat,oldstat=path.stat(),oldpath.stat()
+    _require((newstat.st_dev,newstat.st_ino)==(oldstat.st_dev,oldstat.st_ino),'retained checkpoint inode differs')
+    runtime_record=result['runtime_environment'];runtime=_bound(runtime_record)
+    python=str(job/'runtime/environment/bin/python')
+    _require(Path(runtime_record['path'])==job/'runtime/result.json' and
+        runtime.get('schema')=='plan069-depth-environment-result/v1' and runtime.get('record_kind')=='actual' and
+        runtime.get('candidate')=='D9' and runtime.get('status')=='complete' and
+        result.get('python_executable')==runtime.get('python_executable')==python and
+        result.get('python')==runtime.get('python') and file_record(python)==result['python'] and
+        Path(python).resolve()==Path(result['python']['path']), 'exact fresh recovery interpreter required')
+    for key,expected in (('runtime_recipe',environment['recipe']),('runtime_profile',PROFILE),
+                         ('excluded_distributions',['decord','xformers'])):
+        _require(result.get(key)==runtime.get(key)==expected,'recovery runtime binding changed: '+key)
+    _require(runtime.get('python_seed')==environment['python_seed'] and
+        runtime.get('requirement_sources')==environment['requirement_sources'] and
+        runtime.get('sources')==[] and runtime.get('source_packages')==[] and
+        runtime.get('offline') is True and runtime.get('model_imports') is False and runtime.get('gpu_operations') is False and
+        type(runtime.get('automatic_retries')) is int and runtime['automatic_retries']==0 and
+        result.get('media_tools')==environment.get('media_tools',{}) and result.get('xformers')==environment.get('xformers'),
+        'recovery environment differs from reviewed offline scope')
+    for record in [environment['python_seed'],environment['uv'],*environment['requirement_sources'],
+                   *environment.get('media_tools',{}).values()]:verify_record(record)
+    for key,name in (('dependency_lock','requirements.lock'),('inventory','inventory.json')):
+        record=result[key]
+        _require(runtime.get(key)==record and Path(record['path'])==job/'runtime'/name and verify_record(record)==record,
+            'exact recovery runtime file required: '+key)
+    _require(len(environment['constraints'])==48 and environment['runtime_profile']==PROFILE,'reviewed 48-pin recovery required')
+    inventory=read_json(result['inventory']['path']);_validate_inventory(inventory,environment,python)
+    packages=[row['name'].lower().replace('_','-') for row in inventory['packages']]
+    _require(len(packages)==len(set(packages)) and set(packages).isdisjoint({'decord','xformers'}),
+        'excluded or duplicate recovery distributions present')
+    uv=environment['uv']['path'];runtimepath=job/'runtime';seed=environment['python_seed_executable']
+    expected_commands=[
+        [seed,'-I','-B','-c','import json,sys; print(json.dumps({"python_version": "%d.%d" % sys.version_info[:2]}))'],
+        [uv,'venv','--offline','--python',seed,'--no-python-downloads',str(runtimepath/'environment')],
+        [uv,'pip','compile','--offline','--python',python,'--index-url','https://pypi.org/simple','--generate-hashes','--no-build-isolation',
+            '-c',str(runtimepath/'constraints.txt'),'--output-file',str(runtimepath/'requirements.lock'),str(runtimepath/'requirements.txt')],
+        [uv,'pip','install','--offline','--python',python,'--index-url','https://pypi.org/simple','--require-hashes','--no-build-isolation',
+            '-c',str(runtimepath/'constraints.txt'),'-r',str(runtimepath/'requirements.lock')],
+        [uv,'pip','check','--offline','--python',python],
+        [python,'-I','-B',str(ROOT/'scripts/vipe_benchmark/runtime_inventory.py'),'--output',str(runtimepath/'inventory.json')]]
+    labels=['seed-python','venv','resolve','locked-dependencies','dependency-check','inventory']
+    records=runtime.get('command_receipts',[])
+    _require(len(records)==6,'six successful offline recovery command receipts required')
+    for index,(record,argv,label) in enumerate(zip(records,expected_commands,labels)):
+        receipt=_bound(record);log=receipt.get('log',{})
+        _require(Path(record['path'])==runtimepath/'commands'/f'{index:02d}-{label}.json' and
+            receipt.get('command')==argv and receipt.get('cwd')==str(ROOT) and
+            receipt.get('record_kind')=='actual' and 'error' in receipt and receipt['error'] is None and
+            receipt.get('offline') is True and type(receipt.get('automatic_retries')) is int and receipt['automatic_retries']==0 and
+            receipt.get('package_transfer_proxy') is False and 'uv_transfer_receipt' in receipt and
+            receipt['uv_transfer_receipt'] is None and Path(log.get('path',''))==runtimepath/'commands'/f'{index:02d}-{label}.log' and
+            verify_record(log)==log,'exact successful offline recovery command required')
+    guard=result.get('offline_guard',{})
+    _require(guard==dict(policy='seccomp: Unix-domain sockets only; io_uring_setup denied',probes=dict(
+        AF_INET='EPERM (expected offline self-test)',AF_INET6='EPERM (expected offline self-test)',AF_UNIX='allowed local IPC')),
+        'actual recovery network restriction evidence required')
+    return result

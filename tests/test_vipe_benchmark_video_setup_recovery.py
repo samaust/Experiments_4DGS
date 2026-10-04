@@ -98,3 +98,79 @@ class VideoRecoveryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'must be absent'):
             run_video_setup_recovery(self.request,self.output,environment_runner=contaminated)
         self.assertFalse((self.output/'result.json').exists())
+
+
+class RecoveryAcceptanceTests(unittest.TestCase):
+    runner=VideoRecoveryTests.runner
+
+    def setUp(self):
+        VideoRecoveryTests.setUp(self)
+        from vipe_benchmark.video_setup_recovery import run_video_setup_recovery
+        import json
+        self.result=run_video_setup_recovery(self.request,self.output,environment_runner=self.runner)
+        self.request.update(record_kind='actual',review={},authorization={},source_review={})
+        self.request_path=self.root/'request.json';write_json(self.request_path,self.request)
+        self.request_record=file_record(self.request_path)
+        self.binding=dict(request=self.request_record,original=self.request['original_setup'],
+            runtime_environment=self.request['runtime_environment'],review={},authorization={},source_review={},
+            map_proposal=dict(candidate_config=dict(code=dict(revision='source-rev'),weights=dict(revision='weight-rev'))))
+        self.result.update(record_kind='actual',request=self.request_record,review={},authorization={},source_review={},
+            source_revision='source-rev',weight_revision='weight-rev',offline_guard=dict(
+                policy='seccomp: Unix-domain sockets only; io_uring_setup denied',probes=dict(
+                    AF_INET='EPERM (expected offline self-test)',AF_INET6='EPERM (expected offline self-test)',AF_UNIX='allowed local IPC')))
+        runtime=read_json(self.result['runtime_environment']['path']);runtime['record_kind']='actual'
+        receipts=[]
+        for record in runtime['command_receipts']:
+            value=read_json(record['path']);value['record_kind']='actual'
+            Path(record['path']).write_text(json.dumps(value));receipts.append(file_record(record['path']))
+        runtime['command_receipts']=receipts
+        Path(self.result['runtime_environment']['path']).write_text(json.dumps(runtime))
+        self.result['runtime_environment']=file_record(self.result['runtime_environment']['path'])
+        self.save_result()
+
+    def save_result(self):
+        import json
+        (self.output/'result.json').write_text(json.dumps(self.result))
+        return file_record(self.output/'result.json')
+
+    def validate(self):
+        import sys,types
+        from unittest.mock import Mock,patch
+        from vipe_benchmark.video_setup_recovery import validate_recovery_result
+        authority=Mock(return_value=self.binding)
+        module=types.SimpleNamespace(validate_recovery_request=authority)
+        with patch.dict(sys.modules,{'vipe_benchmark.depth_setup_recovery':module}):
+            value=validate_recovery_result(self.save_result(),self.request_record,[],self.root)
+        authority.assert_called_once_with(self.request_record,[],self.root,require_reservation=True)
+        return value
+
+    def test_active_reservation_acceptance_checks_real_scope_without_finish(self):
+        self.assertEqual(self.validate()['status'],'complete')
+
+    def test_scope_and_approval_mutations_rejected(self):
+        for key,value in [('record_kind','fixture'),('bytes_received',1),('authorization',{'changed':True}),
+                          ('source_revision','other'),('original_failure_preserved',False),('automatic_retries',1)]:
+            with self.subTest(key=key):
+                previous=self.result[key];self.result[key]=value
+                with self.assertRaises(ValueError):self.validate()
+                self.result[key]=previous
+
+    def test_copied_checkpoint_rejected_even_with_same_bytes(self):
+        path=Path(self.result['checkpoint']['path']);data=path.read_bytes();path.unlink();path.write_bytes(data)
+        with self.assertRaisesRegex(ValueError,'inode'):self.validate()
+
+    def test_receipt_without_offline_dependency_check_rejected(self):
+        import json
+        runtime=read_json(self.result['runtime_environment']['path'])
+        record=runtime['command_receipts'][4];value=read_json(record['path']);value['command'][2]='install'
+        Path(record['path']).write_text(json.dumps(value));runtime['command_receipts'][4]=file_record(record['path'])
+        Path(self.result['runtime_environment']['path']).write_text(json.dumps(runtime))
+        self.result['runtime_environment']=file_record(self.result['runtime_environment']['path'])
+        with self.assertRaisesRegex(ValueError,'command'):self.validate()
+
+    def test_retained_failure_markers_prevent_result_acceptance(self):
+        for marker in (self.output/'failure.json',self.output/'runtime/failure.json'):
+            with self.subTest(marker=marker):
+                marker.write_text('{"status":"failed"}')
+                with self.assertRaisesRegex(ValueError,'failure'):self.validate()
+                marker.unlink()
