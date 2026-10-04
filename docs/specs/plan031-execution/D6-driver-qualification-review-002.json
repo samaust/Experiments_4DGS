@@ -1,0 +1,82 @@
+{
+  "schema": "plan069-D6-driver-qualification-review/v2",
+  "status": "REVIEW",
+  "root_source_commit": "5192dffd50a3994ed465cdd2d4ae854cf412c5da",
+  "scope": "One distinct traced creation-only guard005 driver-aware import and two strict CPU weight loads; no native map qualification or further attempt granted.",
+  "proposal": {
+    "candidate": "D6",
+    "job_id": "plan069-D6-driver-qualification-002",
+    "qualification_kind": "gpu_aware_import_cpu_weights",
+    "max_attempts": 1,
+    "seconds": 180,
+    "cleanup_seconds": 30,
+    "device_bytes": 2147483648,
+    "artifact_bytes": 67108864,
+    "downloads": 0,
+    "strict_cpu_loads": 2,
+    "inference": false,
+    "benchmarks": false,
+    "gpu_model_load": false,
+    "creation_exception": {
+      "syscall": "socket",
+      "domain": 1,
+      "type": 524293,
+      "protocol": 0
+    },
+    "setup": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-setup-001/result.json",
+      "sha256": "8ef6e9c357e043cf857e1a480671aac3103ee9873eb058000abd326f92c77816",
+      "bytes": 50950
+    },
+    "network_guard": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/moge-driver-method-005/network_guard.py",
+      "sha256": "00bd038d20c8444723aa403edf22e48d12a9d785fbbbb7c8c651deab86b2b375",
+      "bytes": 2513
+    },
+    "worker": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/moge-driver-method-005/producer.py",
+      "sha256": "78ec4296e1c8cf9fafcffe06bcf24e328371ac3a8f0b1817c240d253f86ce19f",
+      "bytes": 22445
+    },
+    "dispatcher": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/basketball_vipe_depth_driver_qualification_recovery.py",
+      "sha256": "295855683ab5947e44dcd181e724b6d41e07c958284d9075f0803eb5913cf2f4",
+      "bytes": 6615
+    },
+    "strace": {
+      "path": "/usr/bin/strace",
+      "sha256": "28f957c227012de0b18d1bd7fff2d396cb693ea60ed8013be68de071e84b5001",
+      "bytes": 2087432
+    },
+    "trace_filter_prefix": [
+      "-f",
+      "-qq",
+      "-s",
+      "128",
+      "-e",
+      "trace=socket,socketpair,connect,bind,listen,accept,accept4,sendto,sendmsg,recvfrom,recvmsg,ioctl",
+      "-e",
+      "raw=sendto,sendmsg,recvfrom,recvmsg,ioctl"
+    ],
+    "predecessor_finish": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-driver-failure-001/finish.json",
+      "sha256": "94312768ca6159018f0254ea90e076dd95abb7091c2429f00d52ada807b060e4",
+      "bytes": 1078
+    },
+    "diagnostic_finish": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/prepare/plan069-D6-driver-diagnostic-001/finish.json",
+      "sha256": "b283fc660c6aeb7244afe496fa29d3026f3752b04392716ff1767c84475f22b1",
+      "bytes": 1117
+    },
+    "diagnostic_result": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/prepare/plan069-D6-driver-diagnostic-001/result.json",
+      "sha256": "d50c748e07fcdd3e146aa7d84cb3434b70ae2e75075884ef7ef6bd53f30d21c6",
+      "bytes": 1280
+    },
+    "diagnostic_trace": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/prepare/plan069-D6-driver-diagnostic-001.syscalls.log",
+      "sha256": "d95ca3f42e9245e00e360a98c1804774ef692dfe8c29f7f370d73ebf0d4f1927",
+      "bytes": 2272457
+    }
+  }
+}
