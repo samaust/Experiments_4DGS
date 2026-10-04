@@ -1,110 +1,223 @@
-import argparse,hashlib,json,os,signal,subprocess,time
+"""Run the retained full CPU suite under a reviewed overall deadline."""
+import argparse
+import hashlib
+import json
+import os
+import signal
+import subprocess
+import time
 from pathlib import Path
+
+
+def record(path):
+    path = Path(path).absolute()
+    if 'prompts' in path.parts or 'prompts' in path.resolve().parts:
+        raise ValueError('forbidden prompts path')
+    data = path.read_bytes()
+    return dict(path=str(path), sha256=hashlib.sha256(data).hexdigest(), bytes=len(data))
+
+
+def read_json(path):
+    record(path)  # Guard both the original spelling and resolved target first.
+    return json.loads(Path(path).read_text())
+
+
+def verify(row):
+    if record(row['path']) != row:
+        raise ValueError('changed reviewed file: ' + row['path'])
+
+
+def process_rows():
+    rows = {}
+    for path in Path('/proc').glob('[0-9]*/stat'):
+        try:
+            raw = path.read_text()
+            fields = raw[raw.rfind(')') + 2:].split()
+            pid = int(path.parent.name)
+            rows[pid] = dict(pid=pid, ppid=int(fields[1]), pgid=int(fields[2]), start_ticks=int(fields[19]), state=fields[0])
+        except (OSError, ValueError, IndexError):
+            pass
+    return rows
+
+
+def census(child, owned):
+    rows = process_rows()
+    branch = {pid for pid, old in owned.items() if pid in rows and rows[pid]['start_ticks'] == old['start_ticks']}
+    while True:
+        updated = branch | {pid for pid, row in rows.items() if row['ppid'] in branch}
+        if updated == branch:
+            break
+        branch = updated
+    for pid in branch:
+        if pid in rows and pid not in owned:
+            owned[pid] = rows[pid]
+    return rows
+
+
+def survivors(owned):
+    return [row for pid, row in process_rows().items() if pid in owned and row['start_ticks'] == owned[pid]['start_ticks'] and row['state'] != 'Z']
+
+
+def cleanup(child, owned, deadline):
+    # Signal only observed identities, including descendants in detached groups.
+    census(child, owned)
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        if child.poll() is None:
+            child.send_signal(sig)
+        snapshot = survivors(owned)
+        for row in snapshot:
+            if time.monotonic() >= deadline - 2:
+                raise TimeoutError('owned cleanup deadline reached')
+            current = process_rows().get(row['pid'])
+            if current and current['start_ticks'] == row['start_ticks']:
+                try:
+                    os.kill(row['pid'], sig)
+                except ProcessLookupError:
+                    pass
+        until = min(deadline - 2, time.monotonic() + 1)
+        while survivors(owned) and time.monotonic() < until:
+            time.sleep(.05)
+    if child.poll() is None and time.monotonic() < deadline - 1:
+        try:
+            child.wait(timeout=min(1, deadline - time.monotonic() - 1))
+        except subprocess.TimeoutExpired:
+            pass
+    remaining = survivors(owned)
+    return dict(method='observed /proc PID/start-ticks census and verified-identity TERM/KILL', surviving_observed_owned_processes=remaining, confirmed_no_surviving_observed_processes=not remaining, limitation='100 ms polling cannot prove ownership of unobserved short-lived or detached descendants')
+
+
 def main():
- p=argparse.ArgumentParser();p.add_argument('--checkout',required=True);p.add_argument('--overlay',required=True);p.add_argument('--output',required=True);p.add_argument('--max-seconds',type=float,default=1200);p.add_argument('--review-request',required=True);a=p.parse_args()
- outer_start=time.monotonic();root=Path(a.checkout).resolve();out=Path(a.output).resolve();out.mkdir(exist_ok=False);fixture=out/'disposable-results';fixture.mkdir();mpl=out/'matplotlib';mpl.mkdir()
- python='/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python'
- env=dict(os.environ,PYTHONPATH=f'{a.overlay}:{root}/scripts:{root}/tests',VIPE_CPU_VALIDATION='1',S1_VALIDATION_RUN_DIRECTORY=str(fixture),CUDA_VISIBLE_DEVICES='',MPLCONFIGDIR=str(mpl),MPLBACKEND='Agg',PYTHONDONTWRITEBYTECODE='1',PYTEST_DISABLE_PLUGIN_AUTOLOAD='1',OMP_NUM_THREADS='1',OPENBLAS_NUM_THREADS='1',MKL_NUM_THREADS='1',NUMEXPR_NUM_THREADS='1')
- def record(f):
-  if 'prompts' in f.parts or 'prompts' in f.resolve().parts:raise ValueError('forbidden prompts path')
-  b=f.read_bytes();return dict(path=str(f),sha256=hashlib.sha256(b).hexdigest(),bytes=len(b))
- def sources():
-  rows=[]
-  names=subprocess.check_output(['git','ls-files','-z'],cwd=root).decode().split('\0')
-  for name in sorted(names):
-   f=root/name
-   if name and 'prompts' not in Path(name).parts and f.is_file() and f.suffix in ['.py','.json','.txt','.in','.md','.yaml','.yml','.toml']:
-    rows.append(record(f))
-  return rows
- def process_rows():
-  rows={}
-  for f in Path('/proc').glob('[0-9]*/stat'):
-   try:
-    raw=f.read_text();tail=raw[raw.rfind(')')+2:].split();pid=int(f.parent.name)
-    rows[pid]=dict(pid=pid,ppid=int(tail[1]),pgid=int(tail[2]),start_ticks=int(tail[19]),state=tail[0])
-   except (OSError,ValueError,IndexError):pass
-  return rows
- def census_owned(child,owned):
-  rows=process_rows();branch={child.pid}|{pid for pid,row in owned.items() if pid in rows and rows[pid]['start_ticks']==row['start_ticks']}
-  while True:
-   add={pid for pid,row in rows.items() if row['ppid'] in branch};new=branch|add
-   if new==branch:break
-   branch=new
-  for pid in branch:
-   if pid in rows:owned[pid]=rows[pid]
-  return rows
+    parser = argparse.ArgumentParser(description=__doc__)
+    for name in ('checkout', 'overlay', 'output', 'review-request'):
+        parser.add_argument('--' + name, required=True)
+    parser.add_argument('--max-seconds', type=float, default=1200)
+    args = parser.parse_args()
+    started = time.monotonic()
+    if not 20 < args.max_seconds <= 1200:
+        raise ValueError('full CPU cap must be within (20, 1200] seconds')
+    deadline = started + args.max_seconds
+    root = Path(args.checkout).resolve()
+    out = Path(args.output).resolve()
+    out.mkdir(exist_ok=False)
+    fixture = out / 'disposable-results'
+    fixture.mkdir()
+    matplotlib = out / 'matplotlib'
+    matplotlib.mkdir()
+    python = '/home/auss/git_repos/samaust/Experiments_4DGS/.local/envs/stg-colmap/bin/python'
+    env = dict(os.environ, PYTHONPATH=f'{args.overlay}:{root}/scripts:{root}/tests', VIPE_CPU_VALIDATION='1', S1_VALIDATION_RUN_DIRECTORY=str(fixture), CUDA_VISIBLE_DEVICES='', MPLCONFIGDIR=str(matplotlib), MPLBACKEND='Agg', PYTHONDONTWRITEBYTECODE='1', PYTEST_DISABLE_PLUGIN_AUTOLOAD='1', OMP_NUM_THREADS='1', OPENBLAS_NUM_THREADS='1', MKL_NUM_THREADS='1', NUMEXPR_NUM_THREADS='1')
+    receipt = dict(schema='plan069-integrated-cpu-test-capture/v1', record_kind='actual', scope='Full CPU test suite; no model admission receipt', checkout=str(root), max_seconds=args.max_seconds, commands=[], passed=False)
 
- request_path=Path(a.review_request).resolve();request=json.loads(request_path.read_text())
- if not 0 < a.max_seconds <= 1200:raise ValueError('full CPU cap must be within 1200 seconds')
- if request.get('status') != 'REVIEW':
-  raise ValueError('CPU retry request is not finalized for review')
- def verify_record(row):
-  actual=record(Path(row['path']))
-  if actual!=row:raise ValueError('changed reviewed file: '+row['path'])
- verify_record(request['launcher'])
- verify_record(request['builder'])
- verify_record(request['cpu_admission'])
- if request['launcher']['path']!=str(Path(__file__).resolve()) or request['output']!=str(out) or request['max_seconds']!=a.max_seconds:
-  raise ValueError('reviewed launcher/output/time mismatch')
- if request['checkout']!=str(root) or request['overlay']!=str(Path(a.overlay).resolve()):raise ValueError('reviewed checkout/overlay mismatch')
- if subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()!=request['base_head']:raise ValueError('reviewed HEAD changed')
- if request['interpreter']['path']!=python:raise ValueError('reviewed test interpreter mismatch')
- verify_record(request['interpreter'])
- for key in ['source_bindings','environment_bindings']:verify_record(request[key])
- for row in json.loads(Path(request['source_bindings']['path']).read_text()):verify_record(row)
- for package in json.loads(Path(request['environment_bindings']['path']).read_text()):
-  for row in package['metadata']+package.get('files',[]):verify_record(row)
- reviewed_sources=json.loads(Path(request['source_bindings']['path']).read_text())
- if sources()!=reviewed_sources:raise ValueError('reviewed source set changed')
- receipt=dict(schema='plan069-integrated-cpu-test-capture/v1',record_kind='actual',scope='CPU test suite; no model admission receipt',review_request=record(request_path),checkout=str(root),head=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),environment={k:env[k] for k in ['PYTHONPATH','VIPE_CPU_VALIDATION','S1_VALIDATION_RUN_DIRECTORY','CUDA_VISIBLE_DEVICES','MPLCONFIGDIR','MPLBACKEND','PYTHONDONTWRITEBYTECODE','PYTEST_DISABLE_PLUGIN_AUTOLOAD','OMP_NUM_THREADS','OPENBLAS_NUM_THREADS','MKL_NUM_THREADS','NUMEXPR_NUM_THREADS']},max_seconds=a.max_seconds,launcher=record(Path(__file__).resolve()),sources_before=sources(),commands=[],passed=False)
- start=outer_start;deadline=start+a.max_seconds
- jobs=[('pytest',[python,'-B','-m','pytest','-q','-p','no:cacheprovider','tests/test_basketball_scene.py','tests/test_sync_pivot_budget.py','tests/test_sync_timing.py']),('unittest',[python,'-B','-m','unittest','discover','-s','tests','-v'])]
- try:
-  for name,cmd in jobs:
-   elapsed=time.monotonic();log=out/(name+'.log');row=dict(name=name,command=cmd,log=str(log),start_new_session=True,timed_out=False);receipt['commands'].append(row)
-   with log.open('xb') as stream:
-    child=subprocess.Popen(cmd,cwd=root,env=env,stdout=stream,stderr=subprocess.STDOUT,start_new_session=True)
-    print(json.dumps(dict(running=name,pid=child.pid,output=str(out))),flush=True)
-    owned={}
-    while child.poll() is None and time.monotonic()<deadline-15:
-     census_owned(child,owned)
-     time.sleep(.1)
-    census_owned(child,owned)
-    if child.poll() is None:
-     row['timed_out']=True
-     try:os.killpg(child.pid,signal.SIGTERM)
-     except ProcessLookupError:pass
-     until=min(deadline-10,time.monotonic()+3)
-     while child.poll() is None and time.monotonic()<until:time.sleep(.05)
-     if child.poll() is None:
-      try:os.killpg(child.pid,signal.SIGKILL)
-      except ProcessLookupError:pass
-      child.wait(timeout=2)
-    rows=census_owned(child,owned)
-    survivors=[r for pid,r in rows.items() if pid in owned and r['start_ticks']==owned[pid]['start_ticks'] and r['state']!='Z']
-    # Escaped groups are observed independently; never infer cleanup from killpg.
-    row['observed_owned_processes']=list(owned.values())
-    row['cleanup']=dict(method='observed /proc PID and start-ticks census',surviving_observed_owned_processes=survivors,confirmed_no_surviving_observed_processes=not survivors,limitation='100 ms polling cannot prove ownership of unobserved short-lived or detached descendants')
-   row.update(returncode=child.returncode,elapsed_seconds=time.monotonic()-elapsed,log_sha256=hashlib.sha256(log.read_bytes()).hexdigest())
-   print(json.dumps(row),flush=True)
-   if child.returncode or row['timed_out']:break
-  receipt['head_after']=subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip();receipt['head_unchanged']=receipt['head']==receipt['head_after'];receipt['sources_after']=sources();receipt['source_bytes_unchanged']=receipt['sources_before']==receipt['sources_after'];receipt['passed']=len(receipt['commands'])==2 and all(r['returncode']==0 and not r['timed_out'] for r in receipt['commands']) and receipt['head_unchanged'] and receipt['source_bytes_unchanged'] and all(r['cleanup']['confirmed_no_surviving_observed_processes'] for r in receipt['commands'])
- finally:
-  environment_unchanged=True
-  try:
-   verify_record(receipt['review_request'])
-   verify_record(request['launcher'])
-   verify_record(request['builder'])
-   verify_record(request['cpu_admission'])
-   verify_record(request['source_bindings'])
-   verify_record(request['environment_bindings'])
-   verify_record(request['interpreter'])
-   for package in json.loads(Path(request['environment_bindings']['path']).read_text()):
-    for row in package['metadata']+package.get('files',[]):verify_record(row)
-  except (OSError,ValueError):environment_unchanged=False
-  receipt['environment_bytes_unchanged']=environment_unchanged
-  receipt['passed']=receipt['passed'] and environment_unchanged
-  receipt['elapsed_seconds']=time.monotonic()-start;receipt['within_wall_limit']=receipt['elapsed_seconds']<=a.max_seconds;receipt['passed']=receipt['passed'] and receipt['within_wall_limit'];(out/'receipt.json').write_text(json.dumps(receipt,indent=2)+'\n');print(json.dumps(dict(passed=receipt['passed'],elapsed_seconds=receipt['elapsed_seconds'],receipt=str(out/'receipt.json'))),flush=True)
+    def expired(signum, frame):
+        raise TimeoutError('overall CPU qualification deadline reached')
 
-if __name__=='__main__':
- main()
+    def git(*words):
+        return subprocess.check_output(['git', *words], cwd=root, text=True, timeout=max(.001, deadline - time.monotonic() - 1))
+
+    def sources():
+        rows = []
+        for name in sorted(git('ls-files', '-z').split('\0')):
+            path = root / name
+            if name and 'prompts' not in Path(name).parts and path.is_file() and path.suffix in ['.py', '.json', '.txt', '.in', '.md', '.yaml', '.yml', '.toml']:
+                rows.append(record(path))
+        return rows
+
+    def environment_records(request):
+        verify(request['interpreter'])
+        verify(request['environment_bindings'])
+        for package in read_json(request['environment_bindings']['path']):
+            for row in package['metadata'] + package.get('files', []):
+                verify(row)
+
+    old_alarm = signal.signal(signal.SIGALRM, expired)
+    old_term = signal.signal(signal.SIGTERM, expired)
+    signal.setitimer(signal.ITIMER_REAL, args.max_seconds - 15)
+    request = None
+    try:
+        request = read_json(args.review_request)
+        receipt['review_request'] = record(args.review_request)
+        if request.get('status') != 'REVIEW':
+            raise ValueError('CPU request is not finalized for review')
+        for key in ('launcher', 'builder', 'cpu_admission', 'source_bindings'):
+            verify(request[key])
+        if request['launcher']['path'] != str(Path(__file__).resolve()) or request['output'] != str(out) or request['max_seconds'] != args.max_seconds:
+            raise ValueError('reviewed launcher/output/time mismatch')
+        if request['checkout'] != str(root) or request['overlay'] != str(Path(args.overlay).resolve()) or request['interpreter']['path'] != python:
+            raise ValueError('reviewed checkout/overlay/interpreter mismatch')
+        receipt['head'] = git('rev-parse', 'HEAD').strip()
+        if receipt['head'] != request['base_head']:
+            raise ValueError('reviewed HEAD changed')
+        environment_records(request)
+        receipt['sources_before'] = sources()
+        if receipt['sources_before'] != read_json(request['source_bindings']['path']):
+            raise ValueError('reviewed source set changed')
+        receipt['environment'] = {key: env[key] for key in ('PYTHONPATH', 'VIPE_CPU_VALIDATION', 'S1_VALIDATION_RUN_DIRECTORY', 'CUDA_VISIBLE_DEVICES', 'MPLCONFIGDIR', 'MPLBACKEND', 'PYTHONDONTWRITEBYTECODE', 'PYTEST_DISABLE_PLUGIN_AUTOLOAD', 'OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'NUMEXPR_NUM_THREADS')}
+        jobs = [('pytest', [python, '-B', '-m', 'pytest', '-q', '-p', 'no:cacheprovider', 'tests/test_basketball_scene.py', 'tests/test_sync_pivot_budget.py', 'tests/test_sync_timing.py']), ('unittest', [python, '-B', '-m', 'unittest', 'discover', '-s', 'tests', '-v'])]
+        for name, command in jobs:
+            row = dict(name=name, command=command, timed_out=False, start_new_session=True)
+            receipt['commands'].append(row)
+            log = out / (name + '.log')
+            row['log'] = str(log)
+            phase_start = time.monotonic()
+            with log.open('xb') as stream:
+                child = subprocess.Popen(command, cwd=root, env=env, stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
+                owned = {}
+                try:
+                    initial = process_rows().get(child.pid)
+                    if initial is not None:
+                        owned[child.pid] = initial
+                    print(json.dumps(dict(running=name, pid=child.pid, output=str(out))), flush=True)
+                    while child.poll() is None:
+                        census(child, owned)
+                        time.sleep(.1)
+                except TimeoutError:
+                    row['timed_out'] = True
+                    raise
+                finally:
+                    signal.setitimer(signal.ITIMER_REAL, max(.001, deadline - time.monotonic() - 2))
+                    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+                    try:
+                        row['cleanup'] = cleanup(child, owned, deadline)
+                    except (Exception, KeyboardInterrupt) as error:
+                        row['cleanup'] = dict(confirmed_no_surviving_observed_processes=False, verification_incomplete=True, error=dict(type=type(error).__name__, message=str(error)))
+                    row['observed_owned_processes'] = list(owned.values())
+                    row['returncode'] = child.poll()
+                    row['elapsed_seconds'] = time.monotonic() - phase_start
+                    signal.signal(signal.SIGTERM, expired)
+                    signal.setitimer(signal.ITIMER_REAL, max(.001, deadline - time.monotonic() - 15))
+            row['log_sha256'] = record(log)['sha256']
+            if row['returncode'] or not row['cleanup']['confirmed_no_surviving_observed_processes']:
+                break
+        receipt['passed'] = len(receipt['commands']) == 2 and all(row['returncode'] == 0 and not row['timed_out'] and row['cleanup']['confirmed_no_surviving_observed_processes'] for row in receipt['commands'])
+    except (Exception, KeyboardInterrupt) as error:
+        receipt['error'] = dict(type=type(error).__name__, message=str(error))
+        receipt['passed'] = False
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, max(.001, deadline - time.monotonic() - 1))
+        try:
+            if request is None:
+                raise ValueError('preflight request unavailable')
+            verify(receipt['review_request'])
+            for key in ('launcher', 'builder', 'cpu_admission', 'source_bindings'):
+                verify(request[key])
+            environment_records(request)
+            receipt['environment_bytes_unchanged'] = True
+            receipt['head_after'] = git('rev-parse', 'HEAD').strip()
+            receipt['head_unchanged'] = receipt.get('head') == receipt['head_after']
+            receipt['sources_after'] = sources()
+            receipt['source_bytes_unchanged'] = receipt.get('sources_before') == receipt['sources_after']
+            receipt['passed'] = receipt['passed'] and receipt['head_unchanged'] and receipt['source_bytes_unchanged']
+        except (Exception, KeyboardInterrupt) as error:
+            receipt['verification_error'] = dict(type=type(error).__name__, message=str(error))
+            receipt['passed'] = False
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        receipt['elapsed_seconds'] = time.monotonic() - started
+        receipt['within_wall_limit'] = receipt['elapsed_seconds'] <= args.max_seconds
+        receipt['passed'] = receipt['passed'] and receipt['within_wall_limit']
+        (out / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+        signal.signal(signal.SIGALRM, old_alarm)
+        signal.signal(signal.SIGTERM, old_term)
+        print(json.dumps(dict(passed=receipt['passed'], elapsed_seconds=receipt['elapsed_seconds'], receipt=str(out / 'receipt.json'))), flush=True)
+
+
+if __name__ == '__main__':
+    main()

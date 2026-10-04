@@ -52,6 +52,7 @@ def main():
     # existing inventory fails if its contents changed; it never silently accepts
     # replacement dependencies or grants native model qualification.
     template = root / 'docs/research/vipe-alternatives/plan031-execution/depth-combined-cpu-retry-review-001/environment-bindings.json'
+    record(template)
     environment = json.loads(template.read_text())
     for package in environment:
         for row in package['metadata'] + package.get('files', []):
