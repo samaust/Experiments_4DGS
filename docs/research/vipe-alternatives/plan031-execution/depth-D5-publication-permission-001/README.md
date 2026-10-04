@@ -1,0 +1,13 @@
+# D5 publication tool permission addendum
+
+Scope: local commercial creation and checking of D5 qualitative review clips on the existing owned workstation. This supplements the immutable D5 inference assessment without changing it. It grants no GPU attempt, runtime reconstruction, hosting or executable redistribution authority.
+
+The current PATH resolves `ffmpeg` and `ffprobe` to `/usr/bin/ffmpeg` and `/usr/bin/ffprobe`. Both exact binary hashes and build configurations equal the already assessed D2 records. Version/license queries report the same Ubuntu FFmpeg 6.1.1 GPL-enabled build. All 217 currently resolved dynamic libraries were rehashed against the prior manifest; no missing or changed binary record was found. The evidence retains the PATH resolution, command outputs and exact canonical source/config hashes.
+
+The existing D2/D11 owned-workstation commercial scope therefore covers these same tools used as separate processes. Delivered FFmpeg/libav/libsw/postproc, libx264, GPL and LGPL primary license notices were rehashed. Their terms allow local commercial execution. This report preserves the original limit: remaining linked libraries are host OS components whose binary records match, not a new approval to redistribute the entire host closure.
+
+The current `depth_clips.py` encoder uses libx264, raw RGB24 input, 960×540 pixels, 25 fps, 50 frames, ultrafast preset, CRF 25, yuv420p, and MP4 faststart; both FFmpeg threads settings are one. `qualitative_package.py` invokes ffprobe as a separate process to verify clip shape, frame count and rate, then invokes a separate FFmpeg full decode to a null output to reject corruption. These uses match the previous depth-clip publication scope. GPU operations are not required by these commands.
+
+Ordinary resulting clip pixels are not licensed copies of the encoder merely because it created them; GPL/LGPL software terms do not restrict this output use. Commercial use of the clips is permitted within the assessed software copyright/license scope. Codec patent clearance, source-media rights, hosting and redistribution of tools/libraries remain outside this finding. Keep notices and reassess if binaries, command paths, encoder settings or scope change.
+
+Primary evidence: the exact previously assessed D2 installed dependency manifest and delivered host package/common-license notices in `evidence.json`; [FFmpeg legal documentation](https://ffmpeg.org/legal.html) describes GPL/LGPL build conditions. D11's accepted permission report independently retained the same host scope. No replacement downloads or new installations were performed.
