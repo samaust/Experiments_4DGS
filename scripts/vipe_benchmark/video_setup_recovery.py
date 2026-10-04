@@ -13,6 +13,8 @@ from .files import file_record, read_json, safe_path, verify_record, write_json
 
 JOB='plan069-D9-setup-recovery-001'
 SCHEMA='plan069-video-setup-recovery-request/v1'
+REPAIR_JOB='plan069-D9-setup-recovery-002'
+JOBS=(JOB,REPAIR_JOB)
 PROFILE_ID='D9-D10-torch-2.14.1-pypi-frame-input'
 
 
@@ -24,6 +26,22 @@ def _require(condition,message):
 def _bound(record):
     _require(verify_record(record)==record,'changed immutable recovery input')
     return read_json(record['path'])
+
+
+def _request_job(request):
+    job=request.get('job_id')
+    version='v1' if job==JOB else 'v2'
+    _require(job in JOBS and request.get('candidate')=='D9' and
+        request.get('schema')=='plan069-video-setup-recovery-request/'+version,
+        'explicit one-use D9 recovery job/schema required')
+    if job==REPAIR_JOB:
+        failed=request.get('failed_recoveries')
+        _require(isinstance(failed,list) and len(failed)==1 and
+            isinstance(failed[0],dict) and failed[0].get('job_id')==JOB,
+            'repair requires exactly the consumed recovery001 ancestor')
+    else:
+        _require('failed_recoveries' not in request,'original recovery cannot acquire repair ancestry')
+    return job,version
 
 
 def _old_snapshot(root):
@@ -123,8 +141,7 @@ def _environment(request,output,binding,deadline,check,runner):
 def run_video_setup_recovery(request,output,*,request_path=None,environment_runner=None):
     """Build a fresh offline environment while preserving the failed original job."""
     started=time.monotonic()
-    _require(request.get('schema')==SCHEMA and request.get('candidate')=='D9' and request.get('job_id')==JOB,
-        'explicit one-use D9 recovery request required')
+    job,version=_request_job(request)
     output=safe_path(output).absolute()
     kind=request.get('record_kind')
     if kind=='actual':
@@ -138,7 +155,7 @@ def run_video_setup_recovery(request,output,*,request_path=None,environment_runn
         events=Ledger(root/'ledger.jsonl',config).events()
         binding=validate_recovery_request(record,events,root,require_reservation=True)
         binding=dict(binding,run_root=str(root),record_kind='actual')
-        reservation=next(e for e in events if e.get('event')=='reserve' and e.get('job_id')==JOB)
+        reservation=next(e for e in events if e.get('event')=='reserve' and e.get('job_id')==job)
         command=reservation.get('command',[])
         _require(os.environ.get('VIPE_RESERVATION_START')==str(reservation['monotonic_start']) and
             '--request' in command and '--output' in command and
@@ -155,7 +172,7 @@ def run_video_setup_recovery(request,output,*,request_path=None,environment_runn
         binding['byte_limits']=dict(download_bytes=baseline['download_bytes']+binding['allocation']['download_bytes'],
             artifact_bytes=baseline['artifact_bytes']+binding['allocation']['artifact_bytes'])
         deadline=started+binding['allocation']['setup_seconds']
-    _require(output==root/'jobs'/JOB and not output.exists() and not output.is_symlink(),
+    _require(output==root/'jobs'/job and not output.exists() and not output.is_symlink(),
         'fresh immutable recovery output required')
     original=binding['original']
     archive=verify_record(original['source_archive']);checkpoint=verify_record(original['checkpoint'])
@@ -185,7 +202,7 @@ def run_video_setup_recovery(request,output,*,request_path=None,environment_runn
         check()
         _require(_old_snapshot(oldroot)==preserved,'original failed setup tree changed during recovery')
         for record in [archive,checkpoint,*original['source_files']]:verify_record(record)
-        result=dict(schema='plan069-video-setup-recovery-result/v1',record_kind=kind,status='complete',candidate='D9',job_id=JOB,
+        result=dict(schema='plan069-video-setup-recovery-result/'+version,record_kind=kind,status='complete',candidate='D9',job_id=job,
             original_setup=original,source_archive=archive,source_dir=str(oldroot/'source'),source_files=original['source_files'],
             checkpoint=file_record(new_checkpoint),runtime_environment=file_record(output/'runtime/result.json'),
             python_executable=runtime['python_executable'],python=runtime['python'],dependency_lock=runtime['dependency_lock'],
@@ -194,6 +211,8 @@ def run_video_setup_recovery(request,output,*,request_path=None,environment_runn
             excluded_distributions=['decord','xformers'],media_tools=binding['runtime_environment'].get('media_tools',{}),
             xformers=binding['runtime_environment'].get('xformers'),bytes_received=0,elapsed_seconds=time.monotonic()-started,
             offline_guard=guard,original_failure_preserved=True,model_imports=False,gpu_operations=False,automatic_retries=0)
+        if job==REPAIR_JOB:
+            result['failed_recoveries']=request['failed_recoveries']
         if kind=='actual':
             result.update(request=binding['request'],review=binding['review'],authorization=binding['authorization'],
                 source_review=binding['source_review'],
@@ -202,9 +221,12 @@ def run_video_setup_recovery(request,output,*,request_path=None,environment_runn
         write_json(output/'result.json',result);check()
         return result
     except BaseException as error:
-        write_json(output/'failure.json',dict(schema='plan069-video-setup-recovery-failure/v1',record_kind=kind,status='failed',
-            job_id=JOB,error=type(error).__name__+': '+str(error),elapsed_seconds=time.monotonic()-started,
-            original_setup=original,automatic_retries=0,gpu_operations=False))
+        failure=dict(schema='plan069-video-setup-recovery-failure/'+version,record_kind=kind,status='failed',
+            job_id=job,error=type(error).__name__+': '+str(error),elapsed_seconds=time.monotonic()-started,
+            original_setup=original,automatic_retries=0,gpu_operations=False)
+        if job==REPAIR_JOB:
+            failure['failed_recoveries']=request['failed_recoveries']
+        write_json(output/'failure.json',failure)
         raise
 
 
@@ -215,16 +237,19 @@ def validate_recovery_result(result_record,request_record,events,run_root):
     requires the real supervisor's clean finish and remains a separate gate.
     """
     from .depth_setup_recovery import validate_recovery_request
-    root=safe_path(run_root).resolve();job=root/'jobs'/JOB
+    request=_bound(request_record);job_id,version=_request_job(request)
+    root=safe_path(run_root).resolve();job=root/'jobs'/job_id
     binding=validate_recovery_request(request_record,events,root,require_reservation=True)
     _require(not any(path.exists() or path.is_symlink() for path in
         (job/'failure.json',job/'runtime/failure.json')), 'retained recovery failure prevents acceptance')
     result=_bound(result_record);request=_bound(request_record)
     _require(Path(result_record['path'])==job/'result.json' and
-        result.get('schema')=='plan069-video-setup-recovery-result/v1' and
+        result.get('schema')=='plan069-video-setup-recovery-result/'+version and
         result.get('record_kind')=='actual' and result.get('status')=='complete' and
-        result.get('candidate')=='D9' and result.get('job_id')==JOB and
+        result.get('candidate')=='D9' and result.get('job_id')==job_id and
         result.get('request')==request_record==binding['request'], 'exact actual recovery result required')
+    _require((result.get('failed_recoveries')==request['failed_recoveries'] if job_id==REPAIR_JOB else
+        'failed_recoveries' not in result),'recovery result changed failed recovery ancestry')
     for key in ('review','authorization','source_review'):
         _require(result.get(key)==request.get(key)==binding[key],'recovery approval binding changed: '+key)
     original=binding['original'];maps=binding['map_proposal'];environment=binding['runtime_environment']

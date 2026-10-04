@@ -6,6 +6,8 @@ from vipe_benchmark.files import file_record,read_json,write_json
 
 
 class VideoRecoveryTests(unittest.TestCase):
+    recovery_job='plan069-D9-setup-recovery-001'
+    recovery_version='v1'
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name);self.old=self.root/'jobs/plan069-D9-setup-001'
@@ -28,12 +30,14 @@ class VideoRecoveryTests(unittest.TestCase):
         runtime=environment_request('D9',self.root,seed_executable=str(self.seed),uv_executable=str(self.uv),
             record_kind='fixture',media_tools=tools,recipe_path=FRAME_RECIPE)
         runtime=bind_source_environment(runtime,self.source,recipe['source_revision'],candidate='D9',record_kind='fixture')
-        self.request=dict(schema='plan069-video-setup-recovery-request/v1',record_kind='fixture',candidate='D9',
-            job_id='plan069-D9-setup-recovery-001',original_setup=dict(source_archive=file_record(self.old/'source.tar.gz'),
+        self.request=dict(schema='plan069-video-setup-recovery-request/'+self.recovery_version,record_kind='fixture',candidate='D9',
+            job_id=self.recovery_job,original_setup=dict(source_archive=file_record(self.old/'source.tar.gz'),
             source_files=[file_record(path) for path in sorted(self.source.rglob('*')) if path.is_file()],checkpoint=file_record(self.old/'video_depth_anything_vits.pth')),
             runtime_environment=runtime,
             fixture_allocation=dict(setup_seconds=120,download_bytes=0,artifact_bytes=10**7))
-        self.output=self.root/'jobs/plan069-D9-setup-recovery-001';self.commands=[]
+        self.output=self.root/'jobs'/self.recovery_job;self.commands=[]
+        if self.recovery_version=='v2':
+            self.request['failed_recoveries']=[dict(job_id='plan069-D9-setup-recovery-001',fixture_ancestor=True)]
 
     def runner(self,command,*,environment,cwd,timeout,log):
         self.commands.append(command)
@@ -56,7 +60,7 @@ class VideoRecoveryTests(unittest.TestCase):
         before={p:p.read_bytes() for p in self.old.rglob('*') if p.is_file()}
         result=run_video_setup_recovery(self.request,self.output,environment_runner=self.runner)
         self.assertEqual(result['status'],'complete')
-        self.assertEqual(result['job_id'],'plan069-D9-setup-recovery-001')
+        self.assertEqual(result['job_id'],self.recovery_job)
         self.assertEqual(result['bytes_received'],0)
         self.assertEqual(result['runtime_profile'],self.request['runtime_environment']['runtime_profile'])
         self.assertIsInstance(result['runtime_profile'],dict)
@@ -108,6 +112,11 @@ class VideoRecoveryTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'dependency conflict'):
             run_video_setup_recovery(self.request,self.output,environment_runner=fail)
         self.assertTrue((self.output/'failure.json').exists())
+        failure=read_json(self.output/'failure.json')
+        self.assertEqual(failure['schema'],'plan069-video-setup-recovery-failure/'+self.recovery_version)
+        self.assertEqual(failure['job_id'],self.recovery_job)
+        if self.recovery_version=='v2':
+            self.assertEqual(failure['failed_recoveries'],self.request['failed_recoveries'])
         self.assertFalse((self.output/'result.json').exists())
         self.assertEqual(before,{p:p.read_bytes() for p in self.old.rglob('*') if p.is_file()})
 
@@ -152,6 +161,8 @@ class VideoRecoveryTests(unittest.TestCase):
 
 class RecoveryAcceptanceTests(unittest.TestCase):
     runner=VideoRecoveryTests.runner
+    recovery_job=VideoRecoveryTests.recovery_job
+    recovery_version=VideoRecoveryTests.recovery_version
 
     def setUp(self):
         VideoRecoveryTests.setUp(self)
@@ -243,3 +254,38 @@ class RecoveryAcceptanceTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError,'runtime binding changed'):
                         validate_recovery_result(self.save_result(),self.request_record,[],self.root)
                 self.result['runtime_profile']=deepcopy(original)
+
+
+class RepairRecoveryTests(VideoRecoveryTests):
+    recovery_job='plan069-D9-setup-recovery-002'
+    recovery_version='v2'
+
+    def test_repair_result_retains_exact_consumed_ancestor(self):
+        from vipe_benchmark.video_setup_recovery import run_video_setup_recovery
+        result=run_video_setup_recovery(self.request,self.output,environment_runner=self.runner)
+        self.assertEqual(result['schema'],'plan069-video-setup-recovery-result/v2')
+        self.assertEqual(result['failed_recoveries'],self.request['failed_recoveries'])
+
+    def test_job_schema_and_ancestor_mismatches_rejected_before_commands(self):
+        from vipe_benchmark.video_setup_recovery import run_video_setup_recovery
+        for changes in ({'schema':'plan069-video-setup-recovery-request/v1'},
+                        {'job_id':'plan069-D9-setup-recovery-003'},
+                        {'failed_recoveries':[]},
+                        {'failed_recoveries':[{'job_id':'plan069-D9-setup-recovery-002'}]}):
+            with self.subTest(changes=changes),self.assertRaises(ValueError):
+                run_video_setup_recovery(dict(self.request,**changes),self.output,environment_runner=self.runner)
+            self.assertFalse(self.output.exists())
+            self.assertEqual(self.commands,[])
+
+
+class RepairAcceptanceTests(RecoveryAcceptanceTests):
+    recovery_job='plan069-D9-setup-recovery-002'
+    recovery_version='v2'
+
+    def test_repair_result_ancestry_cannot_be_omitted_or_changed(self):
+        self.validate()
+        original=self.result.pop('failed_recoveries')
+        with self.assertRaisesRegex(ValueError,'ancestry'):self.validate()
+        self.result['failed_recoveries']=[dict(job_id='other')]
+        with self.assertRaisesRegex(ValueError,'ancestry'):self.validate()
+        self.result['failed_recoveries']=original

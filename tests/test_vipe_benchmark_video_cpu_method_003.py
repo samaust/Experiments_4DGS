@@ -27,7 +27,7 @@ class VideoCpuMethod003Tests(unittest.TestCase):
         write_json(self.request,dict(schema='plan069-video-setup-recovery-request/v1',candidate='D9',record_kind='actual',
             job_id='plan069-D9-setup-recovery-001',review=self.review,authorization=self.authorization,
             ledger_path=str(self.root/'ledger.jsonl'),runtime_environment=self.recipe))
-        self.setup=dict(schema='plan069-video-setup-recovery-result/v1',candidate='D9',status='complete',record_kind='actual',
+        self.setup=dict(schema='plan069-video-setup-recovery-result/v1',job_id='plan069-D9-setup-recovery-001',candidate='D9',status='complete',record_kind='actual',
             source_dir=str(self.source),review=self.review,authorization=self.authorization,source_revision='source',weight_revision='weight',
             runtime_environment=file_record(self.runtime))
         self.setup_path=self.job/'result.json';write_json(self.setup_path,self.setup)
@@ -46,7 +46,7 @@ class VideoCpuMethod003Tests(unittest.TestCase):
                 patch('vipe_benchmark.depth_authorization.execution_authorization',return_value=(self.review,self.authorization,self.proposal,{})), \
                 patch('vipe_benchmark.video_environment.bind_source_environment',side_effect=lambda recipe,*args,**kw:recipe):
             result=module.setup_context(self.args)
-        if self.setup['schema']=='plan069-video-setup-recovery-result/v1':
+        if self.setup['schema'] in ('plan069-video-setup-recovery-result/v1','plan069-video-setup-recovery-result/v2'):
             accepted.assert_called_once_with(file_record(self.setup_path),self.events,self.root)
         return result
 
@@ -99,3 +99,20 @@ class VideoCpuMethod003Tests(unittest.TestCase):
         model.parameters.return_value=[SimpleNamespace(device=SimpleNamespace(type='cuda'))]
         with patch('vipe_benchmark.video_native.load_native_video',return_value=model):
             with self.assertRaisesRegex(ValueError,'escaped CPU'):module.strict_cpu_loads('D9',record,self.ledger,torch)
+
+
+class VideoCpuRepair002Tests(VideoCpuMethod003Tests):
+    def setUp(self):
+        super().setUp()
+        import json
+        self.setup.update(schema='plan069-video-setup-recovery-result/v2',job_id='plan069-D9-setup-recovery-002')
+        self.setup_path.write_text(json.dumps(self.setup))
+        request=read_json(self.request)
+        request.update(schema='plan069-video-setup-recovery-request/v2',job_id='plan069-D9-setup-recovery-002')
+        self.request.write_text(json.dumps(request));self.accepted['request']=file_record(self.request)
+
+    def test_wrong_job_schema_pair_cannot_qualify(self):
+        import json
+        self.setup['job_id']='plan069-D9-setup-recovery-003'
+        self.setup_path.write_text(json.dumps(self.setup))
+        with self.assertRaisesRegex(ValueError,'actual complete'):self.context()

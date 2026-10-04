@@ -55,7 +55,9 @@ def setup_context(args):
     setup_record = record(args.setup)
     setup = read(args.setup)
     candidate = args.candidate
-    recovered = setup.get('schema') == 'plan069-video-setup-recovery-result/v1'
+    recovery_jobs={'plan069-D9-setup-recovery-001':'v1','plan069-D9-setup-recovery-002':'v2'}
+    recovery_version=recovery_jobs.get(setup.get('job_id'))
+    recovered = recovery_version is not None and setup.get('schema') == 'plan069-video-setup-recovery-result/'+recovery_version
     require(setup.get('candidate') == candidate and setup.get('status') == 'complete' and
             setup.get('record_kind') == 'actual' and
             (candidate == 'D9' if recovered else setup.get('schema') == 'plan069-video-setup-result/v1'),
@@ -94,9 +96,9 @@ def setup_context(args):
     request_record = record(args.setup_request)
     request = read(args.setup_request)
     require(request.get('review') == review and request.get('authorization') == authorization and
-            request.get('schema') == ('plan069-video-setup-recovery-request/v1' if recovered else 'plan069-depth-setup-request/v1') and
+            request.get('schema') == ('plan069-video-setup-recovery-request/'+recovery_version if recovered else 'plan069-depth-setup-request/v1') and
             request.get('candidate') == candidate and request.get('record_kind') == 'actual' and
-            request.get('job_id') == ('plan069-D9-setup-recovery-001' if recovered else f'plan069-{candidate}-setup-001') and
+            request.get('job_id') == (setup['job_id'] if recovered else f'plan069-{candidate}-setup-001') and
             (not recovered or (ledger is not None and request.get('ledger_path') == str(ledger.path))), 'exact setup request required')
     recipe = request['runtime_environment']
     verify(recipe['recipe'])
