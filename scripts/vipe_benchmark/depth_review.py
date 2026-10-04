@@ -137,6 +137,10 @@ def _completed_qualification(candidate, slot, generation, actual):
         qualification.get('source_files') != runtime['source_files'] or
         source_review.get('source_files') != runtime['source_files']):
         return None
+    if candidate == 'D6' and ('qualification_kind' in runtime or
+            'driver_qualification' in runtime or runtime.get('cuda_initialized') is True):
+        from .depth_driver_qualification import qualification_exception
+        qualification_exception(runtime)
     _verify_file(runtime['source_archive'])
     if actual:
         from .config import load

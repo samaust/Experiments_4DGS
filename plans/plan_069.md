@@ -117,3 +117,15 @@ documents, protected historical hashes remain unchanged and document checks pass
 Implementation completion requires the actual extended comparison, justified
 eligible depth handoff, required final-render comparisons and reconciled final
 assessment. Specification publication alone completes none of those experiments.
+
+
+### Proposed D6 qualification amendment (REVIEW)
+
+The actual pinned MoGe-3/FlexGEMM import requires GPU driver metadata. The
+zero-CUDA CPU qualification is blocked. The [driver-aware qualification
+spec](../docs/specs/plan031-execution/D6-driver-qualification-001.md) proposes one
+separate 180-second qualification allocation, including cleanup, for real driver
+initialization and two strict CPU weight loads. It permits no forward/inference,
+benchmark or kernel launch. Installed sources and the scientific profile remain
+unchanged; D6 native maps retain their existing single 3,600-second attempt.
+This proposal requires separate user DO before GPU execution.

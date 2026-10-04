@@ -63,7 +63,7 @@ LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py',
     D5=('depth_authorization.py', 'moge_metric.py', 'moge_native.py', 'moge_setup.py',
         'depth_metric_scale.py', 'depth_single_run.py', 'depth_single_publish.py',
         'moge_environment.py', 'depth_environment.py', 'moge_source_build.py', 'runtime_inventory.py'),
-    D6=('depth_authorization.py', 'moge_metric.py', 'moge_native.py', 'moge_setup.py',
+    D6=('depth_driver_qualification.py', 'depth_authorization.py', 'moge_metric.py', 'moge_native.py', 'moge_setup.py',
         'depth_metric_scale.py', 'depth_single_run.py', 'depth_single_publish.py',
         'moge_environment.py', 'depth_environment.py', 'moge_source_build.py', 'runtime_inventory.py'),
     D7=('dav2_metric.py', 'moge_metric.py', 'depth_setup.py', 'depth_metric_scale.py', 'depth_d7_run.py', 'depth_d7_publish.py'),
@@ -120,6 +120,9 @@ def local_source_records(candidate):
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_actual_dispatch.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_publish.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_dependencies.py'))
+    if candidate == 'D6':
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_driver_qualification.py'))
+        records.append(file_record(ROOT / 'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-004/producer.py'))
     return records
 
 
@@ -278,6 +281,13 @@ def review(proposal, *, config, commercial, assets, runtime, live,
           qualification.get('local_sources') == current_sources and
           qualification.get('dependency_manifest') == dependency_record,
           'runtime qualification does not bind exact assets and profile')
+    if candidate == 'D6' and ('qualification_kind' in qualification or
+            'driver_qualification' in qualification or qualification.get('cuda_initialized') is True):
+        try:
+            from .depth_driver_qualification import qualification_exception
+            qualification_exception(qualification)
+        except (KeyError, TypeError, ValueError, OSError) as error:
+            blockers.append('D6 driver qualification exception invalid: ' + str(error))
     check(approval is not None and
           approval.get('schema') == 'plan069-depth-execution-approval/v1' and
           approval.get('proposal_sha256') == object_hash(proposal) and

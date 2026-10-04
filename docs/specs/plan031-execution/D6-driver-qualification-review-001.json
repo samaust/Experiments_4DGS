@@ -1,0 +1,41 @@
+{
+  "schema": "plan069-D6-driver-qualification-review/v1",
+  "status": "REVIEW",
+  "proposal": {
+    "candidate": "D6",
+    "job_id": "plan069-D6-driver-qualification-001",
+    "qualification_kind": "gpu_aware_import_cpu_weights",
+    "max_attempts": 1,
+    "seconds": 180,
+    "device_bytes": 2147483648,
+    "artifact_bytes": 67108864,
+    "downloads": 0,
+    "inference": false,
+    "benchmarks": false,
+    "strict_cpu_loads": 2,
+    "setup": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-setup-001/result.json",
+      "bytes": 50950,
+      "sha256": "8ef6e9c357e043cf857e1a480671aac3103ee9873eb058000abd326f92c77816"
+    },
+    "scope": "Initialize the real single GPU driver for unchanged pinned v3/FlexGEMM import; load the actual complete weights twice strictly on CPU; no model forward/inference, kernel launch or benchmark.",
+    "native_map_job": "plan069-D6-maps-001",
+    "native_map_max_attempts": 1,
+    "native_map_seconds": 3600,
+    "global_download_gib": 110,
+    "global_artifact_gib": 210,
+    "cleanup_seconds_reserved": 30,
+    "remaining_global_gpu_budget_required": true,
+    "cpu_preparation_budget_unchanged": 1800
+  },
+  "prerequisites": [
+    "Separate explicit user DO bound to exact proposal hash",
+    "Fresh independent current source review including exception module and producer/dispatcher",
+    "Passing combined CPU qualification binding all reviewed helper bytes",
+    "Accepted existing immutable D6 setup/runtime",
+    "Single GPU unowned and no active ledger reservation",
+    "Current global and whole-slot resource checks"
+  ],
+  "estimate": "180 seconds is a conservative deadline, not an observed or predicted D6 runtime. Supervisor reserves 30 seconds for cleanup.",
+  "changes": "The qualifier explicitly records CUDA driver initialization. Native model weights stay on CPU, installed/pinned sources and scientific inference profile stay unchanged. The separate native map attempt remains one use."
+}

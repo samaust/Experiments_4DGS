@@ -23,6 +23,11 @@ class Ledger:
     def _jobs(self, events):
         allocated = jobs(self.config)
         for event in events:
+            if event['event'] == 'depth_driver_qualification_authorized':
+                from .depth_driver_qualification import JOB, validate_request
+                _, proposal = validate_request(event['request'], completed=True)
+                allocated[JOB] = dict(id=JOB, resource='gpu', seconds=proposal['seconds'],
+                    scope='approved D6 driver-aware import and two strict CPU model loads')
             if event['event'] == 'depth_attempt_authorized':
                 for key in ('review', 'authorization', 'source_review', 'admission'):
                     verify_record(event[key])
@@ -162,6 +167,15 @@ class Ledger:
                         for key in ('request', 'worker', 'executable')):
                     raise ValueError('depth command differs from authorization')
                 self._depth_command(candidate, bound, source, evidence, command)
+            if job_id == 'plan069-D6-driver-qualification-001':
+                from .depth_driver_qualification import validate_request
+                grants = [row for row in events if row['event'] == 'depth_driver_qualification_authorized']
+                if len(grants) != 1 or events[-1] != grants[0] or time.time() - grants[0]['recorded_unix'] > 30:
+                    raise ValueError('fresh exact driver qualification authorization required')
+                from .depth_admission import local_source_records
+                request, _ = validate_request(grants[0]['request'], current_sources=local_source_records('D6'))
+                if command != request['command'] or evidence != dict(request=grants[0]['request']):
+                    raise ValueError('driver qualification command/evidence differs')
             if is_recovery_job(job_id):
                 from .s1_recovery import reservation_binding
                 reservation_binding(self.path.parent, self.config, events, evidence, command=command)
@@ -186,6 +200,32 @@ class Ledger:
             return self._append(stream, events, dict(event='reserve', job_id=job_id, resource=resource,
                 seconds=seconds, command=command, evidence=evidence, monotonic_start=time.monotonic(),
                 boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip()))
+
+    def authorize_depth_driver_qualification(self, request_record):
+        """Allocate only the separately approved one-use D6 driver qualification."""
+        from .depth_driver_qualification import JOB, validate_request
+        from .depth_admission import local_source_records
+        request, proposal = validate_request(request_record, current_sources=local_source_records('D6'))
+        if Path(request['ledger_path']).absolute() != self.path.absolute():
+            raise ValueError('driver qualification ledger binding differs')
+        from .execution import resources
+        with self.locked() as (stream, events):
+            if any(row['event'] == 'depth_driver_qualification_authorized' for row in events) or JOB in self.states(events):
+                raise ValueError('driver qualification already authorized or consumed')
+            if any(row['event'] == 'reserve' for row in self.states(events).values()):
+                raise ValueError('unreconciled active attempt')
+            live = resources(self.path.parent, gpu=True)
+            if self.config['gpu_total_seconds_limit'] - self.totals(events)['gpu']['elapsed_seconds'] < proposal['seconds']:
+                raise ValueError('insufficient global GPU wall allocation')
+            if live['gpu_pids']:
+                raise ValueError('GPU owner active before driver qualification')
+            if live['device_bytes'] > proposal['device_bytes']:
+                raise ValueError('driver qualification initial VRAM cap exceeded')
+            if live['download_bytes'] > self.config['new_download_gib_limit'] * 1024**3 or \
+                    live['artifact_bytes'] > self.config['new_artifact_disk_gib_limit'] * 1024**3:
+                raise ValueError('global disk or download cap exceeded')
+            return self._append(stream, events, dict(event='depth_driver_qualification_authorized',
+                job_id=JOB, request=request_record, seconds=proposal['seconds']))
 
     def authorize_depth_setup(self, candidate, review, authorization, source_review):
         """Allocate one bounded setup attempt from exact user-approved proposals."""
@@ -439,7 +479,7 @@ class Ledger:
 
     def note(self, event, **fields):
         if event in ('reserve', 'finish', 'account', 'resume_unstarted', 'checkpoint',
-                     'checkpoint_resume', 'final_render_do_authorized', 'cpu_preparation_charge', 'setup_recovery_authorized', 'component_recovery_authorized',
+                     'checkpoint_resume', 'depth_driver_qualification_authorized', 'final_render_do_authorized', 'cpu_preparation_charge', 'setup_recovery_authorized', 'component_recovery_authorized',
                      'reconstruction_recovery_authorized', 'memory_diagnostic_authorized'):
             raise ValueError('use the checked ledger transition')
         with self.locked() as (stream, events):
