@@ -47,7 +47,25 @@ def validate_findings(checkout,manifest_path,findings_path):
         inventory.get('executable')==manifest['python_executable']==setup['python_executable'],
         'exact installed inventory package closure required')
     verify(manifest['python']);verify(manifest['dependency_lock'])
-    files=[r for package in inventory['packages'] for r in package['files']]
+    installed_root=Path(manifest['inventory']['path']).resolve().parent
+    verified_files={}
+    def installed(row):
+        require(isinstance(row,dict) and set(row)=={'path','sha256','bytes'} and
+            isinstance(row['path'],str) and type(row['bytes']) is int and row['bytes']>=0,
+            'exact installed file record required')
+        key=(row['path'],row['sha256'],row['bytes'])
+        if key not in verified_files:
+            declared=Path(row['path']);resolved=declared.resolve()
+            require(declared.is_absolute() and 'prompts' not in declared.parts and
+                'prompts' not in resolved.parts and resolved.is_relative_to(installed_root) and
+                not any(path.is_symlink() for path in (declared,*declared.parents)),
+                'installed evidence must be an owned nonsymlink file')
+            actual=verify(row)
+            require(actual==dict(row,path=str(resolved)),
+                'installed evidence hash or byte count changed')
+            verified_files[key]=actual
+        return verified_files[key]
+    files=[installed(r) for package in inventory['packages'] for r in package['files']]
     legacy_notices=[r for r in files if any(token in Path(r['path']).name.upper() for token in ('LICENSE','NOTICE'))]
     notices=[r for r in files if any(token in Path(r['path']).name.upper() for token in ('LICENSE','LICENCE','COPYING','NOTICE'))]
     require(manifest.get('files')==files and manifest.get('notices')==legacy_notices,
@@ -80,15 +98,16 @@ def validate_findings(checkout,manifest_path,findings_path):
         require(row.get('version')==package['version'],'commercial finding version differs')
         evidence(row)
         records=row.get('installed_evidence',[])
-        require(bool(records) and all(r in package['files'] for r in records),'package findings need exact installed evidence')
-        for r in records:verify(r)
-        covered.extend(records)
+        canonical_records=[installed(r) for r in records]
+        package_files=[installed(r) for r in package['files']]
+        require(bool(records) and all(r in package_files for r in canonical_records),'package findings need exact installed evidence')
+        covered.extend(canonical_records)
     for row in findings.get('embedded_components',[]):
         evidence(row)
-        require(bool(row.get('installed_evidence')) and all(r in manifest['files'] for r in row['installed_evidence']),
+        records=[installed(r) for r in row.get('installed_evidence',[])]
+        require(bool(records) and all(r in manifest['files'] for r in records),
             'embedded findings need exact installed evidence')
-        for r in row['installed_evidence']:verify(r)
-        covered.extend(row['installed_evidence'])
+        covered.extend(records)
     require(all(row in covered for row in notices),'installed notices require explicit package or embedded findings')
     scopes=findings.get('scopes',{})
     require(set(scopes)==set(SCOPES),'all commercial scopes require separate findings')

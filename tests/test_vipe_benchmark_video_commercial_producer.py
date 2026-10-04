@@ -159,3 +159,56 @@ class CommercialProducerTests(unittest.TestCase):
         self.manifest.write_text(json.dumps(manifest));self.findings['dependency_manifest']=file_record(self.manifest)
         with self.assertRaisesRegex(ValueError,'notices require explicit'):self.prepare()
         self.assertFalse(self.output.exists())
+
+    def console_inventory(self, *, malformed=None):
+        """Accepted raw wheel RECORD spelling and canonical native manifest."""
+        import json
+        environment=self.root/'runtime/environment'
+        site=environment/'lib/python3.11/site-packages';site.mkdir(parents=True)
+        console=environment/'bin/fonttools';console.parent.mkdir();console.write_text('fixture console script')
+        canonical=file_record(console)
+        literal=dict(canonical,path=str(site/'..'/'..'/'..'/'bin/fonttools'))
+        if malformed=='symlink':
+            alias=console.parent/'alias';alias.symlink_to(console)
+            literal['path']=str(alias)
+        if malformed=='escape':
+            outside=self.root.parent/(self.root.name+'-outside');outside.write_text('fixture console script')
+            self.addCleanup(outside.unlink)
+            literal=file_record(outside);canonical=dict(literal)
+        if malformed=='bytes':literal['bytes']+=1
+        if malformed=='hash':literal['sha256']='0'*64
+        inventory=read_json(self.inventory);inventory['packages'][0]['files'].append(literal)
+        self.inventory.write_text(json.dumps(inventory))
+        runtime=read_json(self.runtime);runtime['inventory']=file_record(self.inventory);self.runtime.write_text(json.dumps(runtime))
+        setup=read_json(self.setup);setup['runtime_environment']=file_record(self.runtime);self.setup.write_text(json.dumps(setup))
+        manifest=read_json(self.manifest);manifest.update(packages=inventory['packages'],inventory=file_record(self.inventory),runtime_environment=file_record(self.runtime),setup=file_record(self.setup))
+        manifest['files']=[canonical if row is literal else row for package in inventory['packages'] for row in package['files']]
+        self.manifest.write_text(json.dumps(manifest))
+        self.findings['dependency_manifest']=file_record(self.manifest)
+        return canonical,literal
+
+    def test_canonical_manifest_accepts_verified_parent_segment_inventory(self):
+        canonical,literal=self.console_inventory()
+        before=(self.inventory.read_bytes(),self.manifest.read_bytes(),self.runtime.read_bytes())
+        self.assertNotEqual(canonical['path'],literal['path'])
+        result=self.prepare()
+        self.assertEqual(result['status'],'pending_independent_review')
+        self.assertEqual(before,(self.inventory.read_bytes(),self.manifest.read_bytes(),self.runtime.read_bytes()))
+
+    def test_embedded_canonical_evidence_matches_raw_inventory_file(self):
+        canonical,literal=self.console_inventory()
+        self.findings['embedded_components']=[dict(permission='allowed',basis='Fixture embedded permission',
+            installed_evidence=[canonical],primary_evidence=[dict(url='https://example.invalid/embedded',record=file_record(self.scopefile))])]
+        self.assertEqual(self.prepare()['status'],'pending_independent_review')
+
+    def test_inventory_file_hash_size_symlink_and_escape_stay_fail_closed(self):
+        # Separate fixture instances avoid rewriting a successful output or
+        # accidentally accumulating a second inventory modification.
+        for malformed in ('hash','bytes','symlink','escape'):
+            with self.subTest(malformed=malformed):
+                case=CommercialProducerTests();case.setUp()
+                try:
+                    case.console_inventory(malformed=malformed)
+                    with self.assertRaises(ValueError):case.prepare()
+                    self.assertFalse(case.output.exists())
+                finally:case.doCleanups()
