@@ -132,8 +132,41 @@ def accepted_setup_lineage(setup_record, events, run_root, *, verifier=verify_re
     if map_grant is not None:
         _require(map_grant.get('proposal_sha256') == object_hash(maps) and all(
             map_grant.get(key) == normalized[key] == active[0].get('evidence', {}).get(key)
-            for key in ('review', 'authorization', 'source_review')),
+            for key in ('review', 'authorization')),
             'active recovery map authority binding changed')
+        source_record = map_grant.get('source_review')
+        _require(isinstance(source_record, dict) and source_record ==
+                 active[0].get('evidence', {}).get('source_review') == admission.get('source_review') and
+                 verifier(source_record) == source_record and all(
+                     key not in admission or admission[key] == normalized[key]
+                     for key in ('review', 'authorization')) and
+                 ('proposal_sha256' not in admission or admission['proposal_sha256'] == object_hash(maps)),
+                 'active recovery map authority source or admission binding changed')
+        from .depth_admission import local_source_records
+        source = read_json(source_record['path'])
+        _require(source.get('schema') == 'plan069-depth-source-review/v1' and
+                 source.get('status') == 'passed' and source.get('candidate') == CANDIDATE and
+                 bool(source.get('reviewer')) and
+                 source.get('local_sources') == local_source_records(CANDIDATE) and
+                 source.get('source_revision') == maps['candidate_config']['code']['revision'] ==
+                 result.get('source_revision') and source.get('profile_inventory') == maps.get('profile_inventory') and
+                 source.get('source_archive') == original['source_archive'] and
+                 source.get('source_files') == original['source_files'] and
+                 ('proposal_sha256' not in source or source['proposal_sha256'] == object_hash(maps)),
+                 'current independent recovery map source review required')
+        runtime_record = admission.get('runtime', {}).get('receipt')
+        phase_records = [row for row in (runtime_record, admission.get('qualification'))
+                         if isinstance(row, dict)]
+        phase_expected = dict(candidate=CANDIDATE, record_kind='actual', status='passed',
+            source_review=source_record, setup=setup_record, source_revision=result['source_revision'],
+            source_archive=original['source_archive'], source_files=original['source_files'],
+            local_sources=source['local_sources'], profile=maps.get('profile'))
+        for record in phase_records:
+            _require(verifier(record) == record, 'active recovery map native phase changed')
+            phase = read_json(record['path'])
+            _require(all(key not in phase or phase[key] == value for key, value in phase_expected.items()) and
+                     ('runtime' not in phase or phase['runtime'].get('receipt') == runtime_record),
+                     'active recovery map native phase binding changed')
     _require(grant.get('request') == request_record == normalized['request'] and
              grant.get('proposal_sha256') == object_hash(proposal) and
              reserve.get('evidence', {}).get('request') == request_record and

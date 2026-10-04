@@ -42,6 +42,15 @@ class RecoveryLineageTests(unittest.TestCase):
         self.maps = dict(candidate='D9', max_attempts=1, required_assets=required,
             candidate_config=dict(code=dict(revision='code'), weights=dict(revision='weights')),
             allocation=dict(setup_seconds=100, download_bytes=60, artifact_bytes=90, cpu_seconds=100))
+        self.maps['profile_inventory'] = self.document(self.root / 'profiles.json', {'fixture': 'profile'})
+        self.local_helpers = [content(self.root / 'helpers/current.py', 'completed helper')]
+        source_path = Path(self.authority['source_review']['path']); source_path.unlink()
+        self.authority['source_review'] = self.document(source_path, dict(
+            schema='plan069-depth-source-review/v1', status='passed', candidate='D9', reviewer='fixture independent reviewer',
+            source_revision='code', profile_inventory=self.maps['profile_inventory'],
+            source_archive=archive, source_files=[source], local_sources=self.local_helpers))
+        current = patch('vipe_benchmark.depth_admission.local_source_records', side_effect=lambda candidate: self.local_helpers)
+        current.start(); self.addCleanup(current.stop)
         self.proposal = dict(candidate='D9', job_id=JOB, max_attempts=1, original_setup=self.original)
         self.request = self.document(self.root / 'requests' / (JOB + '.json'),
             dict(self.authority, original_setup=self.original))
@@ -227,6 +236,54 @@ class RecoveryLineageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'request'):
             self.accepted()
         self.validator.assert_not_called()
+
+    def active_fresh_maps(self):
+        # A later independently reviewed helper phase leaves completed authority unchanged.
+        helper = self.root / 'helpers/fresh.py'; helper.write_text('fresh helper')
+        self.local_helpers = [file_record(helper)]
+        source = dict(read_json(self.authority['source_review']['path']), local_sources=self.local_helpers)
+        source_record = self.document(self.root / 'fresh-source-review.json', source)
+        admission = self.document(self.root / 'fresh-admission.json', dict(
+            schema='plan069-depth-admission-result/v1', status='passed', candidate='D9',
+            completed_setup=self.setup, source_review=source_record,
+            review=self.authority['review'], authorization=self.authority['authorization'],
+            proposal_sha256=object_hash(self.maps)))
+        authority = dict(self.authority, source_review=source_record)
+        self.events.extend([dict(event='depth_attempt_authorized', candidate='D9', sequence=7,
+            admission=admission, proposal_sha256=object_hash(self.maps), **authority),
+            dict(event='reserve', job_id='plan069-D9-maps-001', sequence=8, resource='gpu',
+                 evidence=dict(admission=admission, **authority))])
+        return admission, source_record
+
+    def test_active_fresh_map_review_preserves_completed_historical_authority(self):
+        admission, source = self.active_fresh_maps()
+        self.assertNotEqual(source, self.authority['source_review'])
+        accepted = accepted_setup_lineage(self.setup, self.events, self.root,
+                                         active_map_admission=admission)
+        self.assertEqual(accepted['source_review'], self.authority['source_review'])
+        self.assertEqual(accepted['accepted_result'], self.result)
+
+    def test_active_fresh_map_rejects_stale_or_mismatched_source(self):
+        admission, source_record = self.active_fresh_maps()
+        self.events[-1]['evidence']['source_review'] = self.authority['source_review']
+        with self.assertRaisesRegex(ValueError, 'active recovery map'):
+            accepted_setup_lineage(self.setup, self.events, self.root, active_map_admission=admission)
+        self.events[-1]['evidence']['source_review'] = source_record
+        self.local_helpers = []
+        with self.assertRaisesRegex(ValueError, 'current independent recovery map source'):
+            accepted_setup_lineage(self.setup, self.events, self.root, active_map_admission=admission)
+
+    def test_active_fresh_map_rejects_stale_supplied_native_phase(self):
+        admission, source = self.active_fresh_maps()
+        native = self.document(self.root / 'stale-native-phase.json', dict(
+            source_review=self.authority['source_review'], status='passed', record_kind='actual',
+            candidate='D9', setup=self.setup))
+        document = read_json(admission['path']); document['runtime'] = dict(receipt=native)
+        new_admission = self.document(self.root / 'native-bound-admission.json', document)
+        self.events[-2]['admission'] = new_admission
+        self.events[-1]['evidence']['admission'] = new_admission
+        with self.assertRaisesRegex(ValueError, 'native phase binding'):
+            accepted_setup_lineage(self.setup, self.events, self.root, active_map_admission=new_admission)
 
     def test_accepted_recovery_normalizes_without_failed_setup_promotion(self):
         result = self.accepted()
