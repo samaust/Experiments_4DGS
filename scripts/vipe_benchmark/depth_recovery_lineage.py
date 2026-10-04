@@ -247,6 +247,27 @@ def accepted_setup_lineage(setup_record, events, run_root, *, verifier=verify_re
         result_record=setup_record, grant=grant, reserve=reserve, finish=finish, job=job_id, failed_recoveries=failed_recoveries)
 
 
+def recovery_cap_authorization(proposal, authorization, setup, events, run_root):
+    """Return inherited cap authority only for an exact accepted D9 recovery.
+
+    Recovery DO records approve their own setup and unchanged map proposal.
+    Resource-cap approval remains in the protected original setup grant.
+    """
+    root = Path(run_root).resolve()
+    if (proposal.get('candidate') != CANDIDATE or setup is None or
+            Path(setup['path']) not in [root / 'jobs' / name / 'result.json' for name in JOBS]):
+        return None
+    accepted = accepted_setup_lineage(setup, events, root)
+    _require(accepted['map_proposal'] == proposal and accepted['authorization'] == authorization,
+             'recovered cap authority differs from exact map approval')
+    original = read_json(verify_record(accepted['lineage']['grant']['authorization'])['path'])
+    amendment, approval = original.get('cap_amendment'), original.get('cap_approval')
+    _require(isinstance(amendment, dict) and isinstance(approval, dict),
+             'original approved cap authority missing')
+    verify_record(amendment)
+    return amendment, approval
+
+
 def recovery_map_allocation(proposal, setup, events, run_root, assets, *, verifier=verify_record,
                             active_map_admission=None):
     """Credit only the retained model after accepted recovery; preserve all caps."""

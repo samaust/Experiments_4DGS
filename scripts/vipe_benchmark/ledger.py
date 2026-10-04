@@ -608,12 +608,18 @@ class Ledger:
             from .depth_admission import BENCHMARK, CAP_AMENDMENT
             historical = read_json(BENCHMARK)
             cap_amendment = file_record(CAP_AMENDMENT) if self.config != historical else None
+            cap_approval = approved.get('cap_approval')
+            from .depth_recovery_lineage import recovery_cap_authorization
+            inherited = recovery_cap_authorization(proposal, authorization,
+                evidence.get('completed_setup'), events, self.path.parent)
+            if inherited is not None:
+                cap_amendment, cap_approval = inherited
             blockers = decide(proposal, config=self.config,
                 commercial=evidence['commercial'], assets=evidence['assets'],
                 runtime=evidence['runtime'], live=live,
                 source_review=source_review, approval=grant,
                 cap_amendment=cap_amendment,
-                cap_approval=approved.get('cap_approval'),
+                cap_approval=cap_approval,
                 ledger_head_sha256=head,
                 completed_setup=evidence.get('completed_setup'),
                 setup_events=events, run_root=self.path.parent)

@@ -45,7 +45,15 @@ class VideoDispatchBindingTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def run_dispatch(self, candidate, *, source_override=False, corrupt=None, recovery=False):
+    def run_dispatch(self, candidate, *, source_override=False, corrupt=None, recovery=False, truthful_recovery=False):
+        cap_authority = file_record(self.approval)
+        if truthful_recovery:
+            prior = read_json(self.approval)
+            prior_path = self.root / 'original-cap-approval.json'
+            write_json(prior_path, prior)
+            cap_authority = file_record(prior_path)
+            prior.pop('cap_amendment'); prior.pop('cap_approval')
+            self.approval.unlink(); write_json(self.approval, prior)
         source_review = self.root / ('docs/research/vipe-alternatives/'
             f'plan031-execution/depth-{candidate}-source-review-001.json')
         source_review.parent.mkdir(parents=True, exist_ok=True)
@@ -95,6 +103,9 @@ class VideoDispatchBindingTests(unittest.TestCase):
         clock = [2000.]
 
         def review_evidence(*args, **kwargs):
+            inherited = read_json(cap_authority['path'])
+            self.assertEqual(kwargs['cap_amendment'], inherited['cap_amendment'])
+            self.assertEqual(kwargs['cap_approval'], inherited['cap_approval'])
             self.assertEqual(kwargs['completed_setup'], file_record(setup))
             self.assertEqual(kwargs['setup_events'], [])
             self.assertEqual(kwargs['run_root'], self.local)
@@ -158,7 +169,9 @@ class VideoDispatchBindingTests(unittest.TestCase):
              patch.object(Path, 'read_text', read_text), \
              patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',
                    side_effect=ValueError('unprotected recovery') if corrupt == 'recovery:unprotected' else None,
-                   return_value=dict(map_proposal={} if corrupt == 'recovery:proposal' else proposal)) as lineage, \
+                   return_value=dict(map_proposal={} if corrupt == 'recovery:proposal' else proposal,
+                       authorization=file_record(self.approval),
+                       lineage=dict(grant=dict(authorization=cap_authority)))) as lineage, \
              patch('vipe_benchmark.depth_admission.local_source_records', return_value=native_files), \
              patch('vipe_benchmark.video_native.native_source_records', return_value=[] if corrupt == 'source:changed_native' else native_files):
             if corrupt:
@@ -174,7 +187,7 @@ class VideoDispatchBindingTests(unittest.TestCase):
                 source_review_path=source_review if source_override else None,
                 **({'setup_path': setup} if recovery else {}))
             if recovery:
-                lineage.assert_called_once_with(file_record(setup), [], self.local)
+                lineage.assert_any_call(file_record(setup), [], self.local)
             else:
                 lineage.assert_not_called()
         self.assertEqual(result['status'], 'fixture-supervision-not-executed')
@@ -191,6 +204,10 @@ class VideoDispatchBindingTests(unittest.TestCase):
 
     def test_explicit_accepted_d9_repair_reaches_dispatch_with_exact_setup(self):
         self.run_dispatch('D9', recovery='002')
+
+    def test_recovery002_inherits_caps_without_rewriting_its_do(self):
+        self.run_dispatch('D9', recovery='002', truthful_recovery=True)
+        self.assertNotIn('cap_approval', read_json(self.approval))
 
     def test_unprotected_or_wrong_proposal_recovery_stops_before_writes(self):
         for corrupt in ('recovery:unprotected', 'recovery:proposal'):

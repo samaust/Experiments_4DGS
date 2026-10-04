@@ -163,11 +163,15 @@ def dispatch(candidate, admission_path, context_path,
     if any(path.exists() for path in (output, request_path, refreshed_path)):
         raise ValueError('video inference already prepared, reserved or attempted')
     grant = next(row for row in approved['candidate_approvals'] if row['candidate'] == candidate)
+    from vipe_benchmark.depth_recovery_lineage import recovery_cap_authorization
+    caps = recovery_cap_authorization(proposal, authorization, setup, ledger.events(), local)
+    if caps is None:
+        caps = approved['cap_amendment'], approved['cap_approval']
     previous_live = accepted['live']
     blockers = admit(proposal, config=config, commercial=accepted['commercial'],
         assets=accepted['assets'], runtime=accepted['runtime'], live=previous_live,
         source_review=source_review, approval=grant,
-        cap_amendment=approved['cap_amendment'], cap_approval=approved['cap_approval'],
+        cap_amendment=caps[0], cap_approval=caps[1],
         ledger_head_sha256=previous_live['ledger_head_sha256'],
         now_unix=previous_live['sampled_unix'], completed_setup=setup,
         setup_events=ledger.events(), run_root=local)
