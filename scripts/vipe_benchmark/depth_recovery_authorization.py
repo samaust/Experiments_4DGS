@@ -14,11 +14,15 @@ def validate_recovery_authorization(candidate,approved,reviewed,*,root):
     """Check REVIEW and both new approvals against protected failed ancestry."""
     from .config import load
     from .ledger import Ledger
-    from .depth_setup_recovery import original_setup_lineage
+    from .depth_setup_recovery import JOB, REPAIR_JOB, JOBS, original_setup_lineage, failed_recovery_lineages
     from .depth_admission import VIDEO_FRAME_PROFILES,selected_profile_inventory
     from .video_environment import FRAME_RECIPE
     _require(candidate=='D9','setup recovery authorization is D9-only')
-    expected_review=Path(root)/'docs/specs/plan031-execution/depth-D9-frame-recovery-review-001.json'
+    recovery=reviewed.get('setup_recovery_proposal',{})
+    job_id=recovery.get('job_id') if isinstance(recovery,dict) else None
+    _require(job_id in JOBS,'unknown separately approved recovery job')
+    version='001' if job_id==JOB else '002'
+    expected_review=Path(root)/f'docs/specs/plan031-execution/depth-D9-frame-recovery-review-{version}.json'
     _require(approved.get('schema')=='plan069-depth-user-authorization/v1' and approved.get('status')=='DO' and
         reviewed.get('schema')=='plan069-depth-execution-review/v1' and reviewed.get('status')=='REVIEW' and
         approved.get('review')==file_record(expected_review),'exact new canonical D9 recovery REVIEW and DO required')
@@ -28,8 +32,8 @@ def validate_recovery_authorization(candidate,approved,reviewed,*,root):
     maps=rows[0]
     _require(maps.get('schema')=='plan069-depth-execution-proposal/v1' and maps.get('status')=='REVIEW' and
         type(maps.get('max_attempts')) is int and maps['max_attempts']==1 and
-        recovery.get('schema')=='plan069-video-setup-recovery-proposal/v1' and recovery.get('status')=='REVIEW' and
-        recovery.get('candidate')=='D9' and recovery.get('job_id')=='plan069-D9-setup-recovery-001' and
+        recovery.get('schema')==('plan069-video-setup-recovery-proposal/v1' if job_id==JOB else 'plan069-video-setup-recovery-proposal/v2') and recovery.get('status')=='REVIEW' and
+        recovery.get('candidate')=='D9' and recovery.get('job_id')==job_id and
         type(recovery.get('max_attempts')) is int and recovery['max_attempts']==1 and
         type(recovery.get('recovery_seconds')) is int and recovery['recovery_seconds']==1200 and
         recovery.get('map_proposal_sha256')==object_hash(maps) and
@@ -41,19 +45,25 @@ def validate_recovery_authorization(candidate,approved,reviewed,*,root):
         grants[0].get('candidate')=='D9' and grants[0].get('status')=='approved' and
         type(grants[0].get('max_attempts')) is int and grants[0]['max_attempts']==1 and
         grants[0].get('proposal_sha256')==object_hash(maps) and
-        approved.get('setup_recovery_approval')==dict(candidate='D9',job_id='plan069-D9-setup-recovery-001',
+        approved.get('setup_recovery_approval')==dict(candidate='D9',job_id=job_id,
             status='approved',max_attempts=1,proposal_sha256=object_hash(recovery)),
         'both exact fresh D9 map and setup-recovery approvals required')
     _require(selected_profile_inventory(maps)==VIDEO_FRAME_PROFILES,'exact frame-input runtime profile required')
     original=recovery['original_setup'];run_root=Path(original['request']['path']).parent.parent
     config=dict(load(),new_download_gib_limit=110,new_artifact_disk_gib_limit=210)
-    lineage=original_setup_lineage(original,Ledger(run_root/'ledger.jsonl',config).events(),run_root)
+    events=Ledger(run_root/'ledger.jsonl',config).events()
+    lineage=original_setup_lineage(original,events,run_root)
+    failures=failed_recovery_lineages(dict(job_id=job_id,
+        failed_recoveries=recovery.get('failed_recoveries',[])),recovery,events,run_root)
     _require(lineage['grant']['sequence']==761 and lineage['finish']['sequence']==765,
         'exact preserved original D9 grant and failed finish required')
     restored=copy.deepcopy(maps)
     for key in ('profile','profile_inventory','runtime_recipe'):restored[key]=lineage['proposal'][key]
     _require(restored==lineage['proposal'],'recovery changes original science, assets, caps or workload')
     elapsed=lineage['finish'].get('elapsed_seconds')
+    _require(type(elapsed) in (int,float) and math.isfinite(elapsed) and elapsed>=0,
+        'original setup elapsed invalid')
+    elapsed+=sum(row['finish']['elapsed_seconds'] for row in failures)
     _require(type(elapsed) in (int,float) and math.isfinite(elapsed) and elapsed>=0 and
         elapsed+recovery['recovery_seconds']<=lineage['proposal']['allocation']['setup_seconds'],
         'recovery exceeds original remaining setup allowance')

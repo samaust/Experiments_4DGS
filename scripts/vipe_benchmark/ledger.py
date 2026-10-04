@@ -34,10 +34,13 @@ class Ledger:
                 allocated[JOB] = dict(id=JOB, resource='gpu', seconds=proposal['seconds'],
                     scope='separately approved D6 driver-only syscall diagnostic')
             if event['event'] == 'depth_setup_recovery_authorized':
-                from .depth_setup_recovery import JOB
+                from .depth_setup_recovery import JOBS
+                recovery_job = event.get('job_id')
+                if recovery_job not in JOBS:
+                    raise ValueError('unknown checked setup recovery job')
                 for key in ('request','review','authorization','source_review'):
                     verify_record(event[key])
-                allocated[JOB] = dict(id=JOB,resource='setup',seconds=event['seconds'],
+                allocated[recovery_job] = dict(id=recovery_job,resource='setup',seconds=event['seconds'],
                     scope='explicitly approved one-attempt D9 retained-input recovery')
             if event['event'] == 'depth_driver_qualification_authorized':
                 from .depth_driver_qualification import JOB, validate_request
@@ -171,9 +174,9 @@ class Ledger:
                 raise ValueError('job already consumed or accounted for; no automatic retry')
             if any(r['event'] == 'reserve' for r in states.values()):
                 raise ValueError('unreconciled active attempt; refusing concurrent dispatch')
-            from .depth_setup_recovery import JOB as RECOVERY_JOB
-            if job_id == RECOVERY_JOB:
-                self._depth_recovery_reservation(events, evidence, command)
+            from .depth_setup_recovery import JOBS as RECOVERY_JOBS
+            if job_id in RECOVERY_JOBS:
+                self._depth_recovery_reservation(events, evidence, command, job_id=job_id)
             if re.fullmatch(r'plan069-(D2|D5|D6|D7|D8|D9|D10|D11)-maps-001', job_id):
                 candidate = job_id.split('-')[1]
                 authorized = [row for row in events if
@@ -402,16 +405,17 @@ class Ledger:
 
     def authorize_depth_setup_recovery(self, request, *, command, worker, executable):
         """Approve a fresh immutable recovery only under an explicit new DO."""
-        from .depth_setup_recovery import JOB, EVENT, validate_recovery_request
+        from .depth_setup_recovery import EVENT, validate_recovery_request
         with self.locked() as (stream, events):
             if any(row['event'] == 'reserve' for row in self.states(events).values()):
                 raise ValueError('active attempt prevents setup recovery authorization')
-            if JOB in self.states(events) or any(row.get('event') == EVENT for row in events):
-                raise ValueError('setup recovery already authorized or consumed')
             normalized = validate_recovery_request(request, events, self.path.parent)
+            job_id = normalized['job_id']
+            if job_id in self.states(events) or any(row.get('event') == EVENT and row.get('job_id') == job_id for row in events):
+                raise ValueError('setup recovery already authorized or consumed')
             source = read_json(verify_record(normalized['source_review'])['path'])
             expected = [sys.executable, worker['path'], '--request', request['path'],
-                        '--output', str(self.path.parent / 'jobs' / JOB)]
+                        '--output', str(self.path.parent / 'jobs' / job_id)]
             if verify_record(worker) != worker or verify_record(executable) != executable or \
                     executable != file_record(sys.executable) or command != expected or \
                     worker not in source.get('local_sources',[]) or \
@@ -428,16 +432,16 @@ class Ledger:
                              ('artifact_bytes','new_artifact_disk_gib_limit')):
                 if reading[key] > min(self.config[cap] * 2**30,normalized['byte_limits'][key]):
                     raise ValueError(key + ' recovery exceeds unchanged original/global byte cap')
-            return self._append(stream, events, dict(event=EVENT,candidate='D9',job_id=JOB,
+            return self._append(stream, events, dict(event=EVENT,candidate='D9',job_id=job_id,
                 seconds=seconds,proposal_sha256=object_hash(normalized['proposal']),request=request,
                 review=normalized['review'],authorization=normalized['authorization'],
                 source_review=normalized['source_review'],command=command,worker=worker,
                 executable=executable,resource_snapshot=reading,
                 original_setup=normalized['original'],byte_limits=normalized['byte_limits']))
 
-    def _depth_recovery_reservation(self, events, evidence, command):
+    def _depth_recovery_reservation(self, events, evidence, command, *, job_id):
         from .depth_setup_recovery import EVENT, validate_recovery_request
-        grants = [row for row in events if row.get('event') == EVENT]
+        grants = [row for row in events if row.get('event') == EVENT and row.get('job_id') == job_id]
         if len(grants) != 1 or events[-1] != grants[0] or time.time()-grants[0]['recorded_unix'] > 30:
             raise ValueError('fresh exact setup recovery authorization required')
         grant = grants[0]
