@@ -144,3 +144,18 @@ class CommercialProducerTests(unittest.TestCase):
                 rp.write_text(json.dumps(dict(base,reviewer=reviewer)))
                 with self.assertRaises(ValueError):
                     module.finalize(ROOT,path,rp,self.root/'assessment.json')
+
+    def test_licence_family_notice_cannot_hide_behind_legacy_manifest_list(self):
+        import json
+        added=self.root/'embedded-LICENCE';added.write_text('Supplemental fixture terms')
+        notice=file_record(added);inventory=read_json(self.inventory)
+        inventory['packages'][0]['files'].append(notice);self.inventory.write_text(json.dumps(inventory))
+        runtime=read_json(self.runtime);runtime['inventory']=file_record(self.inventory);self.runtime.write_text(json.dumps(runtime))
+        setup=read_json(self.setup);setup['runtime_environment']=file_record(self.runtime);self.setup.write_text(json.dumps(setup))
+        manifest=read_json(self.manifest)
+        manifest.update(inventory=file_record(self.inventory),packages=inventory['packages'],setup=file_record(self.setup),
+            runtime_environment=file_record(self.runtime),files=[r for package in inventory['packages'] for r in package['files']])
+        # Original producer legacy notices excludes LICENCE, intentionally unchanged.
+        self.manifest.write_text(json.dumps(manifest));self.findings['dependency_manifest']=file_record(self.manifest)
+        with self.assertRaisesRegex(ValueError,'notices require explicit'):self.prepare()
+        self.assertFalse(self.output.exists())

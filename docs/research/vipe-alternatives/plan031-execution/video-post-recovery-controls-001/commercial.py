@@ -48,8 +48,9 @@ def validate_findings(checkout,manifest_path,findings_path):
         'exact installed inventory package closure required')
     verify(manifest['python']);verify(manifest['dependency_lock'])
     files=[r for package in inventory['packages'] for r in package['files']]
-    notices=[r for r in files if any(token in Path(r['path']).name.upper() for token in ('LICENSE','NOTICE'))]
-    require(manifest.get('files')==files and manifest.get('notices')==notices,
+    legacy_notices=[r for r in files if any(token in Path(r['path']).name.upper() for token in ('LICENSE','NOTICE'))]
+    notices=[r for r in files if any(token in Path(r['path']).name.upper() for token in ('LICENSE','LICENCE','COPYING','NOTICE'))]
+    require(manifest.get('files')==files and manifest.get('notices')==legacy_notices,
         'manifest must retain exact full installed file and derived notice closure')
     def name(value):return value.lower().replace('_','-').replace('.','-')
     pins={name(row.name):str(row.specifier)[2:] for row in _requirements(recipe['constraints'])}
@@ -88,7 +89,7 @@ def validate_findings(checkout,manifest_path,findings_path):
             'embedded findings need exact installed evidence')
         for r in row['installed_evidence']:verify(r)
         covered.extend(row['installed_evidence'])
-    require(all(row in covered for row in manifest.get('notices',[])),'installed notices require explicit package or embedded findings')
+    require(all(row in covered for row in notices),'installed notices require explicit package or embedded findings')
     scopes=findings.get('scopes',{})
     require(set(scopes)==set(SCOPES),'all commercial scopes require separate findings')
     for row in scopes.values():evidence(row)
