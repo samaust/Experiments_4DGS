@@ -55,3 +55,16 @@ Exact probe, results, trace and cleanup hashes are preserved in
 
 This demonstrates the initialization fix. No actual004 request, DO, full model
 qualification result or integrated source receipt is claimed.
+
+## Integration
+
+Fast-forwarded `plan069-depth-extension` through `e64c3f4f` after confirming
+zero active ledger reservations. Canonical worker, guard, startup, dispatcher
+and authority bytes match the reviewed proposal. Existing untracked D9/D10
+outcomes were preserved.
+
+On the integrated branch, 96 CPU tests covering the D6 qualification versions,
+dispatchers, admission and protected ledger transitions passed, plus 13 guard
+fixtures. Captures: `.local/D6-guard007-integration-tests-001/`. Command wall:
+7.494010378 seconds. This focused regression check is not the full production
+CPU qualification required for a new attempt.
