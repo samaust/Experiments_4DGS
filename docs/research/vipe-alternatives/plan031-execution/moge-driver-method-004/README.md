@@ -102,3 +102,15 @@ Standards PASS and Spec PASS; no unresolved findings. Review corrections bind
 result source/method/interpreter lineage, preserve the exact ledger finish
 instead of the worker return value, and guard direct benchmark entry points.
 Both reviews performed no GPU, model or probe execution.
+
+## Integration composition
+
+The D6 amendment is commit `7191ca52`, following diagnosis `896e22e2`.
+Video selector source commits `d987ac45` and `2ac51123` were then composed in
+this isolated branch as `7f303b05` and `e6a7836d`. They are already integrated
+in the canonical branch; do not cherry-pick these duplicate commits there.
+Both independent composition reviews passed with no actionable findings.
+The 49 selected CPU tests passed in 1.663 seconds (1.746774569 including
+imports), recorded in `combined-cpu-validation.json`. No model or GPU was used.
+Refresh canonical source reviews and run the canonical combined qualification
+after integration; this fixture evidence does not replace either gate.
