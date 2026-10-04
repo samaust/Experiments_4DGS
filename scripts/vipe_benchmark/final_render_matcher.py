@@ -17,6 +17,8 @@ SCHEMA = 'plan069-final-render-matcher-runtime/v1'
 DEPENDENCIES = {'torch','einops','torchvision','opencv-python','kornia','albumentations',
     'loguru','tqdm','matplotlib','h5py','wandb','timm','poselib','numpy','Pillow'}
 
+OPENCV_PROVIDERS = {'opencv-python','opencv-python-headless'}
+
 FIELDS = {'schema','record_kind','status','checkout','weights','revision',
     'environment_prefix','interpreter','dependencies','source_files','checkout_files'}
 
@@ -69,7 +71,11 @@ def _dependencies(records, environment, *, active=False):
             if name in metadata:
                 raise ValueError('duplicate matcher dependency distribution')
             metadata[name] = path
-    for name in DEPENDENCIES:
+    providers = OPENCV_PROVIDERS.intersection(metadata)
+    if len(providers) != 1:
+        raise ValueError('exactly one OpenCV provider required for matcher runtime')
+    required = (DEPENDENCIES-{'opencv-python'}) | providers
+    for name in required:
         canonical = re.sub(r'[-_.]+','-',name).lower()
         if canonical not in metadata:
             raise ValueError('missing complete matcher dependency: '+name)

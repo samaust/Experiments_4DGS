@@ -6,6 +6,14 @@ It requires the unchanged EDGS RoMa revision and the two exact historical weight
 hashes. Tracked checkout files, audited geometry and loader sources and complete
 installed dependency files are bound. Dependency records must include METADATA,
 RECORD and every listed file except bytecode and forbidden `prompts` content.
+Exactly one installed OpenCV provider, `opencv-python` or
+`opencv-python-headless`, is required. Both supply the unchanged `cv2` matcher/LK
+interface; inventories containing both providers are rejected because their files
+overlap. All other required distributions and complete file bindings remain
+mandatory. A headless custom recipe must document substitution of upstream
+RoMa's `opencv-python` dependency spelling and satisfy its complete actual
+inference dependency closure; this acceptance does not resolve/install packages.
+
 Preparation is neither qualification nor execution permission. Regenerate the
 inventory after integration changes any bound source.
 

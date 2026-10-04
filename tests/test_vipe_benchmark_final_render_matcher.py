@@ -63,3 +63,44 @@ class MatcherPreparationTests(unittest.TestCase):
                 run({'record_kind':'fixture'},'arm',output,object(),
                     invocation_record={'path':'unused'})
             self.assertFalse(output.exists())
+
+
+class OpenCVProviderTests(unittest.TestCase):
+    def _validate(self, providers):
+        from unittest.mock import patch
+        from vipe_benchmark import final_render_matcher as matcher
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            interpreter = root/'python'; interpreter.write_text('fixture executable')
+            weight = root/'weights'; weight.write_text('fixture checkpoint')
+            dependencies = []
+            names = (matcher.DEPENDENCIES-{'opencv-python'}) | set(providers)
+            for name in sorted(names):
+                folder = root/(name.replace('-','_')+'-1.0.dist-info'); folder.mkdir()
+                metadata = folder/'METADATA'; metadata.write_text('Name: '+name+'\nVersion: 1.0\n')
+                record = folder/'RECORD'
+                record.write_text(str(metadata.relative_to(root))+',,\n'+str(record.relative_to(root))+',,\n')
+                dependencies.extend((file_record(metadata),file_record(record)))
+            inventory = dict(schema=matcher.SCHEMA,record_kind='actual',status='prepared',
+                checkout=str(root),revision='fixture-revision',environment_prefix=str(root),
+                interpreter=file_record(interpreter),weights={'weights':file_record(weight)},
+                source_files=[],checkout_files=[],dependencies=dependencies)
+            with patch.object(matcher,'_matching_helpers',return_value=(None,None,'fixture-revision',
+                    {'weights':file_record(weight)['sha256']})), \
+                    patch.object(matcher,'required_sources',return_value=[]), \
+                    patch.object(matcher,'_checkout_files',return_value=[]):
+                return matcher.validate_inventory(inventory)
+
+    def test_headless_provider_supplies_complete_matcher_inventory(self):
+        self.assertEqual(self._validate({'opencv-python-headless'})['status'],'prepared')
+
+    def test_gui_provider_retains_existing_inventory_support(self):
+        self.assertEqual(self._validate({'opencv-python'})['status'],'prepared')
+
+    def test_two_providers_rejected_before_any_model_import(self):
+        with self.assertRaisesRegex(ValueError,'exactly one OpenCV provider'):
+            self._validate({'opencv-python','opencv-python-headless'})
+
+    def test_missing_provider_rejected(self):
+        with self.assertRaisesRegex(ValueError,'exactly one OpenCV provider'):
+            self._validate(set())
