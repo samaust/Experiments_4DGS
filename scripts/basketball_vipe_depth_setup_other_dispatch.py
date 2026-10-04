@@ -7,6 +7,7 @@ import sys
 
 from vipe_benchmark.config import ROOT, load
 from vipe_benchmark.depth_authorization import execution_authorization
+from vipe_benchmark.depth_admission import local_source_records
 from vipe_benchmark.execution import resources
 from vipe_benchmark.depth_native_runtime import recipe, verify_runtime
 from vipe_benchmark.depth_source_integrity import verify_source
@@ -29,7 +30,7 @@ def shared_run_root():
     return repository
 
 
-def dispatch(candidate, run_id):
+def dispatch(candidate, run_id, *, source_review_path=None):
     if candidate not in ('D8', 'D11') or run_id != 'plan031-20260913T032700Z':
         raise ValueError('setup candidate/run differs from reviewed Plan 069 scope')
     if Path('/proc/1/comm').read_text().strip() != 'systemd':
@@ -40,9 +41,18 @@ def dispatch(candidate, run_id):
     config = dict(load(), new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
     ledger = Ledger(local / 'ledger.jsonl', config)
     review, authorization, proposal, _ = execution_authorization(candidate)
-    source_path = (ROOT / 'docs/research/vipe-alternatives' / run_id /
-                   f'depth-{candidate}-source-review-001.json')
+    source_path = (Path(source_review_path) if source_review_path is not None else
+        ROOT / 'docs/research/vipe-alternatives' / run_id /
+        f'depth-{candidate}-source-review-001.json')
     source_review = file_record(source_path)
+    source = read_json(verify_record(source_review)['path'])
+    if (source.get('schema') != 'plan069-depth-source-review/v1' or
+            source.get('status') != 'passed' or source.get('candidate') != candidate or
+            source.get('source_revision') != proposal['candidate_config']['code']['revision'] or
+            source.get('profile_inventory') != proposal['profile_inventory'] or
+            source.get('local_sources') != local_source_records(candidate) or
+            not source.get('reviewer')):
+        raise ValueError('current independent depth source review required')
     output = local / 'jobs' / job_id
     request_path = local / 'requests' / (job_id + '.json')
     if output.exists() or request_path.exists():
@@ -101,8 +111,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--candidate', choices=('D8', 'D11'), required=True)
     parser.add_argument('--run-id', default='plan031-20260913T032700Z')
+    parser.add_argument('--source-review', help='Exact immutable independently reviewed source receipt')
     args = parser.parse_args()
-    dispatch(args.candidate, args.run_id)
+    dispatch(args.candidate, args.run_id, source_review_path=args.source_review)
 
 
 if __name__ == '__main__':
