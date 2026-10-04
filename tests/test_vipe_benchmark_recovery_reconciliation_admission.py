@@ -2,6 +2,8 @@
 import importlib.util
 from pathlib import Path
 import unittest
+import json,hashlib,math,tempfile
+from vipe_benchmark.ledger import Ledger
 from unittest.mock import patch
 
 PATH = Path(__file__).resolve().parents[1] / 'docs/research/vipe-alternatives/plan069-D9-recovery-causal-001/prepare_reconciliation_admission.py'
@@ -46,3 +48,43 @@ class HistoricalPreservationChargeTests(unittest.TestCase):
         with patch.object(producer, 'record', return_value=dict(self.evidence, sha256='changed')):
             with self.assertRaisesRegex(ValueError, 'exact protected historical'):
                 producer.preservation_charge_owner(self.event)
+
+
+class GlobalCpuAccumulationTests(unittest.TestCase):
+    def test_public_admission_matches_sequential_ledger_not_accurate_sum(self):
+        # Modern builtin sum compensates rounding; the persisted ledger uses +=.
+        # Patch this producer's builtin lookup to reproduce that host behavior
+        # even if a future fixture interpreter uses an older builtin algorithm.
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);run=root/'run';run.mkdir();out=root/'admission'
+            def save(name,value):
+                path=root/name;path.parent.mkdir(parents=True,exist_ok=True)
+                path.write_text(json.dumps(value));return producer.record(path)
+            helper=save('helper.json',{'fixture':True})
+            source=save('source.json',dict(status='passed',candidate='D9',local_sources=[helper]))
+            review=save('review.json',dict(proposals=[dict(candidate='D9',allocation=dict(cpu_seconds=3600))]))
+            save('configs/vipe-alternatives/benchmark-v1.json',dict(cpu_prepare_score_report_seconds_limit=57600))
+            job='plan069-D9-setup-recovery-002';request=dict(path='fixture-request',sha256='fixture',bytes=0)
+            result=save('result.json',dict(schema='plan069-video-setup-recovery-result/v2',job_id=job,status='complete',record_kind='actual',candidate='D9',request=request,source_review=source))
+            events=[dict(event='depth_setup_authorized',candidate='D9',review=review),
+                dict(event='depth_setup_recovery_authorized',job_id=job,source_review=source,request=request),
+                dict(event='finish',job_id=job,status='complete',resource='setup',elapsed_seconds=0.,cleanup_confirmed=True,cleanup_uncertain=False,surviving_pids=[],deadline_exceeded=False,result=result),
+                dict(event='finish',job_id='cpu-fixture',resource='cpu',elapsed_seconds=1.),
+                dict(event='cpu_preparation_charge',resource='cpu',elapsed_seconds=2.**-53,evidence=helper),
+                dict(event='checkpoint',job_id='cpu-checkpoint',resource='cpu',elapsed_seconds=2.**-53),
+                dict(event='finish',job_id='gpu-fixture',resource='gpu',elapsed_seconds=99.)]
+            previous=None
+            for index,row in enumerate(events):
+                row.update(sequence=index,previous_sha256=previous)
+                previous=hashlib.sha256(json.dumps(row,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest();row['event_sha256']=previous
+            (run/'ledger.jsonl').write_text(''.join(json.dumps(row)+'\n' for row in events))
+            expected=Ledger.__new__(Ledger).totals(events)['cpu']['elapsed_seconds']
+            self.assertEqual(expected,1.)
+            self.assertNotEqual(math.fsum([1.,2.**-53,2.**-53]),expected)
+            args=['prepare','--checkout',str(root),'--run',str(run),'--output',str(out),'--source-review',source['path']]
+            with patch('sys.argv',args),patch.object(producer.subprocess,'check_output',side_effect=lambda args,**kwargs:'fixture-head\n' if args[1]=='rev-parse' else ''),patch.object(producer,'sum',math.fsum,create=True):
+                producer.main()
+            admitted=producer.read(out/'admission.json')
+            self.assertEqual(admitted['global_cpu_elapsed_seconds'],expected)
+            self.assertEqual(admitted['global_cpu_remaining_seconds'],57600.-expected)
+            self.assertEqual(admitted['candidate_cpu_elapsed_seconds'],0.)

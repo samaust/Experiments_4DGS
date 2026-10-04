@@ -146,7 +146,12 @@ def main():
                 raise ValueError('changed D9 CPU charge evidence')
             attributed.append(dict(sequence=event['sequence'], seconds=event['elapsed_seconds'], evidence=event['evidence']))
     candidate_used = sum(row['seconds'] for row in attributed)
-    global_used = sum(event['elapsed_seconds'] for event in events if event['event'] == 'cpu_preparation_charge' or event['event'] in ('finish', 'checkpoint') and event['resource'] == 'cpu')
+    # Match Ledger.totals exactly; compensated sum differs across interpreters.
+    global_used = 0.0
+    for event in events:
+        if event['event'] == 'cpu_preparation_charge' or (
+                event['event'] in ('finish', 'checkpoint') and event['resource'] == 'cpu'):
+            global_used += event['elapsed_seconds']
     bounds = dict(reconciliation_seconds=120, preparation_reserve_seconds=10, qualification_headroom_seconds=180, maps_headroom_seconds=160)
     needed = sum(bounds.values())
     if candidate_used + needed > candidate_limit or global_used + needed > config['cpu_prepare_score_report_seconds_limit']:
