@@ -33,8 +33,59 @@ def _live(ledger, local):
         device_peak_bytes=reading['device_bytes'])
 
 
+def _qualified_sources(candidate, proposal, accepted, source_review, setup_record,
+                       review, authorization):
+    """Rehash current native lineage before writing or reserving an attempt."""
+    from vipe_benchmark.depth_admission import local_source_records
+    from vipe_benchmark.video_native import native_source_records
+    source = read_json(verify_record(source_review)['path'])
+    setup = read_json(verify_record(setup_record)['path'])
+    qualification = accepted.get('qualification')
+    if not isinstance(qualification, dict):
+        raise ValueError('video admission requires explicit full qualification bundle')
+    bundle = read_json(verify_record(qualification)['path'])
+    runtime_record = accepted.get('runtime', {}).get('receipt')
+    if not isinstance(runtime_record, dict):
+        raise ValueError('video admission requires exact runtime receipt')
+    runtime = read_json(verify_record(runtime_record)['path'])
+    current = local_source_records(candidate)
+    if (source.get('schema') != 'plan069-depth-source-review/v1' or
+            source.get('status') != 'passed' or source.get('candidate') != candidate or
+            not source.get('reviewer') or
+            source.get('source_revision') != proposal['candidate_config']['code']['revision'] or
+            source.get('profile_inventory') != proposal['profile_inventory'] or
+            source.get('local_sources') != current or
+            setup.get('schema') != 'plan069-video-setup-result/v1' or
+            setup.get('record_kind') != 'actual' or setup.get('status') != 'complete' or
+            setup.get('candidate') != candidate or setup.get('review') != review or
+            setup.get('authorization') != authorization or
+            setup.get('source_revision') != source['source_revision'] or
+            setup.get('weight_revision') != proposal['candidate_config']['weights']['revision'] or
+            runtime.get('schema') != 'plan069-depth-runtime-qualification/v1' or
+            runtime.get('record_kind') != 'actual' or runtime.get('candidate') != candidate or
+            runtime.get('status') != 'passed' or runtime.get('setup') != setup_record or
+            runtime.get('source_revision') != source['source_revision'] or
+            runtime.get('local_sources') != current or runtime.get('profile') != proposal['profile'] or
+            runtime.get('source_review') != source_review or
+            bundle.get('schema') != f'plan069-depth-{candidate}-qualification/v1' or
+            bundle.get('candidate') != candidate or bundle.get('status') != 'passed' or
+            bundle.get('record_kind') != 'actual' or bundle.get('setup') != setup_record or
+            bundle.get('source_review') != source_review or
+            bundle.get('runtime', {}).get('receipt') != runtime_record or
+            bundle.get('commercial', {}).get('assessment') != accepted.get('commercial', {}).get('assessment')):
+        raise ValueError('current independent video source/runtime qualification required')
+    archive, files = setup.get('source_archive'), setup.get('source_files')
+    if (not archive or not files or any(document.get('source_archive') != archive or
+            document.get('source_files') != files for document in (source, runtime, bundle))):
+        raise ValueError('exact video archive and source-file qualification required')
+    verify_record(archive)
+    if native_source_records(setup['source_dir']) != files:
+        raise ValueError('native video source changed since qualification')
+    return qualification
+
+
 def dispatch(candidate, admission_path, context_path,
-             run_id='plan031-20260913T032700Z', *, qualitative_admission_path=None):
+             run_id='plan031-20260913T032700Z', *, qualitative_admission_path=None, source_review_path=None):
     if candidate not in ('D9', 'D10') or run_id != 'plan031-20260913T032700Z':
         raise ValueError('only approved D9/D10 native run')
     if Path('/proc/1/comm').read_text().strip() != 'systemd':
@@ -46,7 +97,8 @@ def dispatch(candidate, admission_path, context_path,
     authorization = file_record(DO)
     approved = read_json(DO)
     review = approved['review']
-    source_review = file_record(ROOT / 'docs/research/vipe-alternatives/'
+    source_review = file_record(Path(source_review_path) if source_review_path is not None else
+        ROOT / 'docs/research/vipe-alternatives/' /
         f'plan031-execution/depth-{candidate}-source-review-001.json')
     input_admission = file_record(admission_path)
     context = file_record(context_path)
@@ -66,11 +118,6 @@ def dispatch(candidate, admission_path, context_path,
             len(source.get('rows', [])) != 4500 or
             {(row['camera'], row['frame']) for row in source['rows']} != expected):
         raise ValueError('exact passing admission and complete video context required')
-    qualification = accepted.get('qualification', accepted.get('runtime', {}).get('receipt'))
-    if not isinstance(qualification, dict):
-        raise ValueError('video admission must bind exact runtime qualification')
-    verify_record(qualification)
-    validate_runtime_interpreter(accepted['runtime'], sys.executable)
     setup_id = f'plan069-{candidate}-setup-001'
     setup_path = local / 'jobs' / setup_id / 'result.json'
     setup = file_record(setup_path)
@@ -78,6 +125,8 @@ def dispatch(candidate, admission_path, context_path,
     if (state.get('event') != 'finish' or state.get('status') != 'complete' or
             state.get('result') != setup):
         raise ValueError('completed exact video setup required')
+    qualification = _qualified_sources(candidate, proposal, accepted, source_review, setup, review, authorization)
+    validate_runtime_interpreter(accepted['runtime'], sys.executable)
     job_id = f'plan069-{candidate}-maps-001'
     output = local / 'jobs' / job_id
     request_path = local / 'requests' / (job_id + '.json')
@@ -160,10 +209,11 @@ def main():
     parser.add_argument('--admission', required=True)
     parser.add_argument('--context', required=True)
     parser.add_argument('--qualitative-admission')
+    parser.add_argument('--source-review', help='Exact immutable current post-setup source review')
     parser.add_argument('--run-id', default='plan031-20260913T032700Z')
     args = parser.parse_args()
     dispatch(args.candidate, args.admission, args.context, args.run_id,
-             qualitative_admission_path=args.qualitative_admission)
+             qualitative_admission_path=args.qualitative_admission, source_review_path=args.source_review)
 
 
 if __name__ == '__main__':
