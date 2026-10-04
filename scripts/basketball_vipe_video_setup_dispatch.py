@@ -28,7 +28,8 @@ def shared_run_root():
     return repository
 
 
-def dispatch(candidate, run_id='plan031-20260913T032700Z', *, source_review_path=None):
+def dispatch(candidate, run_id='plan031-20260913T032700Z', *, source_review_path=None,
+             authorization_path=None):
     if candidate not in ('D9', 'D10') or run_id != 'plan031-20260913T032700Z':
         raise ValueError('only approved D9/D10 setup in accepted run')
     if Path('/proc/1/comm').read_text().strip() != 'systemd':
@@ -38,8 +39,13 @@ def dispatch(candidate, run_id='plan031-20260913T032700Z', *, source_review_path
     config = dict(load(), new_download_gib_limit=110,
                   new_artifact_disk_gib_limit=210)
     ledger = Ledger(local / 'ledger.jsonl', config)
-    authorization = file_record(DO)
-    review = read_json(DO)['review']
+    if authorization_path is None:
+        authorization = file_record(DO)
+        review = read_json(DO)['review']
+    else:
+        from vipe_benchmark.depth_authorization import execution_authorization
+        review, authorization, _, _ = execution_authorization(
+            candidate, authorization_path=authorization_path)
     verify_record(review)
     source_review_path = (Path(source_review_path) if source_review_path is not None else
         ROOT / 'docs/research/vipe-alternatives/'
@@ -58,7 +64,8 @@ def dispatch(candidate, run_id='plan031-20260913T032700Z', *, source_review_path
     request = dict(schema='plan069-depth-setup-request/v1',
         record_kind='actual', candidate=candidate, job_id=job_id,
         ledger_path=str(ledger.path), review=review, authorization=authorization,
-        runtime_environment=environment_request(candidate, local))
+        runtime_environment=environment_request(candidate, local,
+            recipe_path=proposal.get('runtime_recipe', {}).get('path')))
     write_json(request_path, request)
     ledger.authorize_depth_setup(candidate, review, authorization, source_review)
     worker = ROOT / 'scripts/basketball_vipe_video_setup.py'
@@ -114,8 +121,12 @@ def main():
     parser.add_argument('--candidate', required=True, choices=('D9', 'D10'))
     parser.add_argument('--run-id', default='plan031-20260913T032700Z')
     parser.add_argument('--source-review', help='Exact immutable independently reviewed source receipt')
+    parser.add_argument('--authorization', help='Explicit approved versioned video runtime authorization')
     args = parser.parse_args()
-    dispatch(args.candidate, args.run_id, source_review_path=args.source_review)
+    options = dict(source_review_path=args.source_review)
+    if args.authorization is not None:
+        options['authorization_path'] = args.authorization
+    dispatch(args.candidate, args.run_id, **options)
 
 
 if __name__ == '__main__':

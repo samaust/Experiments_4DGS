@@ -13,6 +13,31 @@ from .files import file_record, object_hash, read_json, verify_record
 
 INVENTORY = CONFIG.parents[2] / 'docs/specs/plan031-execution/depth-required-assets-v1.json'
 PROFILES = CONFIG.parents[2] / 'docs/specs/plan031-execution/depth-runtime-profiles-v1.json'
+VIDEO_PROFILES = CONFIG.parents[2] / 'docs/specs/plan031-execution/depth-runtime-profiles-video-v2.json'
+
+
+def selected_profile_inventory(proposal):
+    """The new runtime exception applies only to explicitly selected video slots."""
+    if proposal.get('profile_inventory') == file_record(PROFILES):
+        if proposal.get('runtime_recipe') is not None:
+            raise ValueError('video runtime recipe requires its versioned profile')
+        return PROFILES
+    from .video_environment import CU130_RECIPE
+    if (proposal.get('candidate') not in ('D9', 'D10') or
+            proposal.get('profile_inventory') != file_record(VIDEO_PROFILES) or
+            proposal.get('runtime_recipe') != file_record(CU130_RECIPE)):
+        raise ValueError('exact video runtime profile inventory required')
+    original = read_json(PROFILES)
+    selected = read_json(VIDEO_PROFILES)
+    import copy
+    restored = copy.deepcopy(selected)
+    for candidate in ('D9', 'D10'):
+        profile = restored['profiles'][candidate].pop('runtime_profile', None)
+        if profile != read_json(CU130_RECIPE)['runtime_profile']:
+            raise ValueError('video runtime profile exception changed')
+    if restored != original:
+        raise ValueError('video runtime profile changes unrelated frozen settings')
+    return VIDEO_PROFILES
 HISTORICAL = ROOT / 'configs/vipe-alternatives/components-v1.json'
 BENCHMARK = ROOT / 'configs/vipe-alternatives/benchmark-v1.json'
 CAP_AMENDMENT = ROOT / 'docs/specs/plan031-execution/depth-cap-amendment-review-001.json'
@@ -83,7 +108,10 @@ def local_source_records(candidate):
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_single_maps.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_single_publish.py'))
     if candidate in ('D9', 'D10'):
+        records.append(file_record(ROOT / 'scripts/vipe_benchmark/depth_authorization.py'))
         records.append(file_record(ROOT / 'configs/vipe-alternatives/video-environment-v1.json'))
+        records.append(file_record(ROOT / 'configs/vipe-alternatives/video-environment-v2.json'))
+        records.append(file_record(VIDEO_PROFILES))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_setup.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_setup_dispatch.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_actual.py'))
@@ -149,7 +177,12 @@ def review(proposal, *, config, commercial, assets, runtime, live,
 
     extension = read_json(CONFIG)
     inventory = read_json(INVENTORY)
-    profiles = read_json(PROFILES)['profiles']
+    try:
+        profile_inventory = selected_profile_inventory(proposal)
+    except (ValueError, OSError, KeyError) as error:
+        blockers.append(str(error))
+        profile_inventory = PROFILES
+    profiles = read_json(profile_inventory)['profiles']
     candidates = dict(extension['candidates'], D2=D2_SPEC)
     candidate = proposal.get('candidate')
     check(proposal.get('schema') == 'plan069-depth-execution-proposal/v1' and
@@ -162,7 +195,7 @@ def review(proposal, *, config, commercial, assets, runtime, live,
     check(proposal.get('required_assets') == file_record(INVENTORY),
           'required asset inventory changed')
     check(proposal.get('profile') == profiles[candidate] and
-          proposal.get('profile_inventory') == file_record(PROFILES),
+          proposal.get('profile_inventory') == file_record(profile_inventory),
           'frozen native preprocessing, precision or seed profile changed')
     expected_maps = 196 if candidate == 'D2' else 256
     check(proposal.get('max_attempts') == 1 and
@@ -177,7 +210,7 @@ def review(proposal, *, config, commercial, assets, runtime, live,
     check(reviewed.get('candidate') == candidate and
           reviewed.get('status') == 'passed' and
           reviewed.get('source_revision') == candidates[candidate]['code']['revision'] and
-          reviewed.get('profile_inventory') == file_record(PROFILES),
+          reviewed.get('profile_inventory') == file_record(profile_inventory),
           'current source review and qualification required')
     current_sources = local_source_records(candidate)
     check(bool(reviewed.get('reviewer')) and

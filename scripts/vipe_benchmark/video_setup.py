@@ -85,6 +85,15 @@ def run_video_setup(request, output, *, request_path=None, acquire=_acquire,
             not assets[0]['lfs_sha256']):
         raise ValueError('video required-only checkpoint changed')
     allocation = proposal['allocation']
+    if proposal.get('runtime_recipe') is not None:
+        from .depth_admission import selected_profile_inventory
+        selected_profile_inventory(proposal)
+        environment = request.get('runtime_environment', {})
+        if (environment.get('recipe') != proposal['runtime_recipe'] or
+                environment.get('runtime_profile') != proposal['profile'].get('runtime_profile')):
+            raise ValueError('video runtime proposal and environment profile differ')
+    elif request.get('runtime_environment', {}).get('runtime_profile') is not None:
+        raise ValueError('video runtime profile requires an explicitly amended proposal')
     if (allocation['setup_seconds'] != 2400 or
             allocation['download_bytes'] < assets[0]['bytes'] or
             allocation['download_bytes'] > 3 * 2**30):
@@ -157,6 +166,9 @@ def run_video_setup(request, output, *, request_path=None, acquire=_acquire,
                 python_executable=runtime['python_executable'], python=runtime['python'],
                 dependency_lock=runtime['dependency_lock'], inventory=runtime['inventory'],
                 media_tools=environment['media_tools'], xformers=environment['xformers'])
+            if environment.get('runtime_profile') is not None:
+                result.update(runtime_recipe=environment['recipe'],
+                              runtime_profile=environment['runtime_profile'])
         write_json(output / 'result.json', result)
         return result
     except BaseException as error:

@@ -1,0 +1,76 @@
+{
+  "schema": "plan069-video-environment-recipe/v1",
+  "source_revision": "4f5ae23172ba60fd7bc11ef671cca678842c7072",
+  "python_version": "3.11",
+  "upstream_requirements": [
+    "numpy==1.24.0",
+    "torch==2.1.1",
+    "torchvision==0.16.1",
+    "opencv-python",
+    "matplotlib",
+    "pillow",
+    "imageio==2.37.0",
+    "imageio-ffmpeg==0.4.7",
+    "decord",
+    "xformers==0.0.23",
+    "einops==0.4.1",
+    "easydict",
+    "tqdm",
+    "OpenEXR==3.3.1"
+  ],
+  "requirements": [
+    "numpy==1.24.0",
+    "torch==2.14.1",
+    "torchvision==0.29.1",
+    "opencv-python",
+    "matplotlib",
+    "pillow",
+    "imageio==2.37.0",
+    "imageio-ffmpeg==0.4.7",
+    "decord",
+    "einops==0.4.1",
+    "easydict",
+    "tqdm",
+    "OpenEXR==3.3.1"
+  ],
+  "constraints": [
+    "torch==2.14.1+cu130",
+    "torchvision==0.29.1+cu130",
+    "numpy==1.24.0"
+  ],
+  "indexes": [
+    "https://pypi.org/simple",
+    "https://download.pytorch.org/whl/cu130"
+  ],
+  "source_requirement": "requirements.txt",
+  "fallback_sources": [
+    "video_depth_anything/dinov2_layers/attention.py",
+    "video_depth_anything/motion_module/motion_module.py",
+    "video_depth_anything/motion_module/attention.py"
+  ],
+  "optional_dependencies": {
+    "xformers==0.0.23": "Omitted; pinned native attention modules implement the torch fallback when xformers is absent. Qualification must record this runtime path."
+  },
+  "primary_sources": [
+    "https://github.com/DepthAnything/Video-Depth-Anything/blob/4f5ae23172ba60fd7bc11ef671cca678842c7072/requirements.txt",
+    "https://github.com/DepthAnything/Video-Depth-Anything/blob/4f5ae23172ba60fd7bc11ef671cca678842c7072/video_depth_anything/dinov2_layers/attention.py",
+    "https://github.com/DepthAnything/Video-Depth-Anything/blob/4f5ae23172ba60fd7bc11ef671cca678842c7072/video_depth_anything/motion_module/motion_module.py",
+    "https://github.com/DepthAnything/Video-Depth-Anything/blob/4f5ae23172ba60fd7bc11ef671cca678842c7072/video_depth_anything/motion_module/attention.py",
+    "https://pytorch.org/get-started/previous-versions/#v211",
+    "https://github.com/pytorch/pytorch/releases/tag/v2.14.1",
+    "https://github.com/pytorch/vision/releases/tag/v0.29.1"
+  ],
+  "runtime_profile": {
+    "id": "D9-D10-torch-2.14.1-cu130",
+    "upstream_supported": false,
+    "original_core_requirements": [
+      "torch==2.1.1",
+      "torchvision==0.16.1"
+    ],
+    "selected_core_requirements": [
+      "torch==2.14.1+cu130",
+      "torchvision==0.29.1+cu130"
+    ],
+    "compatibility": "unqualified until actual metered native qualification"
+  }
+}

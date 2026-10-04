@@ -41,6 +41,14 @@ def setup_environment(setup):
         raise ValueError('exact provisioned video environment interpreter required')
     for key in ('python', 'dependency_lock', 'inventory'):
         verify_record(runtime[key])
+    from .video_environment import CU130_RECIPE
+    recipe = file_record(CU130_RECIPE)
+    if recipe in runtime.get('requirement_sources', []):
+        if (setup.get('runtime_recipe') != recipe or
+                setup.get('runtime_profile') != read_json(CU130_RECIPE)['runtime_profile']):
+            raise ValueError('video cu130 runtime profile binding missing or changed')
+    elif setup.get('runtime_recipe') is not None or setup.get('runtime_profile') is not None:
+        raise ValueError('video cu130 runtime profile differs from installed source bindings')
     for name, record in setup['media_tools'].items():
         installed = shutil.which(name)
         if installed is None or file_record(installed) != verify_record(record):
@@ -87,6 +95,10 @@ def write_dependency_inventory(candidate, setup_result, output):
     if setup.get('source_files') != source_files:
         raise ValueError('native video source changed before dependency inventory')
     versions = installed_dependency_versions()
+    if 'runtime_recipe' in setup:
+        from .video_environment import validate_runtime_versions
+        validate_runtime_versions(dict(recipe=setup['runtime_recipe'],
+            runtime_profile=setup.get('runtime_profile')), versions)
     inventory = read_json(runtime['inventory']['path'])
     if inventory.get('executable') != setup['python_executable'] or not inventory.get('inventory_only'):
         raise ValueError('video installed dependency inventory interpreter changed')
@@ -124,6 +136,10 @@ def load_native_video(candidate, setup_result, *, device='cuda'):
     if Path(checkpoint).resolve().parent != Path(setup_result['path']).resolve().parent:
         raise ValueError('native video checkpoint escaped setup directory')
     versions = installed_dependency_versions()
+    if 'runtime_recipe' in setup:
+        from .video_environment import validate_runtime_versions
+        validate_runtime_versions(dict(recipe=setup['runtime_recipe'],
+            runtime_profile=setup.get('runtime_profile')), versions)
     if versions['xformers'] is not None:
         raise ValueError('video recipe requires the qualified native torch attention fallback')
     if str(source_dir) not in sys.path:

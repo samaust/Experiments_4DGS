@@ -189,10 +189,22 @@ def _qualification_blockers(candidate, evidence, generation, actual, completed):
         bool(dependencies.get('files')), 'installed dependency closure required')
     for record in dependencies.get('files', []):
         _verify_file(record)
+    expected_profile = read_json(PROFILES)['profiles'][candidate]
+    if candidate == 'D10' and completed is not None and runtime.get('profile') != expected_profile:
+        from .depth_admission import selected_profile_inventory
+        request = _record(completed['request'])
+        review = _record(request['review'])
+        proposals = [row for row in review['proposals'] if row.get('candidate') == candidate]
+        if len(proposals) != 1:
+            return blockers + [candidate + ': exact completed runtime proposal missing']
+        profile_inventory = selected_profile_inventory(proposals[0])
+        expected_profile = read_json(profile_inventory)['profiles'][candidate]
+        check(proposals[0]['profile'] == expected_profile,
+              'completed versioned runtime profile differs from reviewed proposal')
     check(runtime.get('candidate') == candidate and runtime.get('source_revision') == revision and
         runtime.get('status') == 'passed' and
         runtime.get('dependency_manifest') == commercial['dependency_manifest'] and
-        runtime.get('profile') == read_json(PROFILES)['profiles'][candidate],
+        runtime.get('profile') == expected_profile,
         'exact passing runtime qualification required')
     runtime_config = _record(runtime['config'])
     check(runtime_config == read_json(HISTORICAL if candidate == 'D2' and actual else CONFIG),

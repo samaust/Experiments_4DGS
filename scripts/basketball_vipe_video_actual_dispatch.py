@@ -85,7 +85,8 @@ def _qualified_sources(candidate, proposal, accepted, source_review, setup_recor
 
 
 def dispatch(candidate, admission_path, context_path,
-             run_id='plan031-20260913T032700Z', *, qualitative_admission_path=None, source_review_path=None):
+             run_id='plan031-20260913T032700Z', *, qualitative_admission_path=None, source_review_path=None,
+             authorization_path=None):
     if candidate not in ('D9', 'D10') or run_id != 'plan031-20260913T032700Z':
         raise ValueError('only approved D9/D10 native run')
     if Path('/proc/1/comm').read_text().strip() != 'systemd':
@@ -94,9 +95,14 @@ def dispatch(candidate, admission_path, context_path,
     config = dict(load(), new_download_gib_limit=110,
                   new_artifact_disk_gib_limit=210)
     ledger = Ledger(local / 'ledger.jsonl', config)
-    authorization = file_record(DO)
-    approved = read_json(DO)
-    review = approved['review']
+    if authorization_path is None:
+        authorization = file_record(DO)
+        review = read_json(DO)['review']
+    else:
+        from vipe_benchmark.depth_authorization import execution_authorization
+        review, authorization, _, _ = execution_authorization(
+            candidate, authorization_path=authorization_path)
+    approved = read_json(authorization['path'])
     source_review = file_record(Path(source_review_path) if source_review_path is not None else
         ROOT / 'docs/research/vipe-alternatives/' /
         f'plan031-execution/depth-{candidate}-source-review-001.json')
@@ -210,10 +216,13 @@ def main():
     parser.add_argument('--context', required=True)
     parser.add_argument('--qualitative-admission')
     parser.add_argument('--source-review', help='Exact immutable current post-setup source review')
+    parser.add_argument('--authorization', help='Explicit approved versioned video runtime authorization')
     parser.add_argument('--run-id', default='plan031-20260913T032700Z')
     args = parser.parse_args()
-    dispatch(args.candidate, args.admission, args.context, args.run_id,
-             qualitative_admission_path=args.qualitative_admission, source_review_path=args.source_review)
+    options = dict(qualitative_admission_path=args.qualitative_admission, source_review_path=args.source_review)
+    if args.authorization is not None:
+        options['authorization_path'] = args.authorization
+    dispatch(args.candidate, args.admission, args.context, args.run_id, **options)
 
 
 if __name__ == '__main__':
