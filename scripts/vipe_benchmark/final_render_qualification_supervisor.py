@@ -147,6 +147,8 @@ def _supervise_reserved(ledger, reservation, command, output, invocation_record,
             if isinstance(error,ControlFailure) and not error.cleanup_confirmed:
                 cleanup = False
                 lifecycle['cleanup_confirmed'] = False
+    if primary is None and accepted is None:
+        primary = RuntimeError('qualification acceptance result missing')
     if primary is None and cleanup:
         try:
             # No retained worker group remains: every compute PID is foreign.
@@ -180,9 +182,10 @@ def _supervise_reserved(ledger, reservation, command, output, invocation_record,
         # Published evidence is never used as success when publication crosses cap.
         primary = TimeoutError('supervision publication exceeded qualification allocation')
         write_json(control_root/'publication-failure.json',dict(error=repr(primary),execution_authorized=False))
+    accepted_result = accepted['result'] if primary is None and accepted is not None else None
     finish = ledger.finish(reservation['job_id'],'complete' if primary is None else 'failed',
         elapsed,invocation=invocation_record,cleanup_confirmed=cleanup,cleanup_uncertain=not cleanup,
-        result=None if primary is not None else accepted['result'],
+        result=accepted_result,
         supervision=file_record(receipt_path))
     if time.monotonic() >= deadline:
         terminal = dict(schema='plan069-final-render-qualification-terminal-publication-failure/v1',
@@ -195,7 +198,7 @@ def _supervise_reserved(ledger, reservation, command, output, invocation_record,
             dict(receipt=receipt,finish=finish,terminal_publication_failure=terminal)) from primary
     if primary is not None:
         raise QualificationSupervisionFailure(str(primary), dict(receipt=receipt,finish=finish)) from primary
-    return dict(result=accepted['result'],supervision=file_record(receipt_path),finish=finish)
+    return dict(result=accepted_result,supervision=file_record(receipt_path),finish=finish)
 
 
 def supervise_reserved(ledger, reservation, command, output, invocation_record, *, release_path):
