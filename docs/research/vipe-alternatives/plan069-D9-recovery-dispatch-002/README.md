@@ -46,3 +46,9 @@ map admission and actual renders remain separately required.
 `validation.json` binds eight unique captured CPU validation runs, including failures,
 22 passing focused cases, four passing mypy modules and independent reviews. No
 model, GPU, environment, network or production ledger operation was performed.
+
+## Prospective integration after D6 CPU013
+
+The isolated combined sources preserve the D6 locked-event qualification fix and pass both integration reviews. 220 substantive CPU cases passed; the first capture also recorded one unavailable module name, corrected by running the actual CPU003 module separately. This is preparation evidence; canonical execution still requires a fresh source review, combined CPU qualification and explicit recovery002 approval.
+
+The canonical-path REVIEW002 draft preserves failed setup765 and failed recovery784. No DO or live request was created. Source005 remains historical.
