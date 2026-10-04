@@ -7,6 +7,7 @@ import signal
 import subprocess
 import time
 from pathlib import Path
+from typing import Any
 
 
 def record(path):
@@ -153,7 +154,7 @@ def main():
         receipt['environment'] = {key: env[key] for key in ('PYTHONPATH', 'VIPE_CPU_VALIDATION', 'S1_VALIDATION_RUN_DIRECTORY', 'CUDA_VISIBLE_DEVICES', 'MPLCONFIGDIR', 'MPLBACKEND', 'PYTHONDONTWRITEBYTECODE', 'PYTEST_DISABLE_PLUGIN_AUTOLOAD', 'OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'NUMEXPR_NUM_THREADS')}
         jobs = [('pytest', [python, '-B', '-m', 'pytest', '-q', '-p', 'no:cacheprovider', 'tests/test_basketball_scene.py', 'tests/test_sync_pivot_budget.py', 'tests/test_sync_timing.py']), ('unittest', [python, '-B', '-m', 'unittest', 'discover', '-s', 'tests', '-v'])]
         for name, command in jobs:
-            row = dict(name=name, command=command, timed_out=False, start_new_session=True)
+            row: dict[str, Any] = dict(name=name, command=command, timed_out=False, start_new_session=True)
             receipt['commands'].append(row)
             log = out / (name + '.log')
             row['log'] = str(log)
