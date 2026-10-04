@@ -32,7 +32,7 @@ def dispatch(path):
     ledger.authorize_depth_driver_diagnostic(record)
     supervise(ledger, JOB, request['command'], output, evidence=dict(request=record),
         sample_resources=sample, validate_result=lambda out: validate_result(read_json(out / 'result.json'), record),
-        poll_seconds=.2, cpu_workers_limit=7)
+        poll_seconds=.2, cpu_workers_limit=7, cleanup_reserve_seconds=proposal['cleanup_seconds'])
     finish = ledger.states().get(JOB, {})
     if finish.get('event') != 'finish' or finish.get('status') != 'complete' or finish.get('cleanup_confirmed') is not True:
         raise ValueError('diagnostic did not finish with confirmed cleanup')

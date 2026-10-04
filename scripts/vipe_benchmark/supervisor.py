@@ -2,6 +2,7 @@ from .s1_progress import checked_clock_reservation
 """Serial process-group supervisor with deadlines that include cleanup."""
 from .s1_identity import is_recovery_job
 import os
+import math
 from pathlib import Path
 import signal
 import subprocess
@@ -377,7 +378,7 @@ def monitored_call(function, deadline, sampler, config, peak, *, worker=None,
 def supervise(ledger, job_id, command, output, *, evidence, sample_resources=None,
               validate_result=None, poll_seconds=.1, seconds_limit=None,
               checkpoint=False, resume_checkpoint=False, terminal_publisher=None, terminal_docs=None,
-              cpu_workers_limit=None):
+              cpu_workers_limit=None, cleanup_reserve_seconds=None):
     """The worker owns a fresh output directory; logs are siblings, not results.
 
     Resource injection is for disposable CPU tests. Real GPU dispatch always
@@ -386,11 +387,17 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
     if cpu_workers_limit is not None and (type(cpu_workers_limit) is not int or
             not 1 <= cpu_workers_limit <= ledger.config['cpu_max_workers']):
         raise ValueError('bounded numerical CPU worker limit required')
+    spec = ledger.jobs[job_id]
+    if cleanup_reserve_seconds is not None:
+        requested_seconds = min(spec['seconds'], seconds_limit) if seconds_limit is not None else spec['seconds']
+        if (type(cleanup_reserve_seconds) not in (int, float) or
+                not math.isfinite(cleanup_reserve_seconds) or
+                not 0 < cleanup_reserve_seconds < requested_seconds):
+            raise ValueError('cleanup reserve must be positive and shorter than the allocation')
     output = safe_path(output)
     if output.exists() or output.with_suffix('.log').exists():
         raise ValueError('refusing to overwrite incomplete or previous output')
     output.parent.mkdir(parents=True, exist_ok=True)
-    spec = ledger.jobs[job_id]
     if spec['resource'] == 'gpu' and sample_resources is None:
         raise ValueError('GPU dispatch requires exclusive-device and resource readings')
     sampler = sample_resources or (lambda: {})
@@ -434,7 +441,8 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
         safety=getattr(helper,'fixture_safety_end',None)
         helper.reservation_cleanup_limit=deadline
         helper.cleanup_deadline=min(deadline,safety) if safety is not None else deadline
-    cleanup_reserve = min(30., reservation['seconds'] / 4)
+    cleanup_reserve = (min(30., reservation['seconds'] / 4) if cleanup_reserve_seconds is None
+                       else cleanup_reserve_seconds)
     run_deadline = deadline - cleanup_reserve
     process, stopped, error = None, [], None
     primary_failure=None;primary_exception=None;secondary_failures=[]
@@ -452,6 +460,8 @@ def supervise(ledger, job_id, command, output, *, evidence, sample_resources=Non
             return
         raise InterruptedError(f'supervisor received signal {signum}')
     try:
+        if cleanup_reserve >= reservation['seconds']:
+            raise TimeoutError('remaining allocation cannot retain the requested cleanup reserve')
         for sig in (signal.SIGTERM, signal.SIGINT):
             old_handlers[sig] = signal.signal(sig, interrupted)
         threads=str(1 if is_s1 else (cpu_workers_limit if cpu_workers_limit is not None else 8))
