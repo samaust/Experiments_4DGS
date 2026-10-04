@@ -25,6 +25,25 @@ def read(path):
     return json.loads(guarded(path).read_text())
 
 
+
+def preservation_charge_owner(event):
+    """Recognize one immutable historical typo as consumed D9 CPU, never credit."""
+    evidence = dict(path='/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/'
+                    'depth-extension/.local/D9-frame-recovery-outcome-001/preservation-receipt.json',
+                    sha256='f15273481e8a19f2abddc8bd9d705f0b400df8197c6e9a77d61d84740e71c6fe', bytes=1715)
+    if event.get('sequence') != 785:
+        return None
+    if (event.get('event') != 'cpu_preparation_charge' or event.get('resource') != 'cpu' or
+            event.get('event_sha256') != '287a285eb7b2dc231f251b477ac9c27476686e0abb57d43ba5bc2fd2dce48017' or
+            event.get('evidence') != evidence or event.get('elapsed_seconds') != 30.002395444000285 or
+            record(evidence['path']) != evidence):
+        raise ValueError('exact protected historical D9 preservation CPU charge required')
+    document = read(evidence['path'])
+    if (document.get('schema') != 'plan069-cpu-preservation/v1' or
+            document.get('record_kind') != 'actual' or document.get('cpu_preparation_owner') != 'D9'):
+        raise ValueError('exact historical D9 preservation receipt required')
+    return 'D9'
+
 def main():
     began = time.monotonic()
     parser = argparse.ArgumentParser(description=__doc__)
@@ -84,7 +103,13 @@ def main():
     approved_cpu = proposals[0]['allocation']['cpu_seconds']
     if approved_cpu < candidate_limit:
         raise ValueError('unchanged approved candidate CPU allowance required')
-    recovery_job = 'plan069-D9-setup-recovery-001'
+    schemas = {'plan069-D9-setup-recovery-001': 'plan069-video-setup-recovery-result/v1',
+               'plan069-D9-setup-recovery-002': 'plan069-video-setup-recovery-result/v2'}
+    completed = [row for row in events if row.get('event') == 'finish' and
+                 row.get('job_id') in schemas and row.get('status') == 'complete']
+    if len(completed) != 1:
+        raise ValueError('unique accepted approved recovery required')
+    recovery_job = completed[0]['job_id']
     grants = [row for row in events if row.get('event') == 'depth_setup_recovery_authorized' and row.get('job_id') == recovery_job]
     finishes = [row for row in events if row.get('event') == 'finish' and row.get('job_id') == recovery_job]
     if len(grants) != 1 or len(finishes) != 1:
@@ -95,7 +120,7 @@ def main():
     if grant.get('source_review') != source_record or record(finish['result']['path']) != finish['result']:
         raise ValueError('accepted recovery must bind exact current source review/result')
     result = read(finish['result']['path'])
-    if result.get('schema') != 'plan069-video-setup-recovery-result/v1' or result.get('status') != 'complete' or result.get('record_kind') != 'actual' or result.get('candidate') != 'D9' or result.get('request') != grant.get('request') or result.get('source_review') != source_record:
+    if result.get('schema') != schemas[recovery_job] or result.get('job_id') != recovery_job or result.get('status') != 'complete' or result.get('record_kind') != 'actual' or result.get('candidate') != 'D9' or result.get('request') != grant.get('request') or result.get('source_review') != source_record:
         raise ValueError('actual reviewed accepted recovery required')
     if any(row.get('event') == 'depth_setup_bytes_reconciled' and row.get('candidate') == 'D9' for row in events):
         raise ValueError('D9 reconciliation already protected')
@@ -106,7 +131,7 @@ def main():
         path = guarded(event['evidence']['path'])
         # These exact historical metadata scopes are shared video preparation;
         # root conservatively attributes each entirely to D9, never to D6.
-        owner = 'D9' if event['sequence'] in (707, 713) else None
+        owner = 'D9' if event['sequence'] in (707, 713) else preservation_charge_owner(event)
         if event['sequence'] > 754 and path.suffix == '.json':
             doc = read(path)
             declared = doc.get('cpu_accounting_owner')

@@ -20,7 +20,8 @@ def remaining_map_allocation(proposal, setup, events, run_root, assets, *, verif
     candidate = proposal['candidate']
     job = f'plan069-{candidate}-setup-001'
     root = Path(run_root).resolve()
-    if Path(setup['path']) == root / 'jobs/plan069-D9-setup-recovery-001/result.json':
+    from .depth_recovery_lineage import JOBS
+    if Path(setup['path']) in [root / 'jobs' / name / 'result.json' for name in JOBS]:
         from .depth_recovery_lineage import recovery_map_allocation
         return recovery_map_allocation(proposal, setup, events, root, assets,
             verifier=verifier, active_map_admission=active_map_admission)
@@ -117,11 +118,18 @@ def owned_slot_bytes(run_root, candidate, *, recovery_lineage=None):
     total = 0
     union = {}
     _require(recovery_lineage is None or candidate == 'D9', 'only D9 has retained setup recovery')
+    approved_jobs = {'plan069-D9-setup-001'}
+    if recovery_lineage is not None:
+        from .depth_recovery_lineage import JOBS, JOB, REPAIR_JOB
+        job_id = recovery_lineage.get('job_id')
+        _require(job_id in JOBS and
+                 [row.get('job_id') for row in recovery_lineage.get('failed_recoveries', [])] ==
+                 ([JOB] if job_id == REPAIR_JOB else []), 'exact approved recovery union required')
+        approved_jobs.update([job_id, *[row['job_id'] for row in recovery_lineage.get('failed_recoveries', [])]])
     for path in jobs.glob(f'plan069-{candidate}-*'):
         _require(not path.is_symlink(), 'owned candidate job must not be a symlink')
         if path.is_dir():
-            if recovery_lineage is not None and path.name in (
-                    'plan069-D9-setup-001', 'plan069-D9-setup-recovery-001'):
+            if recovery_lineage is not None and path.name in approved_jobs:
                 union.update(_inventory(path))
             else:
                 total += directory_bytes(path)
@@ -137,8 +145,8 @@ def _recovery_marker(budget, events, run_root):
     marker = budget.get('recovery_lineage')
     if marker is None:
         return None
-    _require(budget.get('candidate') == 'D9' and marker.get('job_id') ==
-             'plan069-D9-setup-recovery-001', 'exact D9 recovery marker required')
+    from .depth_recovery_lineage import JOBS, checked_failed_recoveries
+    _require(budget.get('candidate') == 'D9' and marker.get('job_id') in JOBS, 'exact D9 recovery marker required')
     grants = [row for row in events if row.get('event') == 'depth_setup_recovery_authorized' and
               row.get('event_sha256') == marker.get('grant_event_sha256')]
     reserves = [row for row in events if row.get('event') == 'reserve' and
@@ -158,10 +166,16 @@ def _recovery_marker(budget, events, run_root):
              'protected accepted recovery marker changed')
     record = verify_record(budget['setup'])
     _require(record == budget['setup'] and Path(record['path']) == Path(run_root).resolve() /
-             'jobs/plan069-D9-setup-recovery-001/result.json', 'owned accepted recovery marker required')
+             'jobs' / marker['job_id'] / 'result.json', 'owned accepted recovery marker required')
     _require(verify_record(marker['request']) == marker['request'] and
              verify_record(marker['paid_asset_receipt']) == marker['paid_asset_receipt'],
              'recovery request or paid asset evidence changed')
+    descriptors = checked_failed_recoveries(marker['job_id'], marker.get('failed_recoveries', []),
+        events, run_root, before_sequence=grants[0]['sequence'])
+    if descriptors:
+        _require(read_json(marker['request']['path']).get('failed_recoveries') == descriptors and
+                 read_json(record['path']).get('failed_recoveries') == descriptors,
+                 'protected recovery failed ancestry changed')
     return marker
 
 

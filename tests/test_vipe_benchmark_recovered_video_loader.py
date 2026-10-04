@@ -48,6 +48,12 @@ class RecoveredVideoLoaderTests(unittest.TestCase):
         accepted.assert_called_once_with(file_record(self.path),self.events,self.root)
         self.model.load_state_dict.assert_called_once_with({'fixture':'state'},strict=True)
 
+    def test_repair_v2_requires_checked_lineage_before_cpu_model_construction(self):
+        self.setup['schema'] = 'plan069-video-setup-recovery-result/v2'; self.save()
+        with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value={'accepted_result':self.setup}) as accepted:
+            self.assertIs(self.load(ledger=self.ledger),self.model)
+        accepted.assert_called_once_with(file_record(self.path),self.events,self.root)
+
     def test_checked_active_map_admission_is_explicitly_forwarded(self):
         admission={'fixture_checked_map':True}
         with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value={'accepted_result':self.setup}) as accepted:

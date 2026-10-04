@@ -94,12 +94,14 @@ def _checkpoint(root, grant, *, verifier=verify_record):
 def _accepted(root, candidate, events, *, verifier=verify_record):
     """Use the existing exact approval/request/asset/clean-finish validator."""
     from .depth_map_allowance import remaining_map_allocation
+    from .depth_recovery_lineage import JOBS
     recovery_finishes = [row for row in events if row.get('event') == 'finish' and
-                         row.get('job_id') == 'plan069-D9-setup-recovery-001']
+                         row.get('job_id') in JOBS]
+    completed_recoveries = [row for row in recovery_finishes if row.get('status') == 'complete']
     if candidate == 'D9' and recovery_finishes:
-        _require(len(recovery_finishes) == 1, 'unique accepted recovery finish required')
+        _require(len(completed_recoveries) == 1, 'clean independently authorized recovery completion required')
         from .depth_recovery_lineage import accepted_setup_lineage
-        accepted = accepted_setup_lineage(recovery_finishes[0]['result'], events, root,
+        accepted = accepted_setup_lineage(completed_recoveries[0]['result'], events, root,
                                           verifier=verifier)
         return (accepted['lineage']['grant'], accepted['finish'],
                 accepted['accepted_result'], accepted['map_proposal'])
@@ -139,7 +141,7 @@ def prepare_reconciliation(run_root, candidate, events, *, deadline=None):
     grant, finish, result, proposal = _accepted(root, candidate, events, verifier=verifier)
     checkpoint = _checkpoint(root, grant, verifier=verifier)
     prior = {_key(row) for row in checkpoint['files'].values()}
-    recovery = result.get('schema') == 'plan069-video-setup-recovery-result/v1'
+    recovery = result.get('schema') in ('plan069-video-setup-recovery-result/v1', 'plan069-video-setup-recovery-result/v2')
     original_job = root / 'jobs' / f'plan069-{candidate}-setup-001'
     job = root / 'jobs' / (result['job_id'] if recovery else f'plan069-{candidate}-setup-001')
     files = _files(root, deadline)
@@ -261,10 +263,11 @@ def prepare_reconciliation(run_root, candidate, events, *, deadline=None):
     if recovery:
         from .depth_recovery_lineage import accepted_setup_lineage
         accepted = accepted_setup_lineage(finish['result'], events, root, verifier=verifier)
-        document['recovery_lineage'] = dict(grant_event_sha256=accepted['grant']['event_sha256'],
+        document['recovery_lineage'] = dict(job_id=accepted['job'], grant_event_sha256=accepted['grant']['event_sha256'],
             reserve_event_sha256=accepted['reserve']['event_sha256'],
             failed_finish_event_sha256=accepted['lineage']['finish']['event_sha256'],
-            request=accepted['request'])
+            request=accepted['request'], **(dict(failed_recoveries=accepted['failed_recoveries'])
+                if accepted['failed_recoveries'] else {}))
     _check_deadline(deadline)
     _require(files == _files(root, deadline), 'setup ownership inventory changed during reconciliation')
     _check_deadline(deadline)
@@ -285,6 +288,9 @@ def _recovery_proof_lineage(proof, events, original_grant, finish):
                 row.get('event_sha256') == digest]
         _require(len(rows) == 1, 'unique protected recovery causal event required')
         return rows[0]
+    from .depth_recovery_lineage import JOBS, JOB, REPAIR_JOB, RESULT_SCHEMAS, checked_failed_recoveries
+    job_id = lineage.get('job_id', JOB)
+    _require(job_id in JOBS, 'exact approved causal recovery job required')
     grant = event('depth_setup_recovery_authorized', lineage['grant_event_sha256'])
     reserve = event('reserve', lineage['reserve_event_sha256'])
     failed = event('finish', lineage['failed_finish_event_sha256'])
@@ -292,7 +298,7 @@ def _recovery_proof_lineage(proof, events, original_grant, finish):
              reserve['sequence'] < finish['sequence'] and
              grant.get('candidate') == 'D9' and
              grant.get('job_id') == reserve.get('job_id') == finish.get('job_id') ==
-             'plan069-D9-setup-recovery-001' and
+             job_id and
              failed.get('job_id') == 'plan069-D9-setup-001' and failed.get('status') == 'failed' and
              failed.get('cleanup_confirmed') is True and failed.get('cleanup_uncertain') is False and
              failed.get('surviving_pids') == [] and failed.get('deadline_exceeded') is False and
@@ -304,7 +310,8 @@ def _recovery_proof_lineage(proof, events, original_grant, finish):
              'checked recovery causal request changed')
     document = read_json(request['path'])
     original = document['original_setup']
-    _require(document.get('schema') == 'plan069-video-setup-recovery-request/v1' and
+    _require(document.get('schema') == ('plan069-video-setup-recovery-request/v2'
+                 if job_id == REPAIR_JOB else 'plan069-video-setup-recovery-request/v1') and
              original.get('grant_event_sha256') == original_grant['event_sha256'] and
              original.get('failed_finish_event_sha256') == failed['event_sha256'] and
              original.get('byte_checkpoint') == proof['checkpoint'] and
@@ -313,8 +320,13 @@ def _recovery_proof_lineage(proof, events, original_grant, finish):
     for key in ('review', 'authorization', 'source_review'):
         _require(verify_record(document[key]) == document[key] == grant.get(key) ==
                  reserve.get('evidence', {}).get(key), 'recovery causal authority changed')
+    descriptors = checked_failed_recoveries(job_id, lineage.get('failed_recoveries', []),
+        events, Path(proof['setup']['path']).parents[2], before_sequence=grant['sequence'])
     accepted = read_json(proof['setup']['path'])
-    _require(accepted.get('schema') == 'plan069-video-setup-recovery-result/v1' and
+    if job_id == REPAIR_JOB:
+        _require(document.get('failed_recoveries') == accepted.get('failed_recoveries') == descriptors,
+                 'causal accepted failed recovery ancestry changed')
+    _require(accepted.get('schema') == RESULT_SCHEMAS[job_id] and
              accepted.get('original_setup') == original and accepted.get('request') == request and
              accepted.get('bytes_received') == 0 and accepted.get('original_failure_preserved') is True,
              'accepted recovery causal result changed')

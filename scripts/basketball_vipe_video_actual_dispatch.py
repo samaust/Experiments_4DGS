@@ -39,7 +39,8 @@ def _selected_setup(candidate, local, accepted, *, setup_path=None):
     selected = original if setup_path is None else Path(setup_path).resolve()
     allowed = [original]
     if candidate == 'D9':
-        allowed.append(local / 'jobs/plan069-D9-setup-recovery-001/result.json')
+        from vipe_benchmark.depth_recovery_lineage import JOBS
+        allowed.extend(local / 'jobs' / job / 'result.json' for job in JOBS)
     if selected not in allowed:
         raise ValueError('exact owned video setup path required')
     record = file_record(selected)
@@ -55,7 +56,7 @@ def _qualified_sources(candidate, proposal, accepted, source_review, setup_recor
     from vipe_benchmark.video_native import native_source_records
     source = read_json(verify_record(source_review)['path'])
     setup = read_json(verify_record(setup_record)['path'])
-    recovery = setup.get('schema') == 'plan069-video-setup-recovery-result/v1'
+    recovery = setup.get('schema') in ('plan069-video-setup-recovery-result/v1', 'plan069-video-setup-recovery-result/v2')
     if recovery:
         if candidate != 'D9' or events is None or run_root is None:
             raise ValueError('protected accepted recovery lineage required before video dispatch')

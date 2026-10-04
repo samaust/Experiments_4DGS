@@ -144,7 +144,7 @@ def load_native_video(candidate, setup_result, *, device='cuda', ledger=None, ac
     if candidate not in ('D9', 'D10') or device not in ('cuda', 'cpu'):
         raise ValueError('D9/D10 native candidate and explicit device required')
     setup = read_json(verify_record(setup_result)['path'])
-    recovered = setup.get('schema') == 'plan069-video-setup-recovery-result/v1'
+    recovered = setup.get('schema') in ('plan069-video-setup-recovery-result/v1', 'plan069-video-setup-recovery-result/v2')
     if (setup.get('status') != 'complete' or setup.get('candidate') != candidate or
             setup.get('record_kind') != 'actual' or
             (recovered and candidate != 'D9') or

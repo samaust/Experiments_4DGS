@@ -407,6 +407,22 @@ class RecoveryCausalTests(recovery_fixtures.RecoveryLineageTests):
             sequence=7, event_sha256='reconciled', proof=proof))
         return read_json(proof['path'])
 
+    def test_repair_causal_proof_binds_failed_first_recovery(self):
+        self.build_recovery()
+        original_events = self.events[:2]
+        descriptor = self.repair()
+        self.events = original_events + self.events
+        proof_record = prepare_reconciliation(self.root, 'D9', self.events)
+        proof = read_json(proof_record['path'])
+        self.assertEqual(proof['recovery_lineage']['job_id'], self.job.name)
+        self.assertEqual(proof['recovery_lineage']['failed_recoveries'], [descriptor])
+        self.events.append(dict(event='depth_setup_bytes_reconciled', candidate='D9', sequence=10,
+            event_sha256='reconciled', proof=proof_record))
+        self.assertEqual(causal_credits(self.root, self.subject, self.events)['download_bytes'], 16388)
+        self.events[4]['cleanup_uncertain'] = True
+        with self.assertRaisesRegex(ValueError, 'clean failed recovery'):
+            causal_credits(self.root, self.subject, self.events)
+
     def test_recovery_reconciles_expanded_new_cache_using_original_checkpoint(self):
         self.build_recovery()
         proof = self.protect_proof()

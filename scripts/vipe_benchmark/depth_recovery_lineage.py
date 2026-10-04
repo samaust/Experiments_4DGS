@@ -9,6 +9,10 @@ from .files import file_record, object_hash, read_json, verify_record
 
 CANDIDATE = 'D9'
 JOB = 'plan069-D9-setup-recovery-001'
+REPAIR_JOB = 'plan069-D9-setup-recovery-002'
+JOBS = (JOB, REPAIR_JOB)
+RESULT_SCHEMAS = {JOB: 'plan069-video-setup-recovery-result/v1',
+                  REPAIR_JOB: 'plan069-video-setup-recovery-result/v2'}
 ORIGINAL_JOB = 'plan069-D9-setup-001'
 
 
@@ -24,23 +28,62 @@ def _one(events, event, job=None):
     return rows[0]
 
 
+def checked_failed_recoveries(job_id, descriptors, events, run_root, *, verifier=verify_record,
+                              before_sequence=None):
+    """Recheck only the explicitly approved failed predecessor, without new closure."""
+    expected = [JOB] if job_id == REPAIR_JOB else []
+    _require(job_id in JOBS and isinstance(descriptors, list) and
+             [row.get('job_id') for row in descriptors] == expected,
+             'exact approved failed recovery chain required')
+    root = Path(run_root).resolve()
+    for row in descriptors:
+        grant = _one(events, 'depth_setup_recovery_authorized', row['job_id'])
+        reserve = _one(events, 'reserve', row['job_id'])
+        finish = _one(events, 'finish', row['job_id'])
+        _require(row.get('grant_event_sha256') == grant['event_sha256'] and
+                 row.get('failed_finish_event_sha256') == finish['event_sha256'] and
+                 grant.get('candidate') == CANDIDATE and
+                 grant['sequence'] < reserve['sequence'] < finish['sequence'] and
+                 (before_sequence is None or finish['sequence'] < before_sequence) and
+                 reserve.get('resource') == finish.get('resource') == 'setup' and
+                 finish.get('status') == 'failed' and finish.get('cleanup_confirmed') is True and
+                 finish.get('cleanup_uncertain') is False and finish.get('surviving_pids') == [] and
+                 finish.get('deadline_exceeded') is False and
+                 grant.get('request') == reserve.get('evidence', {}).get('request') == row.get('request'),
+                 'protected clean failed recovery ancestry changed')
+        for key in ('request', 'failure'):
+            _require(verifier(row[key]) == row[key], 'failed recovery evidence changed')
+        _require(Path(row['failure']['path']) == root / 'jobs' / JOB / 'failure.json',
+                 'owned historical recovery failure required')
+        failure = read_json(row['failure']['path'])
+        _require(failure.get('schema') == 'plan069-video-setup-recovery-failure/v1' and
+                 failure.get('record_kind') == 'actual' and failure.get('status') == 'failed' and
+                 failure.get('job_id') == JOB and isinstance(failure.get('error'), str) and
+                 bool(failure['error']) and type(failure.get('automatic_retries')) is int and
+                 failure['automatic_retries'] == 0 and failure.get('gpu_operations') is False and
+                 failure.get('original_setup') == read_json(row['request']['path']).get('original_setup'), 'historical failed recovery receipt changed')
+    return descriptors
+
+
 def accepted_setup_lineage(setup_record, events, run_root, *, verifier=verify_record,
                            active_map_admission=None):
     """Validate exact immutable recovery and its separately checked DO ancestry."""
     root = Path(run_root).resolve()
-    job = root / 'jobs' / JOB
+    job_id = Path(setup_record['path']).parent.name
+    _require(job_id in JOBS, 'owned accepted recovery result required')
+    job = root / 'jobs' / job_id
     _require(verifier(setup_record) == setup_record and
              Path(setup_record['path']) == job / 'result.json',
              'owned accepted recovery result required')
     result = read_json(setup_record['path'])
-    _require(result.get('schema') == 'plan069-video-setup-recovery-result/v1' and
+    _require(result.get('schema') == RESULT_SCHEMAS[job_id] and
              result.get('record_kind') == 'actual' and result.get('status') == 'complete' and
-             result.get('candidate') == CANDIDATE and result.get('job_id') == JOB,
+             result.get('candidate') == CANDIDATE and result.get('job_id') == job_id,
              'actual completed D9 recovery required')
-    grant = _one(events, 'depth_setup_recovery_authorized')
-    reserve = _one(events, 'reserve', JOB)
-    finish = _one(events, 'finish', JOB)
-    _require(grant.get('candidate') == CANDIDATE and grant.get('job_id') == JOB and
+    grant = _one(events, 'depth_setup_recovery_authorized', job_id)
+    reserve = _one(events, 'reserve', job_id)
+    finish = _one(events, 'finish', job_id)
+    _require(grant.get('candidate') == CANDIDATE and grant.get('job_id') == job_id and
              grant['sequence'] < reserve['sequence'] < finish['sequence'] and
              reserve.get('resource') == finish.get('resource') == 'setup' and
              finish.get('status') == 'complete' and finish.get('result') == setup_record and
@@ -74,6 +117,12 @@ def accepted_setup_lineage(setup_record, events, run_root, *, verifier=verify_re
     normalized = validate_recovery_request(request_record, events, root,
         require_reservation=False, verifier=verifier)
     request = read_json(request_record['path'])
+    _require(normalized.get('job_id', JOB) == job_id, 'normalized recovery job changed')
+    failed_recoveries = checked_failed_recoveries(job_id, normalized.get('failed_recoveries', []),
+        events, root, verifier=verifier, before_sequence=grant['sequence'])
+    if job_id == REPAIR_JOB:
+        _require(result.get('failed_recoveries') == request.get('failed_recoveries') ==
+                 failed_recoveries, 'accepted recovery failed ancestry changed')
     proposal, maps, original = (normalized[key] for key in ('proposal', 'map_proposal', 'original'))
     if map_grant is not None:
         _require(map_grant.get('proposal_sha256') == object_hash(maps) and all(
@@ -157,7 +206,7 @@ def accepted_setup_lineage(setup_record, events, run_root, *, verifier=verify_re
     _require({row['name'].lower().replace('_', '-') for row in inventory['packages']}.isdisjoint(
         {'decord', 'xformers'}), 'excluded recovery distributions must remain absent')
     return dict(normalized, accepted_result=result, setup=setup_record,
-        result_record=setup_record, grant=grant, reserve=reserve, finish=finish, job=JOB)
+        result_record=setup_record, grant=grant, reserve=reserve, finish=finish, job=job_id, failed_recoveries=failed_recoveries)
 
 
 def recovery_map_allocation(proposal, setup, events, run_root, assets, *, verifier=verify_record,
@@ -212,8 +261,9 @@ def recovery_map_allocation(proposal, setup, events, run_root, assets, *, verifi
         allocation[key] -= credit
     return dict(allocation=allocation, credited_assets_bytes=credit,
         setup=setup, setup_finish_event_sha256=accepted['finish']['event_sha256'],
-        original_setup=accepted['original'], recovery_lineage=dict(job_id=JOB,
+        original_setup=accepted['original'], recovery_lineage=dict(job_id=accepted['job'],
             grant_event_sha256=accepted['grant']['event_sha256'],
             reserve_event_sha256=accepted['reserve']['event_sha256'],
             finish_event_sha256=accepted['finish']['event_sha256'], request=accepted['request'],
-            paid_asset_receipt=paid_record))
+            paid_asset_receipt=paid_record, **(dict(failed_recoveries=accepted['failed_recoveries'])
+                if accepted['job'] == REPAIR_JOB else {})))

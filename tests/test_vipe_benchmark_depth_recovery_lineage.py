@@ -111,6 +111,91 @@ class RecoveryLineageTests(unittest.TestCase):
     def assets(self):
         return [dict(repository='fixture/model', path='model.bin', record=self.checkpoint)]
 
+    def repair(self):
+        old_job = self.job
+        self.job = self.root / 'jobs/plan069-D9-setup-recovery-002'
+        self.job.mkdir()
+        import shutil
+        shutil.copytree(old_job / 'runtime', self.job / 'runtime', symlinks=True)
+        os.link(self.old_checkpoint['path'], self.job / 'model.bin')
+        self.checkpoint = file_record(self.job / 'model.bin')
+        failed_request = self.request
+        failure = self.document(old_job / 'failure.json', dict(schema='plan069-video-setup-recovery-failure/v1',
+            record_kind='actual', status='failed', job_id=JOB, original_setup=self.original,
+            error='fixture failure', automatic_retries=0, gpu_operations=False))
+        failed_grant = deepcopy(self.grant)
+        failed_reserve = deepcopy(self.reserve)
+        failed_finish = dict(self.finish, status='failed', result=None, failure=failure)
+        descriptor = dict(job_id=JOB, grant_event_sha256='grant', failed_finish_event_sha256='finish',
+                          request=failed_request, failure=failure)
+        self.proposal = dict(self.proposal, job_id=self.job.name, failed_recoveries=[descriptor])
+        self.request = self.document(self.root / 'requests' / (self.job.name + '.json'),
+            dict(self.authority, schema='plan069-video-setup-recovery-request/v2', job_id=self.job.name,
+                 original_setup=self.original, failed_recoveries=[descriptor]))
+        self.grant = dict(self.grant, sequence=7, event_sha256='repair-grant', job_id=self.job.name,
+                          request=self.request, proposal_sha256=object_hash(self.proposal))
+        self.reserve = dict(self.reserve, sequence=8, event_sha256='repair-reserve', job_id=self.job.name,
+                            evidence=dict(request=self.request, **self.authority))
+        self.finish = dict(self.finish, sequence=9, event_sha256='repair-finish', job_id=self.job.name)
+        for key in ('runtime_environment', 'dependency_lock', 'inventory'):
+            path = self.job / Path(self.result[key]['path']).relative_to(old_job)
+            if key != 'dependency_lock':
+                doc = read_json(path)
+                if key == 'inventory':
+                    for package in doc['packages']:
+                        for index, record in enumerate(package['files']):
+                            native = self.job / Path(record['path']).relative_to(old_job)
+                            native.unlink(); os.link(record['path'], native)
+                            package['files'][index] = file_record(native)
+                for name in ('python_executable', 'executable'):
+                    if name in doc:
+                        doc[name] = str(self.job / 'runtime/environment/bin/python')
+                for name in ('dependency_lock', 'inventory'):
+                    if name in doc:
+                        doc[name] = file_record(self.job / Path(doc[name]['path']).relative_to(old_job))
+                path.unlink(); self.document(path, doc)
+            self.result[key] = file_record(path)
+        # Inventory hash changed after the runtime was copied.
+        runtime_path = Path(self.result['runtime_environment']['path'])
+        runtime = read_json(runtime_path); runtime['inventory'] = self.result['inventory']
+        runtime_path.unlink(); self.result['runtime_environment'] = self.document(runtime_path, runtime)
+        self.result.update(schema='plan069-video-setup-recovery-result/v2', job_id=self.job.name, request=self.request, checkpoint=self.checkpoint,
+                           failed_recoveries=[descriptor],
+                           python_executable=str(self.job / 'runtime/environment/bin/python'))
+        self.normalized.update(job_id=self.job.name, proposal=self.proposal, request=self.request,
+                               failed_recoveries=[descriptor])
+        self.publish()
+        self.events = [failed_grant, failed_reserve, failed_finish, self.grant, self.reserve, self.finish]
+        return descriptor
+
+    def test_second_recovery_preserves_failed_first_and_credits_original_only(self):
+        descriptor = self.repair()
+        accepted = self.accepted()
+        self.assertEqual(accepted['job'], self.job.name)
+        stage = recovery_map_allocation(self.maps, self.setup, self.events, self.root, self.assets())
+        self.assertEqual(stage['recovery_lineage']['failed_recoveries'], [descriptor])
+        self.assertEqual(stage['credited_assets_bytes'], 4)
+
+    def test_repair_rejects_old_schema_and_unapproved_failed_chain(self):
+        self.repair()
+        self.result['schema'] = 'plan069-video-setup-recovery-result/v1'; self.publish()
+        with self.assertRaisesRegex(ValueError, 'completed D9 recovery'):
+            self.accepted()
+        self.result['schema'] = 'plan069-video-setup-recovery-result/v2'; self.publish()
+        self.normalized['failed_recoveries'][0]['job_id'] = 'plan069-D9-setup-recovery-003'
+        with self.assertRaisesRegex(ValueError, 'failed recovery chain'):
+            self.accepted()
+
+    def test_repair_rejects_unclean_or_changed_historical_failure(self):
+        descriptor = self.repair()
+        self.events[2]['cleanup_confirmed'] = False
+        with self.assertRaisesRegex(ValueError, 'clean failed recovery'):
+            self.accepted()
+        self.events[2]['cleanup_confirmed'] = True
+        Path(descriptor['failure']['path']).write_text('{}')
+        with self.assertRaisesRegex(ValueError, 'changed file'):
+            self.accepted()
+
     def test_accepted_recovery_normalizes_without_failed_setup_promotion(self):
         result = self.accepted()
         self.assertEqual(result['accepted_result'], self.result)

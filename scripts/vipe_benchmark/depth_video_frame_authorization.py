@@ -107,7 +107,7 @@ def validate_D9_prerequisite(record, *, ledger_prefix=None, approved=None,
     validate_runtime_versions(environment, dependencies.get('versions', {}))
     validate_runtime_observation(environment, dependencies.get('runtime_observation'))
     setup = read_json(verify_record(qualified['setup'])['path'])
-    recovery = setup.get('schema') == 'plan069-video-setup-recovery-result/v1'
+    recovery = setup.get('schema') in ('plan069-video-setup-recovery-result/v1', 'plan069-video-setup-recovery-result/v2')
     if recovery:
         validate_recovery_qualification_lineage(qualified['setup'], ledger_prefix, approved,
             qualification_record=record, current_events=current_events, allow_owned_active=allow_owned_active)
@@ -116,7 +116,7 @@ def validate_D9_prerequisite(record, *, ledger_prefix=None, approved=None,
     capture = read_json(verify_record(qualified['capture'])['path'])
     source = read_json(verify_record(qualified['source_review'])['path'])
     if (setup.get('schema') not in ('plan069-video-setup-result/v1',
-                                  'plan069-video-setup-recovery-result/v1') or
+                                  'plan069-video-setup-recovery-result/v1', 'plan069-video-setup-recovery-result/v2') or
             setup.get('record_kind') != 'actual' or setup.get('status') != 'complete' or
             setup.get('candidate') != 'D9' or setup.get('source_revision') != revision or
             setup.get('weight_revision') != candidate_config['weights']['revision'] or

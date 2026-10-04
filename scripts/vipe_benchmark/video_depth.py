@@ -188,16 +188,20 @@ def admitted_video_request(request, output, config, *, ledger, request_path):
             admission.get('schema') != 'plan069-depth-admission-result/v1'):
         raise ValueError('passed exact video admission and GPU reservation required')
     setup = read_json(verify_record(request['setup'])['path'])
-    recovery = setup.get('schema') == 'plan069-video-setup-recovery-result/v1'
+    recovery = setup.get('schema') in ('plan069-video-setup-recovery-result/v1', 'plan069-video-setup-recovery-result/v2')
     if ((recovery and request['component'] != 'D9') or
-            setup.get('schema') not in ('plan069-video-setup-result/v1', 'plan069-video-setup-recovery-result/v1') or
+            setup.get('schema') not in ('plan069-video-setup-result/v1', 'plan069-video-setup-recovery-result/v1', 'plan069-video-setup-recovery-result/v2') or
             setup.get('status') != 'complete' or
             setup.get('record_kind') != 'actual' or
             setup.get('candidate') != request['component'] or
             setup.get('review') != request['review'] or
             setup.get('authorization') != request['authorization']):
         raise ValueError('exact completed native video setup required')
-    setup_job = 'plan069-D9-setup-recovery-001' if recovery else f"plan069-{request['component']}-setup-001"
+    if recovery:
+        from .depth_recovery_lineage import JOBS
+        if setup.get('job_id') not in JOBS:
+            raise ValueError('exact approved recovery job required')
+    setup_job = setup['job_id'] if recovery else f"plan069-{request['component']}-setup-001"
     setup_state = ledger.states().get(setup_job, {})
     if (setup_state.get('event') != 'finish' or
             setup_state.get('status') != 'complete' or

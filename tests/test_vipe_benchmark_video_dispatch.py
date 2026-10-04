@@ -64,10 +64,12 @@ class VideoDispatchBindingTests(unittest.TestCase):
         admission = self.root / 'admission.json'
         proposal = next(row for row in read_json(self.review_path)['proposals']
                         if row['candidate'] == candidate)
-        setup_id = 'plan069-D9-setup-recovery-001' if recovery else f'plan069-{candidate}-setup-001'
+        setup_id = ('plan069-D9-setup-recovery-002' if recovery == '002' else
+                    'plan069-D9-setup-recovery-001') if recovery else f'plan069-{candidate}-setup-001'
         setup = self.local / 'jobs' / setup_id / 'result.json'
         setup.parent.mkdir(parents=True)
-        write_json(setup, dict(schema='plan069-video-setup-recovery-result/v1' if recovery else 'plan069-video-setup-result/v1', record_kind='actual', candidate=candidate,status='complete',review=file_record(self.review_path),authorization=file_record(self.approval),source_revision='fixture-source',weight_revision='fixture-weights',source_archive=file_record(archive),source_files=native_files,source_dir=str(self.worker.parent)))
+        write_json(setup, dict(schema=('plan069-video-setup-recovery-result/v2' if recovery == '002' else
+            'plan069-video-setup-recovery-result/v1') if recovery else 'plan069-video-setup-result/v1', record_kind='actual', candidate=candidate,status='complete',review=file_record(self.review_path),authorization=file_record(self.approval),source_revision='fixture-source',weight_revision='fixture-weights',source_archive=file_record(archive),source_files=native_files,source_dir=str(self.worker.parent)))
         if corrupt == 'source:missing':
             source_record = dict(path=str(source_review),sha256='0'*64,bytes=0)
         else: source_record = file_record(source_review)
@@ -186,6 +188,9 @@ class VideoDispatchBindingTests(unittest.TestCase):
 
     def test_explicit_accepted_d9_recovery_reaches_dispatch_with_exact_setup(self):
         self.run_dispatch('D9', recovery=True)
+
+    def test_explicit_accepted_d9_repair_reaches_dispatch_with_exact_setup(self):
+        self.run_dispatch('D9', recovery='002')
 
     def test_unprotected_or_wrong_proposal_recovery_stops_before_writes(self):
         for corrupt in ('recovery:unprotected', 'recovery:proposal'):

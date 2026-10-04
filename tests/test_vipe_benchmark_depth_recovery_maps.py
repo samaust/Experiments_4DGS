@@ -59,6 +59,21 @@ class RecoveryMapIntegrationTests(lineage_fixtures.RecoveryLineageTests):
         self.video_request = dict(component='D9', candidate='D9', setup=self.setup,
             admission=self.admission, max_seconds=120, **self.authority)
 
+    def test_repair_owned_union_preserves_failed_bytes_and_arbitrary_jobs(self):
+        self.repair()
+        stage = remaining_map_allocation(self.maps, self.setup, self.events, self.root, self.assets())
+        failed_extra = self.root / 'jobs/plan069-D9-setup-recovery-001/retained-failure.bin'
+        failed_extra.write_bytes(b'x' * 4096)
+        plain = owned_slot_bytes(self.root, 'D9')
+        union = owned_slot_bytes(self.root, 'D9', recovery_lineage=stage['recovery_lineage'])
+        info = (self.job / 'model.bin').stat()
+        self.assertEqual(plain - union, 2 * max(info.st_size, info.st_blocks * 512))
+        before = union
+        arbitrary = self.root / 'jobs/plan069-D9-setup-recovery-003'; arbitrary.mkdir()
+        os.link(self.old_checkpoint['path'], arbitrary / 'model.bin')
+        self.assertEqual(owned_slot_bytes(self.root, 'D9', recovery_lineage=stage['recovery_lineage']),
+                         before + max(info.st_size, info.st_blocks * 512))
+
     def test_recovery_maps_dispatch_preserves_failed_original_and_paid_model_stage(self):
         self.prepare_maps()
         self.assertEqual(self.stage['setup'], self.setup)

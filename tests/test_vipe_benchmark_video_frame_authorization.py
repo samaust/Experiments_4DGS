@@ -142,13 +142,13 @@ class FrameAuthorityTests(unittest.TestCase):
                 run_video_setup(request,f.root/request['job_id'],acquire=f.acquire)
         self.assertEqual(provision.call_count,1)
         self.assertEqual(provision.call_args.args[0]['recipe'],file_record(FRAME_RECIPE))
-    def recovery_prerequisite_fixture(self):
+    def recovery_prerequisite_fixture(self, *, repair=False):
         """Rebind tiny qualification receipts to a recovery-shaped private setup."""
         qualified=read_json(self.qual_path)
         old_setup=read_json(qualified['setup']['path'])
-        job=self.root/'jobs/plan069-D9-setup-recovery-001';job.mkdir(parents=True)
+        job=self.root/('jobs/plan069-D9-setup-recovery-002' if repair else 'jobs/plan069-D9-setup-recovery-001');job.mkdir(parents=True)
         setup_path=job/'result.json'
-        write_json(setup_path,dict(old_setup,schema='plan069-video-setup-recovery-result/v1',job_id=job.name))
+        write_json(setup_path,dict(old_setup,schema='plan069-video-setup-recovery-result/v2' if repair else 'plan069-video-setup-recovery-result/v1',job_id=job.name))
         setup_record=file_record(setup_path);qualified['setup']=setup_record
         dependency_path=Path(qualified['dependency_manifest']['path']);dependencies=read_json(dependency_path)
         dependencies['setup']=setup_record;write_json(dependency_path,dependencies);qualified['dependency_manifest']=file_record(dependency_path)
@@ -174,6 +174,17 @@ class FrameAuthorityTests(unittest.TestCase):
         from unittest.mock import patch
         from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
         record,prefix,rows=self.recovery_prerequisite_fixture()
+        # Accepted lineage itself has independent full producer fixtures. This
+        # seam test verifies the prerequisite delegates with exact checked rows.
+        with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value=dict(finish=rows[0])) as accept:
+            validate_D9_prerequisite(record,ledger_prefix=prefix)
+        self.assertEqual(accept.call_args.args[0],read_json(self.qual_path)['setup'])
+        self.assertEqual(accept.call_args.args[1],rows)
+        self.assertEqual(accept.call_args.kwargs,{})
+    def test_accepted_repair_delegates_to_strict_no_active_lineage(self):
+        from unittest.mock import patch
+        from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
+        record,prefix,rows=self.recovery_prerequisite_fixture(repair=True)
         # Accepted lineage itself has independent full producer fixtures. This
         # seam test verifies the prerequisite delegates with exact checked rows.
         with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value=dict(finish=rows[0])) as accept:
