@@ -1,0 +1,47 @@
+{
+  "schema": "plan069-D6-driver-diagnostic-outcome/v1",
+  "record_kind": "actual",
+  "status": "captured",
+  "request": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/requests/plan069-D6-driver-diagnostic-001.json",
+    "sha256": "891e7f000d6d2d59867240df7f1cc80dabbf44a15e0ff5a6aa9c80b48e42ab7f",
+    "bytes": 4579
+  },
+  "result": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/prepare/plan069-D6-driver-diagnostic-001/result.json",
+    "sha256": "d50c748e07fcdd3e146aa7d84cb3434b70ae2e75075884ef7ef6bd53f30d21c6",
+    "bytes": 1280
+  },
+  "finish": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-driver-diagnostic-outcome-001/finish.json",
+    "sha256": "b283fc660c6aeb7244afe496fa29d3026f3752b04392716ff1767c84475f22b1",
+    "bytes": 1117
+  },
+  "trace": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-driver-diagnostic-outcome-001/syscalls.log",
+    "sha256": "d95ca3f42e9245e00e360a98c1804774ef692dfe8c29f7f370d73ebf0d4f1927",
+    "bytes": 2272457
+  },
+  "elapsed_seconds": 27.15699819499787,
+  "seconds_limit": 60,
+  "cleanup_seconds_reserved": 30,
+  "cleanup_confirmed": true,
+  "model_loaded": false,
+  "inference": false,
+  "tensor_peak_allocated_bytes": 0,
+  "cuda_init_outcome": "error",
+  "cuda_error": {
+    "type": "RuntimeError",
+    "message": "Unexpected error from cudaGetDeviceCount(). Did you run some cuda functions before calling NumCudaDevices() that might have already set an error? Error 304: OS call failed or operation not supported on this OS"
+  },
+  "observation": "Two socket(AF_UNIX, SOCK_SEQPACKET|SOCK_CLOEXEC, 0) calls returned EPERM under the unchanged guard.",
+  "trace_line_numbers": [
+    26052,
+    26155
+  ],
+  "causality": "Confirmed local socket denial during failed CUDA initialization; this capture alone does not establish it as the sole cause of error304.",
+  "qualification_passed": false,
+  "diagnostic_attempt_consumed": true,
+  "network_guard_changed": false,
+  "next_step": "CPU-only review of a narrower guard; any further GPU qualification requires a separately reviewed proposal and explicit new attempt approval."
+}
