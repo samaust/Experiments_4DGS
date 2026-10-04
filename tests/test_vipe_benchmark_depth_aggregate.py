@@ -245,6 +245,42 @@ class AggregateTests(unittest.TestCase):
                         self.root = previous
                         self.request['candidates'][candidate] = dict(status='missing', reason='pending', evidence={})
 
+    def test_shared_source_clips_use_input_lineage_not_encoded_movie_bytes(self):
+        self.clip_arm('D2')
+        original_root = self.root
+        self.root = original_root / 'second-arm'
+        self.root.mkdir()
+        self.clip_arm('D5')
+        self.root = original_root
+        from vipe_benchmark.files import read_json
+        slot = self.request['candidates']['D5']
+        receipt = read_json(slot['clips']['path'])
+        package = read_json(receipt['package']['path'])
+        copied = self.root / 'different-encoded-source.mp4'
+        copied.write_bytes(b'different lossy encoding, identical accepted source inputs')
+        for item in package['candidates'][0]['media']:
+            item['record'] = file_record(copied)
+        receipt['package'] = self.record('alternate-source-package', package)
+        slot['clips'] = self.record('alternate-source-receipt', receipt)
+        # Rebuild this fixture's immutable preview linkage after changing its clips.
+        slot.pop('anchor_previews')
+        slot['evidence'].pop('anchor_preview_accounting')
+        self.previews('D5')
+        manifest = assemble(self.request)
+        source = manifest['candidates'][0]
+        self.assertEqual(source['media'][-4:][0]['record'], self.image)
+        self.assertEqual(manifest['candidates'][6]['source_clip_receipt'], slot['clips'])
+        package['candidates'][0]['media'][0]['source_images'][0] = self.config
+        receipt['package'] = self.record('wrong-source-package', package)
+        slot['clips'] = self.record('wrong-source-receipt', receipt)
+        self.root = original_root / 'wrong-preview'
+        self.root.mkdir()
+        slot.pop('anchor_previews')
+        slot['evidence'].pop('anchor_preview_accounting')
+        self.previews('D5')
+        with self.assertRaisesRegex(ValueError, 'source RGB input lineage differs'):
+            assemble(self.request)
+
     def test_failed_fit_can_be_visible_without_manufacturing_a_pass(self):
         self.clip_arm('D7', scale_status='blocked')
         manifest = assemble(self.request)

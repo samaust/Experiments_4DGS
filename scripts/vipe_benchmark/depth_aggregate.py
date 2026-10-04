@@ -352,9 +352,14 @@ def assemble(request):
                 if source_clips is None:
                     source_clips = clips_source
                 else:
-                    _require([item['record'] for item in source_clips] ==
-                             [item['record'] for item in clips_source],
-                             f'{candidate}: source RGB clip bytes differ')
+                    # Display one canonical accepted source clip per camera.
+                    # Lossy encodes may differ across environments; compare the
+                    # actual inputs and frame/grid identity, retaining originals.
+                    identity = ('selection_id', 'kind', 'camera_id', 'frame_ids',
+                                'timestamps', 'resolution', 'source_images')
+                    _require([{key: item[key] for key in identity} for item in source_clips] ==
+                             [{key: item[key] for key in identity} for item in clips_source],
+                             f'{candidate}: source RGB input lineage differs')
             _anchor_previews(slot, candidate, context_record, request['bindings']['inputs'],
                              request['bindings']['config'])
             _require(len(media) <= 64, f'{candidate}: published media bound exceeded')
@@ -374,7 +379,8 @@ def assemble(request):
             output_type='component', status=status, reason=slot['reason'],
             provenance=slot.get('provenance', {}), media=media,
             engineering_eligibility=eligibility, physical_accuracy='unverified',
-            **({'depth_display': display} if status == 'available' and candidate in CLIP_CANDIDATES else {})))
+            **({'depth_display': display, 'source_clip_receipt': slot['clips']}
+               if status == 'available' and candidate in CLIP_CANDIDATES else {})))
     _require(source_clips is not None or all(slots[key]['status'] != 'available'
              for key in CLIP_CANDIDATES), 'available clip arm must provide source RGB')
     source = dict(id='source-rgb', label='Accepted source RGB', is_control=True,
