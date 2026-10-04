@@ -33,13 +33,36 @@ def _live(ledger, local):
         device_peak_bytes=reading['device_bytes'])
 
 
+def _selected_setup(candidate, local, accepted, *, setup_path=None):
+    """Keep the original default; explicit recovery selects one owned D9 job."""
+    original = local / 'jobs' / f'plan069-{candidate}-setup-001' / 'result.json'
+    selected = original if setup_path is None else Path(setup_path).resolve()
+    allowed = [original]
+    if candidate == 'D9':
+        allowed.append(local / 'jobs/plan069-D9-setup-recovery-001/result.json')
+    if selected not in allowed:
+        raise ValueError('exact owned video setup path required')
+    record = file_record(selected)
+    if setup_path is not None and accepted.get('completed_setup') != record:
+        raise ValueError('explicit video setup differs from passed admission')
+    return selected.parent.name, record
+
+
 def _qualified_sources(candidate, proposal, accepted, source_review, setup_record,
-                       review, authorization):
+                       review, authorization, *, events=None, run_root=None):
     """Rehash current native lineage before writing or reserving an attempt."""
     from vipe_benchmark.depth_admission import local_source_records
     from vipe_benchmark.video_native import native_source_records
     source = read_json(verify_record(source_review)['path'])
     setup = read_json(verify_record(setup_record)['path'])
+    recovery = setup.get('schema') == 'plan069-video-setup-recovery-result/v1'
+    if recovery:
+        if candidate != 'D9' or events is None or run_root is None:
+            raise ValueError('protected accepted recovery lineage required before video dispatch')
+        from vipe_benchmark.depth_recovery_lineage import accepted_setup_lineage
+        lineage = accepted_setup_lineage(setup_record, events, run_root)
+        if lineage['map_proposal'] != proposal or accepted.get('completed_setup') != setup_record:
+            raise ValueError('recovery setup differs from qualified map proposal or admission')
     qualification = accepted.get('qualification')
     if not isinstance(qualification, dict):
         raise ValueError('video admission requires explicit full qualification bundle')
@@ -55,7 +78,7 @@ def _qualified_sources(candidate, proposal, accepted, source_review, setup_recor
             source.get('source_revision') != proposal['candidate_config']['code']['revision'] or
             source.get('profile_inventory') != proposal['profile_inventory'] or
             source.get('local_sources') != current or
-            setup.get('schema') != 'plan069-video-setup-result/v1' or
+            (not recovery and setup.get('schema') != 'plan069-video-setup-result/v1') or
             setup.get('record_kind') != 'actual' or setup.get('status') != 'complete' or
             setup.get('candidate') != candidate or setup.get('review') != review or
             setup.get('authorization') != authorization or
@@ -86,7 +109,7 @@ def _qualified_sources(candidate, proposal, accepted, source_review, setup_recor
 
 def dispatch(candidate, admission_path, context_path,
              run_id='plan031-20260913T032700Z', *, qualitative_admission_path=None, source_review_path=None,
-             authorization_path=None):
+             authorization_path=None, setup_path=None):
     if candidate not in ('D9', 'D10') or run_id != 'plan031-20260913T032700Z':
         raise ValueError('only approved D9/D10 native run')
     if Path('/proc/1/comm').read_text().strip() != 'systemd':
@@ -124,14 +147,13 @@ def dispatch(candidate, admission_path, context_path,
             len(source.get('rows', [])) != 4500 or
             {(row['camera'], row['frame']) for row in source['rows']} != expected):
         raise ValueError('exact passing admission and complete video context required')
-    setup_id = f'plan069-{candidate}-setup-001'
-    setup_path = local / 'jobs' / setup_id / 'result.json'
-    setup = file_record(setup_path)
+    setup_id, setup = _selected_setup(candidate, local, accepted, setup_path=setup_path)
     state = ledger.states().get(setup_id, {})
     if (state.get('event') != 'finish' or state.get('status') != 'complete' or
             state.get('result') != setup):
         raise ValueError('completed exact video setup required')
-    qualification = _qualified_sources(candidate, proposal, accepted, source_review, setup, review, authorization)
+    qualification = _qualified_sources(candidate, proposal, accepted, source_review, setup, review,
+        authorization, events=ledger.events(), run_root=local)
     validate_runtime_interpreter(accepted['runtime'], sys.executable)
     job_id = f'plan069-{candidate}-maps-001'
     output = local / 'jobs' / job_id
@@ -217,11 +239,14 @@ def main():
     parser.add_argument('--qualitative-admission')
     parser.add_argument('--source-review', help='Exact immutable current post-setup source review')
     parser.add_argument('--authorization', help='Explicit approved versioned video runtime authorization')
+    parser.add_argument('--setup', help='Exact owned setup result bound by the passed admission')
     parser.add_argument('--run-id', default='plan031-20260913T032700Z')
     args = parser.parse_args()
     options = dict(qualitative_admission_path=args.qualitative_admission, source_review_path=args.source_review)
     if args.authorization is not None:
         options['authorization_path'] = args.authorization
+    if args.setup is not None:
+        options['setup_path'] = args.setup
     dispatch(args.candidate, args.admission, args.context, args.run_id, **options)
 
 

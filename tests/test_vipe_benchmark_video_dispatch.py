@@ -45,7 +45,7 @@ class VideoDispatchBindingTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def run_dispatch(self, candidate, *, source_override=False, corrupt=None):
+    def run_dispatch(self, candidate, *, source_override=False, corrupt=None, recovery=False):
         source_review = self.root / ('docs/research/vipe-alternatives/'
             f'plan031-execution/depth-{candidate}-source-review-001.json')
         source_review.parent.mkdir(parents=True, exist_ok=True)
@@ -64,9 +64,10 @@ class VideoDispatchBindingTests(unittest.TestCase):
         admission = self.root / 'admission.json'
         proposal = next(row for row in read_json(self.review_path)['proposals']
                         if row['candidate'] == candidate)
-        setup = self.local / 'jobs' / f'plan069-{candidate}-setup-001' / 'result.json'
+        setup_id = 'plan069-D9-setup-recovery-001' if recovery else f'plan069-{candidate}-setup-001'
+        setup = self.local / 'jobs' / setup_id / 'result.json'
         setup.parent.mkdir(parents=True)
-        write_json(setup, dict(schema='plan069-video-setup-result/v1', record_kind='actual', candidate=candidate,status='complete',review=file_record(self.review_path),authorization=file_record(self.approval),source_revision='fixture-source',weight_revision='fixture-weights',source_archive=file_record(archive),source_files=native_files,source_dir=str(self.worker.parent)))
+        write_json(setup, dict(schema='plan069-video-setup-recovery-result/v1' if recovery else 'plan069-video-setup-result/v1', record_kind='actual', candidate=candidate,status='complete',review=file_record(self.review_path),authorization=file_record(self.approval),source_revision='fixture-source',weight_revision='fixture-weights',source_archive=file_record(archive),source_files=native_files,source_dir=str(self.worker.parent)))
         if corrupt == 'source:missing':
             source_record = dict(path=str(source_review),sha256='0'*64,bytes=0)
         else: source_record = file_record(source_review)
@@ -75,18 +76,20 @@ class VideoDispatchBindingTests(unittest.TestCase):
         self.qualification = self.root / 'full-qualification.json'
         write_json(self.qualification, dict(schema='unrelated/v1' if corrupt == 'qualification:schema' else None if corrupt == 'qualification:missing_schema' else f'plan069-depth-{candidate}-qualification/v1',record_kind='actual',candidate=candidate,status='passed',setup=file_record(setup),source_review=source_record,runtime={'receipt':file_record(runtime_path)},commercial={'assessment':file_record(archive)},source_archive=file_record(archive),source_files=native_files))
         admitted = dict(schema='plan069-depth-admission-result/v1',status='passed',candidate=candidate,source_review=source_record,review=file_record(self.review_path),authorization=file_record(self.approval),proposal_sha256=dispatcher.object_hash(proposal),commercial={'assessment':file_record(archive)},assets=[],live=dict(sampled_unix=1000.,ledger_head_sha256='0'*64),runtime={'receipt':file_record(runtime_path)},qualification=file_record(self.qualification))
+        if recovery:
+            admitted['completed_setup'] = file_record(setup)
         if corrupt == 'qualification:missing': admitted.pop('qualification')
         if corrupt == 'qualification:runtime': admitted['qualification'] = file_record(runtime_path)
         write_json(admission, admitted)
         original_admission = file_record(admission)
         ledger = Mock(path=self.local / 'ledger.jsonl')
         ledger.events.return_value = []
-        ledger.states.return_value = {f'plan069-{candidate}-setup-001': dict(
+        ledger.states.return_value = {setup_id: dict(
             event='finish', status='complete', result=file_record(setup))}
         ledger.events.return_value = []
         ledger.totals.return_value = {resource: dict(elapsed_seconds=0, reserved_seconds=0)
                                      for resource in ('gpu', 'cpu', 'setup')}
-        captured = {}
+        captured: dict = {}
         clock = [2000.]
 
         def review_evidence(*args, **kwargs):
@@ -151,16 +154,27 @@ class VideoDispatchBindingTests(unittest.TestCase):
              patch.object(dispatcher.time, 'time', side_effect=lambda: clock[0]), \
              patch.object(dispatcher, 'supervise', side_effect=supervise), \
              patch.object(Path, 'read_text', read_text), \
+             patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',
+                   side_effect=ValueError('unprotected recovery') if corrupt == 'recovery:unprotected' else None,
+                   return_value=dict(map_proposal={} if corrupt == 'recovery:proposal' else proposal)) as lineage, \
              patch('vipe_benchmark.depth_admission.local_source_records', return_value=native_files), \
              patch('vipe_benchmark.video_native.native_source_records', return_value=[] if corrupt == 'source:changed_native' else native_files):
             if corrupt:
                 with self.assertRaises((ValueError, FileNotFoundError)):
-                    dispatcher.dispatch(candidate, admission, self.context, source_review_path=source_review if source_override or corrupt == 'source:missing' else None)
+                    dispatcher.dispatch(candidate, admission, self.context,
+                        source_review_path=source_review if source_override or corrupt == 'source:missing' else None,
+                        **({'setup_path': setup} if recovery else {}))
                 ledger.authorize_depth_attempt.assert_not_called()
                 self.assertEqual(list((self.local / 'requests').iterdir()), [])
                 self.assertFalse((self.local / 'jobs' / f'plan069-{candidate}-maps-001').exists())
                 return
-            result = dispatcher.dispatch(candidate, admission, self.context, source_review_path=source_review if source_override else None)
+            result = dispatcher.dispatch(candidate, admission, self.context,
+                source_review_path=source_review if source_override else None,
+                **({'setup_path': setup} if recovery else {}))
+            if recovery:
+                lineage.assert_called_once_with(file_record(setup), [], self.local)
+            else:
+                lineage.assert_not_called()
         self.assertEqual(result['status'], 'fixture-supervision-not-executed')
         ledger.authorize_depth_attempt.assert_called_once()
 
@@ -169,6 +183,37 @@ class VideoDispatchBindingTests(unittest.TestCase):
 
     def test_d10_authorization_and_supervision_share_exact_bindings(self):
         self.run_dispatch('D10')
+
+    def test_explicit_accepted_d9_recovery_reaches_dispatch_with_exact_setup(self):
+        self.run_dispatch('D9', recovery=True)
+
+    def test_unprotected_or_wrong_proposal_recovery_stops_before_writes(self):
+        for corrupt in ('recovery:unprotected', 'recovery:proposal'):
+            with self.subTest(corrupt=corrupt):
+                fixture = VideoDispatchBindingTests(); fixture.setUp()
+                try:
+                    fixture.run_dispatch('D9', recovery=True, corrupt=corrupt)
+                finally:
+                    fixture.tearDown()
+
+    def test_setup_option_requires_exact_owned_candidate_and_admission(self):
+        setup = self.local / 'jobs/plan069-D9-setup-recovery-001/result.json'
+        setup.parent.mkdir(parents=True); write_json(setup, dict(fixture=True))
+        record = file_record(setup)
+        with self.assertRaisesRegex(ValueError, 'owned video setup'):
+            dispatcher._selected_setup('D10', self.local, dict(completed_setup=record), setup_path=setup)
+        with self.assertRaisesRegex(ValueError, 'differs from passed admission'):
+            dispatcher._selected_setup('D9', self.local, {}, setup_path=setup)
+        self.assertEqual(dispatcher._selected_setup('D9', self.local,
+            dict(completed_setup=record), setup_path=setup), ('plan069-D9-setup-recovery-001', record))
+
+    def test_cli_preserves_explicit_setup_selection(self):
+        with patch.object(sys, 'argv', ['dispatcher', '--candidate', 'D9', '--admission', 'admission',
+            '--context', 'context', '--setup', 'owned-setup', '--authorization', 'fresh-do']), \
+             patch.object(dispatcher, 'dispatch') as invoke:
+            dispatcher.main()
+        self.assertEqual(invoke.call_args.kwargs['setup_path'], 'owned-setup')
+        self.assertEqual(invoke.call_args.kwargs['authorization_path'], 'fresh-do')
 
     def test_explicit_fresh_source_review_is_preserved_in_request(self):
         self.run_dispatch('D10', source_override=True)
