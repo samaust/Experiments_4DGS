@@ -1,0 +1,54 @@
+{
+  "schema": "plan069-D6-driver-qualification-outcome/v3",
+  "status": "failed",
+  "job_id": "plan069-D6-driver-qualification-003",
+  "finish": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-driver-failure-003/finish.json",
+    "sha256": "e3323727d63247146a16c7e1fc88e2c26e72ac01dbbac019b2df1b55c0329dce",
+    "bytes": 1079
+  },
+  "request": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/requests/plan069-D6-driver-qualification-003.json",
+    "sha256": "7e485ffa82a6032e7fd8d5bae34a7576485646a5dab9506b795f75203e117e78",
+    "bytes": 7388
+  },
+  "authorization": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/depth-D6-driver-approval-003.json",
+    "sha256": "615891af2b886550974dc70700545ce426a091b95624e4ad6297b0cd39e72ba5",
+    "bytes": 872
+  },
+  "log": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-driver-qualification-003.log",
+    "sha256": "046eff795cff192ac1ac59bcadfdd5b69470ec43288e9ca7b4f8c42f0242cf14",
+    "bytes": 1420
+  },
+  "trace": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-driver-qualification-003.syscalls.log",
+    "sha256": "7829965244ce8210fbc30fe56da8c4a6ce039e274c7f6a6d59d062525e25e349",
+    "bytes": 2310214
+  },
+  "parent_capture": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-qualification003-parent-capture-001/receipt.json",
+    "sha256": "9566df4bd48df5b1203637b1d1a0cd672ed3081290183638f9f777881d8646b1",
+    "bytes": 813
+  },
+  "cpu_settlement": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-driver-failure-003/settlement.json",
+    "sha256": "32e0cc9f21f88867a242552da11320774263b5602afc41acd39309a77e8ac609",
+    "bytes": 1044
+  },
+  "elapsed_seconds": 22.10835636099364,
+  "cleanup_confirmed": true,
+  "deadline_exceeded": false,
+  "attempt_consumed": true,
+  "native_runtime_qualified": false,
+  "observations": [
+    "AF_UNIX SOCK_SEQPACKET|SOCK_CLOEXEC creation succeeds.",
+    "Abstract CUDA UVM socket bind succeeds under guard006.",
+    "After successful CUDA UVM bind, listen(16,128) is denied with EPERM; attempt002 did not reach this call.",
+    "Connect to /tmp/nvidia-mps/control remains denied with EPERM.",
+    "CUDA initialization still raises error304 before strict CPU weight loading."
+  ],
+  "causality": "The successful bind advances the observed syscall path to a denied listen. Retained evidence does not establish that listen or the MPS connection is a sufficient or sole cause of CUDA304.",
+  "remaining": "No D6 retry is authorized. Preserve attempts001/002/003; investigate retained evidence without GPU execution before proposing any further driver experiment."
+}
