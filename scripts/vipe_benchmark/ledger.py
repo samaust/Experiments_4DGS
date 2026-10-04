@@ -479,7 +479,9 @@ class Ledger:
 
     def note(self, event, **fields):
         if event in ('reserve', 'finish', 'account', 'resume_unstarted', 'checkpoint',
-                     'checkpoint_resume', 'depth_driver_qualification_authorized', 'final_render_do_authorized', 'cpu_preparation_charge', 'setup_recovery_authorized', 'component_recovery_authorized',
+                     'checkpoint_resume', 'depth_driver_qualification_authorized',
+                     'depth_setup_authorized', 'depth_attempt_authorized',
+                     'native_qualification_authorized', 'final_render_do_authorized', 'cpu_preparation_charge', 'setup_recovery_authorized', 'component_recovery_authorized',
                      'reconstruction_recovery_authorized', 'memory_diagnostic_authorized'):
             raise ValueError('use the checked ledger transition')
         with self.locked() as (stream, events):
