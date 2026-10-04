@@ -104,11 +104,16 @@ def dispatch(candidate, run_id='plan031-20260913T032700Z', *, source_review_path
                 result.get('bytes_received', 10**30) > proposal['allocation']['download_bytes'] or
                 result.get('elapsed_seconds', 10**30) > proposal['allocation']['setup_seconds']):
             raise ValueError('video setup differs from approved assets or bounds')
+    def sample():
+        from vipe_benchmark.video_setup_budget import setup_byte_limits
+        reading = resources(local, gpu=True)
+        setup_byte_limits(request, proposal, local, reading, config)
+        return reading
     outcome = supervise(ledger, job_id, command, output,
         evidence=dict(request=file_record(request_path), review=review,
                       authorization=authorization, source_review=source_review,
                       worker=file_record(worker)),
-        sample_resources=lambda: resources(local, gpu=True),
+        sample_resources=sample,
         validate_result=validate, poll_seconds=2.)
     write_json(docs / f'{job_id}.json', dict(
         schema='plan069-video-setup-dispatch/v1', status='complete',

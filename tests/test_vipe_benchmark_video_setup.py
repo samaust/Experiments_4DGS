@@ -48,7 +48,7 @@ class VideoSetupTests(unittest.TestCase):
         write_json(inventory, dict(candidates={'D9': dict(files=[asset])}))
         proposal = dict(candidate='D9', max_attempts=1,
             required_assets=file_record(inventory),
-            allocation=dict(setup_seconds=2400, download_bytes=100000),
+            allocation=dict(setup_seconds=2400, download_bytes=100000, artifact_bytes=2**20),
             candidate_config=dict(
                 code=dict(url='https://github.com/DepthAnything/Video-Depth-Anything',
                           revision=REVISION),

@@ -126,11 +126,13 @@ def run_video_setup(request, output, *, request_path=None, acquire=_acquire,
         raise ValueError('immutable video setup output identity changed or exists')
     output.mkdir(parents=True, exist_ok=False)
     write_json(output / 'request.json', request)
-    baseline = budget_snapshot(run_root)['download_bytes']
-    download_limit = min(config['new_download_gib_limit'] * 2**30,
-                         baseline + allocation['download_bytes'])
-    artifact_limit = config['new_artifact_disk_gib_limit'] * 2**30
+    from .video_setup_budget import setup_byte_limits
+    initial_reading = budget_snapshot(run_root)
+    baseline = initial_reading['download_bytes']
     try:
+        limits = setup_byte_limits(request, proposal, run_root, initial_reading, config)
+        download_limit = limits['download_bytes']
+        artifact_limit = limits['artifact_bytes']
         archive = output / 'source.tar.gz'
         archive_record = acquire(
             'https://codeload.github.com/DepthAnything/Video-Depth-Anything/tar.gz/' +
