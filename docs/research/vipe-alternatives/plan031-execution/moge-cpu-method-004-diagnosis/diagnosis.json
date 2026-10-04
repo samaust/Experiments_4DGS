@@ -1,0 +1,72 @@
+{
+  "schema": "plan069-d6-cpu-import-diagnosis/v1",
+  "status": "blocked",
+  "candidate": "D6",
+  "cause": "Pinned FlexGEMM constructs GPU autotuners and selects GPU-specific sparse convolution configuration while importing the actual v3 model class.",
+  "sources": [
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-setup-001/runtime/environment/lib/python3.11/site-packages/triton/runtime/autotuner.py",
+      "sha256": "0497baf6ff4c48c4b3764bd84940ebbd7ac015e2d9d71e80fbb6949a9cf62ded",
+      "bytes": 17271
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-setup-001/runtime/environment/lib/python3.11/site-packages/flex_gemm/autotuner.py",
+      "sha256": "a0b7612e62008a373d8a4b6303eee717c7e7256f382e1870e88888060f863364",
+      "bytes": 25733
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-setup-001/runtime/environment/lib/python3.11/site-packages/flex_gemm/kernels/triton/utils.py",
+      "sha256": "e12a723ec3a5ef303f0e1a757ea2ad147de2596559e11b05cc61090c2d42767d",
+      "bytes": 15074
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-setup-001/runtime/environment/lib/python3.11/site-packages/flex_gemm/kernels/triton/spconv/config.py",
+      "sha256": "101091e3bbe2c72a9a6788b94ebeff986967d574d0bb753d0c64e75c38429dff",
+      "bytes": 11457
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-setup-001/runtime/environment/lib/python3.11/site-packages/flex_gemm/config.py",
+      "sha256": "9972a651220dbaadd91a89a052646da2dcafe26074cae4497847926040a321e4",
+      "bytes": 3847
+    }
+  ],
+  "probes": [
+    {
+      "script": "probe.py",
+      "status": "reproduced",
+      "error": "RuntimeError: 0 active drivers ([]). There should only be one.",
+      "elapsed_seconds": 3.31368664799993,
+      "cuda_initialized": false
+    },
+    {
+      "script": "lazy_probe.py",
+      "status": "failed_after_relevant_fix",
+      "error": "RuntimeError: No CUDA GPUs are available",
+      "elapsed_seconds": null,
+      "seconds_limit": 30,
+      "cuda_initialization_attempted": true,
+      "warning": "The diagnostic omitted the explicit CUDA initialization guard; masked runtime initialization failed. Preserve this evidence; do not repeat this command."
+    },
+    {
+      "script": "guarded_lazy_probe.py",
+      "status": "blocked",
+      "error": "PermissionError: CPU qualification prohibits CUDA initialization",
+      "elapsed_seconds": 3.230959073999884,
+      "autotuners_adapted": 2,
+      "benchmark_calls": 0,
+      "cuda_initialized": false,
+      "constructor_restored": true
+    }
+  ],
+  "model_constructed": false,
+  "checkpoint_content_read": false,
+  "installed_bytes_modified": false,
+  "production_sources_modified": false,
+  "gpu_inference": false,
+  "ledger_written": false,
+  "cpu_charge_owner": "root",
+  "cpu_charge_applied": false,
+  "measured_probe_seconds": 6.544645721999814,
+  "unmeasured_probe_conservative_seconds": 30,
+  "scope": "Import-only diagnosis, not model CPU qualification; no passing method004 produced"
+}
