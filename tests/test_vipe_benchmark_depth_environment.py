@@ -82,6 +82,11 @@ class DepthEnvironmentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'immutable'):
             self.provision()
 
+    def test_fixture_runner_cannot_issue_uv_transfer_ownership(self):
+        result = self.provision()
+        for record in result['command_receipts']:
+            self.assertIsNone(read_json(record['path'])['uv_transfer_receipt'])
+
     def test_unmetered_git_requirement_and_actual_fixture_injection_are_rejected_before_commands(self):
         for request in [dict(self.request, requirements=['utils3d @ git+https://example.org/source']),
                         dict(self.request, record_kind='actual')]:

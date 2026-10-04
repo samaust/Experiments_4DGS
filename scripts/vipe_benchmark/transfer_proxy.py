@@ -24,7 +24,7 @@ import uuid
 from urllib.parse import unquote, urlsplit
 
 from .budgets import _publish_counter, download_lock, download_remaining
-from .files import safe_path, write_json
+from .files import read_json, safe_path, write_json
 
 
 class TransferProxyError(RuntimeError):
@@ -54,6 +54,24 @@ class _Tunnel:
     upstream_eof: bool = False
     client_write_closed: bool = False
     upstream_write_closed: bool = False
+
+
+def completed_uv_receipt(run_root, transfer_id):
+    """Return only an exact successful immutable receipt in its owned run scope."""
+    if (type(transfer_id) is not str or len(transfer_id) != 32 or
+            any(c not in '0123456789abcdef' for c in transfer_id)):
+        raise TransferProxyError('invalid UV transfer identity')
+    root = safe_path(run_root).resolve()
+    path = root / 'uv-transfers' / f'transfer-{transfer_id}.json'
+    if path.is_symlink() or not path.is_file() or path.resolve().parent != root / 'uv-transfers':
+        raise TransferProxyError('owned completed UV transfer receipt required')
+    record = read_json(path)
+    if (type(record) is not dict or 'error' not in record or record.get('transfer_id') != transfer_id or record.get('complete') is not True or
+            record.get('error') is not None or type(record.get('reserved_bytes')) is not int or
+            record['reserved_bytes'] != 0 or type(record.get('bytes_received')) is not int or
+            record['bytes_received'] < 0):
+        raise TransferProxyError('successful complete UV transfer receipt required')
+    return path
 
 
 class _UVProxy:
@@ -99,6 +117,14 @@ class _UVProxy:
         self._started_utc = datetime.now(timezone.utc).isoformat()
         self._meter = self.run_root / 'uv-transfers' / f'active-{self.transfer_id}.json'
         self._receipt = self.run_root / 'uv-transfers' / f'transfer-{self.transfer_id}.json'
+
+    @property
+    def receipt_path(self):
+        """Expose this proxy's successful receipt only after its context cleanup."""
+        if self._thread is None or self._thread.is_alive() or not self._stop.is_set():
+            raise TransferProxyError('UV context cleanup required before receipt binding')
+        self.check()
+        return completed_uv_receipt(self.run_root, self.transfer_id)
 
     @property
     def environment(self):

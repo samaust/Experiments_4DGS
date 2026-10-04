@@ -186,6 +186,7 @@ def provision_depth_environment(request, output, config, *, run_root, deadline,
         if offline:
             env.update(UV_OFFLINE='1', HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1', PIP_NO_INDEX='1')
         begin, error = time.monotonic(), None
+        uv_transfer_receipt = None
         try:
             if runner is not None:
                 runner(command, environment=env, cwd=ROOT,
@@ -203,6 +204,8 @@ def provision_depth_environment(request, output, config, *, run_root, deadline,
                                     timeout=max(.001, deadline - time.monotonic()))
                             finally:
                                 proxy.check()
+                        if request['record_kind'] == 'actual':
+                            uv_transfer_receipt = file_record(proxy.receipt_path)
                     else:
                         subprocess.run(command, check=True, env=env, cwd=ROOT,
                             stdout=stream, stderr=subprocess.STDOUT,
@@ -218,7 +221,7 @@ def provision_depth_environment(request, output, config, *, run_root, deadline,
             write_json(path, dict(command=command, cwd=str(ROOT), log=file_record(log),
                 wall_seconds=time.monotonic() - begin, error=error, offline=offline,
                 automatic_retries=0, package_transfer_proxy=command[0] == uv,
-                record_kind=request['record_kind']))
+                record_kind=request['record_kind'], uv_transfer_receipt=uv_transfer_receipt))
             receipts.append(file_record(path))
         return log
 
