@@ -7,6 +7,7 @@ Old grants without this evidence retain conservative v1 accounting.
 from pathlib import Path
 import hashlib
 import math
+import re
 import time
 
 from .budgets import _inventory, _snapshot
@@ -474,9 +475,15 @@ def run_reconciliation(ledger, candidate, admission, output, *, seconds_limit=12
     _require(not any(row['event'] == 'reserve' for row in ledger.states(events).values()),
              'active attempt prevents CPU reconciliation')
     root = ledger.path.resolve().parent
-    output = safe_path(output).resolve()
-    _require(output.parent == root / 'prepare' and
-             output.name == f'plan069-{candidate}-setup-byte-reconciliation-001' and
+    literal_output = safe_path(output).absolute()
+    _require(not any(component.is_symlink() for component in
+                     (literal_output, *literal_output.parents)),
+             'immutable owned CPU reconciliation output required')
+    output = literal_output.resolve()
+    numbered = re.fullmatch(r'plan069-' + re.escape(candidate) +
+                            r'-setup-byte-reconciliation-([0-9]{3,})', output.name)
+    _require(output.parent == root / 'prepare' and numbered is not None and
+             int(numbered[1]) > 0 and numbered[1] == f'{int(numbered[1]):03}' and
              not output.exists(), 'immutable owned CPU reconciliation output required')
     output.mkdir(parents=True, exist_ok=False)
     receipt = dict(schema='plan069-depth-setup-byte-reconciliation-cpu/v1',

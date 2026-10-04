@@ -239,15 +239,15 @@ class RetainedCausalTests(unittest.TestCase):
         self.assertEqual(self.ledger.path.read_bytes(), before)
         self.assertEqual(budget_snapshot(self.root), reading)
 
-    def cpu_admission(self, *, remaining=1000, seconds=120):
+    def cpu_admission(self, *, remaining=1000, seconds=120, attempt=1):
         from vipe_benchmark.depth_admission import local_source_records
-        source = self.root / 'cpu-source-review.json'
+        source = self.root / f'cpu-source-review-{attempt:03}.json'
         write_json(source, dict(status='passed', candidate='D5', local_sources=local_source_records('D5')))
-        config = self.root / 'cpu-effective-config.json'
+        config = self.root / f'cpu-effective-config-{attempt:03}.json'
         write_json(config, self.ledger.config)
         events = self.ledger.events()
         elapsed = self.ledger.totals(events)['cpu']['elapsed_seconds']
-        admission = self.root / 'cpu-admission.json'
+        admission = self.root / f'cpu-admission-{attempt:03}.json'
         write_json(admission, dict(schema='plan069-root-cpu-fixture-admission/v1',candidate='D5',
             cpu_accounting_owner='D5', ledger_head_sequence=events[-1]['sequence'],
             ledger_head_sha256=events[-1]['event_sha256'],ledger_event_count=len(events),
@@ -255,7 +255,7 @@ class RetainedCausalTests(unittest.TestCase):
             candidate_cpu_remaining_seconds=remaining, global_cpu_elapsed_seconds=elapsed,
             global_cpu_remaining_seconds=self.ledger.config['cpu_prepare_score_report_seconds_limit']-elapsed,
             seconds=seconds,effective_configuration=file_record(config),source_review=file_record(source)))
-        return file_record(admission), self.root / 'prepare/plan069-D5-setup-byte-reconciliation-001'
+        return file_record(admission), self.root / f'prepare/plan069-D5-setup-byte-reconciliation-{attempt:03}'
 
     def test_bounded_cpu_producer_charges_once_with_receipt_and_preserves_future_headroom(self):
         from vipe_benchmark.depth_budget_reconciliation import run_reconciliation
@@ -562,3 +562,54 @@ class InstalledDeclaredPathTests(unittest.TestCase):
             for deadline in [None,time.monotonic()+1]:
                 with self.subTest(path=path,deadline=deadline),self.assertRaisesRegex(ValueError,'symlink or relative'):
                     _timed_verify(dict(record,path=path),deadline)
+
+
+class ReconciliationRetryOutputTests(unittest.TestCase):
+    setUp = RetainedCausalTests.setUp
+    tearDown = RetainedCausalTests.tearDown
+    prepare_completed_setup = RetainedCausalTests.prepare_completed_setup
+    build_causal = RetainedCausalTests.build_causal
+    cpu_admission = RetainedCausalTests.cpu_admission
+
+    def test_failed_charged_first_receipt_stays_immutable_after_second_success(self):
+        from vipe_benchmark.depth_budget_reconciliation import run_reconciliation
+        from unittest.mock import patch
+        self.build_causal(reconcile=False)
+        first,output001=self.cpu_admission()
+        states_before=self.ledger.states()
+        config_before=dict(self.ledger.config)
+        with patch.object(self.ledger,'reconcile_depth_setup_bytes',side_effect=RuntimeError('fixture failure')):
+            with self.assertRaisesRegex(RuntimeError,'fixture failure'):
+                run_reconciliation(self.ledger,'D5',first,output001)
+        old=file_record(output001/'receipt.json');old_bytes=Path(old['path']).read_bytes()
+        charge=self.ledger.events()[-1]
+        self.assertEqual(charge['evidence'],old)
+        second,output002=self.cpu_admission(attempt=2)
+        result=run_reconciliation(self.ledger,'D5',second,output002)
+        self.assertEqual(result['status'],'complete')
+        self.assertEqual(file_record(output001/'receipt.json'),old)
+        self.assertEqual(Path(old['path']).read_bytes(),old_bytes)
+        self.assertIn(charge,self.ledger.events())
+        proofs=[row for row in self.ledger.events() if row['event']=='depth_setup_bytes_reconciled']
+        self.assertEqual(len(proofs),1)
+        self.assertEqual(Path(proofs[0]['proof']['path']).name,'plan069-D5-setup-byte-reconciliation.json')
+        self.assertEqual(len([row for row in self.ledger.events() if row['event']=='cpu_preparation_charge']),2)
+        self.assertEqual(self.ledger.states(),states_before)
+        self.assertEqual(self.ledger.config,config_before)
+
+    def test_malformed_foreign_reused_and_symlink_outputs_fail_before_writes(self):
+        from vipe_benchmark.depth_budget_reconciliation import run_reconciliation
+        self.build_causal(reconcile=False);admission,default=self.cpu_admission()
+        reused=default.parent/'plan069-D5-setup-byte-reconciliation-002';reused.mkdir()
+        target=default.parent/'plan069-D5-setup-byte-reconciliation-003'
+        alias=default.parent/'plan069-D5-setup-byte-reconciliation-004';alias.symlink_to(target,target_is_directory=True)
+        names=['plan069-D5-setup-byte-reconciliation-000','plan069-D5-setup-byte-reconciliation-2',
+            'plan069-D5-setup-byte-reconciliation-0002','plan069-D5-setup-byte-reconciliation-002x',
+            'plan069-D5-setup-byte-reconciliation--002','plan069-D6-setup-byte-reconciliation-002']
+        outputs=[default.parent/name for name in names]+[reused,alias,self.root/'plan069-D5-setup-byte-reconciliation-002']
+        before=self.ledger.path.read_bytes()
+        for out in outputs:
+            with self.subTest(output=str(out)),self.assertRaisesRegex(ValueError,'owned CPU reconciliation output'):
+                run_reconciliation(self.ledger,'D5',admission,out)
+            self.assertEqual(self.ledger.path.read_bytes(),before)
+        self.assertFalse(target.exists())
