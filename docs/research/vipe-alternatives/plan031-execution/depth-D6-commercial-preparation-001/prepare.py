@@ -28,7 +28,7 @@ def file_snapshot(manifest):
     for f in manifest['files']:
         path = f['path']
         key = path.split('/site-packages/', 1)[-1]
-        assert key not in result, key
+        assert key not in result or result[key] == (f['sha256'], f['bytes']), key
         result[key] = (f['sha256'], f['bytes'])
     return result
 
