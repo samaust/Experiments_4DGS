@@ -193,3 +193,23 @@ class QualificationSupervisorTests(unittest.TestCase):
                         receipt = read_json(root/'output-controls'/'supervision.json')
                         self.assertEqual(receipt['status'],'failed')
                         self.assertIn('publication storage reserve',receipt['error'])
+
+    def test_finished_reservation_replay_creates_no_process_or_second_finish(self):
+        import time
+        from vipe_benchmark.ledger import Ledger
+        from vipe_benchmark.config import load
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            ledger=Ledger(root/'fixture-ledger.jsonl',load())
+            with ledger.locked() as (stream,events):
+                reservation=ledger._append(stream,events,dict(event='reserve',job_id='fixture/probe',
+                    resource='cpu',seconds=60,command=['unapproved-fixture-only'],monotonic_start=time.monotonic(),
+                    evidence=dict(record_kind='actual',execution_authorized=True,native_adapter_qualified=False,
+                        role='native-qualification',schema='plan069-final-render-qualification-reservation-binding/v1')))
+            ledger.finish(reservation['job_id'],'failed',1.,cleanup_confirmed=True,cleanup_uncertain=False)
+            before=ledger.events()
+            with self.assertRaisesRegex(ValueError,'current active reservation'):
+                supervise_reserved(ledger,reservation,reservation['command'],root/'output',{},release_path=root/'release')
+            self.assertEqual(ledger.events(),before)
+            self.assertFalse((root/'output').exists())
+            self.assertFalse((root/'output-controls').exists())

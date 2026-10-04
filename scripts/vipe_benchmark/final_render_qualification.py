@@ -282,6 +282,10 @@ def validate_dispatch_invocation(invocation_record,ledger,reservation):
     _require(safe_path(invocation['ledger_path']).resolve()==ledger.path.resolve(),'qualification ledger differs')
     binding=invocation_binding(invocation_record,_bound(invocation['request']),invocation['arm'],invocation['phase'])
     _require(binding['reservation']==reservation,'qualification reservation substituted')
+    with ledger.locked() as (_,events):
+        _require(ledger.states(events).get(reservation['job_id'])==reservation and
+            not any(e.get('event')=='started' and e.get('job_id')==reservation['job_id'] for e in events),
+            'exact unstarted current active qualification reservation required')
     return binding
 
 
@@ -326,7 +330,8 @@ def validate_phase_result(result,invocation_record,*,published=False):
         observations.get('production_adequacy_established') is False,'exact limited compatibility observations required')
     if published:
         _require(not (output/'failure.json').exists() and not (output/'terminal-publication-failure.json').exists() and
-            not (output.parent/(output.name+'-controls')/'terminal-publication-failure.json').exists(),
+            not (output.parent/(output.name+'-controls')/'terminal-publication-failure.json').exists() and
+            not (output.parent/(output.name+'-controls')/'publication-failure.json').exists(),
             'compatibility publication failed')
         completion=_bound(file_record(output/'completion.json'))
         _require(completion==dict(schema=COMPLETION,record_kind='actual',status='measured',

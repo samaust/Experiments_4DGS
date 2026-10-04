@@ -203,6 +203,8 @@ def supervise_reserved(ledger, reservation, command, output, invocation_record, 
     evidence = reservation.get('evidence', {})
     if reservation.get('event') != 'reserve' or evidence.get('record_kind') != 'actual' or evidence.get('execution_authorized') is not True or evidence.get('native_adapter_qualified') is not False or evidence.get('role') != 'native-qualification' or evidence.get('schema') != 'plan069-final-render-qualification-reservation-binding/v1':
         raise ValueError('checked qualification reservation required')
+    if ledger.states().get(reservation['job_id']) != reservation:
+        raise ValueError('exact current active reservation required before supervision')
     lifecycle = dict(launch_attempted=False,cleanup_confirmed=True)
     try:
         return _supervise_reserved(ledger,reservation,command,output,invocation_record,
