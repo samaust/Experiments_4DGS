@@ -59,6 +59,7 @@ LIMIT_KEYS = dict(download_bytes='new_download_gib_limit',
                   cpu_seconds='cpu_prepare_score_report_seconds_limit',
                   setup_seconds='setup_wall_seconds_limit')
 LOCAL_COMMON = ('files.py', 'config.py', 'ledger.py', 'depth_admission.py', 'depth_map_allowance.py',
+    'depth_budget_reconciliation.py',
     'depth_extension.py', 'depth_clips.py', 'scale.py', 'qualitative_package.py',
     'execution.py', 'supervisor.py', 'budgets.py', 'runtime.py', 'isolation.py',
     'ffmpeg_binding.py', 'transfer_proxy.py', 's1_helper_session.py',

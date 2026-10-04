@@ -11,6 +11,12 @@ from vipe_benchmark.ledger import Ledger
 
 
 class CheckpointTests(unittest.TestCase):
+    def test_reconciliation_helper_is_bound_in_every_candidate_source_closure(self):
+        from vipe_benchmark.depth_admission import LOCAL_ADAPTERS, local_source_records
+        for candidate in LOCAL_ADAPTERS:
+            self.assertIn('depth_budget_reconciliation.py',
+                [Path(row['path']).name for row in local_source_records(candidate)])
+
     def test_generic_notes_cannot_manufacture_reconciled_credit(self):
         with tempfile.TemporaryDirectory() as directory:
             ledger = Ledger(Path(directory) / 'ledger.jsonl', load())
