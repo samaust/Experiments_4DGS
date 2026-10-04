@@ -1,7 +1,8 @@
-# Private guard007 proposal validation
+# Guard007 validation
 
 Base: `a2afb5d7`; overall user-approved review baseline: `b1b43c58`.
-No canonical source, actual RUN output, model, GPU or protected ledger changed.
+The initial CPU proposal milestone below changed no canonical source, actual RUN
+output, model, GPU or protected ledger. The later CUDA check is recorded separately.
 
 The RED fixture failed because listen was still denied and the new startup proof
 was absent (12 tests, two expected failures, fixture time0.004s). After the scoped
@@ -32,6 +33,25 @@ pass in3.902046702s. Scoped mypy passed five owned sources in0.471624867s.
 Measured command wall for these four runs totals9.065379068s; the initial missing
 module RED parent was not separately metered. No live resource charge was written.
 
-Root will arrange independent implementation review after its actual CUDA
-experiment. The earlier independent PASS applies only to the guard/proposal
-milestone. No actual004 request, DO, qualification result or source receipt exists.
+Independent Standards and Spec/security implementation reviews of commits
+4405930b and dc864432 found no actionable findings. The fixed baseline remains
+b1b43c58; a2afb5d7 identifies the incremental correction.
+
+## Actual CUDA initialization regression
+
+The user's terminal comparison established that this D6 interpreter initializes
+CUDA without guard006 and fails with guard006. The retained003 trace identifies
+the denied local `listen`. With only that denial removed in guard007, a fresh
+outside-sandbox diagnostic passed `torch.cuda.init()` using PyTorch 2.6.0+cu124.
+The new trace records successful abstract Unix bind/listen and the unchanged
+EPERM for the MPS connection. Guard startup proved one thread, zero inherited
+socket descriptors and no numerical imports before installation.
+
+Parent wall:1.773786115s; child wall:1.514073522s; sampled total GPU memory
+peak:910163968 bytes. No weights or inference were used. Cleanup confirmed no
+owned process or MPS client; the pre-existing idle MPS service was not changed.
+Exact probe, results, trace and cleanup hashes are preserved in
+[the outcome](../depth-D6-guard007-cuda-outcome-001.json).
+
+This demonstrates the initialization fix. No actual004 request, DO, full model
+qualification result or integrated source receipt is claimed.

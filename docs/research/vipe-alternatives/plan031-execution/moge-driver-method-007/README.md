@@ -1,15 +1,22 @@
-# D6 guard007 / qualification004 — REVIEW only
+# D6 guard007 — CUDA initialization fixed
 
-This version preserves method006 and proposes one change: allow `listen` after the
-same pre-import descriptor check. No socket, filter, tracer, native import or
-GPU operation has been run to validate this proposal. CUDA recovery is unproved.
+This version preserves method006 and allows `listen` after the same pre-import
+descriptor check. The actual guarded `torch.cuda.init()` now passes with D6's
+PyTorch 2.6.0+cu124 environment. Qualification004 remains at REVIEW: the diagnostic
+loaded no model weights and does not establish full model readiness.
 
 ## Evidence
 
 Qualification003 finish842 is failed, cleanup confirmed, no surviving owned PID.
 Its trace shows the abstract UNIX `bind` succeeding and the next `listen(16,128)`
 returning EPERM. CUDA initialization still returned error304. The earlier MPS
-`connect` denial remains; neither denial is proven to be the sole cause.
+`connect` denial was also present; that trace alone did not isolate the cause.
+Guard007's fresh trace shows that bind and listen both succeed while the MPS
+connection remains denied. Initialization passed in 1.51 seconds (1.77 seconds
+including supervision), with cleanup confirmed and no surviving owned process.
+The existing idle MPS service was left running; it had no clients before or after.
+See [the preserved diagnostic evidence](../depth-D6-guard007-cuda-outcome-001.json).
+
 The proposal binds the immutable003 finish and trace alongside001/002/diagnostic
 ancestry. Failed attempts are preserved and cannot be reused or reset.
 
@@ -56,5 +63,5 @@ new exact v4 DO. This proposal grants no new attempt.
 
 Changed proposed source closure now contains007/network_guard.py and007/startup.py.
 The v4 worker, authority, dispatcher and protected ledger/admission changes
-join the exact reviewed CPU/source closure. Integration is deferred while
-root's D9/D10 source freezes are protected.
+join the exact reviewed CPU/source closure. Earlier source receipts remain
+historical; future execution requires qualification of the integrated sources.

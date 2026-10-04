@@ -1,0 +1,85 @@
+{
+  "schema": "plan069-D6-guard007-cuda-outcome/v1",
+  "status": "passed",
+  "scope": "CUDA initialization regression check only; not qualification004 or model readiness",
+  "source_commit": "dc8644321f32eba446f056c2df27ba0952579f84",
+  "guard_revision": "007",
+  "network_guard": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/d6-local-listen/docs/research/vipe-alternatives/plan031-execution/moge-driver-method-007/network_guard.py",
+    "sha256": "259db2e8d001f7a8f3ddade6689cafb251ee32745a138b4cfc9a882b94dc4a25",
+    "bytes": 4826
+  },
+  "guard_startup": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/d6-local-listen/docs/research/vipe-alternatives/plan031-execution/moge-driver-method-007/startup.py",
+    "sha256": "452d9e9fce6cccd89edb02dc711891b1b2280af7f346ced7c9b054781f1dcd8a",
+    "bytes": 892
+  },
+  "records": {
+    "probe.py": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/d6-local-listen/.local/guard007-cuda-repro-001/probe.py",
+      "sha256": "9a620ad738b031bd8dca9378a8481bf702c546ca73ed5b95d2d3df9e21d43070",
+      "bytes": 2327
+    },
+    "receipt.json": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/d6-local-listen/.local/guard007-cuda-repro-001/receipt.json",
+      "sha256": "4e908d251f975ba7cb5f2bbafd2c7867d6454ea7428bf2808ecdc54979fa810d",
+      "bytes": 1293
+    },
+    "child-result.json": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/d6-local-listen/.local/guard007-cuda-repro-001/child-result.json",
+      "sha256": "f4faebb3b216e4e5c1c15df27f3a9a45c70b49856bb0aa31998a856231921f61",
+      "bytes": 951
+    },
+    "syscalls.log": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/d6-local-listen/.local/guard007-cuda-repro-001/syscalls.log",
+      "sha256": "19bd8cc0ff2efda2a22091b0684fd0db4a76c0711e906c9d325e93667f49444e",
+      "bytes": 92507
+    },
+    "stdout.log": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/d6-local-listen/.local/guard007-cuda-repro-001/stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "stderr.log": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/d6-local-listen/.local/guard007-cuda-repro-001/stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "cleanup.json": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/d6-local-listen/.local/guard007-cuda-repro-001/cleanup.json",
+      "sha256": "2a929d18c603be7768101aca83930e760757d7c61b2ee00b191400484dff2ab1",
+      "bytes": 163
+    }
+  },
+  "torch_version": "2.6.0+cu124",
+  "torch_cuda_version": "12.4",
+  "guard_startup_proof": {
+    "socket_descriptors": 0,
+    "descriptor_count": 3,
+    "single_thread": true,
+    "numeric_imports": false,
+    "unix_bind_allowed": true,
+    "unix_listen_allowed": true
+  },
+  "parent_elapsed_seconds": 1.7737861150017125,
+  "child_elapsed_seconds": 1.5140735219974886,
+  "peak_total_device_bytes": 910163968,
+  "model_weight_loads": 0,
+  "inference": false,
+  "trace_observations": [
+    "AF_UNIX SOCK_SEQPACKET|SOCK_CLOEXEC socket creation succeeds",
+    "MPS control connection remains denied with EPERM",
+    "abstract cuda-uvmfd bind and listen succeed",
+    "torch.cuda.init completes"
+  ],
+  "cleanup": {
+    "mps_clients_after": "",
+    "gpu_processes_after": [
+      "495223, nvidia-cuda-mps-server"
+    ],
+    "owned_process_group_after": "",
+    "cleanup_confirmed": true
+  },
+  "qualification004_consumed": false,
+  "live_ledger_changed": false
+}
