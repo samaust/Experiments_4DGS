@@ -60,7 +60,7 @@ LIMIT_KEYS = dict(download_bytes='new_download_gib_limit',
                   cpu_seconds='cpu_prepare_score_report_seconds_limit',
                   setup_seconds='setup_wall_seconds_limit')
 LOCAL_COMMON = ('files.py', 'config.py', 'ledger.py', 'depth_admission.py', 'depth_map_allowance.py',
-    'depth_budget_reconciliation.py',
+    'depth_budget_reconciliation.py', 'depth_setup_recovery.py',
     'depth_extension.py', 'depth_clips.py', 'scale.py', 'qualitative_package.py',
     'execution.py', 'supervisor.py', 'budgets.py', 'runtime.py', 'isolation.py',
     'ffmpeg_binding.py', 'transfer_proxy.py', 's1_helper_session.py',
@@ -77,7 +77,7 @@ LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py',
     D8=('depth_authorization.py', 'moge_metric.py', 'depth_metric_scale.py', 'depth_single_run.py', 'depth_single_publish.py', 'native_d8.py', 'depth_native_packages.py', 'depth_source_integrity.py',
         'depth_native_runtime.py', 'depth_environment.py', 'moge_source_build.py', 'runtime_inventory.py',
         'depth_setup.py', 'depth_setup_other.py'),
-    D9=('depth_setup.py', 'contracts.py', 'video_depth.py', 'video_native.py', 'video_setup.py',
+    D9=('video_setup_recovery.py', 'depth_setup.py', 'contracts.py', 'video_depth.py', 'video_native.py', 'video_setup.py',
         'video_environment.py', 'video_setup_budget.py', 'depth_environment.py', 'moge_source_build.py', 'runtime_inventory.py'),
     D10=('depth_setup.py', 'contracts.py', 'video_depth.py', 'video_native.py', 'video_setup.py',
         'video_environment.py', 'video_setup_budget.py', 'depth_environment.py', 'moge_source_build.py', 'runtime_inventory.py'),
@@ -116,6 +116,8 @@ def local_source_records(candidate):
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_single_dispatch.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_single_maps.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_single_publish.py'))
+    if candidate == 'D9':
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_video_setup_recovery.py'))
     if candidate in ('D9', 'D10'):
         records.append(file_record(ROOT / 'scripts/vipe_benchmark/depth_authorization.py'))
         records.append(file_record(ROOT / 'configs/vipe-alternatives/video-environment-v1.json'))
