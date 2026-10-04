@@ -39,6 +39,8 @@ def validate_request(request_record, *, current_sources=None, completed=False):
             proposal.get('creation_exception') == CREATION_EXCEPTION,
             'qualification proposal differs from bounded D6 contract')
     require(proposal.get('setup') == request.get('setup'), 'proposal setup binding differs')
+    require(isinstance(request.get('worker'), dict) and proposal.get('worker') == request['worker'],
+            'exact reviewed qualification worker required')
     require(all(proposal.get(key) == request.get(key) for key in
             ('network_guard', 'strace', 'predecessor_finish', 'diagnostic_finish', 'diagnostic_result', 'diagnostic_trace',
              'creation_exception')), 'exact reviewed recovery lineage/guard required')
@@ -184,17 +186,14 @@ def validate_result(result, request_record, *, cleanup_confirmed):
     return request
 
 
-def qualification_exception(runtime):
+def qualification_exception(runtime, *, events=None, run_root=None):
     """Validate a retained completed exception without granting another attempt."""
     receipt = runtime.get('driver_qualification')
     require(isinstance(receipt, dict), 'D6 GPU-aware qualification receipt missing')
     result = read_json(verify_record(receipt['result'])['path'])
     finish = read_json(verify_record(receipt['finish'])['path'])
-    from .ledger import Ledger
-    from .config import load
-    ledger = Ledger(receipt['ledger_path'], dict(load(), new_download_gib_limit=110,
-                                              new_artifact_disk_gib_limit=210))
-    events = ledger.events()
+    from .depth_driver_qualification import retained_ledger_events
+    events = retained_ledger_events(receipt, events=events, run_root=run_root)
     require(any(event == finish for event in events) and finish.get('event') == 'finish' and
             finish.get('job_id') == JOB and finish.get('status') == 'complete' and
             finish.get('cleanup_confirmed') is True and not finish.get('cleanup_uncertain') and
@@ -203,6 +202,8 @@ def qualification_exception(runtime):
             finish.get('peak', {}).get('device_bytes', float('inf')) <= 2 * 1024**3,
             'accepted driver qualification finish missing')
     request = validate_result(result, receipt['request'], cleanup_confirmed=finish['cleanup_confirmed'])
+    require(request.get('ledger_path') == receipt['ledger_path'],
+            'qualification request and retained ledger path differ')
     check_predecessor(events, request)
     reserves = [event for event in events if event.get('event') == 'reserve' and event.get('job_id') == JOB]
     require(len(reserves) == 1 and reserves[0].get('evidence', {}).get('request') == receipt['request'] and

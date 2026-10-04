@@ -133,17 +133,42 @@ def validate_result(result, request_record, *, cleanup_confirmed):
     return request
 
 
-def qualification_exception(runtime):
+def retained_ledger_events(receipt, *, events=None, run_root=None):
+    """Check a caller's locked snapshot against current bytes without relocking."""
+    import json
+    from .ledger import Ledger
+    from .config import load
+    path = Path(receipt['ledger_path'])
+    if run_root is not None:
+        require(path == path.resolve() and Path(run_root).resolve() == path.parent,
+                'driver qualification ledger differs from exact run root')
+    if events is None:
+        return Ledger(path, dict(load(), new_download_gib_limit=110,
+                                new_artifact_disk_gib_limit=210)).events()
+    require(run_root is not None, 'locked qualification events require exact run root')
+    require(not path.is_symlink() and path.is_file(), 'exact qualification ledger file required')
+    current: list[dict] = []
+    previous = None
+    with path.open('r') as stream:
+        for line in stream:
+            row = json.loads(line)
+            stored = row.pop('event_sha256')
+            require(row['sequence'] == len(current) and row['previous_sha256'] == previous and
+                    object_hash(row) == stored, 'driver qualification ledger hash chain changed')
+            row['event_sha256'] = stored
+            current.append(row)
+            previous = stored
+    require(current == events, 'locked qualification events differ from current ledger')
+    return events
+
+
+def qualification_exception(runtime, *, events=None, run_root=None):
     """Validate a retained completed exception without granting another attempt."""
     receipt = runtime.get('driver_qualification')
     require(isinstance(receipt, dict), 'D6 GPU-aware qualification receipt missing')
     result = read_json(verify_record(receipt['result'])['path'])
     finish = read_json(verify_record(receipt['finish'])['path'])
-    from .ledger import Ledger
-    from .config import load
-    ledger = Ledger(receipt['ledger_path'], dict(load(), new_download_gib_limit=110,
-                                              new_artifact_disk_gib_limit=210))
-    events = ledger.events()
+    events = retained_ledger_events(receipt, events=events, run_root=run_root)
     require(any(event == finish for event in events) and finish.get('event') == 'finish' and
             finish.get('job_id') == JOB and finish.get('status') == 'complete' and
             finish.get('cleanup_confirmed') is True and not finish.get('deadline_exceeded') and
@@ -151,6 +176,8 @@ def qualification_exception(runtime):
             finish.get('peak', {}).get('device_bytes', float('inf')) <= 2 * 1024**3,
             'accepted driver qualification finish missing')
     request = validate_result(result, receipt['request'], cleanup_confirmed=finish['cleanup_confirmed'])
+    require(request.get('ledger_path') == receipt['ledger_path'],
+            'qualification request and retained ledger path differ')
     reserves = [event for event in events if event.get('event') == 'reserve' and event.get('job_id') == JOB]
     require(len(reserves) == 1 and reserves[0].get('evidence', {}).get('request') == receipt['request'] and
             finish.get('result') == receipt['result'] and

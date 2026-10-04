@@ -321,10 +321,10 @@ def review(proposal, *, config, commercial, assets, runtime, live,
             finish = read_json(verify_record(receipt['finish'])['path'])
             if finish.get('job_id') == 'plan069-D6-driver-qualification-002':
                 from .depth_driver_qualification_recovery import qualification_exception as recovery_exception
-                recovery_exception(qualification)
+                recovery_exception(qualification, events=setup_events, run_root=run_root)
             else:
                 from .depth_driver_qualification import qualification_exception
-                qualification_exception(qualification)
+                qualification_exception(qualification, events=setup_events, run_root=run_root)
         except (KeyError, TypeError, ValueError, OSError) as error:
             blockers.append('D6 driver qualification exception invalid: ' + str(error))
     check(approval is not None and
