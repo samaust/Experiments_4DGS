@@ -88,9 +88,18 @@ def run_video_setup(request, output, *, request_path=None, acquire=_acquire,
             not assets[0]['lfs_sha256']):
         raise ValueError('video required-only checkpoint changed')
     allocation = proposal['allocation']
+    pypi_runtime = False
     if proposal.get('runtime_recipe') is not None:
         from .depth_admission import selected_profile_inventory
-        selected_profile_inventory(proposal)
+        from .depth_admission import VIDEO_PYPI_PROFILES
+        pypi_runtime = selected_profile_inventory(proposal) == VIDEO_PYPI_PROFILES
+        if pypi_runtime:
+            from .depth_authorization import execution_authorization
+            exact_review, exact_auth, exact_proposal, _ = execution_authorization(
+                candidate, authorization_path=request['authorization']['path'])
+            if (exact_review != request['review'] or exact_auth != request['authorization'] or
+                    exact_proposal != proposal):
+                raise ValueError('exact approved PyPI video setup amendment required')
         environment = request.get('runtime_environment', {})
         if (environment.get('recipe') != proposal['runtime_recipe'] or
                 environment.get('runtime_profile') != proposal['profile'].get('runtime_profile')):
@@ -99,7 +108,7 @@ def run_video_setup(request, output, *, request_path=None, acquire=_acquire,
         raise ValueError('video runtime profile requires an explicitly amended proposal')
     if (allocation['setup_seconds'] != 2400 or
             allocation['download_bytes'] < assets[0]['bytes'] or
-            allocation['download_bytes'] > 3 * 2**30):
+            (not pypi_runtime and allocation['download_bytes'] > 3 * 2**30)):
         raise ValueError('video setup allocation changed')
     deadline = started + allocation['setup_seconds']
     output = Path(output)

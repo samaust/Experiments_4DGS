@@ -14,6 +14,7 @@ from .files import file_record, object_hash, read_json, verify_record
 INVENTORY = CONFIG.parents[2] / 'docs/specs/plan031-execution/depth-required-assets-v1.json'
 PROFILES = CONFIG.parents[2] / 'docs/specs/plan031-execution/depth-runtime-profiles-v1.json'
 VIDEO_PROFILES = CONFIG.parents[2] / 'docs/specs/plan031-execution/depth-runtime-profiles-video-v2.json'
+VIDEO_PYPI_PROFILES = CONFIG.parents[2] / 'docs/specs/plan031-execution/depth-runtime-profiles-video-v3.json'
 
 
 def selected_profile_inventory(proposal):
@@ -22,24 +23,28 @@ def selected_profile_inventory(proposal):
         if proposal.get('runtime_recipe') is not None:
             raise ValueError('video runtime recipe requires its versioned profile')
         return PROFILES
-    from .video_environment import CU130_RECIPE
+    from .video_environment import CU130_RECIPE, PYPI_RECIPE
+    pairs = ((VIDEO_PROFILES, CU130_RECIPE), (VIDEO_PYPI_PROFILES, PYPI_RECIPE))
+    matches = [(inventory, recipe) for inventory, recipe in pairs
+        if proposal.get("profile_inventory") == file_record(inventory) and
+           proposal.get("runtime_recipe") == file_record(recipe)]
     if (proposal.get('candidate') not in ('D9', 'D10') or
-            proposal.get('profile_inventory') != file_record(VIDEO_PROFILES) or
-            proposal.get('runtime_recipe') != file_record(CU130_RECIPE)):
+            len(matches) != 1):
         raise ValueError('exact video runtime profile inventory required')
+    inventory, recipe = matches[0]
     original = read_json(PROFILES)
-    selected = read_json(VIDEO_PROFILES)
+    selected = read_json(inventory)
     import copy
     restored = copy.deepcopy(selected)
     for candidate in ('D9', 'D10'):
         profile = restored['profiles'][candidate].pop('runtime_profile', None)
-        if profile != read_json(CU130_RECIPE)['runtime_profile']:
+        if profile != read_json(recipe)['runtime_profile']:
             raise ValueError('video runtime profile exception changed')
     if restored != original:
         raise ValueError('video runtime profile changes unrelated frozen settings')
     if proposal.get('profile') != selected['profiles'][proposal['candidate']]:
         raise ValueError('video runtime proposal changes the selected scientific profile')
-    return VIDEO_PROFILES
+    return inventory
 HISTORICAL = ROOT / 'configs/vipe-alternatives/components-v1.json'
 BENCHMARK = ROOT / 'configs/vipe-alternatives/benchmark-v1.json'
 CAP_AMENDMENT = ROOT / 'docs/specs/plan031-execution/depth-cap-amendment-review-001.json'
@@ -114,6 +119,8 @@ def local_source_records(candidate):
         records.append(file_record(ROOT / 'configs/vipe-alternatives/video-environment-v1.json'))
         records.append(file_record(ROOT / 'configs/vipe-alternatives/video-environment-v2.json'))
         records.append(file_record(VIDEO_PROFILES))
+        records.append(file_record(VIDEO_PYPI_PROFILES))
+        records.append(file_record(ROOT / "configs/vipe-alternatives/video-environment-v3.json"))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_setup.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_setup_dispatch.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_actual.py'))
@@ -228,6 +235,15 @@ def review(proposal, *, config, commercial, assets, runtime, live,
     dependencies = evidence(dependency_record,
         'plan069-depth-installed-dependencies/v1',
         'installed dependency closure changed or unverified')
+    if candidate in ('D9', 'D10') and profile_inventory == VIDEO_PYPI_PROFILES:
+        try:
+            from .video_environment import validate_runtime_versions, validate_runtime_observation
+            environment = dict(recipe=proposal['runtime_recipe'], runtime_profile=proposal['profile']['runtime_profile'])
+            validate_runtime_versions(environment, dependencies.get('versions', {}))
+            validate_runtime_observation(environment, dependencies.get('runtime_observation'))
+            check(dependencies.get('runtime_recipe') == proposal['runtime_recipe'], 'PyPI dependency recipe binding changed')
+        except (KeyError, TypeError, ValueError, OSError):
+            check(False, 'actual PyPI video runtime observation required')
     dependency_files = dependencies.get('files')
     dependency_ok = (dependencies.get('candidate') == candidate and
         dependencies.get('source_revision') == candidates[candidate]['code']['revision'] and

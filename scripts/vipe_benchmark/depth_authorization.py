@@ -30,7 +30,8 @@ def execution_authorization(candidate, *, root=ROOT, authorization_path=None):
         raise ValueError('exact approved depth authorization required')
     if authorization_path is not None:
         import copy
-        from .depth_admission import VIDEO_PROFILES, selected_profile_inventory
+        from .depth_admission import VIDEO_PROFILES, VIDEO_PYPI_PROFILES, selected_profile_inventory
+        from .video_environment import PYPI_RECIPE
         prior_record = verify_record(approved['previous_authorization'])
         local_prior = file_record(root / 'docs/research/vipe-alternatives/plan031-execution/depth-approval-001.json')
         if any(prior_record[key] != local_prior[key] for key in ('sha256', 'bytes')):
@@ -39,13 +40,33 @@ def execution_authorization(candidate, *, root=ROOT, authorization_path=None):
         baseline = read_json(verify_record(prior['review'])['path'])
         restored = copy.deepcopy(reviewed)
         original = {row['candidate']: row for row in baseline['proposals']}
+        video_rows = [row for row in reviewed.get('proposals', []) if row.get('candidate') in ('D9', 'D10')]
+        inventories = {selected_profile_inventory(row) for row in video_rows}
+        if len(video_rows) != 2 or len(inventories) != 1:
+            raise ValueError('explicit video runtime amendment requires its new profile for both candidates')
+        pypi = inventories == {VIDEO_PYPI_PROFILES}
+        if pypi:
+            budget_path = ROOT / 'docs/research/vipe-alternatives/plan031-execution/video-pypi-budget-proposal-001/proposal.json'
+            expected_amendment = dict(schema='plan069-video-distribution-budget-approval/v1', status='approved',
+                distribution_approved=True, budget_approved=True, recipe=file_record(PYPI_RECIPE),
+                budget_review=file_record(budget_path))
+            if approved.get('video_amendment') != expected_amendment:
+                raise ValueError('explicit PyPI distribution and exact budget approval required')
+            changes = {row['candidate']: row for row in read_json(budget_path)['changes']}
+            if any(row['allocation'] != changes[row['candidate']]['proposed'] for row in video_rows):
+                raise ValueError('PyPI allocation differs from reviewed exact bounds')
+        elif approved.get('video_amendment') is not None:
+            raise ValueError('indexed runtime amendment cannot select PyPI budgets')
         for proposal in restored.get('proposals', []):
             if proposal.get('candidate') in ('D9', 'D10'):
-                if selected_profile_inventory(proposal) != VIDEO_PROFILES:
+                if selected_profile_inventory(proposal) not in (VIDEO_PROFILES, VIDEO_PYPI_PROFILES):
                     raise ValueError('explicit video runtime amendment requires its new profile')
                 for key in ('profile', 'profile_inventory'):
                     proposal[key] = original[proposal['candidate']][key]
                 proposal.pop('runtime_recipe', None)
+                if pypi:
+                    for key in ('download_bytes', 'artifact_bytes'):
+                        proposal['allocation'][key] -= 4 * 2**30
         if (restored != baseline or approved.get('reset_previous_consumption') is not False or
                 approved.get('cap_amendment') != prior.get('cap_amendment') or
                 approved.get('cap_approval') != prior.get('cap_approval') or

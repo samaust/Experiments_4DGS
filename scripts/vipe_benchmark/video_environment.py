@@ -8,11 +8,12 @@ from .files import file_record, read_json, verify_record
 
 RECIPE = ROOT / 'configs/vipe-alternatives/video-environment-v1.json'
 CU130_RECIPE = ROOT / 'configs/vipe-alternatives/video-environment-v2.json'
+PYPI_RECIPE = ROOT / 'configs/vipe-alternatives/video-environment-v3.json'
 
 
 def selected_recipe(path=None):
     path = RECIPE if path is None else Path(path).absolute()
-    if path not in (RECIPE, CU130_RECIPE):
+    if path not in (RECIPE, CU130_RECIPE, PYPI_RECIPE):
         raise ValueError('exact versioned video recipe required')
     return path
 
@@ -89,3 +90,34 @@ def bind_source_environment(environment, source_dir, revision, *, candidate, rec
     evidence = [file_record(path), file_record(requirements)]
     evidence += [file_record(source_dir / relative) for relative in recipe['fallback_sources']]
     return dict(environment, requirement_sources=evidence)
+
+
+def validate_runtime_observation(environment, observation):
+    """Require actual imported module observations for the distinct PyPI build."""
+    path = selected_recipe(environment['recipe']['path'])
+    if path != PYPI_RECIPE:
+        return
+    recipe = read_json(path)
+    expected = recipe['runtime_observation']
+    if (environment['recipe'] != file_record(path) or
+            environment.get('runtime_profile') != recipe['runtime_profile'] or
+            not isinstance(observation, dict) or
+            observation.get('schema') != 'plan069-video-runtime-observation/v1' or
+            observation.get('record_kind') != 'actual' or
+            observation.get('torch_version') not in expected['torch_versions'] or
+            observation.get('torchvision_version') not in expected['torchvision_versions'] or
+            observation.get('cuda_version') != expected['cuda_version']):
+        raise ValueError('actual PyPI video module and CUDA observation required')
+
+
+def observe_runtime(environment):
+    """Observe imported versions without allocating a CUDA context or loading weights."""
+    if selected_recipe(environment['recipe']['path']) != PYPI_RECIPE:
+        return None
+    import torch
+    import torchvision
+    observation = dict(schema='plan069-video-runtime-observation/v1', record_kind='actual',
+        torch_version=str(torch.__version__), torchvision_version=str(torchvision.__version__),
+        cuda_version=torch.version.cuda)
+    validate_runtime_observation(environment, observation)
+    return observation
