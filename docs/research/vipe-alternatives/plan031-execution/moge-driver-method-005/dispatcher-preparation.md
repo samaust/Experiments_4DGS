@@ -37,3 +37,23 @@ both executables. Standards and Spec reviews have no unresolved findings after
 correcting the per-attempt cache/log accounting gap. Private immutable command
 captures retain all failed and passing validation attempts. No actual driver,
 model, GPU, installation, network or production ledger operation was performed.
+
+## Stable syscall trace envelope
+
+Qualification002 uses the exact diagnostic001 strace executable and filters,
+checked by the independent authority. The worker writes `worker-result.json`
+and its expected trace path. After tracer exit and supervisor child checks,
+the dispatcher validates and publishes `result.json` with exact raw worker
+and stable trace records. The protected clean finish binds this envelope.
+A failed clean attempt retains a trace record without a passing result;
+uncertain cleanup retains the raw trace without claiming stable acceptance.
+Freshness and artifact checks include both syscall trace and retained receipt.
+
+Thirteen focused preparation cases and ten real authority cases pass together
+(23 total), including a private fixture ledger through the public envelope
+boundary with the real request/result validators. The final type check passes
+for both executables. Independent Standards and Spec reviews have no remaining
+actionable findings. Four separate trace-follow-up command captures measure
+3.010930487002043 seconds; these exclude the previously reported baseline
+inventory and all actual execution. No actual strace, driver, model, GPU,
+installation, network or production ledger operation was performed.

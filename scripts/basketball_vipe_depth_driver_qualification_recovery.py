@@ -20,11 +20,26 @@ def owned_artifact_bytes(output):
     for directory in (output,output.with_name(output.name+'-temporary')):
         if directory.is_symlink():raise ValueError('qualification artifact directory is a symlink')
         if directory.exists():total+=directory_bytes(directory)
-    log=output.with_suffix('.log')
-    if log.is_symlink():raise ValueError('qualification supervisor log is a symlink')
-    if log.exists():
-        info=log.stat();total+=max(info.st_size,info.st_blocks*512)
+    for log in (output.with_suffix('.log'),output.with_suffix('.syscalls.log'),output.with_suffix('.trace-record.json')):
+        if log.is_symlink():raise ValueError('qualification supervisor artifact is a symlink')
+        if log.exists():
+            info=log.stat();total+=max(info.st_size,info.st_blocks*512)
     return total
+
+
+def publish_result_envelope(out,record,proposal,validate_result):
+    """Bind exited-tracer bytes to the immutable worker result, before finish."""
+    trace=out.with_suffix('.syscalls.log')
+    worker_record=file_record(out/'worker-result.json')
+    result=read_json(worker_record['path'])
+    if result.get('trace_path')!=str(trace) or trace.is_symlink() or not trace.is_file():
+        raise ValueError('exact qualification syscall trace required')
+    result=dict(result,worker_result=worker_record,trace=file_record(trace))
+    validate_result(result,record,cleanup_confirmed=True)
+    if owned_artifact_bytes(out)>proposal['artifact_bytes']-TERMINAL_HEADROOM:
+        raise ValueError('qualification envelope headroom exhausted')
+    write_json(out/'result.json',result)
+    return result
 
 
 def dispatch(request_path):
@@ -40,7 +55,9 @@ def dispatch(request_path):
     if request['record_kind']!='actual':
         raise ValueError('fixture cannot dispatch actual GPU qualification')
     root=Path(request['ledger_path']).resolve().parent;output=Path(request['output']).absolute()
-    if (output!=root/'jobs'/JOB or output!=output.resolve() or output.exists() or
+    trace=output.with_suffix('.syscalls.log');trace_receipt=output.with_suffix('.trace-record.json')
+    if (trace.exists() or trace.is_symlink() or trace_receipt.exists() or trace_receipt.is_symlink() or
+            output!=root/'jobs'/JOB or output!=output.resolve() or output.exists() or
             output.is_symlink() or output.with_suffix('.log').exists() or output.with_suffix('.log').is_symlink() or
             output.with_name(output.name+'-temporary').exists() or output.with_name(output.name+'-temporary').is_symlink()):
         raise ValueError('fresh owned output and supervisor log required')
@@ -57,12 +74,22 @@ def dispatch(request_path):
             raise ValueError('driver qualification artifact cap exceeded')
         return reading
     def accept(out):
-        # Field validation here; only the supervisor's real finish proves cleanup.
-        validate_result(read_json(out/'result.json'),record,cleanup_confirmed=True)
+        # Called only after tracer exit and supervisor child-survival checks.
+        publish_result_envelope(out,record,proposal,validate_result)
         return dict(status='passed',scope='GPU driver import; two strict CPU loads; no inference')
     ledger.authorize_depth_driver_qualification_recovery(record)
-    supervise(ledger,JOB,request['command'],output,evidence=dict(request=record),sample_resources=sample,
-        validate_result=accept,poll_seconds=.5,cpu_workers_limit=7,seconds_limit=180,cleanup_reserve_seconds=30)
+    try:
+        supervise(ledger,JOB,request['command'],output,evidence=dict(request=record),sample_resources=sample,
+            validate_result=accept,poll_seconds=.5,cpu_workers_limit=7,seconds_limit=180,cleanup_reserve_seconds=30)
+    except BaseException:
+        finish=ledger.states().get(JOB,{})
+        if (finish.get('event')=='finish' and finish.get('cleanup_confirmed') is True and
+                finish.get('cleanup_uncertain') is False and finish.get('surviving_pids')==[] and
+                trace.is_file() and not trace.is_symlink()):
+            # Retention only: a failed finish can never promote this trace.
+            if owned_artifact_bytes(output)<=proposal['artifact_bytes']-TERMINAL_HEADROOM:
+                write_json(trace_receipt,file_record(trace))
+        raise
     states=ledger.states();finish=states.get(JOB,{})
     if (finish.get('event')!='finish' or finish.get('status')!='complete' or
             finish.get('result')!=file_record(output/'result.json') or finish.get('cleanup_confirmed') is not True or

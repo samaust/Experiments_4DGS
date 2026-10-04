@@ -25,7 +25,7 @@ class RecoveryQualificationDispatchTests(unittest.TestCase):
         self.validator=Mock(return_value=(self.request,self.proposal));self.result_validator=Mock()
         self.authority=SimpleNamespace(JOB=JOB,validate_request=self.validator,validate_result=self.result_validator)
         self.states={};self.ledger=Mock();self.ledger.states.side_effect=lambda:self.states
-        self.extra_log_bytes=0;self.finish_changes={};self.sampler=Mock(return_value=dict(device_bytes=0,gpu_pids=[],download_bytes=0,artifact_bytes=0))
+        self.extra_log_bytes=0;self.worker_failure=False;self.finish_changes={};self.sampler=Mock(return_value=dict(device_bytes=0,gpu_pids=[],download_bytes=0,artifact_bytes=0))
         spec=importlib.util.spec_from_file_location('driver_recovery_dispatch',ROOT/'scripts/basketball_vipe_depth_driver_qualification_recovery.py')
         self.module=importlib.util.module_from_spec(spec);spec.loader.exec_module(self.module)
 
@@ -37,7 +37,11 @@ class RecoveryQualificationDispatchTests(unittest.TestCase):
         if self.extra_log_bytes:
             output.parent.mkdir(parents=True,exist_ok=True);output.with_suffix('.log').write_bytes(b'x'*self.extra_log_bytes)
         kwargs['sample_resources']()
-        output.mkdir(parents=True);write_json(output/'result.json',{'fixture_only':True})
+        output.mkdir(parents=True);output.with_suffix('.syscalls.log').write_text('fixture traced syscall')
+        write_json(output/'worker-result.json',{'fixture_only':True,'trace_path':str(output.with_suffix('.syscalls.log'))})
+        if self.worker_failure:
+            self.states[JOB]=dict(event='finish',status='failed',cleanup_confirmed=True,cleanup_uncertain=False,surviving_pids=[])
+            raise RuntimeError('fixture worker failed')
         kwargs['validate_result'](output)
         finish=dict(event='finish',status='complete',result=file_record(output/'result.json'),cleanup_confirmed=True,
             cleanup_uncertain=False,surviving_pids=[],deadline_exceeded=False)
@@ -57,6 +61,17 @@ class RecoveryQualificationDispatchTests(unittest.TestCase):
         self.ledger.authorize_depth_driver_qualification_recovery.assert_called_once_with(self.record)
         self.assertTrue((self.output/'finish.json').exists())
         self.assertEqual(self.result_validator.call_count,2)
+        from vipe_benchmark.files import read_json
+        result=read_json(self.output/'result.json')
+        self.assertEqual(result['trace'],file_record(self.output.with_suffix('.syscalls.log')))
+        self.assertEqual(result['worker_result'],file_record(self.output/'worker-result.json'))
+
+    def test_failed_clean_worker_retains_trace_without_passing_envelope(self):
+        self.worker_failure=True
+        with self.assertRaisesRegex(RuntimeError,'worker failed'):self.dispatch()
+        from vipe_benchmark.files import read_json
+        self.assertFalse((self.output/'result.json').exists())
+        self.assertEqual(read_json(self.output.with_suffix('.trace-record.json')),file_record(self.output.with_suffix('.syscalls.log')))
 
     def test_fixture_or_active_attempt_is_rejected_before_authorization(self):
         self.request['record_kind']='fixture'
@@ -134,3 +149,26 @@ class QualificationOwnedArtifactTests(unittest.TestCase):
             output.with_suffix('.log').write_bytes(b'z'*300)
             self.assertGreaterEqual(module.owned_artifact_bytes(output),600)
             self.assertGreater(module.owned_artifact_bytes(output),module.owned_artifact_bytes(output/'absent'))
+
+
+class RealRecoveryEnvelopeContractTests(unittest.TestCase):
+    def test_dispatcher_envelope_matches_real_authority_result_contract(self):
+        from test_vipe_benchmark_depth_driver_qualification_recovery import fixture
+        from test_vipe_benchmark_depth_driver_qualification import result_fixture
+        from vipe_benchmark.depth_driver_qualification_recovery import validate_request,validate_result
+        from vipe_benchmark.files import read_json
+        spec=importlib.util.spec_from_file_location('real_envelope_contract',ROOT/'scripts/basketball_vipe_depth_driver_qualification_recovery.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as directory:
+            ledger,record,request,sources,live=fixture(Path(directory))
+            _,proposal=validate_request(record,current_sources=sources)
+            raw=result_fixture(record,request,sources)
+            out=Path(request['output']);trace=out.with_suffix('.syscalls.log');trace.write_text('completed fixture syscall trace')
+            raw.update(schema='plan069-D6-driver-qualification-result/v2',network_guard=request['network_guard'],
+                creation_exception=request['creation_exception'],trace_path=str(trace))
+            write_json(out/'worker-result.json',raw)
+            result=module.publish_result_envelope(out,record,proposal,validate_result)
+            self.assertEqual(read_json(out/'result.json'),result)
+            self.assertEqual(result['trace'],file_record(trace))
+            self.assertEqual(result['worker_result'],file_record(out/'worker-result.json'))
+            validate_result(result,record,cleanup_confirmed=True)

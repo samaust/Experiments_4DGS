@@ -243,7 +243,8 @@ def driver_child(args):
     require(record(args.setup) == setup_record and record(args.setup_request) == request_record,
             'setup records changed during qualification')
     require(torch.cuda.max_memory_allocated() == 0, 'qualification allocated GPU model/tensor memory')
-    write(out / 'result.json', dict(schema='plan069-D6-driver-qualification-result/v2',
+    write(out / 'worker-result.json', dict(schema='plan069-D6-driver-qualification-result/v2',
+        trace_path=str(out.with_suffix('.syscalls.log')),
         network_guard=network_guard, creation_exception=CREATION_EXCEPTION,
         qualification_kind=KIND, request=qualification_request_record, method=record(__file__),
         all_parameters_cpu=True, all_buffers_cpu=True, gpu_model_load='not_performed',
