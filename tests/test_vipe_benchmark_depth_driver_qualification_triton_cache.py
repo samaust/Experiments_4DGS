@@ -265,3 +265,47 @@ class QualificationTritonCacheRebindTests(unittest.TestCase):
   self.assertIn("require(JOB == 'plan069-D6-driver-qualification-008'",source)
   guard=lambda n:(ROOT/f'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-0{n}/network_guard.py').read_bytes()
   self.assertEqual(guard(11),guard('07'))
+
+
+
+class QualificationReplacementSetupTests(unittest.TestCase):
+ def test_009_is_the_only_attempt_that_switches_setup(self):
+  from vipe_benchmark.depth_driver_qualification_triton_cache import ATTEMPTS
+  row=ATTEMPTS['plan069-D6-driver-qualification-009']
+  self.assertEqual((row['method'],row['previous'],row['previous_status'],row['replaced_setup_job']),
+                   ('moge-driver-method-012','plan069-D6-driver-qualification-008','complete','plan069-D6-setup-recovery-002'))
+  self.assertEqual([job for job,attempt in ATTEMPTS.items() if attempt.get('replaced_setup_job')],['plan069-D6-driver-qualification-009'])
+ def test_replacement_setup_must_be_the_accepted_replacement_of_the_retained_setup(self):
+  from vipe_benchmark.depth_driver_qualification_triton_cache import _require_replacement_setup
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d).resolve();(root/'jobs/plan069-D6-setup-recovery-002').mkdir(parents=True)
+   setup=dict(path=str(root/'jobs/plan069-D6-setup-recovery-002/result.json'));original=dict(path='original')
+   lineage=dict(original=dict(setup=original),request=dict(path='rr'),review=dict(path='rv'))
+   request=dict(ledger_path=str(root/'ledger.jsonl'),setup=setup,setup_request=lineage['request'],setup_dispatch=lineage['review'])
+   with patch('vipe_benchmark.depth_moge_runtime_replacement.accepted_setup_lineage',return_value=lineage):
+    _require_replacement_setup(request,dict(setup=original),'plan069-D6-setup-recovery-002',[])
+    for changed,retained in ((dict(request,setup_dispatch=dict(path='other')),dict(setup=original)),(request,dict(setup=dict(path='foreign'))),
+                             (dict(request,setup=dict(path=str(root/'jobs/plan069-D6-setup-001/result.json'))),dict(setup=original))):
+     with self.subTest(changed=changed),self.assertRaisesRegex(ValueError,'runtime replacement'):
+      _require_replacement_setup(changed,retained,'plan069-D6-setup-recovery-002',[])
+ def test_method012_binds_recovered_setup_and_libcuda_path(self):
+  import importlib.util
+  from vipe_benchmark.config import ROOT
+  path=ROOT/'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-012/producer.py'
+  source=path.read_text()
+  self.assertIn("require(JOB == 'plan069-D6-driver-qualification-009'",source)
+  self.assertIn("'plan069-depth-setup-recovery-result/v1'",source)
+  self.assertNotIn("dispatched.get('schema') == 'plan069-depth-setup-dispatch/v1'",source)
+  spec=importlib.util.spec_from_file_location('method012',path);module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+  output=Path('/run/jobs/plan069-D6-driver-qualification-009');temporary='/run/jobs/plan069-D6-driver-qualification-009-temporary/'
+  env={name:temporary+folder for name,folder in module.SUPERVISED_TRITON}
+  module.select_triton_cache(env,output,dict(cache_directory='/bound',libcuda_path='/usr/lib/x86_64-linux-gnu'))
+  self.assertEqual((env['TRITON_CACHE_DIR'],env['TRITON_LIBCUDA_PATH']),('/bound','/usr/lib/x86_64-linux-gnu'))
+  with self.assertRaisesRegex(ValueError,'bound libcuda directory required'):
+   module.select_triton_cache({name:temporary+folder for name,folder in module.SUPERVISED_TRITON},output,dict(cache_directory='/bound'))
+  guard=lambda n:(ROOT/f'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-0{n}/network_guard.py').read_bytes()
+  self.assertEqual(guard(12),guard('07'))
+ def test_attempt_runtime_pins_the_helper_cache_schema(self):
+  import inspect
+  from vipe_benchmark import depth_driver_qualification_triton_cache as module
+  self.assertIn("(SCHEMA_V2 if attempt.get('replaced_setup_job') else SCHEMA)",inspect.getsource(module.validate_request))

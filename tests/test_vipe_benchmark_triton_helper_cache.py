@@ -1,11 +1,12 @@
 """Prebuilt Triton helper cache binding; fixtures compile and import nothing."""
+import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from vipe_benchmark.files import file_record, write_json
+from vipe_benchmark.files import file_record, read_json, write_json
 from vipe_benchmark.triton_helper_cache import SCHEMA, build, cache_directory_name, cache_key, manifest, validate_binding
 
 
@@ -114,6 +115,57 @@ class TritonHelperCacheTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'fresh'):
                     build(root / 'cache', root / 'out')
             self.assertFalse((root / 'out').exists())
+
+
+
+class TritonHelperCacheV2Tests(unittest.TestCase):
+    def fixture(self, root):
+        from vipe_benchmark import triton_helper_cache as cache
+        triton, _, _, _ = fixture(root)
+        libcuda_dir = root / 'lib'
+        libcuda_dir.mkdir()
+        (libcuda_dir / 'libcuda.so.595').write_bytes(b'libcuda fixture')
+        os.symlink('libcuda.so.595', libcuda_dir / 'libcuda.so.1')
+        store = root / 'cache3'
+        (store / 'KEYDIR').mkdir(parents=True)
+        (store / 'KEYDIR' / 'cuda_utils.cpython-311-x86_64-linux-gnu.so').write_bytes(b'\x7fELF v2')
+        receipt = root / 'receipt-v2.json'
+        write_json(receipt, dict(schema='plan069-triton-helper-build/v2', libcuda_path=str(libcuda_dir),
+                                 gpu_operations=False, triton_version='3.2.0'))
+        binding = dict(schema=cache.SCHEMA_V2, status='built', helper='cuda_utils', cache_directory=str(store),
+                       triton_version='3.2.0', driver_source=file_record(triton / 'backends/nvidia/driver.c'),
+                       libcuda_path=str(libcuda_dir), libcuda=file_record(libcuda_dir / 'libcuda.so.1'),
+                       helper_file='cuda_utils.cpython-311-x86_64-linux-gnu.so', manifest=manifest(store),
+                       build_receipt=file_record(receipt))
+        write_json(root / 'binding-v2.json', binding)
+        return cache, triton, store, file_record(root / 'binding-v2.json')
+
+    def test_v2_binding_validates_and_rejects_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            cache, triton, store, record = self.fixture(root)
+            with patch.object(cache, 'LIBCUDA_DIRECTORY', str(root / 'lib')):
+                self.assertEqual(validate_binding(record, triton_directory=triton)['schema'], cache.SCHEMA_V2)
+                (store / 'OTHER').mkdir()
+                with self.assertRaisesRegex(ValueError, 'contents changed'):
+                    validate_binding(record, triton_directory=triton)
+                (store / 'OTHER').rmdir()
+                (root / 'lib/libcuda.so.595').write_bytes(b'new driver')
+                with self.assertRaises(ValueError):
+                    validate_binding(record, triton_directory=triton)
+            with self.assertRaisesRegex(ValueError, 'v2 helper cache binding'):
+                validate_binding(record, triton_directory=triton)
+
+    def test_v2_binding_requires_a_recorded_triton_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            cache, triton, store, record = self.fixture(root)
+            binding = read_json(record['path'])
+            binding['triton_version'] = None
+            Path(record['path']).write_text(json.dumps(binding))
+            with patch.object(cache, 'LIBCUDA_DIRECTORY', str(root / 'lib')), \
+                    self.assertRaisesRegex(ValueError, 'v2 helper cache binding'):
+                validate_binding(file_record(record['path']))
 
 
 if __name__ == '__main__':

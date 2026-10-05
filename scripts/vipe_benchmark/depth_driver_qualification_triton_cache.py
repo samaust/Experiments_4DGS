@@ -26,6 +26,15 @@ ATTEMPTS = {
                        'fifth_predecessor_finish', 'fifth_predecessor_trace',
                        'sixth_predecessor_finish', 'sixth_predecessor_trace',
                        'seventh_predecessor_finish', 'seventh_predecessor_trace')),
+    # First attempt on the approved replacement runtime: the only attempt allowed to change setup.
+    'plan069-D6-driver-qualification-009': dict(method='moge-driver-method-012',
+              previous='plan069-D6-driver-qualification-008', previous_status='complete',
+              replaced_setup_job='plan069-D6-setup-recovery-002',
+              lineage=('fourth_predecessor_finish', 'fourth_predecessor_trace',
+                       'fifth_predecessor_finish', 'fifth_predecessor_trace',
+                       'sixth_predecessor_finish', 'sixth_predecessor_trace',
+                       'seventh_predecessor_finish', 'seventh_predecessor_trace',
+                       'eighth_predecessor_finish', 'eighth_predecessor_trace')),
 }
 BASE_LINEAGE = ('predecessor_finish', 'diagnostic_finish', 'diagnostic_result', 'diagnostic_trace',
                 'second_predecessor_finish', 'second_predecessor_trace', 'third_predecessor_finish',
@@ -75,8 +84,11 @@ def validate_request(request_record, *, current_sources=None, completed=False):
     for key in lineage + ('triton_cache', 'guard_startup'):
         verify_record(request[key])
     if not completed:
-        from .triton_helper_cache import validate_binding
+        from .triton_helper_cache import SCHEMA, SCHEMA_V2, validate_binding
         binding = validate_binding(request['triton_cache'])
+        # Only the runtime-replacing attempt runs Triton >= 3.3, which needs the bound libcuda (v2).
+        require(binding.get('schema') == (SCHEMA_V2 if attempt.get('replaced_setup_job') else SCHEMA),
+                'Triton helper cache schema differs from the attempt runtime')
         built = read_json(verify_record(binding['build_receipt'])['path'])
         require(built.get('python') == request.get('interpreter_invocation') and built.get('gpu_operations') is False,
                 'Triton helper must be built CPU-only by the qualification interpreter')
@@ -318,9 +330,24 @@ def _check_previous_triton_attempt(events, request):
     retained, _ = validate_request(grants[0]['request'], completed=True)
     require(retained['job_id'] == previous, 'previous Triton-cache grant names a different attempt')
     check_predecessor(events, retained)
+    replaced = ATTEMPTS[request['job_id']].get('replaced_setup_job')
+    if replaced is not None:
+        _require_replacement_setup(request, retained, replaced, events)
     require(all(retained[key] == request[key] for key in
-            ('setup', 'strace') + BASE_LINEAGE + ATTEMPTS[previous]['lineage']) and
+            (() if replaced is not None else ('setup',)) + ('strace',) + BASE_LINEAGE + ATTEMPTS[previous]['lineage']) and
             reserves[0].get('command') == retained['command'], 'previous Triton-cache retained lineage differs')
     trace = verify_record(request[trace_key])
     require(trace['path'] == str(Path(retained['output']).with_suffix('.syscalls.log')),
             'exact retained previous Triton-cache qualification trace required')
+
+
+def _require_replacement_setup(request, retained, replaced_job, events):
+    """The new setup is the accepted approved runtime replacement of the retained original setup."""
+    from .depth_moge_runtime_replacement import accepted_setup_lineage
+    root = Path(request['ledger_path']).resolve().parent
+    require(Path(request['setup']['path']) == root / 'jobs' / replaced_job / 'result.json',
+            'exact accepted runtime replacement setup required')
+    lineage = accepted_setup_lineage(request['setup'], events, root)
+    require(lineage['original']['setup'] == retained['setup'] and
+            request.get('setup_request') == lineage['request'] and request.get('setup_dispatch') == lineage['review'],
+            'runtime replacement does not replace the retained qualification setup')
