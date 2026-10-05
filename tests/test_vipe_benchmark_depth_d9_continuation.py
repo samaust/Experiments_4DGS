@@ -1,5 +1,6 @@
 """CPU request and protected transaction boundaries for grant851 continuation."""
 import copy
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -18,7 +19,7 @@ class D9ContinuationTests(unittest.TestCase):
         Host GPU sampling is replaced at its system boundary; no model executes.
         """
         from vipe_benchmark.depth_admission import local_source_records
-        from vipe_benchmark.depth_d9_continuation import JOB, GRANT_SHA256, SCHEMA
+        from vipe_benchmark.depth_d9_continuation import JOB, GRANT_SHA256, SCHEMA, EVENT as JOB_CONTINUED
         from vipe_benchmark.video_depth import admitted_video_request, video_slot_guard
         from vipe_benchmark.config import ROOT
         from vipe_benchmark import files
@@ -27,6 +28,10 @@ class D9ContinuationTests(unittest.TestCase):
         ledger_path = run_root / 'ledger.jsonl'
         if not ledger_path.is_file():
             self.skipTest('the run-specific immutable grant851 ancestry is unavailable')
+        if any(json.loads(line).get('event') == JOB_CONTINUED for line in ledger_path.read_text().splitlines()):
+            # This rehearses the then-unstarted grant851 against the live run directory.
+            # The real continuation (ledger 877-882) now supersedes it with actual evidence.
+            self.skipTest('grant851 was actually continued; the live run is no longer unstarted')
         config = dict(load(), new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
