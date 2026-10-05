@@ -334,7 +334,7 @@ def run_runtime_replacement(request, output, *, request_path):
         metadata_files = _metadata_growth(cache_before, _cache_inventory(run_root))
         received = 0
         from .depth_map_allowance import owned_slot_bytes, slot_allocation
-        owned = owned_slot_bytes(run_root, CANDIDATE, recovery_lineage=dict(job_id=job, failed_recoveries=[]))
+        owned = owned_slot_bytes(run_root, CANDIDATE, recovery_lineage=dict(job_id=job, failed_recoveries=normalized['failed_recoveries']))
         _require(owned <= slot_allocation(normalized['map_proposal'])['artifact_bytes'],
                  'runtime replacement exceeds the amended D6 whole-slot artifact allocation')
         result = dict(schema=RECOVERY_CANDIDATES[CANDIDATE]['result_schemas'][job], status='complete', kind=KIND,

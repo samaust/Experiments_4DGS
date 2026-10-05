@@ -479,6 +479,30 @@ class WholeSlotBudgetTests(unittest.TestCase):
             self.assertLess(owned_slot_bytes(root,'D11'),directory_bytes(root/'jobs'))
 
 
+    def test_table_recovery_union_shares_inodes_with_its_exact_failed_predecessors(self):
+        import os
+        import tempfile
+        from vipe_benchmark.depth_map_allowance import owned_slot_bytes
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            jobs = root/'jobs'
+            for name in ('setup-001','setup-recovery-001','setup-recovery-002'):
+                (jobs/('plan069-D6-'+name)).mkdir(parents=True)
+            (jobs/'plan069-D6-setup-001/model.pt').write_bytes(b'm'*2**20)
+            for name in ('setup-recovery-001','setup-recovery-002'):
+                os.link(jobs/'plan069-D6-setup-001/model.pt',jobs/('plan069-D6-'+name)/'model.pt')
+            failed = [dict(job_id='plan069-D6-setup-recovery-001')]
+            united = owned_slot_bytes(root,'D6',recovery_lineage=dict(
+                job_id='plan069-D6-setup-recovery-002',failed_recoveries=failed))
+            self.assertLess(united,2*2**20)
+            self.assertGreater(owned_slot_bytes(root,'D6'),2*2**20)
+            for lineage in (dict(job_id='plan069-D6-setup-recovery-002'),
+                            dict(job_id='plan069-D6-setup-recovery-002',failed_recoveries=failed*2),
+                            dict(job_id='plan069-D6-setup-recovery-001',failed_recoveries=failed)):
+                with self.subTest(lineage=lineage), self.assertRaisesRegex(ValueError,'exact approved recovery union'):
+                    owned_slot_bytes(root,'D6',recovery_lineage=lineage)
+
+
     def test_late_cpu_diagnostics_reject_new_downloads_without_charging_other_jobs(self):
         import tempfile
         from types import SimpleNamespace
