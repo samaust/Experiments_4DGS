@@ -131,7 +131,7 @@ def validate_recovery_request(request_record, events, run_root, *, require_reser
              proposal.get('max_attempts') == 1 and
              approval.get('schema') == 'plan069-depth-user-authorization/v1' and
              approval.get('status') == 'DO' and approval.get('review') == review_record and
-             approval.get('setup_recovery_approval') == dict(candidate=CANDIDATE,job_id=job_id,
+             approval.get(RECOVERY_CANDIDATES[CANDIDATE]['approval_field']) == dict(candidate=CANDIDATE,job_id=job_id,
                  status='approved',max_attempts=1,proposal_sha256=object_hash(proposal)),
              'explicit separately approved one-attempt recovery required')
     maps = [row for row in review.get('proposals', []) if row.get('candidate') == CANDIDATE]

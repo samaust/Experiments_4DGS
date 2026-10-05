@@ -102,6 +102,8 @@ def _live_events(ledger_path, current_events):
             fcntl.flock(stream, fcntl.LOCK_SH)
             data = stream.read()
         return data, checked_events(data)
+    if not ledger_path.is_file():
+        raise ValueError('locked current qualification ledger missing')
     data = ledger_path.read_bytes()
     events = checked_events(data)
     if events != current_events:

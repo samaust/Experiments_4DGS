@@ -5,22 +5,8 @@ its ordered recovery jobs and their result schemas. Setup-specific evidence
 (byte checkpoints, runtime recipes, media tools) stays in that candidate's own
 profile module; this core only proves which attempts happened and how they ended.
 """
-from typing import TypedDict
+from .setup_recovery_candidates import RECOVERY_CANDIDATES
 
-
-class RecoveryCandidate(TypedDict):
-    original_job: str
-    jobs: tuple[str, ...]
-    result_schemas: dict[str, str]
-
-
-RECOVERY_CANDIDATES: dict[str, RecoveryCandidate] = {
-    'D9': RecoveryCandidate(
-        original_job='plan069-D9-setup-001',
-        jobs=('plan069-D9-setup-recovery-001', 'plan069-D9-setup-recovery-002'),
-        result_schemas={'plan069-D9-setup-recovery-001': 'plan069-video-setup-recovery-result/v1',
-                        'plan069-D9-setup-recovery-002': 'plan069-video-setup-recovery-result/v2'}),
-}
 RECOVERY_EVENT = 'depth_setup_recovery_authorized'
 CLEAN_FINISH = dict(cleanup_confirmed=True, cleanup_uncertain=False, surviving_pids=[],
                     deadline_exceeded=False)
@@ -87,3 +73,22 @@ def completed_recovery(candidate, job_id, setup_record, events):
              finish.get('status') == 'complete' and finish.get('result') == setup_record and
              _clean(finish), 'clean independently authorized recovery completion required')
     return dict(grant=grant, reserve=reserve, finish=finish)
+
+
+def owned_active_attempt(candidate, events, active_map_admission):
+    """Return the only tolerated active attempt, or None when nothing is active.
+
+    While a recovery lineage is checked, the sole permitted live reservation is
+    the candidate's own GPU maps attempt bound to the supplied admission record.
+    """
+    active = [row for row in events if row.get('event') == 'reserve' and not any(
+        end.get('event') in ('finish', 'account') and end.get('job_id') == row.get('job_id') and
+        end['sequence'] > row['sequence'] for end in events)]
+    if not active:
+        return None
+    _require(active_map_admission is not None and len(active) == 1 and
+             active[0].get('job_id') == RECOVERY_CANDIDATES[candidate]['maps_job'] and
+             active[0].get('resource') == 'gpu' and
+             active[0].get('evidence', {}).get('admission') == active_map_admission,
+             'active attempt prevents accepted recovery lineage')
+    return active[0]

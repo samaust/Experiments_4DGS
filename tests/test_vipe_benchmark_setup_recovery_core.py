@@ -18,7 +18,8 @@ def ledger(*rows):
 
 CLEAN = dict(cleanup_confirmed=True, cleanup_uncertain=False, surviving_pids=[], deadline_exceeded=False)
 FIXTURE = dict(original_job='plan069-DX-setup-001', jobs=('plan069-DX-setup-recovery-001',),
-               result_schemas={'plan069-DX-setup-recovery-001': 'plan069-DX-recovery-result/v1'})
+               result_schemas={'plan069-DX-setup-recovery-001': 'plan069-DX-recovery-result/v1'},
+               maps_job='plan069-DX-maps-001', approval_field='setup_recovery_approval')
 
 
 class SetupRecoveryCoreTests(unittest.TestCase):
@@ -40,7 +41,27 @@ class SetupRecoveryCoreTests(unittest.TestCase):
             original_job='plan069-D9-setup-001',
             jobs=('plan069-D9-setup-recovery-001', 'plan069-D9-setup-recovery-002'),
             result_schemas={'plan069-D9-setup-recovery-001': 'plan069-video-setup-recovery-result/v1',
-                            'plan069-D9-setup-recovery-002': 'plan069-video-setup-recovery-result/v2'}))
+                            'plan069-D9-setup-recovery-002': 'plan069-video-setup-recovery-result/v2'},
+            maps_job='plan069-D9-maps-001', approval_field='setup_recovery_approval'))
+
+    def test_shared_core_names_no_candidate(self):
+        import inspect
+        source = inspect.getsource(self.core)
+        self.assertNotRegex(source, r"'D[0-9]+'|plan069-D[0-9]")
+
+    def test_only_the_candidates_own_admitted_maps_attempt_may_be_active(self):
+        admission = dict(path='/run/requests/plan069-DX-maps-001-admission.json', sha256='b' * 64, bytes=1)
+        quiet = ledger(dict(event='reserve', job_id='other', resource='cpu'),
+                       dict(event='finish', job_id='other', resource='cpu', status='complete'))
+        self.assertIsNone(self.core.owned_active_attempt('DX', quiet, admission))
+        owned = ledger(dict(event='reserve', job_id='plan069-DX-maps-001', resource='gpu',
+                            evidence=dict(admission=admission)))
+        self.assertEqual(self.core.owned_active_attempt('DX', owned, admission), owned[0])
+        for events, active in ((owned, None), (owned, dict(admission, sha256='c' * 64)),
+                               (ledger(dict(event='reserve', job_id='plan069-D9-maps-001', resource='gpu',
+                                            evidence=dict(admission=admission))), admission)):
+            with self.subTest(active=active), self.assertRaisesRegex(ValueError, 'active attempt'):
+                self.core.owned_active_attempt('DX', events, active)
 
     def test_jobs_route_to_their_candidate_only(self):
         self.assertEqual(self.core.candidate_for_job('plan069-DX-setup-recovery-001'), 'DX')

@@ -297,6 +297,12 @@ class FrameAuthorityTests(unittest.TestCase):
         bound,prefix,_,rows=self.stale_bound_with_successor()
         with self.assertRaisesRegex(ValueError,'locked current'):
             validate_D9_prerequisite(bound,ledger_prefix=prefix,current_events=rows[:-1],allow_owned_active=False)
+    def test_caller_locked_events_without_a_ledger_are_rejected(self):
+        from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
+        bound,prefix,_,rows=self.stale_bound_with_successor()
+        (self.root/'ledger.jsonl').unlink()
+        with self.assertRaisesRegex(ValueError,'ledger'):
+            validate_D9_prerequisite(bound,ledger_prefix=prefix,current_events=rows,allow_owned_active=False)
     def test_malformed_charge_rows_are_ignored_not_crashing(self):
         from unittest.mock import patch
         from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite

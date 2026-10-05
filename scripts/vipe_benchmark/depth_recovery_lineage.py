@@ -6,7 +6,8 @@ cleanly finished recovery can expose the unchanged retained model to maps.
 from pathlib import Path
 
 from .files import file_record, object_hash, read_json, verify_record
-from .setup_recovery_core import RECOVERY_CANDIDATES, completed_recovery, failed_setup_ancestry
+from .setup_recovery_core import (RECOVERY_CANDIDATES, completed_recovery, failed_setup_ancestry,
+                                  owned_active_attempt)
 
 # D9 video-setup recovery profile; shared ancestry checks live in setup_recovery_core.
 CANDIDATE = 'D9'
@@ -76,16 +77,10 @@ def accepted_setup_lineage(setup_record, events, run_root, *, verifier=verify_re
              'actual completed D9 recovery required')
     completion = completed_recovery(CANDIDATE, job_id, setup_record, events)
     grant, reserve, finish = completion['grant'], completion['reserve'], completion['finish']
-    active = [row for row in events if row.get('event') == 'reserve' and not any(
-        end.get('event') in ('finish', 'account') and end.get('job_id') == row.get('job_id') and
-        end['sequence'] > row['sequence'] for end in events)]
+    owned = owned_active_attempt(CANDIDATE, events, active_map_admission)
+    active = [owned] if owned is not None else []
     map_grant = None
     if active:
-        _require(active_map_admission is not None and len(active) == 1 and
-                 active[0].get('job_id') == 'plan069-D9-maps-001' and
-                 active[0].get('resource') == 'gpu' and
-                 active[0].get('evidence', {}).get('admission') == active_map_admission,
-                 'active attempt prevents accepted recovery lineage')
         _require(verifier(active_map_admission) == active_map_admission,
                  'exact active recovery map admission required')
         admission = read_json(active_map_admission['path'])
