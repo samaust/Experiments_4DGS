@@ -1,0 +1,76 @@
+{
+  "schema": "plan069-depth-candidate-outcome/v1",
+  "candidate": "D6",
+  "record_kind": "actual",
+  "status": "failed",
+  "job_id": "plan069-D6-maps-001",
+  "finish": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-maps-001-failure/finish.json",
+    "sha256": "daa2099e521a45d2b9fb22654d3a45c21babaedab65c7cec00a220be4450525c",
+    "bytes": 1064
+  },
+  "failure": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-maps-001/failure.json",
+    "sha256": "8147f4f3805247ff76b844c3351f742e38b255cb043e8665c48d1c92dfe17759",
+    "bytes": 635
+  },
+  "log": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-maps-001.log",
+    "sha256": "2cb4549ad14e0b1c9fd0f998ecbba408d569a560da878112408db4515f741c15",
+    "bytes": 10563
+  },
+  "request": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-maps-001/request.json",
+    "sha256": "2b9ee3962bfd89f5195d4c20c5655c10db1fd641bab9441db53b1378268e750a",
+    "bytes": 2829
+  },
+  "gpu_seconds": 37.996559141000034,
+  "gpu_finish_sequence": 976,
+  "completed_map_rows": 0,
+  "failure_kind": "worker_failure",
+  "cleanup_confirmed": true,
+  "deadline_exceeded": false,
+  "qualification": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/prepare/plan069-D6-qualification-004/qualification.json",
+    "sha256": "3ddab56a399c09dc004736971a650e0a052bd4e8e9588cc6276c64d63acf5770",
+    "bytes": 49670
+  },
+  "source_review": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/depth-D6-source-review-022.json",
+    "sha256": "01ecdcf8b3d84f531367c5d51917f70e3e21f78970336240dc6f90b29325adfb",
+    "bytes": 112464
+  },
+  "slot_artifact_amendment": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/depth-D6-slot-artifact-amendment-001.json",
+    "sha256": "96146813fd0b9fe0ed8ab1933ac306779adebb942e51a71c9420e24b98efe36d",
+    "bytes": 2004
+  },
+  "cpu_settlement": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-maps-001-failure/settlement.json",
+    "sha256": "72689ccb3a5541e9b19eab157ac2c1e9b937b84f2d0eace0ebfcc64138661b65",
+    "bytes": 547
+  },
+  "cause": "Runtime incompatibility in the accepted D6 environment: flex_gemm 1.0.0 (declares triton>=3.2.0) compiles _hashmap_build_kernel_32bit using tl dtype.itemsize, which Triton 3.2.0 (pinned with torch 2.6.0+cu124) does not provide. The first sparse-UNet forward fails at Triton compilation before any map is written.",
+  "evidence": {
+    "triton_dist": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-setup-001/runtime/environment/lib/python3.11/site-packages/triton-3.2.0.dist-info/METADATA",
+      "sha256": "eb453b047fc6fa887de70a505bd868123957b58cf12c78129f0020b1046a6d58",
+      "bytes": 1423
+    },
+    "flex_gemm_dist": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-setup-001/runtime/environment/lib/python3.11/site-packages/flex_gemm-1.0.0.dist-info/METADATA",
+      "sha256": "9f55d5c474d4e0e23c7f990b03a4bdcc9b890304053b139433b2b93d041dfc50",
+      "bytes": 8675
+    },
+    "flex_gemm_kernel": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-setup-001/runtime/environment/lib/python3.11/site-packages/flex_gemm/kernels/triton/hashmap.py",
+      "sha256": "c1afc82063284d36918b06477ca83b03506b85891cdd0ec126ffce2803904289",
+      "bytes": 23393
+    }
+  },
+  "note": "Driver qualifications forbid kernel launches by design, so this could only surface in the maps run. The attempt is consumed; no retry is authorized.",
+  "resolution_options": [
+    "New D6 runtime environment with torch 2.7 / Triton >= 3.3 (setup recovery: new downloads, review, requalification, then an approved maps retry)",
+    "Terminal disposition: D6 runtime-qualified but unable to run in the accepted environment"
+  ]
+}
