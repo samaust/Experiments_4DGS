@@ -264,6 +264,51 @@ class FrameAuthorityTests(unittest.TestCase):
         with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value=dict(finish=rows[0])) as accept:
             validate_D9_prerequisite(bound,ledger_prefix=prefix)
         self.assertEqual(accept.call_args.args[1],rows)
+    def test_successor_is_the_qualification_whose_lineage_is_checked(self):
+        from unittest.mock import patch
+        import vipe_benchmark.depth_video_frame_authorization as frame
+        bound,prefix,successor,rows=self.stale_bound_with_successor()
+        with patch.object(frame,'validate_recovery_qualification_lineage') as lineage:
+            frame.validate_D9_prerequisite(bound,ledger_prefix=prefix)
+        self.assertEqual(lineage.call_args.kwargs['qualification_record'],successor)
+        self.assertEqual(lineage.call_args.args[1]['path'],str(Path(successor['path']).parent/'finalization-ledger-prefix.jsonl'))
+    def test_successor_under_caller_owned_exclusive_lock_does_not_deadlock(self):
+        import fcntl, threading
+        from unittest.mock import patch
+        from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
+        bound,prefix,_,rows=self.stale_bound_with_successor()
+        outcome=[]
+        def check():
+            try:
+                validate_D9_prerequisite(bound,ledger_prefix=prefix,current_events=rows,allow_owned_active=False)
+                outcome.append('passed')
+            except Exception as error:
+                outcome.append(error)
+        with (self.root/'ledger.jsonl').open('rb') as held, \
+                patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value=dict(finish=rows[0])):
+            fcntl.flock(held,fcntl.LOCK_EX)
+            worker=threading.Thread(target=check,daemon=True);worker.start();worker.join(5)
+            while_locked=list(outcome)
+            fcntl.flock(held,fcntl.LOCK_UN)
+            worker.join(5)
+        self.assertEqual(while_locked,['passed'])
+    def test_malformed_charge_rows_are_ignored_not_crashing(self):
+        from unittest.mock import patch
+        from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
+        bound,prefix,successor,rows=self.stale_bound_with_successor()
+        odd=dict(event='cpu_preparation_charge',resource='cpu',evidence=None,elapsed_seconds=.001,sequence=len(rows),previous_sha256=rows[-1]['event_sha256'])
+        odd['event_sha256']=object_hash(odd);rows=rows+[odd]
+        (self.root/'ledger.jsonl').write_text(''.join(json.dumps(row)+'\n' for row in rows))
+        with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value=dict(finish=rows[0])):
+            validate_D9_prerequisite(bound,ledger_prefix=prefix)
+    def test_successor_outside_run_prepare_or_missing_prefix_rejected(self):
+        from unittest.mock import patch
+        from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
+        bound,prefix,successor,rows=self.stale_bound_with_successor()
+        (Path(successor['path']).parent/'finalization-ledger-prefix.jsonl').unlink()
+        with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value=dict(finish=rows[0])):
+            with self.assertRaisesRegex(ValueError,'successor'):
+                validate_D9_prerequisite(bound,ledger_prefix=prefix)
     def test_successor_with_changed_installed_runtime_rejected(self):
         from unittest.mock import patch
         from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite

@@ -86,7 +86,16 @@ SUCCESSOR_CONTINUITY = ('schema', 'record_kind', 'candidate', 'status', 'setup',
                         'source_archive', 'source_files', 'profile', 'python', 'python_executable')
 
 
-def protected_successor(record):
+def _charged_record(row):
+    """Return a cpu_preparation_charge evidence record, or None for any other row."""
+    evidence = row.get('evidence') if row.get('event') == 'cpu_preparation_charge' else None
+    if (row.get('resource') != 'cpu' or not isinstance(evidence, dict) or
+            not isinstance(evidence.get('path'), str)):
+        return None
+    return evidence
+
+
+def protected_successor(record, bound_prefix=None, current_events=None):
     """Return the newest protected D9 qualification re-run for unchanged installed bytes.
 
     A DO binds one exact qualification record. When later D9 helper changes make
@@ -96,32 +105,49 @@ def protected_successor(record):
     to every check the bound record would have faced.
     """
     bound = read_json(verify_record(record)['path'])
-    if not isinstance(bound.get('setup'), dict):
+    setup = bound.get('setup')
+    if not isinstance(setup, dict) or not isinstance(setup.get('path'), str):
         return None
-    ledger_path = Path(bound['setup']['path']).resolve().parents[2] / 'ledger.jsonl'
-    if not ledger_path.is_file():
+    run_root = Path(setup['path']).resolve().parents[2]
+    ledger_path = run_root / 'ledger.jsonl'
+    if current_events is not None:
+        events = current_events  # Caller owns the ledger lock; reopening a flock would deadlock.
+    elif ledger_path.is_file():
+        with ledger_path.open('rb') as stream:
+            fcntl.flock(stream, fcntl.LOCK_SH)
+            events = checked_events(stream.read())
+    else:
         return None
-    with ledger_path.open('rb') as stream:
-        fcntl.flock(stream, fcntl.LOCK_SH)
-        events = checked_events(stream.read())
-    bound_charges = [row['sequence'] for row in events if row.get('event') == 'cpu_preparation_charge'
-                     and row.get('evidence') == record]
+    bound_charges = [row['sequence'] for row in events if _charged_record(row) == record]
     if len(bound_charges) != 1:
         return None
-    later = [row for row in events if row.get('event') == 'cpu_preparation_charge' and
-             row['sequence'] > bound_charges[0] and
-             Path(row['evidence']['path']).name == 'runtime-qualification.json' and
-             Path(row['evidence']['path']).parent.name.startswith('plan069-D9-native-qualification-')]
+    if bound_prefix is not None and not any(
+            _charged_record(row) == record
+            for row in checked_events(Path(verify_record(bound_prefix)['path']).read_bytes())):
+        raise ValueError('DO-bound D9 qualification prefix lacks its protected charge')
+    prepare = run_root / 'prepare'
+    later = [(row, evidence) for row in events if row['sequence'] > bound_charges[0]
+             for evidence in [_charged_record(row)] if evidence is not None and
+             Path(evidence['path']).name == 'runtime-qualification.json' and
+             Path(evidence['path']).parent.parent == prepare and
+             Path(evidence['path']).parent.name.startswith('plan069-D9-native-qualification-')]
     if not later:
         return None
-    successor = verify_record(later[-1]['evidence'])
+    charge, successor = later[-1]
+    successor = verify_record(successor)
     current = read_json(successor['path'])
-    old_manifest, new_manifest = bound.get('dependency_manifest', {}), current.get('dependency_manifest', {})
+    old_manifest, new_manifest = bound.get('dependency_manifest'), current.get('dependency_manifest')
     if (any(current.get(key) != bound.get(key) for key in SUCCESSOR_CONTINUITY) or
+            not isinstance(old_manifest, dict) or not isinstance(new_manifest, dict) or
             (old_manifest.get('sha256'), old_manifest.get('bytes')) !=
             (new_manifest.get('sha256'), new_manifest.get('bytes'))):
         raise ValueError('D9 qualification successor changes installed runtime or setup lineage')
-    prefix = file_record(Path(successor['path']).parent / 'finalization-ledger-prefix.jsonl')
+    prefix_path = Path(successor['path']).parent / 'finalization-ledger-prefix.jsonl'
+    if not prefix_path.is_file():
+        raise ValueError('D9 qualification successor lacks its finalization ledger prefix')
+    prefix = file_record(prefix_path)
+    if checked_events(prefix_path.read_bytes())[-1] != charge:
+        raise ValueError('D9 qualification successor prefix must end at its protected charge')
     return successor, prefix
 
 
@@ -133,7 +159,7 @@ def validate_D9_prerequisite(record, *, ledger_prefix=None, approved=None,
     from .video_environment import FRAME_RECIPE, validate_runtime_versions, validate_runtime_observation
     qualified = read_json(verify_record(record)['path'])
     if qualified.get('local_sources') != local_source_records('D9'):
-        successor = protected_successor(record)
+        successor = protected_successor(record, ledger_prefix, current_events)
         if successor is not None:
             record, ledger_prefix = successor
             qualified = read_json(record['path'])
