@@ -8,6 +8,7 @@ from .depth_source_integrity import verify_source
 
 from .files import file_record
 from .moge_metric import MetricAnythingPointMapAdapter, POINTMAP_PIN
+from .setup_recovery_candidates import RECOVERY_CANDIDATES
 
 
 SOURCE_REVISION = '616a5e6762f5fc40d1a4ef990fee04c800532f59'
@@ -28,7 +29,11 @@ class NativePointMapAdapter(MetricAnythingPointMapAdapter):
 
 def load(setup_result, *, torch_module=None, model_class=None):
     """Construct the exact bundled model with strict weights and no HF fallback."""
-    if (setup_result.get('schema') != 'plan069-depth-setup-result/v1' or
+    # The accepted recovery replaces the failed original setup; its ledger lineage is
+    # checked by the map gate before this loader runs.
+    recovery_schemas = RECOVERY_CANDIDATES['D8']['result_schemas']
+    schema = recovery_schemas.get(setup_result.get('job_id'), 'plan069-depth-setup-result/v1')
+    if (setup_result.get('schema') != schema or
             setup_result.get('status') != 'complete' or
             setup_result.get('candidate') != 'D8' or
             setup_result.get('source_revision') != SOURCE_REVISION):

@@ -116,6 +116,14 @@ class NativeD8Tests(unittest.TestCase):
                 self.assertEqual(adapter.runtime.strict, True)
                 self.assertEqual(adapter.runtime.device, 'cuda')
                 self.assertFalse(adapter.runtime.training)
+                recovered = dict(setup, schema='plan069-depth-setup-recovery-result/v1',
+                                 job_id='plan069-D8-setup-recovery-001')
+                adapter = native_d8.load(recovered, torch_module=Torch({'weight': 1}), model_class=Model)
+                self.assertEqual(adapter.runtime.strict, True)
+                for job in ('plan069-D8-setup-001', 'plan069-D9-setup-recovery-001'):
+                    with self.assertRaisesRegex(ValueError, 'completed pinned setup'):
+                        native_d8.load(dict(recovered, job_id=job), torch_module=Torch({'weight': 1}),
+                                       model_class=Model)
                 with self.assertRaisesRegex(ValueError, 'incomplete native weights'):
                     native_d8.load(setup, torch_module=Torch({}), model_class=Model)
                 helper.write_text('# edited executed module\n')
