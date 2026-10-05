@@ -190,7 +190,8 @@ class D9ContinuationTests(unittest.TestCase):
                         overrun = ledger.finish(JOB, 'complete', 1., **clean)
                     self.assertEqual(overrun['status'], 'failed')
                     self.assertTrue(overrun['deadline_exceeded'])
-                    self.assertEqual(overrun['elapsed_seconds'], 12001.)
+                    # monotonic_start + 12001 - monotonic_start is not exact for every start value.
+                    self.assertAlmostEqual(overrun['elapsed_seconds'], 12001., places=6)
                     private_ledger = completed_ledger
                     self.assertEqual(ledger.states()[JOB]['status'], 'complete')
 
