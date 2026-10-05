@@ -19,7 +19,8 @@ WHEELS = [dict(name='moderngl', version='5.12.0', license='MIT', url='https://fi
                sha256='7fa413f4420abff2bbb5aa5770a3e1deffcdc13e0ef2f459b145fa79c36909e7', bytes=51680)]
 
 
-class NativeSetupRecoveryAuthorityTests(unittest.TestCase):
+class NativeSetupRecoveryFixture(unittest.TestCase):
+    """Synthetic run root mirroring the real failed plan069-D8-setup-001 layout."""
     def setUp(self):
         from vipe_benchmark.depth_admission import local_source_records
         temp = tempfile.TemporaryDirectory()
@@ -36,7 +37,9 @@ class NativeSetupRecoveryAuthorityTests(unittest.TestCase):
         self.addCleanup(adapter.stop)
         assets = self.write('assets.json', dict(candidates=dict(D8=dict(files=[dict(
             repository='metricanything', path='student_pointmap.pt', bytes=1304997680, lfs_sha256='e' * 64)]))))
-        self.maps = dict(candidate='D8', max_attempts=1, required_assets=assets, allocation=dict(
+        self.maps = dict(candidate='D8', max_attempts=1, required_assets=assets, candidate_config=dict(
+            code=dict(url='https://github.com/metric-anything/metric-anything', revision='0' * 40),
+            weights=dict(url='https://huggingface.co/fixture/metricanything', revision='1' * 40)), allocation=dict(
             setup_seconds=1800, download_bytes=7747448624, artifact_bytes=9663676416, gpu_seconds=3600))
         review002 = self.write('review002.json', dict(schema='plan069-depth-execution-review/v1',
                                                       status='REVIEW', proposals=[self.maps]))
@@ -57,7 +60,9 @@ class NativeSetupRecoveryAuthorityTests(unittest.TestCase):
                 record_kind='actual')))
         snapshot = dict(download_bytes=10, artifact_bytes=20)
         self.rows: list[dict] = []
+        original_review = self.write('original-source-review.json', dict(candidate='D8', status='passed'))
         self.append(dict(event='depth_setup_authorized', candidate='D8', review=review002, authorization=do002,
+                         source_review=original_review, seconds=1800,
                          proposal_sha256=object_hash(self.maps), resource_snapshot=snapshot))
         self.append(dict(event='reserve', job_id=ORIGINAL, resource='setup', seconds=1800,
                          evidence=dict(request=request)))
@@ -127,6 +132,8 @@ class NativeSetupRecoveryAuthorityTests(unittest.TestCase):
             self.authorize()
         self.assertEqual((self.run_root / 'ledger.jsonl').read_bytes(), before)
 
+
+class NativeSetupRecoveryAuthorityTests(NativeSetupRecoveryFixture):
     def test_exact_failed_ancestry_and_explicit_do_authorize_one_d8_recovery(self):
         event = self.authorize()
         self.assertEqual((event['event'], event['candidate'], event['job_id'], event['seconds']),

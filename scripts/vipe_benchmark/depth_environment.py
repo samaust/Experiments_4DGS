@@ -55,10 +55,14 @@ def _validate_inventory(inventory, request, python):
 
 def _setup_deadline(request, output, run_root, config, deadline):
     from .ledger import Ledger
-    job = f"plan069-{request['candidate']}-setup-001"
+    from .setup_recovery_core import candidate_for_job
     ledger_path = safe_path(request['ledger_path']).absolute()
     saved = verify_record(request['setup_request'])
     parent = read_json(saved['path'])
+    job = f"plan069-{request['candidate']}-setup-001"
+    if candidate_for_job(parent.get('job_id')) == request['candidate']:
+        job = parent['job_id']  # The candidate's own reserved setup recovery.
+
     state = Ledger(ledger_path, config).states().get(job, {})
     command = state.get('command', [])
     _require(ledger_path == run_root / 'ledger.jsonl' and

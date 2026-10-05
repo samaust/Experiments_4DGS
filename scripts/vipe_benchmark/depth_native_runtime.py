@@ -54,8 +54,13 @@ def recipe(candidate, run_root):
 
 
 def prepare(request, output, config, *, run_root, deadline, acquire,
-            download_limit, artifact_limit, request_path=None):
-    """Provision a recipe only inside the caller's approved metered setup slot."""
+            download_limit, artifact_limit, request_path=None, retained_utils3d=None,
+            extra_constraints=()):
+    """Provision a recipe only inside the caller's approved metered setup slot.
+
+    A setup recovery passes the retained utils3d archive (reused by hash, never
+    re-acquired) and the original lock's exact pins as additional constraints.
+    """
     from .depth_environment import provision_depth_environment
     candidate = request['candidate']
     declared = request.get('environment')
@@ -64,6 +69,8 @@ def prepare(request, output, config, *, run_root, deadline, acquire,
     if not isinstance(declared, dict) or declared.get('candidate') != candidate:
         raise ValueError('native environment recipe required')
     environment = dict(declared)
+    environment['constraints'] = list(declared.get('constraints', [])) + [
+        pin for pin in extra_constraints if pin not in declared.get('constraints', [])]
     if request.get('record_kind') == 'actual':
         if request_path is None:
             raise ValueError('actual native environment requires original setup request')
@@ -85,11 +92,15 @@ def prepare(request, output, config, *, run_root, deadline, acquire,
             raise ValueError('D8 exact compatibility profile required')
     sources = []
     if candidate == 'D8':
-        archive = Path(output) / 'utils3d-source.tar.gz'
-        record = acquire('https://codeload.github.com/' + UTILS3D_REPOSITORY +
-                         '/tar.gz/' + D8_UTILS3D_REVISION, archive,
-                         max_bytes=32 * 2**20, deadline=deadline, run_root=run_root,
-                         download_limit=download_limit, artifact_limit=artifact_limit)
+        if retained_utils3d is not None:
+            record = verify_record(retained_utils3d)
+            archive = Path(record['path'])
+        else:
+            archive = Path(output) / 'utils3d-source.tar.gz'
+            record = acquire('https://codeload.github.com/' + UTILS3D_REPOSITORY +
+                             '/tar.gz/' + D8_UTILS3D_REVISION, archive,
+                             max_bytes=32 * 2**20, deadline=deadline, run_root=run_root,
+                             download_limit=download_limit, artifact_limit=artifact_limit)
         from .depth_setup import _unpack_source
         from .depth_source_integrity import source_manifest
         source = Path(output) / 'utils3d-source'
