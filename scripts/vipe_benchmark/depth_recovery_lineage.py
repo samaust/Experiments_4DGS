@@ -6,14 +6,14 @@ cleanly finished recovery can expose the unchanged retained model to maps.
 from pathlib import Path
 
 from .files import file_record, object_hash, read_json, verify_record
+from .setup_recovery_core import RECOVERY_CANDIDATES, completed_recovery, failed_setup_ancestry
 
+# D9 video-setup recovery profile; shared ancestry checks live in setup_recovery_core.
 CANDIDATE = 'D9'
-JOB = 'plan069-D9-setup-recovery-001'
-REPAIR_JOB = 'plan069-D9-setup-recovery-002'
-JOBS = (JOB, REPAIR_JOB)
-RESULT_SCHEMAS = {JOB: 'plan069-video-setup-recovery-result/v1',
-                  REPAIR_JOB: 'plan069-video-setup-recovery-result/v2'}
-ORIGINAL_JOB = 'plan069-D9-setup-001'
+JOBS = RECOVERY_CANDIDATES[CANDIDATE]['jobs']
+JOB, REPAIR_JOB = JOBS
+RESULT_SCHEMAS = RECOVERY_CANDIDATES[CANDIDATE]['result_schemas']
+ORIGINAL_JOB = RECOVERY_CANDIDATES[CANDIDATE]['original_job']
 
 
 def _require(condition, reason):
@@ -37,18 +37,12 @@ def checked_failed_recoveries(job_id, descriptors, events, run_root, *, verifier
              'exact approved failed recovery chain required')
     root = Path(run_root).resolve()
     for row in descriptors:
-        grant = _one(events, 'depth_setup_recovery_authorized', row['job_id'])
-        reserve = _one(events, 'reserve', row['job_id'])
-        finish = _one(events, 'finish', row['job_id'])
-        _require(row.get('grant_event_sha256') == grant['event_sha256'] and
-                 row.get('failed_finish_event_sha256') == finish['event_sha256'] and
-                 grant.get('candidate') == CANDIDATE and
-                 grant['sequence'] < reserve['sequence'] < finish['sequence'] and
-                 (before_sequence is None or finish['sequence'] < before_sequence) and
-                 reserve.get('resource') == finish.get('resource') == 'setup' and
-                 finish.get('status') == 'failed' and finish.get('cleanup_confirmed') is True and
-                 finish.get('cleanup_uncertain') is False and finish.get('surviving_pids') == [] and
-                 finish.get('deadline_exceeded') is False and
+        try:
+            ancestry = failed_setup_ancestry(CANDIDATE, row['job_id'], events, row)
+        except ValueError as error:
+            raise ValueError('protected clean failed recovery ancestry changed') from error
+        grant, reserve, finish = ancestry['grant'], ancestry['reserve'], ancestry['finish']
+        _require((before_sequence is None or finish['sequence'] < before_sequence) and
                  grant.get('request') == reserve.get('evidence', {}).get('request') == row.get('request'),
                  'protected clean failed recovery ancestry changed')
         for key in ('request', 'failure'):
@@ -80,16 +74,8 @@ def accepted_setup_lineage(setup_record, events, run_root, *, verifier=verify_re
              result.get('record_kind') == 'actual' and result.get('status') == 'complete' and
              result.get('candidate') == CANDIDATE and result.get('job_id') == job_id,
              'actual completed D9 recovery required')
-    grant = _one(events, 'depth_setup_recovery_authorized', job_id)
-    reserve = _one(events, 'reserve', job_id)
-    finish = _one(events, 'finish', job_id)
-    _require(grant.get('candidate') == CANDIDATE and grant.get('job_id') == job_id and
-             grant['sequence'] < reserve['sequence'] < finish['sequence'] and
-             reserve.get('resource') == finish.get('resource') == 'setup' and
-             finish.get('status') == 'complete' and finish.get('result') == setup_record and
-             finish.get('cleanup_confirmed') is True and finish.get('cleanup_uncertain') is False and
-             finish.get('surviving_pids') == [] and finish.get('deadline_exceeded') is False,
-             'clean independently authorized recovery completion required')
+    completion = completed_recovery(CANDIDATE, job_id, setup_record, events)
+    grant, reserve, finish = completion['grant'], completion['reserve'], completion['finish']
     active = [row for row in events if row.get('event') == 'reserve' and not any(
         end.get('event') in ('finish', 'account') and end.get('job_id') == row.get('job_id') and
         end['sequence'] > row['sequence'] for end in events)]

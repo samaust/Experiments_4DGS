@@ -6,14 +6,15 @@ successful retained inputs, but no failed result can mint completed setup credit
 from pathlib import Path
 
 from .files import file_record, object_hash, read_json, verify_record
+from .setup_recovery_core import RECOVERY_CANDIDATES, RECOVERY_EVENT, failed_setup_ancestry
 
 
+# D9 video-setup recovery profile; shared ancestry checks live in setup_recovery_core.
 CANDIDATE = 'D9'
-ORIGINAL_JOB = 'plan069-D9-setup-001'
-JOB = 'plan069-D9-setup-recovery-001'
-REPAIR_JOB = 'plan069-D9-setup-recovery-002'
-JOBS = (JOB, REPAIR_JOB)
-EVENT = 'depth_setup_recovery_authorized'
+ORIGINAL_JOB = RECOVERY_CANDIDATES[CANDIDATE]['original_job']
+JOBS = RECOVERY_CANDIDATES[CANDIDATE]['jobs']
+JOB, REPAIR_JOB = JOBS
+EVENT = RECOVERY_EVENT
 
 
 def _require(condition, reason):
@@ -31,20 +32,8 @@ def original_setup_lineage(original, events, run_root, *, verifier=verify_record
     """Validate the consumed failed attempt and every exact retained input."""
     root = Path(run_root).resolve()
     job = root / 'jobs' / ORIGINAL_JOB
-    grant = _one(events, lambda row: row.get('event') == 'depth_setup_authorized' and
-        row.get('candidate') == CANDIDATE, 'unique original D9 setup grant required')
-    finish = _one(events, lambda row: row.get('event') == 'finish' and
-        row.get('job_id') == ORIGINAL_JOB, 'unique consumed original setup finish required')
-    reserve = _one(events, lambda row: row.get('event') == 'reserve' and
-        row.get('job_id') == ORIGINAL_JOB, 'unique original setup reservation required')
-    _require(original.get('grant_event_sha256') == grant['event_sha256'] and
-             original.get('failed_finish_event_sha256') == finish['event_sha256'] and
-             grant['sequence'] < reserve['sequence'] < finish['sequence'] and
-             reserve.get('resource') == finish.get('resource') == 'setup' and
-             finish.get('status') == 'failed' and finish.get('cleanup_confirmed') is True and
-             finish.get('cleanup_uncertain') is False and finish.get('surviving_pids') == [] and
-             finish.get('deadline_exceeded') is False,
-             'exact consumed failed setup with confirmed cleanup required')
+    ancestry = failed_setup_ancestry(CANDIDATE, ORIGINAL_JOB, events, original)
+    grant, reserve, finish = ancestry['grant'], ancestry['reserve'], ancestry['finish']
     _require(original.get('byte_checkpoint') == grant.get('byte_checkpoint') and
              original.get('request') == reserve.get('evidence', {}).get('request'),
              'recovery must retain original protected checkpoint and request')
@@ -238,20 +227,9 @@ def failed_recovery_lineages(request, proposal, events, run_root, *, verifier=ve
              isinstance(descriptors[0], dict) and descriptors[0].get('job_id') == JOB, 'exact failed recovery001 chain required')
     root = Path(run_root).resolve()
     descriptor = descriptors[0]
-    grant = _one(events, lambda row: row.get('event') == EVENT and row.get('job_id') == JOB,
-                 'unique preserved failed recovery001 grant required')
-    reserve = _one(events, lambda row: row.get('event') == 'reserve' and row.get('job_id') == JOB,
-                   'unique consumed recovery001 reservation required')
-    finish = _one(events, lambda row: row.get('event') == 'finish' and row.get('job_id') == JOB,
-                  'unique consumed recovery001 failed finish required')
-    _require(descriptor.get('grant_event_sha256') == grant['event_sha256'] and
-             descriptor.get('failed_finish_event_sha256') == finish['event_sha256'] and
-             grant['sequence'] < reserve['sequence'] < finish['sequence'] and
-             reserve.get('resource') == finish.get('resource') == 'setup' and
-             finish.get('status') == 'failed' and finish.get('cleanup_confirmed') is True and
-             finish.get('cleanup_uncertain') is False and finish.get('surviving_pids') == [] and
-             finish.get('deadline_exceeded') is False and
-             descriptor.get('request') == grant.get('request') == reserve.get('evidence', {}).get('request'),
+    ancestry = failed_setup_ancestry(CANDIDATE, JOB, events, descriptor)
+    grant, reserve, finish = ancestry['grant'], ancestry['reserve'], ancestry['finish']
+    _require(descriptor.get('request') == grant.get('request') == reserve.get('evidence', {}).get('request'),
              'exact consumed failed recovery001 with confirmed cleanup required')
     normalized = validate_recovery_request(descriptor['request'], events, root,
         verifier=verifier, historical=True)

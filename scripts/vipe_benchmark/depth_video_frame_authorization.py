@@ -1,4 +1,8 @@
-"""D10-only optional decoder amendment; preserve prior attempts and budgets."""
+"""D10 optional-decoder amendment and its D9 runtime-qualification prerequisite.
+
+Preserves prior attempts and budgets; a stale DO-bound D9 qualification may be
+replaced only by a protected successor (see protected_successor).
+"""
 import copy
 import fcntl
 import json
@@ -86,6 +90,25 @@ SUCCESSOR_CONTINUITY = ('schema', 'record_kind', 'candidate', 'status', 'setup',
                         'source_archive', 'source_files', 'profile', 'python', 'python_executable')
 
 
+def _live_events(ledger_path, current_events):
+    """Return (bytes, checked events) of the live ledger.
+
+    Without caller events, read under a shared lock. With caller events the caller
+    owns the ledger lock (reopening a flock would deadlock), so read without
+    locking and require the caller's events to equal the bytes on disk.
+    """
+    if current_events is None:
+        with ledger_path.open('rb') as stream:
+            fcntl.flock(stream, fcntl.LOCK_SH)
+            data = stream.read()
+        return data, checked_events(data)
+    data = ledger_path.read_bytes()
+    events = checked_events(data)
+    if events != current_events:
+        raise ValueError('locked current qualification ledger mismatch')
+    return data, events
+
+
 def _charged_record(row):
     """Return a cpu_preparation_charge evidence record, or None for any other row."""
     evidence = row.get('evidence') if row.get('event') == 'cpu_preparation_charge' else None
@@ -110,14 +133,9 @@ def protected_successor(record, bound_prefix=None, current_events=None):
         return None
     run_root = Path(setup['path']).resolve().parents[2]
     ledger_path = run_root / 'ledger.jsonl'
-    if current_events is not None:
-        events = current_events  # Caller owns the ledger lock; reopening a flock would deadlock.
-    elif ledger_path.is_file():
-        with ledger_path.open('rb') as stream:
-            fcntl.flock(stream, fcntl.LOCK_SH)
-            events = checked_events(stream.read())
-    else:
+    if current_events is None and not ledger_path.is_file():
         return None
+    _, events = _live_events(ledger_path, current_events)
     bound_charges = [row['sequence'] for row in events if _charged_record(row) == record]
     if len(bound_charges) != 1:
         return None
@@ -126,15 +144,21 @@ def protected_successor(record, bound_prefix=None, current_events=None):
             for row in checked_events(Path(verify_record(bound_prefix)['path']).read_bytes())):
         raise ValueError('DO-bound D9 qualification prefix lacks its protected charge')
     prepare = run_root / 'prepare'
-    later = [(row, evidence) for row in events if row['sequence'] > bound_charges[0]
-             for evidence in [_charged_record(row)] if evidence is not None and
-             Path(evidence['path']).name == 'runtime-qualification.json' and
-             Path(evidence['path']).parent.parent == prepare and
-             Path(evidence['path']).parent.name.startswith('plan069-D9-native-qualification-')]
-    if not later:
+
+    def is_run_d9_qualification(evidence):
+        path = Path(evidence['path'])
+        return (path.name == 'runtime-qualification.json' and path.parent.parent == prepare and
+                path.parent.name.startswith('plan069-D9-native-qualification-'))
+
+    later_charges = []
+    for row in events:
+        evidence = _charged_record(row)
+        if row['sequence'] > bound_charges[0] and evidence is not None and is_run_d9_qualification(evidence):
+            later_charges.append((row, evidence))
+    if not later_charges:
         return None
-    charge, successor = later[-1]
-    successor = verify_record(successor)
+    charge, charged_evidence = later_charges[-1]
+    successor = verify_record(charged_evidence)
     current = read_json(successor['path'])
     old_manifest, new_manifest = bound.get('dependency_manifest'), current.get('dependency_manifest')
     if (any(current.get(key) != bound.get(key) for key in SUCCESSOR_CONTINUITY) or
@@ -256,17 +280,7 @@ def validate_recovery_qualification_lineage(setup_record, prefix, approved, *,
     prefix_data = Path(verify_record(prefix)['path']).read_bytes()
     prefix_events = checked_events(prefix_data)
     ledger_path = run_root / 'ledger.jsonl'
-    if current_events is None:
-        with ledger_path.open('rb') as stream:
-            fcntl.flock(stream, fcntl.LOCK_SH)
-            live_data = stream.read()
-        events = checked_events(live_data)
-    else:
-        # Caller owns the ledger lock; reopening a flock would deadlock.
-        live_data = ledger_path.read_bytes()
-        events = checked_events(live_data)
-        if events != current_events:
-            raise ValueError('locked current qualification ledger mismatch')
+    live_data, events = _live_events(ledger_path, current_events)
     if not live_data.startswith(prefix_data):
         raise ValueError('qualification ledger prefix differs from protected live ancestry')
     accepted = accepted_setup_lineage(setup_record, prefix_events, run_root)

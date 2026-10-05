@@ -292,6 +292,11 @@ class FrameAuthorityTests(unittest.TestCase):
             fcntl.flock(held,fcntl.LOCK_UN)
             worker.join(5)
         self.assertEqual(while_locked,['passed'])
+    def test_successor_rejects_locked_events_that_differ_from_disk(self):
+        from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
+        bound,prefix,_,rows=self.stale_bound_with_successor()
+        with self.assertRaisesRegex(ValueError,'locked current'):
+            validate_D9_prerequisite(bound,ledger_prefix=prefix,current_events=rows[:-1],allow_owned_active=False)
     def test_malformed_charge_rows_are_ignored_not_crashing(self):
         from unittest.mock import patch
         from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
