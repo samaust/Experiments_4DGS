@@ -144,6 +144,9 @@ def local_source_records(candidate):
         records.extend(file_record(ROOT / path) for path in (
             'scripts/basketball_vipe_depth_driver_qualification_triton_cache.py',
             'scripts/basketball_vipe_triton_helper_cache.py',
+            'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-010/producer.py',
+            'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-010/network_guard.py',
+            'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-010/startup.py',
             'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-009/producer.py',
             'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-009/network_guard.py',
             'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-009/startup.py',

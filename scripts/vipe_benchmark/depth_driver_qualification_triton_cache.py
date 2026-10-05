@@ -7,13 +7,19 @@ from .files import file_record, object_hash, read_json, verify_record
 
 JOB = 'plan069-D6-driver-qualification-005'
 FOURTH_PREDECESSOR = 'plan069-D6-driver-qualification-004'
-# Each distinct attempt names its reviewed worker method and the consumed-attempt lineage it adds.
+# Each distinct attempt names its reviewed worker method, the consumed-attempt lineage it adds and,
+# when the previous attempt passed but its sources were superseded, that previous terminal status.
 ATTEMPTS = {
     JOB: dict(method='moge-driver-method-008', previous=FOURTH_PREDECESSOR,
               lineage=('fourth_predecessor_finish', 'fourth_predecessor_trace')),
     'plan069-D6-driver-qualification-006': dict(method='moge-driver-method-009', previous=JOB,
               lineage=('fourth_predecessor_finish', 'fourth_predecessor_trace',
                        'fifth_predecessor_finish', 'fifth_predecessor_trace')),
+    'plan069-D6-driver-qualification-007': dict(method='moge-driver-method-010',
+              previous='plan069-D6-driver-qualification-006', previous_status='complete',
+              lineage=('fourth_predecessor_finish', 'fourth_predecessor_trace',
+                       'fifth_predecessor_finish', 'fifth_predecessor_trace',
+                       'sixth_predecessor_finish', 'sixth_predecessor_trace')),
 }
 BASE_LINEAGE = ('predecessor_finish', 'diagnostic_finish', 'diagnostic_result', 'diagnostic_trace',
                 'second_predecessor_finish', 'second_predecessor_trace', 'third_predecessor_finish',
@@ -285,17 +291,18 @@ def check_predecessor(events, request):
 
 
 def _check_previous_triton_attempt(events, request):
-    """A later attempt requires the exact failed clean earlier Triton-cache attempt and its lineage."""
+    """A later attempt requires the exact clean earlier Triton-cache attempt (failed, or passed then superseded)."""
     from .ledger import Ledger
     previous = ATTEMPTS[request['job_id']]['previous']
+    status = ATTEMPTS[request['job_id']].get('previous_status', 'failed')
     finish_key, trace_key = ATTEMPTS[request['job_id']]['lineage'][-2:]
     failed = read_json(verify_record(request[finish_key])['path'])
     states = Ledger.__new__(Ledger).states(events)
     require(states.get(previous) == failed and failed.get('event') == 'finish' and
-            failed.get('job_id') == previous and failed.get('status') == 'failed' and
+            failed.get('job_id') == previous and failed.get('status') == status and
             failed.get('cleanup_confirmed') is True and not failed.get('cleanup_uncertain') and
             not failed.get('surviving_pids') and not failed.get('deadline_exceeded'),
-            'exact failed clean previous Triton-cache qualification required')
+            'exact clean previous Triton-cache qualification (' + status + ') required')
     grants = [row for row in events if row.get('event') == 'depth_driver_qualification_triton_cache_authorized' and
               row.get('job_id') == previous]
     reserves = [row for row in events if row.get('event') == 'reserve' and row.get('job_id') == previous]

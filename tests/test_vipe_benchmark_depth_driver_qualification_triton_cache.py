@@ -172,7 +172,7 @@ class QualificationTritonCacheRetryTests(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);ledger,record5,request5,sources,live=fixture(root)
    from vipe_benchmark.depth_driver_qualification_triton_cache import check_predecessor
-   with self.assertRaisesRegex(ValueError,'failed clean previous Triton-cache'):check_predecessor(ledger.events(),dict(request5,job_id=JOB6,fifth_predecessor_finish=request5['fourth_predecessor_finish'],fifth_predecessor_trace=request5['fourth_predecessor_trace']))
+   with self.assertRaisesRegex(ValueError,r'clean previous Triton-cache qualification \(failed\)'):check_predecessor(ledger.events(),dict(request5,job_id=JOB6,fifth_predecessor_finish=request5['fourth_predecessor_finish'],fifth_predecessor_trace=request5['fourth_predecessor_trace']))
  def test_consumed006_cannot_retry_and_005_grant_cannot_be_reused(self):
   with tempfile.TemporaryDirectory() as d:
    ledger,record,request,sources,live=fixture006(Path(d))
@@ -202,4 +202,55 @@ class QualificationTritonCacheRetryTests(unittest.TestCase):
   from vipe_benchmark.depth_admission import local_source_records
   with patch('vipe_benchmark.depth_admission.file_record',side_effect=lambda path:dict(path=str(path))):paths={r['path'] for r in local_source_records('D6')}
   for suffix in ['moge-driver-method-009/producer.py','moge-driver-method-009/network_guard.py','moge-driver-method-009/startup.py']:
+   self.assertTrue(any(p.endswith(suffix) for p in paths),suffix)
+
+
+JOB7='plan069-D6-driver-qualification-007'
+
+
+def fixture007(root, previous_status='complete'):
+ ledger,record6,request6,sources,live=fixture006(root)
+ with patch('vipe_benchmark.depth_admission.local_source_records',return_value=sources),patch('vipe_benchmark.execution.resources',return_value=live):
+  ledger.authorize_depth_driver_qualification_triton_cache(record6);ledger.reserve(JOB6,request6['command'],dict(request=record6));finish=ledger.finish(JOB6,previous_status,1,cleanup_confirmed=True)
+ def save(name,value):
+  path=root/name;write_json(path,value);return file_record(path)
+ sixth=save('finished006.json',finish)
+ trace=Path(request6['output']).with_suffix('.syscalls.log');trace.write_text('qualification006 fixture trace')
+ worker=save('producer010.py',{'fixture':True});guard=save('guard010.py',{'fixture':True});startup=save('startup010.py',{'fixture':True});sources=[worker,guard,startup]
+ source=read_json(request6['source_review']['path']);source['local_sources']=sources
+ lineage=dict(job_id=JOB7,worker=worker,network_guard=guard,guard_startup=startup,sixth_predecessor_finish=sixth,sixth_predecessor_trace=file_record(trace))
+ request=dict(request6,output=str(root/'qualification007'),**lineage)
+ proposal=dict(read_json(request6['review']['path'])['proposal'],**lineage)
+ request['review']=save('review007.json',dict(schema='plan069-D6-driver-qualification-review/v5',status='REVIEW',proposal=proposal))
+ request['authorization']=save('DO007.json',dict(schema='plan069-D6-driver-qualification-authorization/v5',status='DO',review=request['review'],proposal_sha256=object_hash(proposal)))
+ request['source_review']=save('source007.json',source)
+ request['cpu_validation']=save('cpu007.json',dict(schema='plan069-delta-cpu-test-capture/v1',record_kind='fixture',passed=True,within_wall_limit=True,source_bytes_unchanged=True,sources_before=sources,sources_after=sources))
+ path=root/'request007.json';command=list(request6['command']);command[10]=str(Path(request['output']).with_suffix('.syscalls.log'));command[14]=worker['path'];command[17]=str(path);command[19]=request['output'];request['command']=command;write_json(path,request)
+ return ledger,file_record(path),request,sources,live
+
+
+class QualificationTritonCacheRebindTests(unittest.TestCase):
+ def test_fresh007_after_passed006_preserves_all_attempts(self):
+  with tempfile.TemporaryDirectory() as d:
+   ledger,record,request,sources,live=fixture007(Path(d))
+   with patch('vipe_benchmark.depth_admission.local_source_records',return_value=sources),patch('vipe_benchmark.execution.resources',return_value=live):
+    ledger.authorize_depth_driver_qualification_triton_cache(record);reserve=ledger.reserve(JOB7,request['command'],dict(request=record))
+   self.assertEqual(reserve['seconds'],180);self.assertEqual(ledger.states()[JOB6]['status'],'complete');self.assertEqual(ledger.states()[JOB]['status'],'failed')
+ def test_007_requires_the_passed006_not_a_failed_one(self):
+  from vipe_benchmark.depth_driver_qualification_triton_cache import check_predecessor
+  with tempfile.TemporaryDirectory() as d:
+   ledger,record,request,sources,live=fixture007(Path(d),previous_status='failed')
+   with self.assertRaisesRegex(ValueError,r'previous Triton-cache qualification \(complete\)'):check_predecessor(ledger.events(),request)
+ def test_method010_serves_only_qualification007(self):
+  from vipe_benchmark.config import ROOT
+  from vipe_benchmark.depth_driver_qualification_triton_cache import ATTEMPTS
+  self.assertEqual(ATTEMPTS[JOB7]['method'],'moge-driver-method-010');self.assertEqual(ATTEMPTS[JOB7]['previous'],JOB6)
+  source=(ROOT/'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-010/producer.py').read_text()
+  self.assertIn("require(JOB == 'plan069-D6-driver-qualification-007'",source)
+  guard=lambda n:(ROOT/f'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-0{n}/network_guard.py').read_bytes()
+  self.assertEqual(guard(10),guard('07'))
+ def test_method010_sources_are_in_D6_closure(self):
+  from vipe_benchmark.depth_admission import local_source_records
+  with patch('vipe_benchmark.depth_admission.file_record',side_effect=lambda path:dict(path=str(path))):paths={r['path'] for r in local_source_records('D6')}
+  for suffix in ['moge-driver-method-010/producer.py','moge-driver-method-010/network_guard.py','moge-driver-method-010/startup.py']:
    self.assertTrue(any(p.endswith(suffix) for p in paths),suffix)
