@@ -1,4 +1,4 @@
-"""Separately approved D6 qualification005: local-listen guard plus a prebuilt Triton helper cache."""
+"""Separately approved D6 qualifications005+: local-listen guard plus a prebuilt Triton helper cache."""
 from pathlib import Path
 
 # The guard007 socket policy is unchanged from qualification004.
@@ -7,6 +7,17 @@ from .files import file_record, object_hash, read_json, verify_record
 
 JOB = 'plan069-D6-driver-qualification-005'
 FOURTH_PREDECESSOR = 'plan069-D6-driver-qualification-004'
+# Each distinct attempt names its reviewed worker method and the consumed-attempt lineage it adds.
+ATTEMPTS = {
+    JOB: dict(method='moge-driver-method-008', previous=FOURTH_PREDECESSOR,
+              lineage=('fourth_predecessor_finish', 'fourth_predecessor_trace')),
+    'plan069-D6-driver-qualification-006': dict(method='moge-driver-method-009', previous=JOB,
+              lineage=('fourth_predecessor_finish', 'fourth_predecessor_trace',
+                       'fifth_predecessor_finish', 'fifth_predecessor_trace')),
+}
+BASE_LINEAGE = ('predecessor_finish', 'diagnostic_finish', 'diagnostic_result', 'diagnostic_trace',
+                'second_predecessor_finish', 'second_predecessor_trace', 'third_predecessor_finish',
+                'third_predecessor_trace')
 
 
 def require(value, message):
@@ -25,10 +36,12 @@ def validate_request(request_record, *, current_sources=None, completed=False):
             approved.get('status') == 'DO' and approved.get('review') == request['review'] and
             approved.get('proposal_sha256') == object_hash(proposal),
             'explicit approved driver qualification allocation required')
+    job = request.get('job_id')
     require(request.get('schema') == 'plan069-D6-driver-qualification-request/v5' and
-            request.get('candidate') == 'D6' and request.get('job_id') == JOB and
+            request.get('candidate') == 'D6' and job in ATTEMPTS and
             request.get('record_kind') in ('actual', 'fixture'), 'exact D6 qualification request required')
-    require(proposal.get('candidate') == 'D6' and proposal.get('job_id') == JOB and
+    attempt = ATTEMPTS[job]
+    require(proposal.get('candidate') == 'D6' and proposal.get('job_id') == job and
             proposal.get('qualification_kind') == KIND and type(proposal.get('max_attempts')) is int and proposal['max_attempts'] == 1 and
             proposal.get('seconds') == 180 and proposal.get('device_bytes') == 2 * 1024**3 and
             proposal.get('artifact_bytes') == 64 * 1024**2 and
@@ -43,11 +56,11 @@ def validate_request(request_record, *, current_sources=None, completed=False):
     require(proposal.get('setup') == request.get('setup'), 'proposal setup binding differs')
     require(isinstance(request.get('worker'), dict) and proposal.get('worker') == request['worker'],
             'exact reviewed qualification worker required')
+    lineage = BASE_LINEAGE + attempt['lineage']
     require(all(proposal.get(key) == request.get(key) for key in
-            ('network_guard', 'strace', 'predecessor_finish', 'diagnostic_finish', 'diagnostic_result', 'diagnostic_trace',
-             'creation_exception', 'bind_exception', 'guard_startup', 'second_predecessor_finish', 'second_predecessor_trace', 'third_predecessor_finish', 'third_predecessor_trace', 'listen_exception',
-             'fourth_predecessor_finish', 'fourth_predecessor_trace', 'triton_cache')), 'exact reviewed recovery lineage/guard required')
-    for key in ('predecessor_finish', 'diagnostic_finish', 'diagnostic_result', 'diagnostic_trace', 'second_predecessor_finish', 'second_predecessor_trace', 'third_predecessor_finish', 'third_predecessor_trace', 'fourth_predecessor_finish', 'fourth_predecessor_trace', 'triton_cache', 'guard_startup'):
+            ('network_guard', 'strace', 'creation_exception', 'bind_exception', 'guard_startup', 'listen_exception',
+             'triton_cache') + lineage), 'exact reviewed recovery lineage/guard required')
+    for key in lineage + ('triton_cache', 'guard_startup'):
         verify_record(request[key])
     if not completed:
         from .triton_helper_cache import validate_binding
@@ -106,11 +119,11 @@ def validate_request(request_record, *, current_sources=None, completed=False):
                 row.get('cleanup', {}).get('confirmed_no_surviving_observed_processes') is True and
                 row.get('cleanup', {}).get('surviving_observed_owned_processes') == []
                 for row in commands), 'CPU qualification cleanup evidence required')
-        method_root = Path(request['root']) / 'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-008'
+        method_root = Path(request['root']) / 'docs/research/vipe-alternatives/plan031-execution' / attempt['method']
         require(Path(request['worker']['path']) == method_root / 'producer.py' and
                 Path(request['network_guard']['path']) == method_root / 'network_guard.py' and
                 Path(request['guard_startup']['path']) == method_root / 'startup.py',
-                'exact versioned008 producer and local-listen guard required')
+                'exact versioned attempt producer and local-listen guard required')
     qualified_sources = {item['path']: item for item in cpu.get('sources_before', [])}
     require(all(qualified_sources.get(item['path']) == item for item in source['local_sources']),
             'CPU qualification does not bind reviewed driver sources')
@@ -217,17 +230,17 @@ def qualification_exception(runtime, *, events=None, run_root=None):
     from .depth_driver_qualification import retained_ledger_events
     events = retained_ledger_events(receipt, events=events, run_root=run_root)
     require(any(event == finish for event in events) and finish.get('event') == 'finish' and
-            finish.get('job_id') == JOB and finish.get('status') == 'complete' and
+            finish.get('job_id') in ATTEMPTS and finish.get('status') == 'complete' and
             finish.get('cleanup_confirmed') is True and not finish.get('cleanup_uncertain') and
             not finish.get('surviving_pids') and not finish.get('deadline_exceeded') and
             finish.get('elapsed_seconds', float('inf')) <= 180 and
             finish.get('peak', {}).get('device_bytes', float('inf')) <= 2 * 1024**3,
             'accepted driver qualification finish missing')
     request = validate_result(result, receipt['request'], cleanup_confirmed=finish['cleanup_confirmed'])
-    require(request.get('ledger_path') == receipt['ledger_path'],
+    require(request.get('ledger_path') == receipt['ledger_path'] and request['job_id'] == finish['job_id'],
             'qualification request and retained ledger path differ')
     check_predecessor(events, request)
-    reserves = [event for event in events if event.get('event') == 'reserve' and event.get('job_id') == JOB]
+    reserves = [event for event in events if event.get('event') == 'reserve' and event.get('job_id') == finish['job_id']]
     require(len(reserves) == 1 and reserves[0].get('evidence', {}).get('request') == receipt['request'] and
             finish.get('result') == receipt['result'] and
             result.get('record_kind') == runtime.get('record_kind', 'actual') and
@@ -242,7 +255,9 @@ def reservation_evidence(request_record, request=None):
 
 
 def check_predecessor(events, request):
-    """Preserve the exact consumed004 grant, request, trace and earlier ancestry."""
+    """Preserve the exact consumed previous attempt's grant, request, trace and earlier ancestry."""
+    if request['job_id'] != JOB:
+        return _check_previous_triton_attempt(events, request)
     from .ledger import Ledger
     from .depth_driver_qualification_local_listen import validate_request as previous_request, check_predecessor as previous_lineage
     failed = read_json(verify_record(request['fourth_predecessor_finish'])['path'])
@@ -267,3 +282,32 @@ def check_predecessor(events, request):
     trace = verify_record(request['fourth_predecessor_trace'])
     require(trace['path'] == str(Path(retained['output']).with_suffix('.syscalls.log')),
             'exact retained qualification004 trace required')
+
+
+def _check_previous_triton_attempt(events, request):
+    """A later attempt requires the exact failed clean earlier Triton-cache attempt and its lineage."""
+    from .ledger import Ledger
+    previous = ATTEMPTS[request['job_id']]['previous']
+    finish_key, trace_key = ATTEMPTS[request['job_id']]['lineage'][-2:]
+    failed = read_json(verify_record(request[finish_key])['path'])
+    states = Ledger.__new__(Ledger).states(events)
+    require(states.get(previous) == failed and failed.get('event') == 'finish' and
+            failed.get('job_id') == previous and failed.get('status') == 'failed' and
+            failed.get('cleanup_confirmed') is True and not failed.get('cleanup_uncertain') and
+            not failed.get('surviving_pids') and not failed.get('deadline_exceeded'),
+            'exact failed clean previous Triton-cache qualification required')
+    grants = [row for row in events if row.get('event') == 'depth_driver_qualification_triton_cache_authorized' and
+              row.get('job_id') == previous]
+    reserves = [row for row in events if row.get('event') == 'reserve' and row.get('job_id') == previous]
+    require(len(grants) == len(reserves) == 1 and grants[0]['sequence'] < reserves[0]['sequence'] < failed['sequence'] and
+            reserves[0].get('evidence') == dict(request=grants[0]['request']),
+            'exact consumed previous Triton-cache qualification authority required')
+    retained, _ = validate_request(grants[0]['request'], completed=True)
+    require(retained['job_id'] == previous, 'previous Triton-cache grant names a different attempt')
+    check_predecessor(events, retained)
+    require(all(retained[key] == request[key] for key in
+            ('setup', 'strace') + BASE_LINEAGE + ATTEMPTS[previous]['lineage']) and
+            reserves[0].get('command') == retained['command'], 'previous Triton-cache retained lineage differs')
+    trace = verify_record(request[trace_key])
+    require(trace['path'] == str(Path(retained['output']).with_suffix('.syscalls.log')),
+            'exact retained previous Triton-cache qualification trace required')

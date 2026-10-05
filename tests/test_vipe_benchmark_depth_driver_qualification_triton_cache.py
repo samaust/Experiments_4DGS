@@ -47,9 +47,9 @@ class QualificationTritonCacheTests(unittest.TestCase):
    with patch('vipe_benchmark.depth_admission.local_source_records',return_value=sources),patch('vipe_benchmark.execution.resources',return_value=live):
     ledger.authorize_depth_driver_qualification_triton_cache(record)
     with patch('vipe_benchmark.ledger.time.time',return_value=ledger.events()[-1]['recorded_unix']+31):
-     with self.assertRaisesRegex(ValueError,'fresh exact qualification005'):ledger.reserve(JOB,request['command'],dict(request=record))
+     with self.assertRaisesRegex(ValueError,'fresh exact .*qualification-005'):ledger.reserve(JOB,request['command'],dict(request=record))
     ledger.note('fixture_interleaved_event')
-    with self.assertRaisesRegex(ValueError,'fresh exact qualification005'):ledger.reserve(JOB,request['command'],dict(request=record))
+    with self.assertRaisesRegex(ValueError,'fresh exact .*qualification-005'):ledger.reserve(JOB,request['command'],dict(request=record))
    self.assertNotIn(JOB,ledger.states())
  def test_note_cannot_mint_authority(self):
   with tempfile.TemporaryDirectory() as d:
@@ -124,3 +124,82 @@ class QualificationTritonCacheTests(unittest.TestCase):
     with self.subTest(key=key):
      with self.assertRaisesRegex(ValueError,'exact D6 driver qualification result'):validate_result(dict(result,**{key:value}),record,cleanup_confirmed=True)
    with self.assertRaisesRegex(ValueError,'descriptor proof'):validate_result(dict(result,guard_startup_proof=dict(proof,unix_listen_allowed=False)),record,cleanup_confirmed=True)
+
+
+JOB6='plan069-D6-driver-qualification-006'
+
+
+def fixture006(root):
+ ledger,record5,request5,sources,live=fixture(root)
+ with patch('vipe_benchmark.depth_admission.local_source_records',return_value=sources),patch('vipe_benchmark.execution.resources',return_value=live):
+  ledger.authorize_depth_driver_qualification_triton_cache(record5);ledger.reserve(JOB,request5['command'],dict(request=record5));finish=ledger.finish(JOB,'failed',1,cleanup_confirmed=True)
+ def save(name,value):
+  path=root/name;write_json(path,value);return file_record(path)
+ fifth=save('failed005.json',finish)
+ trace=Path(request5['output']).with_suffix('.syscalls.log');trace.write_text('KeyError triton_cache fixture')
+ worker=save('producer009.py',{'fixture':True});guard=save('guard009.py',{'fixture':True});startup=save('startup009.py',{'fixture':True});sources=[worker,guard,startup]
+ source=read_json(request5['source_review']['path']);source['local_sources']=sources
+ lineage=dict(job_id=JOB6,worker=worker,network_guard=guard,guard_startup=startup,fifth_predecessor_finish=fifth,fifth_predecessor_trace=file_record(trace))
+ request=dict(request5,output=str(root/'qualification006'),**lineage)
+ proposal=dict(read_json(request5['review']['path'])['proposal'],**lineage)
+ request['review']=save('review006.json',dict(schema='plan069-D6-driver-qualification-review/v5',status='REVIEW',proposal=proposal))
+ request['authorization']=save('DO006.json',dict(schema='plan069-D6-driver-qualification-authorization/v5',status='DO',review=request['review'],proposal_sha256=object_hash(proposal)))
+ request['source_review']=save('source006.json',source)
+ request['cpu_validation']=save('cpu006.json',dict(schema='plan069-delta-cpu-test-capture/v1',record_kind='fixture',passed=True,within_wall_limit=True,source_bytes_unchanged=True,sources_before=sources,sources_after=sources))
+ path=root/'request006.json';command=list(request5['command']);command[10]=str(Path(request['output']).with_suffix('.syscalls.log'));command[14]=worker['path'];command[17]=str(path);command[19]=request['output'];request['command']=command;write_json(path,request)
+ return ledger,file_record(path),request,sources,live
+
+
+class QualificationTritonCacheRetryTests(unittest.TestCase):
+ def test_fresh006_after_consumed005_preserves_all_attempts(self):
+  with tempfile.TemporaryDirectory() as d:
+   ledger,record,request,sources,live=fixture006(Path(d))
+   with patch('vipe_benchmark.depth_admission.local_source_records',return_value=sources),patch('vipe_benchmark.execution.resources',return_value=live):
+    ledger.authorize_depth_driver_qualification_triton_cache(record);reserve=ledger.reserve(JOB6,request['command'],dict(request=record))
+   self.assertEqual(reserve['seconds'],180);self.assertEqual(ledger.states()[JOB]['status'],'failed');self.assertEqual(ledger.states()[prior.JOB]['status'],'failed')
+ def test_006_requires_consumed_failed005(self):
+  from vipe_benchmark.depth_driver_qualification_triton_cache import check_predecessor
+  with tempfile.TemporaryDirectory() as d:
+   ledger,record,request,sources,live=fixture006(Path(d))
+   finish=read_json(request['fifth_predecessor_finish']['path']);finish['status']='complete'
+   Path(request['fifth_predecessor_finish']['path']).write_text(json.dumps(finish));changed=dict(request,fifth_predecessor_finish=file_record(request['fifth_predecessor_finish']['path']))
+   with self.assertRaisesRegex(ValueError,'previous Triton-cache'):check_predecessor(ledger.events(),changed)
+  with tempfile.TemporaryDirectory() as d:
+   ledger,record,request,sources,live=fixture006(Path(d))
+   foreign=Path(d)/'foreign.trace';foreign.write_text('not retained005')
+   with self.assertRaisesRegex(ValueError,'previous Triton-cache qualification trace'):check_predecessor(ledger.events(),dict(request,fifth_predecessor_trace=file_record(foreign)))
+ def test_006_cannot_authorize_before_005_is_consumed(self):
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d);ledger,record5,request5,sources,live=fixture(root)
+   from vipe_benchmark.depth_driver_qualification_triton_cache import check_predecessor
+   with self.assertRaisesRegex(ValueError,'failed clean previous Triton-cache'):check_predecessor(ledger.events(),dict(request5,job_id=JOB6,fifth_predecessor_finish=request5['fourth_predecessor_finish'],fifth_predecessor_trace=request5['fourth_predecessor_trace']))
+ def test_consumed006_cannot_retry_and_005_grant_cannot_be_reused(self):
+  with tempfile.TemporaryDirectory() as d:
+   ledger,record,request,sources,live=fixture006(Path(d))
+   with patch('vipe_benchmark.depth_admission.local_source_records',return_value=sources),patch('vipe_benchmark.execution.resources',return_value=live):
+    ledger.authorize_depth_driver_qualification_triton_cache(record);ledger.reserve(JOB6,request['command'],dict(request=record));ledger.finish(JOB6,'failed',1,cleanup_confirmed=True)
+    before=ledger.events()
+    with self.assertRaisesRegex(ValueError,'consumed'):ledger.authorize_depth_driver_qualification_triton_cache(record)
+    with self.assertRaisesRegex(ValueError,'consumed'):ledger.reserve(JOB6,request['command'],dict(request=record))
+   self.assertEqual(before,ledger.events())
+ def test_006_requires_method009_paths_for_actual_requests(self):
+  from vipe_benchmark.depth_driver_qualification_triton_cache import ATTEMPTS
+  self.assertEqual(ATTEMPTS[JOB6]['method'],'moge-driver-method-009');self.assertEqual(ATTEMPTS[JOB6]['previous'],JOB)
+  with tempfile.TemporaryDirectory() as d:
+   ledger,record,request,sources,live=fixture006(Path(d))
+   cpu=read_json(request['cpu_validation']['path']);cpu.update(record_kind='actual',commands=[dict(returncode=0,timed_out=False,cleanup=dict(confirmed_no_surviving_observed_processes=True,surviving_observed_owned_processes=[]))])
+   Path(request['cpu_validation']['path']).write_text(json.dumps(cpu))
+   actual=dict(request,record_kind='actual',cpu_validation=file_record(request['cpu_validation']['path']))
+   with self.assertRaisesRegex(ValueError,'versioned attempt producer'):validate_request(rewrite(record,actual))
+ def test_006_grant_cannot_reserve_another_attempt(self):
+  with tempfile.TemporaryDirectory() as d:
+   ledger,record,request,sources,live=fixture006(Path(d))
+   with patch('vipe_benchmark.depth_admission.local_source_records',return_value=sources),patch('vipe_benchmark.execution.resources',return_value=live):
+    ledger.authorize_depth_driver_qualification_triton_cache(record);before=ledger.events()
+    with self.assertRaises(ValueError):ledger.reserve(JOB,request['command'],dict(request=record))
+   self.assertEqual(before,ledger.events())
+ def test_method009_sources_are_in_D6_closure(self):
+  from vipe_benchmark.depth_admission import local_source_records
+  with patch('vipe_benchmark.depth_admission.file_record',side_effect=lambda path:dict(path=str(path))):paths={r['path'] for r in local_source_records('D6')}
+  for suffix in ['moge-driver-method-009/producer.py','moge-driver-method-009/network_guard.py','moge-driver-method-009/startup.py']:
+   self.assertTrue(any(p.endswith(suffix) for p in paths),suffix)

@@ -144,6 +144,9 @@ def local_source_records(candidate):
         records.extend(file_record(ROOT / path) for path in (
             'scripts/basketball_vipe_depth_driver_qualification_triton_cache.py',
             'scripts/basketball_vipe_triton_helper_cache.py',
+            'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-009/producer.py',
+            'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-009/network_guard.py',
+            'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-009/startup.py',
             'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-008/producer.py',
             'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-008/network_guard.py',
             'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-008/startup.py',
@@ -335,7 +338,8 @@ def review(proposal, *, config, commercial, assets, runtime, live,
         try:
             receipt = qualification.get('driver_qualification', {})
             finish = read_json(verify_record(receipt['finish'])['path'])
-            if finish.get('job_id') == 'plan069-D6-driver-qualification-005':
+            from .depth_driver_qualification_triton_cache import ATTEMPTS as triton_cache_attempts
+            if finish.get('job_id') in triton_cache_attempts:
                 from .depth_driver_qualification_triton_cache import qualification_exception as triton_cache_exception
                 triton_cache_exception(qualification, events=setup_events, run_root=run_root)
             elif finish.get('job_id') == 'plan069-D6-driver-qualification-004':

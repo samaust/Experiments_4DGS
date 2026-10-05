@@ -1,4 +1,4 @@
-"""Supervise the separately approved D6 qualification005; preserve attempts001-004."""
+"""Supervise one separately approved D6 Triton-cache qualification (005+); preserve earlier attempts."""
 import argparse
 import os
 from pathlib import Path
@@ -43,15 +43,22 @@ def publish_result_envelope(out,record,proposal,validate_result):
 
 
 def dispatch(request_path):
-    from vipe_benchmark.depth_driver_qualification_triton_cache import JOB,validate_request,validate_result,reservation_evidence
+    from vipe_benchmark.depth_driver_qualification_triton_cache import ATTEMPTS,validate_request,validate_result,reservation_evidence
     from vipe_benchmark.depth_admission import local_source_records
     from vipe_benchmark.triton_helper_cache import validate_binding
     record=file_record(request_path)
     request,proposal=validate_request(record,current_sources=local_source_records('D6'))
+    JOB=request['job_id']
+    if JOB not in ATTEMPTS:
+        raise ValueError('unknown Triton-cache qualification attempt')
     if os.environ.get('CUDA_VISIBLE_DEVICES') not in (None,'0'):
         raise ValueError('qualification requires the approved unmasked single GPU')
     for variable in ('LD_PRELOAD','LD_AUDIT','PYTHONPATH','PYTHONHOME'):
         if variable in os.environ:
+            raise ValueError('unreviewed loader/path injection: '+variable)
+    # The worker accepts only the supervisor's per-attempt Triton paths; fail before consuming the grant.
+    for variable in os.environ:
+        if variable.startswith('TRITON_'):
             raise ValueError('unreviewed loader/path injection: '+variable)
     if request['record_kind']!='actual':
         raise ValueError('fixture cannot dispatch actual GPU qualification')

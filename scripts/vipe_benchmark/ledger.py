@@ -24,10 +24,12 @@ class Ledger:
         allocated = jobs(self.config)
         for event in events:
             if event['event'] == 'depth_driver_qualification_triton_cache_authorized':
-                from .depth_driver_qualification_triton_cache import JOB as qualification_triton_cache_job, validate_request as qualification_triton_cache_request
-                _, proposal = qualification_triton_cache_request(event['request'], completed=True)
-                allocated[qualification_triton_cache_job] = dict(id=qualification_triton_cache_job, resource='gpu', seconds=proposal['seconds'],
-                    scope='separately approved D6 Triton-helper-cache driver qualification005')
+                from .depth_driver_qualification_triton_cache import validate_request as qualification_triton_cache_request
+                granted, proposal = qualification_triton_cache_request(event['request'], completed=True)
+                if granted['job_id'] != event.get('job_id'):
+                    raise ValueError('Triton-cache grant job differs from its request')
+                allocated[granted['job_id']] = dict(id=granted['job_id'], resource='gpu', seconds=proposal['seconds'],
+                    scope='separately approved D6 Triton-helper-cache driver ' + granted['job_id'])
             if event['event'] == 'depth_driver_qualification_local_listen_authorized':
                 from .depth_driver_qualification_local_listen import JOB as qualification_local_listen_job, validate_request as qualification_local_listen_request
                 _, proposal = qualification_local_listen_request(event['request'], completed=True)
@@ -235,16 +237,17 @@ class Ledger:
                     if validate_retry(candidate, proposal, events, self.path.parent) != bound['retry']:
                         raise ValueError('map retry approval changed after authorization')
                 self._depth_command(candidate, bound, source, evidence, command, job_id=job_id)
-            if job_id == 'plan069-D6-driver-qualification-005':
+            from .depth_driver_qualification_triton_cache import ATTEMPTS as triton_cache_attempts
+            if job_id in triton_cache_attempts:
                 from .depth_driver_qualification_triton_cache import check_predecessor as triton_cache_predecessor, validate_request as triton_cache_request
-                grants = [row for row in events if row['event'] == 'depth_driver_qualification_triton_cache_authorized']
+                grants = [row for row in events if row['event'] == 'depth_driver_qualification_triton_cache_authorized' and row.get('job_id') == job_id]
                 if len(grants) != 1 or events[-1] != grants[0] or time.time() - grants[0]['recorded_unix'] > 30:
-                    raise ValueError('fresh exact qualification005 authorization required')
+                    raise ValueError('fresh exact ' + job_id + ' authorization required')
                 from .depth_admission import local_source_records
                 request, _ = triton_cache_request(grants[0]['request'], current_sources=local_source_records('D6'))
                 triton_cache_predecessor(events, request)
-                if command != request['command'] or evidence != dict(request=grants[0]['request']):
-                    raise ValueError('qualification005 command/evidence differs')
+                if request['job_id'] != job_id or command != request['command'] or evidence != dict(request=grants[0]['request']):
+                    raise ValueError(job_id + ' command/evidence differs')
             if job_id == 'plan069-D6-driver-qualification-004':
                 from .depth_driver_qualification_local_listen import check_predecessor as local_listen_predecessor, validate_request as local_listen_request
                 grants = [row for row in events if row['event'] == 'depth_driver_qualification_local_listen_authorized']
@@ -360,28 +363,30 @@ class Ledger:
                 job_id=JOB, request=request_record, seconds=proposal['seconds']))
 
     def authorize_depth_driver_qualification_triton_cache(self, request_record):
-        """Allocate one fresh explicit005 approval; original slots remain consumed."""
-        from .depth_driver_qualification_triton_cache import JOB, check_predecessor, validate_request
+        """Allocate one fresh explicit approval for the next Triton-cache attempt; earlier slots remain consumed."""
+        from .depth_driver_qualification_triton_cache import check_predecessor, validate_request
         from .depth_admission import local_source_records
         request, proposal = validate_request(request_record, current_sources=local_source_records('D6'))
+        job = request['job_id']
         if Path(request['ledger_path']).absolute() != self.path.absolute():
-            raise ValueError('qualification005 ledger binding differs')
+            raise ValueError(job + ' ledger binding differs')
         from .execution import resources
         with self.locked() as (stream, events):
             check_predecessor(events, request)
-            if any(row['event'] == 'depth_driver_qualification_triton_cache_authorized' for row in events) or JOB in self.states(events):
-                raise ValueError('qualification005 already authorized or consumed')
+            if any(row['event'] == 'depth_driver_qualification_triton_cache_authorized' and row.get('job_id') == job
+                   for row in events) or job in self.states(events):
+                raise ValueError(job + ' already authorized or consumed')
             if any(row['event'] == 'reserve' for row in self.states(events).values()):
                 raise ValueError('unreconciled active attempt')
             live = resources(self.path.parent, gpu=True)
             if self.config['gpu_total_seconds_limit'] - self.totals(events)['gpu']['elapsed_seconds'] < proposal['seconds']:
                 raise ValueError('insufficient global GPU wall allocation')
             if live['gpu_pids'] or live['device_bytes'] > proposal['device_bytes']:
-                raise ValueError('qualification005 GPU owner/device bound')
+                raise ValueError(job + ' GPU owner/device bound')
             if live['download_bytes'] > self.config['new_download_gib_limit'] * 1024**3 or live['artifact_bytes'] > self.config['new_artifact_disk_gib_limit'] * 1024**3:
                 raise ValueError('global disk or download cap exceeded')
             return self._append(stream, events, dict(event='depth_driver_qualification_triton_cache_authorized',
-                job_id=JOB, request=request_record, seconds=proposal['seconds']))
+                job_id=job, request=request_record, seconds=proposal['seconds']))
 
     def authorize_depth_driver_qualification_local_listen(self, request_record):
         """Allocate one fresh explicit004 approval; original slots remain consumed."""

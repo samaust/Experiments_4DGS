@@ -20,11 +20,11 @@ class RecoveryQualificationDispatchTests(unittest.TestCase):
         self.path=self.root/'request.json';write_json(self.path,{'fixture':'never executed'})
         self.record=file_record(self.path);self.output=self.root/'jobs'/JOB
         self.sources=[{'fixture_source':True}]
-        self.request=dict(record_kind='actual',ledger_path=str(self.root/'ledger.jsonl'),output=str(self.output),command=['fixture worker'],triton_cache={'fixture_cache':True})
+        self.request=dict(record_kind='actual',ledger_path=str(self.root/'ledger.jsonl'),output=str(self.output),command=['fixture worker'],triton_cache={'fixture_cache':True},job_id=JOB)
         self.cache_validator=Mock()
         self.proposal=dict(seconds=180,cleanup_seconds=30,device_bytes=2*1024**3,artifact_bytes=64*1024**2)
         self.validator=Mock(return_value=(self.request,self.proposal));self.result_validator=Mock()
-        self.authority=SimpleNamespace(JOB=JOB,validate_request=self.validator,validate_result=self.result_validator,reservation_evidence=lambda record,request:dict(request=record))
+        self.authority=SimpleNamespace(JOB=JOB,ATTEMPTS={JOB:{}},validate_request=self.validator,validate_result=self.result_validator,reservation_evidence=lambda record,request:dict(request=record))
         self.states={};self.ledger=Mock();self.ledger.states.side_effect=lambda:self.states
         self.extra_log_bytes=0;self.worker_failure=False;self.finish_changes={};self.sampler=Mock(return_value=dict(device_bytes=0,gpu_pids=[],download_bytes=0,artifact_bytes=0))
         spec=importlib.util.spec_from_file_location('driver_recovery_dispatch',ROOT/'scripts/basketball_vipe_depth_driver_qualification_triton_cache.py')
@@ -113,6 +113,11 @@ class RecoveryQualificationDispatchTests(unittest.TestCase):
                 patch('vipe_benchmark.depth_admission.local_source_records',return_value=self.sources), \
                 patch.dict(os.environ,{'PYTHONPATH':'injected'},clear=True):
             with self.assertRaisesRegex(ValueError,'injection'):self.module.dispatch(self.path)
+        with patch.dict(sys.modules,{'vipe_benchmark.depth_driver_qualification_triton_cache':self.authority}), \
+                patch('vipe_benchmark.depth_admission.local_source_records',return_value=self.sources), \
+                patch.dict(os.environ,{'TRITON_CACHE_MANAGER':'evil:Cache'},clear=True):
+            with self.assertRaisesRegex(ValueError,'injection: TRITON_CACHE_MANAGER'):self.module.dispatch(self.path)
+        self.ledger.authorize_depth_driver_qualification_triton_cache.assert_not_called()
 
 
 class Method008ProducerTests(unittest.TestCase):
@@ -258,3 +263,45 @@ class Method008TritonCacheOrderTests(unittest.TestCase):
         source=(ROOT/'scripts/vipe_benchmark/supervisor.py').read_text()
         for name,folder in module.SUPERVISED_TRITON:
             self.assertIn("('%s', '%s')"%(name,folder),source)
+
+
+class Method009RequestShadowingTests(unittest.TestCase):
+    def test_triton_cache_is_read_only_from_the_verified_qualification_request(self):
+        import inspect
+        spec=importlib.util.spec_from_file_location('method009shadow',ROOT/'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-009/producer.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        source=inspect.getsource(module.driver_child)
+        shadow=source.index('request = read(args.setup_request)')
+        self.assertLess(source.index("qualification = early['request']"),shadow)
+        after=source[shadow:]
+        for key in ('triton_cache','listen_exception','bind_exception','fourth_predecessor','fifth_predecessor','worker'):
+            self.assertNotIn("request['%s']"%key,after,key)
+        self.assertEqual(after.count("qualification['triton_cache']"),2)
+        self.assertLess(after.index('bind_triton_cache(qualification, out)'),after.index('import torch'))
+
+    def test_bind_triton_cache_runs_on_a_real_qualification_request_shape(self):
+        from test_vipe_benchmark_triton_helper_cache import fixture as cache_fixture
+        from test_vipe_benchmark_depth_driver_qualification_triton_cache import fixture006
+        spec=importlib.util.spec_from_file_location('method009bind',ROOT/'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-009/producer.py')
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory).resolve()
+            ledger,record,qualification,sources,live=fixture006(root)
+            from vipe_benchmark.files import read_json
+            setup_request=read_json(qualification['setup_request']['path']) if Path(qualification['setup_request']['path']).exists() else {}
+            self.assertNotIn('triton_cache',setup_request)
+            binding=read_json(qualification['triton_cache']['path'])
+            triton=Path(binding['driver_source']['path']).parents[2]
+            output=Path(qualification['output']);temporary=output.with_name(output.name+'-temporary')
+            environment={name:str(temporary/folder) for name,folder in module.SUPERVISED_TRITON}
+            with patch.object(module.importlib.util,'find_spec',return_value=SimpleNamespace(origin=str(triton/'__init__.py'))):
+                directory_found,cache=module.bind_triton_cache(qualification,output,environment)
+                self.assertEqual(directory_found,triton);self.assertEqual(environment['TRITON_CACHE_DIR'],binding['cache_directory'])
+                with self.assertRaises(KeyError):module.bind_triton_cache(setup_request or {'runtime_environment':{}},output,dict(environment))
+
+    def test_method009_serves_only_qualification006(self):
+        source=(ROOT/'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-009/producer.py').read_text()
+        self.assertIn("request.get('job_id') == 'plan069-D6-driver-qualification-006'",source)
+        self.assertIn("require(JOB == 'plan069-D6-driver-qualification-006'",source)
+        guard=lambda n:(ROOT/f'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-00{n}/network_guard.py').read_bytes()
+        self.assertEqual(guard(9),guard(7))
