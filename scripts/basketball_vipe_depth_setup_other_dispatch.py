@@ -107,45 +107,64 @@ def dispatch(candidate, run_id, *, source_review_path=None):
     return outcome
 
 
-def dispatch_recovery(local, inputs):
-    """Write, authorize and supervise the reviewed D8 setup recovery in run root ``local``.
+def _recovery_evidence(grant):
+    """The exact grant fields the ledger requires as reservation evidence."""
+    return {key: grant[key] for key in ('request', 'review', 'authorization', 'source_review',
+                                        'worker', 'executable')}
+
+
+def dispatch_recovery(run_root, inputs):
+    """Write, authorize and supervise the reviewed D8 setup recovery in ``run_root``.
 
     ``inputs`` names the exact recovery REVIEW, its DO and the current source review.
     The ledger validates the full recovery authority before the single reservation.
+    A request left by a refused authorization is reused only if byte-identical and
+    nothing was granted, reserved or written for the job.
     """
-    from vipe_benchmark.depth_native_setup_recovery import CANDIDATE, JOB
-    from vipe_benchmark.setup_recovery_core import RECOVERY_CANDIDATES
-    local = Path(local).resolve()
+    from vipe_benchmark.depth_native_setup_recovery import (CANDIDATE, JOB, validate_recovery_request,
+                                                            validate_recovery_result)
+    from vipe_benchmark.setup_recovery_core import RECOVERY_CANDIDATES, RECOVERY_EVENT
+    if Path('/proc/1/comm').read_text().strip() != 'systemd':
+        raise PermissionError('depth setup recovery supervision requires host PID visibility')
+    run_root = Path(run_root).resolve()
     config = dict(load(), new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
-    ledger = Ledger(local / 'ledger.jsonl', config)
+    ledger = Ledger(run_root / 'ledger.jsonl', config)
     review = verify_record(inputs['review'])
     proposal = read_json(review['path'])['setup_recovery_proposal']
-    output = local / 'jobs' / JOB
-    request_path = local / 'requests' / (JOB + '.json')
-    if output.exists() or request_path.exists():
-        raise ValueError('setup recovery already prepared, reserved or attempted')
-    write_json(request_path, dict(schema='plan069-depth-setup-recovery-request/v1', record_kind='actual',
-        candidate=CANDIDATE, job_id=JOB, ledger_path=str(local / 'ledger.jsonl'), review=review,
+    output = run_root / 'jobs' / JOB
+    request_path = run_root / 'requests' / (JOB + '.json')
+    request = dict(schema='plan069-depth-setup-recovery-request/v1', record_kind='actual',
+        candidate=CANDIDATE, job_id=JOB, ledger_path=str(run_root / 'ledger.jsonl'), review=review,
         authorization=verify_record(inputs['authorization']), source_review=verify_record(inputs['source_review']),
-        original_setup=proposal['original_setup'], runtime_environment=recipe(CANDIDATE, local),
-        acquisitions=proposal['acquisitions']))
-    request = file_record(request_path)
+        original_setup=proposal['original_setup'], runtime_environment=recipe(CANDIDATE, run_root),
+        acquisitions=proposal['acquisitions'])
+    if output.exists() or output.is_symlink() or any(
+            row.get('job_id') == JOB and row.get('event') in (RECOVERY_EVENT, 'reserve', 'finish', 'account')
+            for row in ledger.events()):
+        raise ValueError('setup recovery already prepared, reserved or attempted')
+    if request_path.exists() or request_path.is_symlink():
+        if request_path.is_symlink() or read_json(request_path) != request:
+            raise ValueError('setup recovery already prepared, reserved or attempted')
+    else:
+        write_json(request_path, request)
+    request_record = file_record(request_path)
+    normalized = validate_recovery_request(request_record, ledger.events(), run_root)
     worker = ROOT / 'scripts' / RECOVERY_CANDIDATES[CANDIDATE]['worker']
     command = [sys.executable, str(worker), '--request', str(request_path), '--output', str(output)]
-    grant = ledger.authorize_depth_setup_recovery(request, command=command, worker=file_record(worker),
+    grant = ledger.authorize_depth_setup_recovery(request_record, command=command, worker=file_record(worker),
                                                   executable=file_record(sys.executable))
 
+    def sample():
+        reading = resources(run_root, gpu=True)
+        for key in ('download_bytes', 'artifact_bytes'):
+            if reading[key] > grant['byte_limits'][key]:
+                raise ValueError(key + ' setup recovery exceeds its approved byte limit')
+        return reading
+
     def validate(out):
-        result = read_json(verify_record(file_record(out / 'result.json'))['path'])
-        if (result.get('schema') != RECOVERY_CANDIDATES[CANDIDATE]['result_schemas'][JOB] or
-                result.get('status') != 'complete' or result.get('job_id') != JOB or
-                result.get('request') != request):
-            raise ValueError('setup recovery result differs from its reviewed request')
-    return supervise(ledger, JOB, command, output,
-        evidence={key: grant[key] for key in ('request', 'review', 'authorization', 'source_review',
-                                              'worker', 'executable')},
-        sample_resources=lambda: resources(local, gpu=True), validate_result=validate,
-        poll_seconds=2., seconds_limit=grant['seconds'])
+        validate_recovery_result(read_json(verify_record(file_record(out / 'result.json'))['path']), normalized)
+    return supervise(ledger, JOB, command, output, evidence=_recovery_evidence(grant),
+        sample_resources=sample, validate_result=validate, poll_seconds=2., seconds_limit=grant['seconds'])
 
 
 def main():
@@ -153,7 +172,18 @@ def main():
     parser.add_argument('--candidate', choices=('D8', 'D11'), required=True)
     parser.add_argument('--run-id', default='plan031-20260913T032700Z')
     parser.add_argument('--source-review', help='Exact immutable independently reviewed source receipt')
+    parser.add_argument('--recovery-review', help='Reviewed D8 setup-recovery REVIEW (recovery dispatch)')
+    parser.add_argument('--recovery-authorization', help='Explicit D8 setup-recovery DO (recovery dispatch)')
     args = parser.parse_args()
+    if args.recovery_review or args.recovery_authorization:
+        if not (args.candidate == 'D8' and args.recovery_review and args.recovery_authorization and
+                args.source_review and args.run_id == 'plan031-20260913T032700Z'):
+            raise ValueError('D8 recovery needs its REVIEW, DO and current source review in the Plan 031 run')
+        run_root = shared_run_root() / '.local/vipe-alternatives' / args.run_id
+        dispatch_recovery(run_root, {key: file_record(path) for key, path in (
+            ('review', args.recovery_review), ('authorization', args.recovery_authorization),
+            ('source_review', args.source_review))})
+        return
     dispatch(args.candidate, args.run_id, source_review_path=args.source_review)
 
 

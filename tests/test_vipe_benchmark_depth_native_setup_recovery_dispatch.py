@@ -18,6 +18,23 @@ class NativeSetupRecoveryDispatchTests(NativeSetupRecoveryFixture):
                       return_value=dict(download_bytes=10, artifact_bytes=20, gpu_pids=[])):
             return dispatcher.dispatch_recovery(self.run_root, inputs)
 
+    def test_request_left_by_a_refused_authorization_can_be_retried_unchanged(self):
+        inputs = self.request_inputs()
+        (self.run_root / 'requests' / (JOB + '.json')).unlink()
+        with patch.object(dispatcher, 'recipe', return_value=self.environment), \
+                patch('vipe_benchmark.execution.resources',
+                      return_value=dict(download_bytes=10, artifact_bytes=20, gpu_pids=[4242])), \
+                patch.object(dispatcher, 'supervise') as supervise:
+            with self.assertRaisesRegex(ValueError, 'GPU owner'):
+                dispatcher.dispatch_recovery(self.run_root, inputs)
+            supervise.assert_not_called()
+        self.assertTrue((self.run_root / 'requests' / (JOB + '.json')).exists())
+        with patch.object(dispatcher, 'supervise', return_value=dict(status='complete')), \
+                patch.object(dispatcher, 'recipe', return_value=self.environment), \
+                patch('vipe_benchmark.execution.resources',
+                      return_value=dict(download_bytes=10, artifact_bytes=20, gpu_pids=[])):
+            self.assertEqual(dispatcher.dispatch_recovery(self.run_root, inputs), dict(status='complete'))
+
     def request_inputs(self):
         request = read_json(self.request['path'])
         return dict(review=request['review'], authorization=request['authorization'],
@@ -44,9 +61,10 @@ class NativeSetupRecoveryDispatchTests(NativeSetupRecoveryFixture):
                   if 'depth_setup_recovery_authorized' in line]
         self.assertEqual(len(events), 1)
 
-    def test_existing_recovery_request_is_never_overwritten(self):
+    def test_a_different_existing_recovery_request_is_never_overwritten(self):
         before = (self.run_root / 'ledger.jsonl').read_bytes()
-        with patch.object(dispatcher, 'supervise') as supervise:
+        with patch.object(dispatcher, 'supervise') as supervise, \
+                patch.object(dispatcher, 'recipe', return_value=dict(self.environment, requirements=[])):
             with self.assertRaisesRegex(ValueError, 'already prepared'):
                 dispatcher.dispatch_recovery(self.run_root, self.request_inputs())
             supervise.assert_not_called()

@@ -179,15 +179,26 @@ def accepted_setup_lineage(setup_record, events, run_root, *, verifier=verify_re
              'exact completed recovery request binding required')
     normalized = validate_recovery_request(request_record, events, root, verifier=verifier, historical=True)
     for key in ('review', 'authorization', 'source_review'):
-        _require(result.get(key) == grant.get(key) == normalized[key],
-                 'completed recovery approval binding changed: ' + key)
+        _require(grant.get(key) == normalized[key], 'completed recovery approval binding changed: ' + key)
+    validate_recovery_result(result, normalized)
+    return dict(normalized, accepted_result=result, setup=setup_record, grant=grant, reserve=reserve,
+                finish=finish, job=JOB)
+
+
+def validate_recovery_result(result, normalized):
+    """Require a recovery result to match its validated request, original and bounds."""
     proposal = normalized['map_proposal']
+    received = result.get('bytes_received')
+    _require(result.get('schema') == RECOVERY_CANDIDATES[CANDIDATE]['result_schemas'][JOB] and
+             result.get('record_kind') == 'actual' and result.get('status') == 'complete' and
+             result.get('candidate') == CANDIDATE and result.get('job_id') == JOB and
+             result.get('request') == normalized['request'] and
+             all(result.get(key) == normalized[key] for key in ('review', 'authorization', 'source_review')),
+             'recovery result differs from its reviewed request')
     _require(result.get('original_setup') == normalized['original'] and
              result.get('source_archive') == normalized['original']['source_archive'] and
              result.get('source_revision') == proposal['candidate_config']['code']['revision'] and
              result.get('weight_revision') == proposal['candidate_config']['weights']['revision'] and
              result.get('original_failure_preserved') is True and result.get('automatic_retries') == 0 and
-             type(result.get('bytes_received')) is int,
+             type(received) is int and 0 <= received <= proposal['allocation']['download_bytes'],
              'recovery changed original sources, model or accounting')
-    return dict(normalized, accepted_result=result, setup=setup_record, grant=grant, reserve=reserve,
-                finish=finish, job=JOB)
