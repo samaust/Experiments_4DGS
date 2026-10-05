@@ -161,5 +161,13 @@ class NativeSetupRecoveryAuthorityTests(unittest.TestCase):
         self.assert_refused('original remaining candidate allowance')
 
 
+class AmendedNativeRecipeTests(unittest.TestCase):
+    def test_d8_lock_declares_the_utils3d_rendering_dependency_exactly(self):
+        from vipe_benchmark.depth_native_runtime import D8_REQUIREMENTS
+        self.assertIn('moderngl==5.12.0', D8_REQUIREMENTS)
+        self.assertIn('glcontext==3.0.0', D8_REQUIREMENTS)
+        self.assertIn('torch==2.14.1+cu130', D8_REQUIREMENTS)
+
+
 if __name__ == '__main__':
     unittest.main()

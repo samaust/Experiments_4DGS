@@ -13,6 +13,8 @@ D8_REQUIREMENTS = (
     'torch==2.14.1+cu130', 'torchvision==0.29.1+cu130', 'numpy==1.26.4',
     'gradio', 'click', 'opencv-python', 'scipy', 'matplotlib', 'trimesh',
     'pillow', 'huggingface-hub', 'setuptools==80.9.0', 'wheel', 'packaging',
+    # Pinned utils3d declares moderngl (rasterization); user chose a complete lock (Plan 070).
+    'moderngl==5.12.0', 'glcontext==3.0.0',
 )
 UTILS3D_REPOSITORY = 'EasternJournalist/utils3d'
 
