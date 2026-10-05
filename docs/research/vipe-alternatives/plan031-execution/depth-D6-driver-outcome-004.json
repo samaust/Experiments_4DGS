@@ -1,0 +1,53 @@
+{
+  "schema": "plan069-D6-driver-qualification-outcome/v4",
+  "status": "failed",
+  "job_id": "plan069-D6-driver-qualification-004",
+  "finish": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-driver-failure-004/finish.json",
+    "sha256": "90e0b097ab4865930080a71785ce7f8dc004eaea7df41b513ceae8f6d932a680",
+    "bytes": 1081
+  },
+  "request": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/requests/plan069-D6-driver-qualification-004.json",
+    "sha256": "dda8d91e54c40ee0b0635a6e85c90edf98d3d0b4bcaa9ba19c06c722e371ee78",
+    "bytes": 8253
+  },
+  "authorization": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/depth-D6-driver-approval-004.json",
+    "sha256": "8d02a2fbf385fcdaf981d21ebfefffe808c949515cb40a1acc47e5fe79dd4a72",
+    "bytes": 931
+  },
+  "log": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-driver-qualification-004.log",
+    "sha256": "8497572af9199dd0862853b58cce7206c70a8244594a20838fc35e5ed23eaab0",
+    "bytes": 9054
+  },
+  "trace": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-driver-qualification-004.syscalls.log",
+    "sha256": "8b24d7e3e67a5d22c12205b0601554456b105b66ffc00d43af7ba8d5ee410527",
+    "bytes": 2443949
+  },
+  "parent_capture": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-qualification004-parent-capture-001/receipt.json",
+    "sha256": "6dd17788bd6f969b12de3fc6258c22e6bfda3368cf02964569ee5dd8e2570cf3",
+    "bytes": 814
+  },
+  "cpu_settlement": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-driver-failure-004/settlement.json",
+    "sha256": "8fda7d330c2a0e5af7bd7665eaae402c210f9484254e977e44aa3f6f6d9e16d2",
+    "bytes": 985
+  },
+  "elapsed_seconds": 26.513367669002037,
+  "cleanup_confirmed": true,
+  "deadline_exceeded": false,
+  "attempt_consumed": true,
+  "native_runtime_qualified": false,
+  "observations": [
+    "Guard007 local listen(16,128) succeeds; the /tmp/nvidia-mps/control connect remains denied with EPERM.",
+    "torch.cuda.init() succeeds: CUDA error 304 is resolved by the guard007 listen exception.",
+    "Importing moge.model.v3 pulls in flex_gemm, whose Triton autotuner decorators initialize the Triton CUDA driver at import time.",
+    "Triton 3.2 CudaUtils compiles its cuda_utils helper (ldconfig -p, then gcc) on a cache miss; the worker audit hook denies subprocess.Popen, so the first strict CPU load fails before any weights are read."
+  ],
+  "causality": "Directly observed in the worker traceback: PermissionError from the reviewed no-child-process audit guard at triton/backends/nvidia/driver.py libcuda_dirs during flex_gemm import.",
+  "remaining": "Fix proposal: pre-build the Triton cuda_utils helper into a hash-bound run-owned cache in a separate CPU step and point the qualification worker at it, keeping the worker subprocess-free. Requires a distinct qualification005 under the user standing approval of 2026-10-05."
+}
