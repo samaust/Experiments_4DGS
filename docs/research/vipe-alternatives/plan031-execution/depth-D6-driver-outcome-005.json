@@ -1,0 +1,52 @@
+{
+  "schema": "plan069-D6-driver-qualification-outcome/v5",
+  "status": "failed",
+  "job_id": "plan069-D6-driver-qualification-005",
+  "finish": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-driver-failure-005/finish.json",
+    "sha256": "7dc206a615646cae79e8f8ddacd61d03a0249fb35294951afed5f770f9f16730",
+    "bytes": 1081
+  },
+  "request": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/requests/plan069-D6-driver-qualification-005.json",
+    "sha256": "657245fc677ab5abfce204f5f5c46d11d4e52885af74d405f0a9f593558dc993",
+    "bytes": 9142
+  },
+  "authorization": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/depth-D6-driver-approval-005.json",
+    "sha256": "7f228c8237a5d449c89549986cb8135a4fb66dfe2ca2164619f51e1a4a8c5aa3",
+    "bytes": 1116
+  },
+  "log": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-driver-qualification-005.log",
+    "sha256": "11e8429556408d67d996ce2909cc75e9232613251a1ea2683be86cc66c50487a",
+    "bytes": 862
+  },
+  "trace": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-driver-qualification-005.syscalls.log",
+    "sha256": "cf57ff8ae206124a82cd8cda370ca88564235b0a3a576f993dea5ad92fbee32a",
+    "bytes": 2241682
+  },
+  "parent_capture": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-qualification005-parent-capture-001/receipt.json",
+    "sha256": "720ac76ffe531bd2110d98374e333fa0b067a4853324c49ef8e0123140687483",
+    "bytes": 815
+  },
+  "cpu_settlement": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-driver-failure-005/settlement.json",
+    "sha256": "07d7b620ddf141bd99b868750bffc9d5949d9955c1e11b9c6acf4a044b09dc44",
+    "bytes": 987
+  },
+  "elapsed_seconds": 19.732675215997006,
+  "cleanup_confirmed": true,
+  "deadline_exceeded": false,
+  "attempt_consumed": true,
+  "native_runtime_qualified": false,
+  "observations": [
+    "The worker failed with KeyError: triton_cache in method-008 driver_child before CUDA initialization or any Triton import.",
+    "Cause: driver_child re-binds `request` to the setup request (read(args.setup_request)) before the Triton cache block, which then read request[\"triton_cache\"] from the wrong record.",
+    "The Triton helper cache hypothesis was therefore not exercised; no CUDA, Triton, model or weight operation occurred."
+  ],
+  "causality": "Directly observed application bug in the reviewed method-008 worker (variable shadowing); unit tests exercised select_triton_cache and validate_binding but not driver_child with real request/setup records.",
+  "remaining": "Fix in a method-009 worker that binds the cache from the early-verified qualification request, with a regression test; run a distinct qualification006 under the user standing approval and the AGENTS.md post-fix retry approval."
+}
