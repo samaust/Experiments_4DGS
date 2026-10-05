@@ -65,7 +65,7 @@ class SetupRecoveryCoreTests(unittest.TestCase):
 
     def test_only_d9_keeps_the_legacy_lineage_contract(self):
         flags = {name: entry['legacy_lineage'] for name, entry in self.core.RECOVERY_CANDIDATES.items() if name != 'DX'}
-        self.assertEqual(flags, {'D9': True, 'D8': False})
+        self.assertEqual(flags, {'D9': True, 'D8': False, 'D6': False})
 
     def test_shared_core_names_no_candidate(self):
         import inspect

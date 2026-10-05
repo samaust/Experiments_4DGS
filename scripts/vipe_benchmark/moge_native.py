@@ -15,7 +15,11 @@ def load_adapter(candidate, setup_result_record, *, device='cuda'):
     if candidate not in ('D5', 'D6'):
         raise ValueError('MoGe native candidate must be D5 or D6')
     setup = read_json(verify_record(setup_result_record)['path'])
-    if (setup.get('schema') != 'plan069-depth-setup-result/v1' or
+    from .setup_recovery_core import candidate_for_job
+    # An approved runtime replacement keeps the original sources and checkpoint in the same layout.
+    replaced = candidate_for_job(setup.get('job_id')) == candidate
+    if (setup.get('schema') != ('plan069-depth-setup-recovery-result/v1' if replaced else
+                                'plan069-depth-setup-result/v1') or
             setup.get('status') != 'complete' or
             setup.get('candidate') != candidate or
             setup.get('source_revision') !=

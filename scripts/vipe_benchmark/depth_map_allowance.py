@@ -7,7 +7,7 @@ from .files import file_record, object_hash, read_json, verify_record
 # User-approved whole-slot artifact amendments, bound to one exact candidate proposal.
 # Only the whole-slot byte budget adds them; proposals, grants and global caps are unchanged.
 SLOT_ARTIFACT_AMENDMENTS = {
-    'D6': ROOT / 'docs/research/vipe-alternatives/plan031-execution/depth-D6-slot-artifact-amendment-001.json'}
+    'D6': ROOT / 'docs/research/vipe-alternatives/plan031-execution/depth-D6-slot-artifact-amendment-002.json'}
 SLOT_ARTIFACT_AMENDMENT_SCHEMA = 'plan069-depth-slot-artifact-amendment/v1'
 
 
@@ -16,27 +16,51 @@ def _require(condition, reason):
         raise ValueError(reason)
 
 
-def slot_artifact_amendment(proposal):
-    """Return (record, extra_bytes) for the candidate's approved amendment, or (None, 0)."""
-    path = SLOT_ARTIFACT_AMENDMENTS.get(proposal['candidate'])
-    if path is None or not path.exists():
-        return None, 0
-    record = file_record(path)
-    amendment = read_json(path)
+def _checked_amendment(record, proposal):
+    amendment = read_json(verify_record(record)['path'])
     extra = amendment.get('additional_artifact_bytes')
     _require(amendment.get('schema') == SLOT_ARTIFACT_AMENDMENT_SCHEMA and amendment.get('status') == 'approved' and
              amendment.get('candidate') == proposal['candidate'] and
              amendment.get('proposal_sha256') == object_hash(proposal) and
              type(extra) is int and 0 < extra <= 8 * 2**30 and bool(amendment.get('approval_basis')),
              'exact approved whole-slot artifact amendment required')
-    return record, extra
+    return amendment, extra
+
+
+def approved_amendments(proposal):
+    """The pinned current amendment first, then each superseded one it names, as (record, extra)."""
+    path = SLOT_ARTIFACT_AMENDMENTS.get(proposal['candidate'])
+    if path is None or not path.exists():
+        return []
+    chain, record = [], file_record(path)
+    while record is not None:
+        _require(record not in [row[0] for row in chain], 'cyclic whole-slot artifact amendment chain')
+        amendment, extra = _checked_amendment(record, proposal)
+        chain.append((record, extra))
+        record = amendment.get('previous_amendment')
+    return chain
+
+
+def slot_artifact_amendment(proposal):
+    """Return (record, extra_bytes) for the candidate's current approved amendment, or (None, 0)."""
+    chain = approved_amendments(proposal)
+    return chain[0] if chain else (None, 0)
 
 
 def budget_slot_allocation(proposal, budget):
-    """Amended allocation for an allocated slot budget; its bound amendment must still be current."""
-    amendment, _ = slot_artifact_amendment(proposal)
-    _require(budget.get('artifact_amendment') == amendment, 'whole-slot artifact amendment differs from allocation')
-    return slot_allocation(proposal)
+    """Allocation for an allocated slot budget under the approved amendment it was bound to.
+
+    A budget keeps the amendment current when it was allocated; a later approved amendment
+    supersedes it only for new allocations, through the explicit ``previous_amendment`` chain.
+    """
+    bound = budget.get('artifact_amendment')
+    chain = approved_amendments(proposal)
+    extras = {object_hash(record): extra for record, extra in chain}
+    _require((bound is None and not chain) or (isinstance(bound, dict) and object_hash(bound) in extras),
+             'whole-slot artifact amendment differs from allocation')
+    allocation = dict(proposal['allocation'])
+    allocation['artifact_bytes'] += extras[object_hash(bound)] if bound is not None else 0
+    return allocation
 
 
 def slot_allocation(proposal):
@@ -333,12 +357,11 @@ def check_slot_byte_budget(proposal, budget, run_root, reading, *, historical=Fa
              type(budget.get('shared_setup_artifact_bytes')) is int and
              budget['shared_setup_artifact_bytes'] >= 0 and
              all(type(budget.get('setup_baseline', {}).get(key)) is int and
-                 budget['setup_baseline'][key] >= 0 and
-                 budget.get('absolute_limits', {}).get(key) ==
-                    budget['setup_baseline'][key] + slot_allocation(proposal)[key]
-                 for key in ('download_bytes', 'artifact_bytes')),
+                 budget['setup_baseline'][key] >= 0 for key in ('download_bytes', 'artifact_bytes')),
              'exact approved whole-slot byte budget required')
     allocation = budget_slot_allocation(proposal, budget)
+    _require(all(budget.get('absolute_limits', {}).get(key) == budget['setup_baseline'][key] + allocation[key]
+                 for key in ('download_bytes', 'artifact_bytes')), 'exact approved whole-slot byte budget required')
     effective = dict(reading)
     marker = None
     if budget.get('recovery_lineage') is not None:

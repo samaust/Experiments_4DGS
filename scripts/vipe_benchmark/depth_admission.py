@@ -71,7 +71,7 @@ LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py',
     D5=('depth_authorization.py', 'moge_metric.py', 'moge_native.py', 'moge_setup.py',
         'depth_metric_scale.py', 'depth_single_run.py', 'depth_single_publish.py',
         'moge_environment.py', 'depth_environment.py', 'moge_source_build.py', 'runtime_inventory.py'),
-    D6=('depth_driver_qualification_triton_cache.py', 'triton_helper_cache.py', 'depth_driver_qualification_local_listen.py', 'depth_driver_qualification_local_bind.py', 'depth_driver_qualification_recovery.py', 'depth_driver_qualification.py', 'depth_authorization.py', 'moge_metric.py', 'moge_native.py', 'moge_setup.py',
+    D6=('depth_moge_runtime_replacement.py', 'depth_driver_qualification_triton_cache.py', 'triton_helper_cache.py', 'depth_driver_qualification_local_listen.py', 'depth_driver_qualification_local_bind.py', 'depth_driver_qualification_recovery.py', 'depth_driver_qualification.py', 'depth_authorization.py', 'moge_metric.py', 'moge_native.py', 'moge_setup.py',
         'depth_metric_scale.py', 'depth_single_run.py', 'depth_single_publish.py',
         'moge_environment.py', 'depth_environment.py', 'moge_source_build.py', 'runtime_inventory.py'),
     D7=('dav2_metric.py', 'moge_metric.py', 'depth_setup.py', 'depth_metric_scale.py', 'depth_d7_run.py', 'depth_d7_publish.py'),
@@ -143,6 +143,8 @@ def local_source_records(candidate):
     if candidate == 'D6':
         records.extend(file_record(ROOT / path) for path in (
             'scripts/basketball_vipe_depth_driver_qualification_triton_cache.py',
+            'scripts/basketball_vipe_moge_runtime_replacement.py',
+            'scripts/basketball_vipe_moge_runtime_replacement_dispatch.py',
             'scripts/basketball_vipe_triton_helper_cache.py',
             'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-011/producer.py',
             'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-011/network_guard.py',
