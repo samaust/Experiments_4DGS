@@ -5,7 +5,8 @@ its ordered recovery jobs and their result schemas. Setup-specific evidence
 (byte checkpoints, runtime recipes, media tools) stays in that candidate's own
 profile module; this core only proves which attempts happened and how they ended.
 """
-from .setup_recovery_candidates import RECOVERY_CANDIDATES
+from .depth_map_retry import map_job
+from .setup_recovery_candidates import RECOVERY_CANDIDATES, UNKNOWN_JOB_PROFILE  # noqa: F401  re-exported
 
 RECOVERY_EVENT = 'depth_setup_recovery_authorized'
 CLEAN_FINISH = dict(cleanup_confirmed=True, cleanup_uncertain=False, surviving_pids=[],
@@ -93,7 +94,7 @@ def owned_active_attempt(candidate, events, active_map_admission):
     if not active:
         return None
     _require(active_map_admission is not None and len(active) == 1 and
-             active[0].get('job_id') == RECOVERY_CANDIDATES[candidate]['maps_job'] and
+             active[0].get('job_id') == map_job(candidate, events) and
              active[0].get('resource') == 'gpu' and
              active[0].get('evidence', {}).get('admission') == active_map_admission,
              'active attempt prevents accepted recovery lineage')

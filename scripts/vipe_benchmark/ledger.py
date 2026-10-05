@@ -54,7 +54,8 @@ class Ledger:
                 from .setup_recovery_core import candidate_for_job
                 recovery_job = event.get('job_id')
                 recovery_candidate = candidate_for_job(recovery_job)
-                if recovery_candidate is None or event.get('candidate', 'D9') != recovery_candidate:
+                # Every retained recovery grant carries its candidate.
+                if recovery_candidate is None or event.get('candidate') != recovery_candidate:
                     raise ValueError('unknown checked setup recovery job')
                 for key in ('request','review','authorization','source_review'):
                     verify_record(event[key])
@@ -549,14 +550,14 @@ class Ledger:
 
     def authorize_depth_setup_recovery(self, request, *, command, worker, executable):
         """Approve a fresh immutable recovery only under an explicit new DO."""
-        from .setup_recovery_core import (RECOVERY_CANDIDATES, RECOVERY_EVENT as EVENT, candidate_for_job,
-                                          recovery_profile)
+        from .setup_recovery_core import (RECOVERY_CANDIDATES, RECOVERY_EVENT as EVENT, UNKNOWN_JOB_PROFILE,
+                                          candidate_for_job, recovery_profile)
         with self.locked() as (stream, events):
             if any(row['event'] == 'reserve' for row in self.states(events).values()):
                 raise ValueError('active attempt prevents setup recovery authorization')
-            # Route by the request's recovery job; unknown jobs keep the D9 profile's refusals.
+            # Route by the request's recovery job; unknown jobs go to a profile that refuses them.
             document = read_json(verify_record(request)['path'])
-            candidate = candidate_for_job(document.get('job_id') if isinstance(document, dict) else None) or 'D9'
+            candidate = candidate_for_job(document.get('job_id') if isinstance(document, dict) else None) or UNKNOWN_JOB_PROFILE
             normalized = recovery_profile(candidate).validate_recovery_request(request, events, self.path.parent)
             job_id = normalized['job_id']
             if job_id in self.states(events) or any(row.get('event') == EVENT and row.get('job_id') == job_id for row in events):

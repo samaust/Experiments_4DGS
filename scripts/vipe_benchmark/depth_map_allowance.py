@@ -25,9 +25,9 @@ def remaining_map_allocation(proposal, setup, events, run_root, assets, *, verif
         from .depth_recovery_lineage import recovery_map_allocation
         return recovery_map_allocation(proposal, setup, events, root, assets,
             verifier=verifier, active_map_admission=active_map_admission)
-    from .setup_recovery_core import candidate_for_job, recovery_profile
+    from .setup_recovery_core import RECOVERY_CANDIDATES, candidate_for_job, recovery_profile
     recovery_job = Path(setup['path']).parent.name
-    if candidate != 'D9' and candidate_for_job(recovery_job) == candidate:
+    if candidate_for_job(recovery_job) == candidate and not RECOVERY_CANDIDATES[candidate]['legacy_lineage']:
         accepted = recovery_profile(candidate).accepted_setup_lineage(setup, events, root, verifier=verifier)
         _require(accepted['map_proposal'] == proposal, 'exact approved recovered map proposal required')
         allocation = dict(proposal['allocation'])
@@ -146,7 +146,7 @@ def owned_slot_bytes(run_root, candidate, *, recovery_lineage=None):
     if recovery_lineage is not None:
         approved_jobs.add(RECOVERY_CANDIDATES[candidate]['original_job'])
         job_id = recovery_lineage.get('job_id')
-        if candidate == 'D9':
+        if RECOVERY_CANDIDATES[candidate]['legacy_lineage']:
             from .depth_recovery_lineage import JOBS, JOB, REPAIR_JOB
             _require(job_id in JOBS and
                      [row.get('job_id') for row in recovery_lineage.get('failed_recoveries', [])] ==
@@ -174,7 +174,8 @@ def _recovery_marker(budget, events, run_root):
     marker = budget.get('recovery_lineage')
     if marker is None:
         return None
-    if budget.get('candidate') != 'D9':
+    from .setup_recovery_core import RECOVERY_CANDIDATES
+    if not RECOVERY_CANDIDATES.get(budget.get('candidate'), {}).get('legacy_lineage'):
         return _table_recovery_marker(budget, marker, events, run_root)
     from .depth_recovery_lineage import JOBS, checked_failed_recoveries
     _require(budget.get('candidate') == 'D9' and marker.get('job_id') in JOBS, 'exact D9 recovery marker required')
