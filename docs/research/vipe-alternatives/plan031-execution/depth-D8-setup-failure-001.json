@@ -1,0 +1,29 @@
+{
+  "schema": "plan069-depth-setup-failure-outcome/v1",
+  "candidate": "D8",
+  "record_kind": "actual",
+  "status": "failed",
+  "failure": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D8-setup-001/failure.json",
+    "sha256": "a3bf1932bffbf3f7827ccb2da05d38693b49399d7582a2ae8549ddc09a58cf45",
+    "bytes": 491
+  },
+  "dependency_check_log": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D8-setup-001/runtime/commands/05-dependency-check.log",
+    "sha256": "9023a3f5e5d04f6b126d2c9d37a22948f1611e267199283ef612aa989dfbc2ad",
+    "bytes": 352
+  },
+  "cause": "Strict `uv pip check` rejected the installed closure: utils3d (pinned source) declares `moderngl`, which is not in the approved D8 lock. All other 87 packages installed.",
+  "runtime_analysis": "moderngl is imported only by utils3d/numpy/rasterization.py, which utils3d loads lazily; D8 student_pointmap inference does not call rasterization. Not yet demonstrated by an import test.",
+  "bytes_received": 3443909244,
+  "finish_sequence": 897,
+  "setup_seconds": 215.3278030549991,
+  "cleanup_confirmed": true,
+  "setup_attempt_consumed": true,
+  "preserved_outputs": [
+    "source.tar.gz",
+    "utils3d-source.tar.gz",
+    "runtime/"
+  ],
+  "remaining": "A D8 setup recovery needs a reviewed fix (declare moderngl in the lock, or an explicit approved exception for the declared-but-unused dependency) and separate user approval for one recovery attempt reusing the preserved assets."
+}
