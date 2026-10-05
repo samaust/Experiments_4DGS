@@ -44,6 +44,16 @@ ATTEMPTS = {
                        'seventh_predecessor_finish', 'seventh_predecessor_trace',
                        'eighth_predecessor_finish', 'eighth_predecessor_trace',
                        'ninth_predecessor_finish', 'ninth_predecessor_trace')),
+    # 010 passed; the D6 maps retry entry then changed the reviewed helper closure.
+    'plan069-D6-driver-qualification-011': dict(method='moge-driver-method-014',
+              previous='plan069-D6-driver-qualification-010', previous_status='complete', runtime='replacement',
+              lineage=('fourth_predecessor_finish', 'fourth_predecessor_trace',
+                       'fifth_predecessor_finish', 'fifth_predecessor_trace',
+                       'sixth_predecessor_finish', 'sixth_predecessor_trace',
+                       'seventh_predecessor_finish', 'seventh_predecessor_trace',
+                       'eighth_predecessor_finish', 'eighth_predecessor_trace',
+                       'ninth_predecessor_finish', 'ninth_predecessor_trace',
+                       'tenth_predecessor_finish', 'tenth_predecessor_trace')),
 }
 BASE_LINEAGE = ('predecessor_finish', 'diagnostic_finish', 'diagnostic_result', 'diagnostic_trace',
                 'second_predecessor_finish', 'second_predecessor_trace', 'third_predecessor_finish',

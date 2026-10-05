@@ -15,7 +15,11 @@ from .files import file_record, object_hash, read_json
 SCHEMA = 'plan069-depth-map-retry-approval/v1'
 RETRIES = {'D8': dict(failed_job='plan069-D8-maps-001', job='plan069-D8-maps-002',
                       approval=ROOT / 'docs/research/vipe-alternatives/plan031-execution'
-                                      / 'depth-D8-maps-retry-approval-001.json')}
+                                      / 'depth-D8-maps-retry-approval-001.json'),
+           # D6 maps-001 failed at its first Triton compile on Triton 3.2; maps-002 runs on the replacement.
+           'D6': dict(failed_job='plan069-D6-maps-001', job='plan069-D6-maps-002',
+                      approval=ROOT / 'docs/research/vipe-alternatives/plan031-execution'
+                                      / 'depth-D6-maps-retry-approval-001.json')}
 FIRST_JOB = re.compile(r'plan069-(D2|D5|D6|D7|D8|D9|D10|D11)-maps-001')
 
 

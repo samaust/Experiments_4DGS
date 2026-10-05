@@ -312,7 +312,10 @@ class QualificationReplacementSetupTests(unittest.TestCase):
                    ('moge-driver-method-013','plan069-D6-driver-qualification-009','failed','replacement',None))
   self.assertEqual(row['lineage'][-2:],('ninth_predecessor_finish','ninth_predecessor_trace'))
   self.assertEqual([job for job,attempt in ATTEMPTS.items() if attempt.get('runtime')=='replacement'],
-                   ['plan069-D6-driver-qualification-009','plan069-D6-driver-qualification-010'])
+                   ['plan069-D6-driver-qualification-009','plan069-D6-driver-qualification-010','plan069-D6-driver-qualification-011'])
+  row=ATTEMPTS['plan069-D6-driver-qualification-011']
+  self.assertEqual((row['method'],row['previous'],row['previous_status'],row.get('replaced_setup_job')),
+                   ('moge-driver-method-014','plan069-D6-driver-qualification-010','complete',None))
  def test_method013_differs_from_method012_only_in_job_and_labels(self):
   from vipe_benchmark.config import ROOT
   method=lambda n,f:(ROOT/f'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-0{n}/{f}').read_text()
@@ -320,6 +323,9 @@ class QualificationReplacementSetupTests(unittest.TestCase):
   for name in ('producer.py','startup.py'):
    relabelled=method(12,name).replace('qualification-009','qualification-010').replace('qualification009','qualification010').replace('method012','method013')
    self.assertEqual(method(13,name).splitlines()[1:],relabelled.splitlines()[1:])
+   relabelled=method(13,name).replace('qualification-010','qualification-011').replace('qualification010','qualification011').replace('method013','method014')
+   self.assertEqual(method(14,name).splitlines()[1:],relabelled.splitlines()[1:])
+  self.assertEqual(method(14,'network_guard.py'),method(12,'network_guard.py'))
  def test_attempt_runtime_pins_the_helper_cache_schema(self):
   import inspect
   from vipe_benchmark import depth_driver_qualification_triton_cache as module

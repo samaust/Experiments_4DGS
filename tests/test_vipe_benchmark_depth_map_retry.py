@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from vipe_benchmark import depth_map_retry as retry
-from vipe_benchmark.files import file_record, object_hash, write_json
+from vipe_benchmark.files import file_record, object_hash, read_json, write_json
 
 FIRST, SECOND = 'plan069-D8-maps-001', 'plan069-D8-maps-002'
 
@@ -134,3 +134,15 @@ class WorkerIdentityTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class PinnedRetryApprovalTests(unittest.TestCase):
+    def test_each_pinned_retry_approval_names_its_own_candidate_and_jobs(self):
+        from vipe_benchmark.depth_map_retry import RETRIES, SCHEMA
+        for candidate, retry in RETRIES.items():
+            with self.subTest(candidate=candidate):
+                approval = read_json(retry['approval'])
+                self.assertEqual((approval['schema'], approval['status'], approval['candidate'],
+                                  approval['failed_job'], approval['job'], approval['max_attempts']),
+                                 (SCHEMA, 'DO', candidate, f'plan069-{candidate}-maps-001',
+                                  f'plan069-{candidate}-maps-002', 1))
