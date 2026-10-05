@@ -1,0 +1,51 @@
+{
+  "schema": "plan069-D6-driver-qualification-outcome/v5",
+  "status": "failed",
+  "job_id": "plan069-D6-driver-qualification-009",
+  "finish": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-driver-failure-009/finish.json",
+    "sha256": "68d95455908a63bac263f82c1c7fac242bb8b62392fbd0920069a0c172cf6a0b",
+    "bytes": 1081
+  },
+  "request": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/requests/plan069-D6-driver-qualification-009.json",
+    "sha256": "7163724c95e348d2251dd76437ab3aa1e0b34b181274ba6671ecf11900cd329e",
+    "bytes": 11569
+  },
+  "authorization": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/depth-D6-driver-approval-009.json",
+    "sha256": "3bbdf1869a71c117dc6b6637832163548037cd4ff74d4559b316b7ac210ead1b",
+    "bytes": 1050
+  },
+  "log": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-driver-qualification-009.log",
+    "sha256": "21ba0ffbd8e169f35af42366f200c14c90559796bf02b7298ab45716193dc7b7",
+    "bytes": 1101
+  },
+  "trace": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-driver-qualification-009.syscalls.log",
+    "sha256": "ee7753f56659f7b596e562c3c55da3e3e0b0be015029f81f5b21f86ed5f3918e",
+    "bytes": 2518698
+  },
+  "parent_capture": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-qualification009-parent-capture-001/receipt.json",
+    "sha256": "75045226f1aaa4fc5c2d6c68253e67fec109a3870f72808a4a377842515365e9",
+    "bytes": 727
+  },
+  "cpu_settlement": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/.local/D6-driver-failure-009/settlement.json",
+    "sha256": "98179bab3ab2fb143e493224f62d233a6c6694d7c41a84449074e6ad183dc50a",
+    "bytes": 986
+  },
+  "elapsed_seconds": 23.424957441995502,
+  "cleanup_confirmed": true,
+  "deadline_exceeded": false,
+  "attempt_consumed": true,
+  "native_runtime_qualified": false,
+  "observations": [
+    "Method 012 passed guard startup, the recovered-setup lineage and Triton v2 cache selection, then moge_native.load_adapter raised ValueError: owned FlexGEMM runtime cache binding required, before CUDA initialization or any model load.",
+    "Cause: load_adapter required runtime/flex-cache to exist. In the original setup a FlexGEMM source build created it as a side effect (06-source-6, 23:07:42); the offline replacement installed FlexGEMM from the cached built wheel, so the directory was never created."
+  ],
+  "causality": "Directly observed: the replacement runtime directory lacks flex-cache while runtime/result.json binds flex_cache_path inside it; no other check failed.",
+  "remaining": "load_adapter now creates the link-checked owned directory (bbdd9c75); run a distinct qualification010 (method 013) under the standing \"diagnose, fix and continue\" approval."
+}
