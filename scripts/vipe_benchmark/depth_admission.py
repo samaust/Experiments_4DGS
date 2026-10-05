@@ -71,7 +71,7 @@ LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py',
     D5=('depth_authorization.py', 'moge_metric.py', 'moge_native.py', 'moge_setup.py',
         'depth_metric_scale.py', 'depth_single_run.py', 'depth_single_publish.py',
         'moge_environment.py', 'depth_environment.py', 'moge_source_build.py', 'runtime_inventory.py'),
-    D6=('depth_driver_qualification_local_listen.py', 'depth_driver_qualification_local_bind.py', 'depth_driver_qualification_recovery.py', 'depth_driver_qualification.py', 'depth_authorization.py', 'moge_metric.py', 'moge_native.py', 'moge_setup.py',
+    D6=('depth_driver_qualification_triton_cache.py', 'triton_helper_cache.py', 'depth_driver_qualification_local_listen.py', 'depth_driver_qualification_local_bind.py', 'depth_driver_qualification_recovery.py', 'depth_driver_qualification.py', 'depth_authorization.py', 'moge_metric.py', 'moge_native.py', 'moge_setup.py',
         'depth_metric_scale.py', 'depth_single_run.py', 'depth_single_publish.py',
         'moge_environment.py', 'depth_environment.py', 'moge_source_build.py', 'runtime_inventory.py'),
     D7=('dav2_metric.py', 'moge_metric.py', 'depth_setup.py', 'depth_metric_scale.py', 'depth_d7_run.py', 'depth_d7_publish.py'),
@@ -142,6 +142,11 @@ def local_source_records(candidate):
         records.append(file_record(ROOT / 'scripts/basketball_vipe_video_dependencies.py'))
     if candidate == 'D6':
         records.extend(file_record(ROOT / path) for path in (
+            'scripts/basketball_vipe_depth_driver_qualification_triton_cache.py',
+            'scripts/basketball_vipe_triton_helper_cache.py',
+            'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-008/producer.py',
+            'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-008/network_guard.py',
+            'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-008/startup.py',
             'scripts/basketball_vipe_depth_driver_qualification_local_listen.py',
             'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-007/producer.py',
             'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-007/network_guard.py',
@@ -330,7 +335,10 @@ def review(proposal, *, config, commercial, assets, runtime, live,
         try:
             receipt = qualification.get('driver_qualification', {})
             finish = read_json(verify_record(receipt['finish'])['path'])
-            if finish.get('job_id') == 'plan069-D6-driver-qualification-004':
+            if finish.get('job_id') == 'plan069-D6-driver-qualification-005':
+                from .depth_driver_qualification_triton_cache import qualification_exception as triton_cache_exception
+                triton_cache_exception(qualification, events=setup_events, run_root=run_root)
+            elif finish.get('job_id') == 'plan069-D6-driver-qualification-004':
                 from .depth_driver_qualification_local_listen import qualification_exception as local_listen_exception
                 local_listen_exception(qualification, events=setup_events, run_root=run_root)
             elif finish.get('job_id') == 'plan069-D6-driver-qualification-003':
