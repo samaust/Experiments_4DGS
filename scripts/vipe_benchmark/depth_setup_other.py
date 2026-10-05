@@ -167,7 +167,8 @@ def lock_pins(text):
         stripped = line.strip().rstrip('\\').strip()
         if not line.startswith((' ', '#')) and '==' in stripped:
             name, version = stripped.split('==', 1)
-            current = name.strip().lower().replace('_', '-')
+            from packaging.utils import canonicalize_name
+            current = canonicalize_name(name.strip())
             pins[current] = (version.strip(), set())
         elif current is not None and stripped.startswith('--hash=sha256:'):
             pins[current][1].add(stripped.removeprefix('--hash=sha256:'))
@@ -176,8 +177,9 @@ def lock_pins(text):
 
 def _allowlisted_lock(original_text, recovered_text, acquisitions):
     """Recovered lock = original lock + exactly the allowlisted wheels, hashes included."""
+    from packaging.utils import canonicalize_name
     original, recovered = lock_pins(original_text), lock_pins(recovered_text)
-    allowed = {row['name'].lower(): row for row in acquisitions}
+    allowed = {canonicalize_name(row['name']): row for row in acquisitions}
     added = {name: pin for name, pin in recovered.items() if name not in original}
     _require(all(recovered.get(name) == pin for name, pin in original.items()) and
              set(added) == set(allowed) and
@@ -207,21 +209,22 @@ def run_setup_recovery(request, output, *, request_path=None, acquire=_acquire,
     assets = inventory['candidates'][CANDIDATE]['files']
     allocation = normalized['allocation']
     deadline = started + allocation['setup_seconds']
-    output.mkdir(parents=True, exist_ok=False)
-    write_json(output / 'request.json', request)
-    baseline_snapshot = budget_snapshot(run_root)
-    baseline = baseline_snapshot['download_bytes']
-    remaining = proposal['allocation']['download_bytes'] - read_json(
-        original['setup_failure']['path'])['bytes_received']
-    download_limit = min(config['new_download_gib_limit'] * 2**30, baseline + remaining)
-    artifact_limit = min(config['new_artifact_disk_gib_limit'] * 2**30,
-                         baseline_snapshot['artifact_bytes'] + proposal['allocation']['artifact_bytes'])
-    checkpoint_urls = []
+    checkpoint_urls: list[str] = []
 
     def approved_acquire(url, path, **kwargs):
         _require(url in checkpoint_urls, 'acquisition outside the recovery allowlist: ' + url)
         return acquire(url, path, **kwargs)
+    output.mkdir(parents=True, exist_ok=False)
+    baseline = None
     try:
+        write_json(output / 'request.json', request)
+        baseline_snapshot = budget_snapshot(run_root)
+        baseline = baseline_snapshot['download_bytes']
+        remaining = proposal['allocation']['download_bytes'] - read_json(
+            verify_record(original['setup_failure'])['path'])['bytes_received']
+        download_limit = min(config['new_download_gib_limit'] * 2**30, baseline + remaining)
+        artifact_limit = min(config['new_artifact_disk_gib_limit'] * 2**30,
+                             baseline_snapshot['artifact_bytes'] + proposal['allocation']['artifact_bytes'])
         code = proposal['candidate_config']['code']
         source_dir = output / 'source'
         _unpack_source(Path(verify_record(original['source_archive'])['path']), source_dir,
@@ -230,10 +233,14 @@ def run_setup_recovery(request, output, *, request_path=None, acquire=_acquire,
         original_lock = Path(verify_record(original['dependency_lock'])['path']).read_text()
         pins = [f'{name}=={version}' for name, (version, _) in sorted(lock_pins(original_lock).items())]
         asset_bytes = sum(row['bytes'] for row in assets)
+        def lock_check(text):
+            _allowlisted_lock(original_lock, text, normalized['acquisitions'])
         runtime = prepare_environment(dict(request, environment=normalized['runtime_environment']), output,
             config, run_root=run_root, deadline=deadline, acquire=approved_acquire,
             download_limit=download_limit - asset_bytes, artifact_limit=artifact_limit - asset_bytes,
-            request_path=request_path, retained_utils3d=original['utils3d_archive'], extra_constraints=pins)
+            request_path=request_path, retained_utils3d=original['utils3d_archive'], extra_constraints=pins,
+            lock_check=lock_check)
+        # Re-check the installed lock as well (defence in depth after the pre-install gate).
         added = _allowlisted_lock(original_lock,
             Path(verify_record(runtime['dependency_lock'])['path']).read_text(), normalized['acquisitions'])
         records = []
@@ -249,7 +256,7 @@ def run_setup_recovery(request, output, *, request_path=None, acquire=_acquire,
         received = budget_snapshot(run_root)['download_bytes'] - baseline
         _require(received <= remaining and time.monotonic() <= deadline,
                  'recovery allocation exceeded')
-        result = dict(schema=normalized_result_schema(), status='complete', candidate=CANDIDATE,
+        result = dict(schema=_recovery_result_schema(), status='complete', candidate=CANDIDATE,
             job_id=JOB, record_kind='actual', request=file_record(request_path),
             review=normalized['review'], authorization=normalized['authorization'],
             source_review=normalized['source_review'], original_setup=original,
@@ -262,18 +269,23 @@ def run_setup_recovery(request, output, *, request_path=None, acquire=_acquire,
             original_failure_preserved=True, automatic_retries=0,
             elapsed_seconds=time.monotonic() - started)
         _require(source_manifest(source_dir) == extracted_source, 'native source tree changed during recovery')
+        _require(time.monotonic() <= deadline, 'recovery allocation exceeded')
+        result['elapsed_seconds'] = time.monotonic() - started
         write_json(output / 'result.json', result)
         return result
     except BaseException as error:
+        try:
+            received = None if baseline is None else budget_snapshot(run_root)['download_bytes'] - baseline
+        except Exception:
+            received = None  # Never let accounting hide the original failure.
         write_json(output / 'failure.json', dict(schema='plan069-depth-setup-recovery-failure/v1',
             candidate=CANDIDATE, job_id=JOB, status='failed', record_kind='actual',
             error=f'{type(error).__name__}: {error}', original_setup=original,
-            bytes_received=budget_snapshot(run_root)['download_bytes'] - baseline,
-            automatic_retries=0, elapsed_seconds=time.monotonic() - started))
+            bytes_received=received, automatic_retries=0, elapsed_seconds=time.monotonic() - started))
         raise
 
 
-def normalized_result_schema():
+def _recovery_result_schema():
     from .setup_recovery_core import RECOVERY_CANDIDATES
     from .depth_native_setup_recovery import CANDIDATE, JOB
     return RECOVERY_CANDIDATES[CANDIDATE]['result_schemas'][JOB]

@@ -55,6 +55,8 @@ class NativeSetupRecoveryRunTests(NativeSetupRecoveryFixture):
             runtime = Path(output) / 'runtime'
             runtime.mkdir(parents=True, exist_ok=True)
             (runtime / 'requirements.lock').write_text(lock_text)
+            kwargs['lock_check'](lock_text)  # The provisioner gates the lock before installing.
+            self.installed = True
             return dict(status='complete', dependency_lock=file_record(runtime / 'requirements.lock'))
         return fake
 
@@ -89,8 +91,10 @@ class NativeSetupRecoveryRunTests(NativeSetupRecoveryFixture):
         self.assertEqual(self.prepared[0]['retained_utils3d'], self.original['utils3d_archive'])
 
     def test_lock_with_an_unreviewed_package_fails_and_is_preserved(self):
+        self.installed = False
         with self.assertRaisesRegex(ValueError, 'acquisition allowlist'):
             self.run_worker(AMENDED_LOCK + 'gradio==9.9.9 \\\n    --hash=sha256:' + 'c' * 64 + '\n')
+        self.assertFalse(self.installed, 'refused before any package install')
         failure = read_json(self.run_root / 'jobs' / JOB / 'failure.json')
         self.assertEqual((failure['status'], failure['job_id']), ('failed', JOB))
         self.assertFalse((self.run_root / 'jobs' / JOB / 'result.json').exists())

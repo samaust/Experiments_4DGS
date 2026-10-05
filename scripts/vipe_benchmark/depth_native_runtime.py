@@ -55,11 +55,12 @@ def recipe(candidate, run_root):
 
 def prepare(request, output, config, *, run_root, deadline, acquire,
             download_limit, artifact_limit, request_path=None, retained_utils3d=None,
-            extra_constraints=()):
+            extra_constraints=(), lock_check=None):
     """Provision a recipe only inside the caller's approved metered setup slot.
 
     A setup recovery passes the retained utils3d archive (reused by hash, never
-    re-acquired) and the original lock's exact pins as additional constraints.
+    re-acquired), the original lock's exact pins as additional constraints, and a
+    lock_check that refuses an unreviewed closure before anything is installed.
     """
     from .depth_environment import provision_depth_environment
     candidate = request['candidate']
@@ -112,7 +113,7 @@ def prepare(request, output, config, *, run_root, deadline, acquire,
     environment['sources'] = sources
     result = provision_depth_environment(environment, Path(output) / 'runtime', config,
         run_root=run_root, deadline=deadline, download_limit=download_limit,
-        artifact_limit=artifact_limit)
+        artifact_limit=artifact_limit, lock_check=lock_check)
     result['source_packages'] = sources
     result['compatibility_profile'] = environment.get('compatibility_profile')
     result['requirement_sources'] = environment['requirement_sources']

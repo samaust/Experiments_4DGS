@@ -95,6 +95,30 @@ class DepthEnvironmentTests(unittest.TestCase):
             self.assertEqual(self.calls, [])
             self.assertFalse(self.output.exists())
 
+    def test_refused_lock_stops_before_any_package_install(self):
+        seen = []
+        def refuse(text):
+            seen.append(text)
+            raise ValueError('recovered lock differs from the original plus the acquisition allowlist')
+        with self.assertRaisesRegex(ValueError, 'acquisition allowlist'):
+            provision_depth_environment(self.request, self.output, self.config, run_root=self.root,
+                deadline=time.monotonic() + 60, download_limit=10**7, artifact_limit=10**7,
+                runner=self.run_fixture, lock_check=refuse)
+        self.assertEqual(seen, ['numpy==1.26.4 --hash=sha256:fixture\n'])
+        self.assertFalse(any('install' in command for command in self.calls))
+        self.assertEqual(read_json(self.output / 'failure.json')['status'], 'failed')
+
+    def test_incomplete_closure_fails_the_strict_dependency_check(self):
+        def incomplete(command, **kwargs):
+            self.run_fixture(command, **kwargs)
+            if 'check' in command:
+                raise RuntimeError('fixture: utils3d requires moderngl, which is not installed')
+        with self.assertRaisesRegex(RuntimeError, 'moderngl'):
+            provision_depth_environment(self.request, self.output, self.config, run_root=self.root,
+                deadline=time.monotonic() + 60, download_limit=10**7, artifact_limit=10**7,
+                runner=incomplete, lock_check=lambda text: None)
+        self.assertTrue(any('install' in command for command in self.calls))
+
     def test_command_failure_is_receipted_without_retry(self):
         def failing(command, **kwargs):
             self.run_fixture(command, **kwargs)

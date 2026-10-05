@@ -80,12 +80,13 @@ def _setup_deadline(request, output, run_root, config, deadline):
 
 
 def provision_depth_environment(request, output, config, *, run_root, deadline,
-                                download_limit=None, artifact_limit=None, runner=None):
+                                download_limit=None, artifact_limit=None, runner=None, lock_check=None):
     """Provision once; fixture runners simulate commands without network or GPU use.
 
     Callers bind requirements to reviewed source and pass the original setup's
     absolute byte ceilings and remaining deadline. Local package archives are
-    installed offline after the hash-locked dependency closure.
+    installed offline after the hash-locked dependency closure. An optional
+    lock_check gates the resolved lock text before any package is installed.
     """
     _require(request.get('schema') == SCHEMA and request.get('candidate') in
              ('D5', 'D6', 'D7', 'D8', 'D9', 'D10', 'D11') and
@@ -242,6 +243,8 @@ def provision_depth_environment(request, output, config, *, run_root, deadline,
             '--output-file', str(lock), str(output / 'requirements.txt')], 'resolve')
         _require(lock.is_file() and lock.stat().st_size > 0,
                  'depth resolver did not produce an immutable hash lock')
+        if lock_check is not None:
+            lock_check(lock.read_text())
         run([uv, 'pip', 'install', '--python', python, *index_arguments, '--require-hashes',
             '--no-build-isolation', '-c', str(output / 'constraints.txt'), '-r', str(lock)], 'locked-dependencies')
         for source in sources:
