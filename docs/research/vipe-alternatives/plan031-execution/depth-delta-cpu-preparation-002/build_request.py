@@ -69,7 +69,9 @@ def main():
     supplemental_sources = review.get(supplemental_key, [])
     if not isinstance(supplemental_sources, list) or len({row['path'] for row in supplemental_sources}) != len(supplemental_sources):
         raise ValueError('invalid supplemental CPU source list')
-    for row in helper_files + supplemental_sources + review.get('changed_tracked_python_sources', []):
+    # D6 reviews carry changed_tracked_python_sources as a historical source015 snapshot against an old
+    # base; every tracked file is bound below, so only the current helper and supplemental records are checked.
+    for row in helper_files + supplemental_sources:
         if record(row['path']) != row:
             raise ValueError('changed reviewed source record')
     # Baseline: passing full suites 025/026/027 and delta016; changes are measured from full027's head.

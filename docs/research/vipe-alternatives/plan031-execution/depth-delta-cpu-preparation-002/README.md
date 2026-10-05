@@ -5,8 +5,10 @@ capture027. `launcher.py` is byte-identical to the reviewed
 `full-qualification-prep/.local/delta-cpu-016-preparation/launcher.py` (its fixed
 receipt scope text still names capture015). `build_request.py` differs only in:
 the D6 accounting owner (admission owner must match), the prior captures (full027
-as the changed-source baseline, plus full025/026 and delta016, all passing) and the
-request scope text.
+as the changed-source baseline, plus full025/026 and delta016, all passing), the
+request scope text, and it no longer re-hashes the review's historical
+`changed_tracked_python_sources` (a source015 snapshot against an old base that D6
+reviews carry unchanged); every tracked file is still bound before and after.
 
 The capture binds every tracked source and the reviewed D6 helper closure before and
 after, and runs only the public tests changed since full027's head plus explicit
