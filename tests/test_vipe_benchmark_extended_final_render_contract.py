@@ -369,6 +369,50 @@ class AdmissionTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 admit_review(self.request,self.ledger,self.storage)
 
+    def extend_artifact_cap(self, **changes):
+        from vipe_benchmark.files import object_hash
+        self.authorize_amended_budget()
+        bound=self.request['budget_amendment']
+        amendment=dict(schema='plan069-final-render-cap-amendment/v1',status='REVIEW',base_amendment=bound['amendment'],
+            new_download_gib_limit=110,new_artifact_disk_gib_limit=260)
+        amendment.update(changes)
+        record=self.record('artifact-extension-'+str(len(list(self.base.root.glob('artifact-extension-*')))),amendment)
+        authorization=self.record('artifact-extension-authorization-'+str(len(list(self.base.root.glob('artifact-extension-authorization-*')))),
+            dict(schema='plan069-final-render-cap-authorization/v1',status='DO',record_kind='fixture',amendment=record,
+                 approval=dict(status='approved',amendment_sha256=object_hash(amendment))))
+        bound['artifact_extension']=dict(amendment=record,authorization=authorization)
+        self.ledger.config=dict(self.ledger.config,new_artifact_disk_gib_limit=260)
+        self.rebind_proposal()
+
+    def test_approved_artifact_extension_admits_against_the_260_gib_cap(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        self.extend_artifact_cap()
+        storage=dict(self.storage,artifact_bytes=200*2**30)
+        self.assertFalse(admit_review(self.request,self.ledger,storage).execution_authorized)
+        with self.assertRaisesRegex(ValueError,'artifact cumulative ceiling exhausted'):
+            admit_review(self.request,self.ledger,dict(self.storage,artifact_bytes=215*2**30))
+
+    def test_artifact_extension_must_chain_the_exact_base_amendment_and_cap(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        for changes in (dict(new_artifact_disk_gib_limit=300),dict(new_download_gib_limit=120),dict(base_amendment=None)):
+            with self.subTest(changes=changes):
+                self.setUp()
+                self.extend_artifact_cap(**changes)
+                with self.assertRaisesRegex(ValueError,'artifact extension'):
+                    admit_review(self.request,self.ledger,self.storage)
+        self.setUp()
+        self.authorize_amended_budget()
+        self.ledger.config=dict(self.ledger.config,new_artifact_disk_gib_limit=260)
+        with self.assertRaisesRegex(ValueError,'approved budget caps'):
+            admit_review(self.request,self.ledger,self.storage)
+
+    def test_actual_artifact_extension_requires_the_recorded_user_authorization(self):
+        from vipe_benchmark import extended_final_render_contract as contract
+        self.extend_artifact_cap()
+        actual=dict(self.request,record_kind='actual')
+        with self.assertRaisesRegex(ValueError,'artifact extension is not the recorded user authorization'):
+            contract._artifact_extension(actual,actual['budget_amendment'])
+
     def test_actual_budget_seam_accepts_only_the_recorded_user_cap_authorization(self):
         from vipe_benchmark.extended_final_render_contract import validate_budget_configuration
         from vipe_benchmark.depth_admission import BENCHMARK

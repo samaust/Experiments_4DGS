@@ -79,7 +79,8 @@ def parse_request(value):
              'proposal fixed settings differ')
     if 'budget_amendment' in value:
         baseline = _bound(bindings['config'])
-        validate_budget_configuration(value, dict(baseline, new_download_gib_limit=110, new_artifact_disk_gib_limit=210))
+        artifact_gib = 260 if 'artifact_extension' in value['budget_amendment'] else 210
+        validate_budget_configuration(value, dict(baseline, new_download_gib_limit=110, new_artifact_disk_gib_limit=artifact_gib))
     if value['record_kind'] == 'actual':
         _require(bindings['source'] == file_record(__file__) and bindings['preset']['sha256'] == PRESET_SOURCE,
                  'current extended contract/preset source pins required')
@@ -310,7 +311,8 @@ def validate_budget_configuration(value, config):
     if bound is None:
         _require(config == baseline, 'ledger allocation configuration differs; approved budget amendment required')
         return
-    _require(type(bound) is dict and set(bound) == {'amendment', 'authorization'}, 'exact budget amendment and authorization records required')
+    _require(type(bound) is dict and set(bound) in ({'amendment', 'authorization'}, {'amendment', 'authorization', 'artifact_extension'}),
+             'exact budget amendment and authorization records required')
     amendment = _bound(bound['amendment'])
     authorization = _bound(bound['authorization'])
     _require(baseline.get('new_download_gib_limit') == 60 and baseline.get('new_artifact_disk_gib_limit') == 150,
@@ -332,5 +334,34 @@ def validate_budget_configuration(value, config):
                  'actual budget approval is not the recorded user authorization')
     else:
         _require(authorization.get('record_kind') == 'fixture', 'budget authorization fixture label required')
-    amended = dict(baseline, new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
-    _require(config == amended, 'ledger configuration differs outside exact approved 110/210 caps')
+    artifact_gib = 210
+    if 'artifact_extension' in bound:
+        artifact_gib = _artifact_extension(value, bound)
+    amended = dict(baseline, new_download_gib_limit=110, new_artifact_disk_gib_limit=artifact_gib)
+    _require(config == amended, 'ledger configuration differs outside exact approved budget caps')
+
+
+# The user-approved final-render artifact extension (AskUserQuestion, 2026-10-05).
+ARTIFACT_EXTENSION_AUTHORIZATION = dict(sha256='5a6db07ea5918ecc1895e71adf59efb304093b8193f724b2e7251b16be2b7aa8', bytes=762)
+
+
+def _artifact_extension(value, bound):
+    """Chain one approved 210 -> 260 GiB artifact extension onto the 110/210 amendment."""
+    extension = bound['artifact_extension']
+    _require(type(extension) is dict and set(extension) == {'amendment', 'authorization'},
+             'exact artifact extension amendment and authorization records required')
+    amendment = _bound(extension['amendment'])
+    authorization = _bound(extension['authorization'])
+    _require(amendment.get('schema') == 'plan069-final-render-cap-amendment/v1' and amendment.get('status') == 'REVIEW' and
+             amendment.get('base_amendment') == bound['amendment'] and amendment.get('new_download_gib_limit') == 110 and
+             amendment.get('new_artifact_disk_gib_limit') == 260, 'exact 110/260 final-render artifact extension differs')
+    _require(authorization.get('schema') == 'plan069-final-render-cap-authorization/v1' and authorization.get('status') == 'DO' and
+             authorization.get('amendment') == extension['amendment'] and
+             authorization.get('approval') == dict(status='approved', amendment_sha256=object_hash(amendment)),
+             'exact approved artifact extension authorization required')
+    if value['record_kind'] == 'actual':
+        _require({key: extension['authorization'][key] for key in ('sha256', 'bytes')} == ARTIFACT_EXTENSION_AUTHORIZATION,
+                 'actual artifact extension is not the recorded user authorization')
+    else:
+        _require(authorization.get('record_kind') == 'fixture', 'artifact extension authorization fixture label required')
+    return 260
