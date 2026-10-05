@@ -107,6 +107,47 @@ def dispatch(candidate, run_id, *, source_review_path=None):
     return outcome
 
 
+def dispatch_recovery(local, inputs):
+    """Write, authorize and supervise the reviewed D8 setup recovery in run root ``local``.
+
+    ``inputs`` names the exact recovery REVIEW, its DO and the current source review.
+    The ledger validates the full recovery authority before the single reservation.
+    """
+    from vipe_benchmark.depth_native_setup_recovery import CANDIDATE, JOB
+    from vipe_benchmark.setup_recovery_core import RECOVERY_CANDIDATES
+    local = Path(local).resolve()
+    config = dict(load(), new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
+    ledger = Ledger(local / 'ledger.jsonl', config)
+    review = verify_record(inputs['review'])
+    proposal = read_json(review['path'])['setup_recovery_proposal']
+    output = local / 'jobs' / JOB
+    request_path = local / 'requests' / (JOB + '.json')
+    if output.exists() or request_path.exists():
+        raise ValueError('setup recovery already prepared, reserved or attempted')
+    write_json(request_path, dict(schema='plan069-depth-setup-recovery-request/v1', record_kind='actual',
+        candidate=CANDIDATE, job_id=JOB, ledger_path=str(local / 'ledger.jsonl'), review=review,
+        authorization=verify_record(inputs['authorization']), source_review=verify_record(inputs['source_review']),
+        original_setup=proposal['original_setup'], runtime_environment=recipe(CANDIDATE, local),
+        acquisitions=proposal['acquisitions']))
+    request = file_record(request_path)
+    worker = ROOT / 'scripts' / RECOVERY_CANDIDATES[CANDIDATE]['worker']
+    command = [sys.executable, str(worker), '--request', str(request_path), '--output', str(output)]
+    grant = ledger.authorize_depth_setup_recovery(request, command=command, worker=file_record(worker),
+                                                  executable=file_record(sys.executable))
+
+    def validate(out):
+        result = read_json(verify_record(file_record(out / 'result.json'))['path'])
+        if (result.get('schema') != RECOVERY_CANDIDATES[CANDIDATE]['result_schemas'][JOB] or
+                result.get('status') != 'complete' or result.get('job_id') != JOB or
+                result.get('request') != request):
+            raise ValueError('setup recovery result differs from its reviewed request')
+    return supervise(ledger, JOB, command, output,
+        evidence={key: grant[key] for key in ('request', 'review', 'authorization', 'source_review',
+                                              'worker', 'executable')},
+        sample_resources=lambda: resources(local, gpu=True), validate_result=validate,
+        poll_seconds=2., seconds_limit=grant['seconds'])
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--candidate', choices=('D8', 'D11'), required=True)
