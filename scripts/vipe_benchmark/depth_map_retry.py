@@ -32,6 +32,24 @@ def is_map_job(job_id):
     return bool(FIRST_JOB.fullmatch(job_id)) or any(row['job'] == job_id for row in RETRIES.values())
 
 
+VOID_EVENT = 'depth_attempt_voided'
+VOID_SCHEMA = 'plan069-depth-grant-void-approval/v1'
+# Only these reviewed user approvals may void a grant, as RETRIES pins its approvals.
+VOID_APPROVALS = {'D6': ROOT / 'docs/research/vipe-alternatives/plan031-execution'
+                         / 'depth-D6-maps-grant-void-approval-001.json'}
+
+
+def voided_grant_hashes(events):
+    return {row.get('grant_event_sha256') for row in events if row.get('event') == VOID_EVENT}
+
+
+def active_grants(events, candidate=None):
+    """Map grants that were not voided as provably unstarted (see Ledger.void_unstarted_depth_attempt)."""
+    voided = voided_grant_hashes(events)
+    return [row for row in events if row.get('event') == 'depth_attempt_authorized' and
+            row.get('event_sha256') not in voided and (candidate is None or row.get('candidate') == candidate)]
+
+
 def event_job(grant):
     """Map job allocated by a depth_attempt_authorized event; first attempts omit it."""
     return grant.get('job_id', first_job(grant['candidate']))
@@ -52,8 +70,7 @@ def current_allocation(candidate, events):
     Between the first attempt's failure and the retry grant this is still the
     first grant; its slot byte budget remains the binding one until replaced.
     """
-    grants = [row for row in events if row.get('event') == 'depth_attempt_authorized'
-              and row.get('candidate') == candidate]
+    grants = active_grants(events, candidate)
     retry = RETRIES.get(candidate)
     expected = [first_job(candidate)] + ([retry['job']] if retry is not None and len(grants) == 2 else [])
     return grants[-1] if [event_job(row) for row in grants] == expected else None
@@ -64,8 +81,7 @@ def validate_retry(candidate, proposal, events, run_root):
     retry = RETRIES.get(candidate)
     _require(retry is not None, 'no approved map retry for this candidate')
     failed = retry['failed_job']
-    grants = [row for row in events if row.get('event') == 'depth_attempt_authorized'
-              and row.get('candidate') == candidate and event_job(row) == failed]
+    grants = [row for row in active_grants(events, candidate) if event_job(row) == failed]
     reserves = [row for row in events if row.get('event') == 'reserve' and row.get('job_id') == failed]
     finishes = [row for row in events if row.get('event') == 'finish' and row.get('job_id') == failed]
     _require(len(grants) == len(reserves) == len(finishes) == 1,

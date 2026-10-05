@@ -7,6 +7,7 @@ Old grants without this evidence retain conservative v1 accounting.
 from pathlib import Path
 import hashlib
 import math
+import os
 import re
 import time
 
@@ -58,8 +59,14 @@ def _key(row):
 
 
 def _files(root, deadline=None):
-    return {str(Path(path).relative_to(root)): _metadata(info)
-            for path, info in _inventory(root, deadline_check=lambda: _check_deadline(deadline)).items()}
+    # String prefixing keeps relative_to semantics for this inventory without its per-path cost.
+    prefix = str(root).rstrip(os.sep) + os.sep
+    files = {}
+    for path, info in _inventory(root, deadline_check=lambda: _check_deadline(deadline)).items():
+        text = str(path)
+        _require(text.startswith(prefix), 'inventory path escaped the run root')
+        files[text[len(prefix):]] = _metadata(info)
+    return files
 
 
 def capture_checkpoint(run_root, candidate, reading):
@@ -401,13 +408,13 @@ def causal_credits(run_root, subject_grant, events, proofs=None):
         checkpoint = _checkpoint(root, grants[0])
         _require(proof['checkpoint'] == grants[0]['byte_checkpoint'], 'causal checkpoint binding changed')
         prior = {_key(row) for row in checkpoint['files'].values()}
+        owned_keys = {_key(row) for row in proof['owned_files'].values()}
         for group, collection in (('owned_files', owned), ('retained_cache_files', cache)):
             for path, info in proof[group].items():
                 _require(files.get(path) == info and _key(info) not in prior,
                          'causal retained inode changed or predates setup')
                 if group == 'retained_cache_files':
-                    _require(_key(info) in {_key(row) for row in proof['owned_files'].values()},
-                             'cache inode has no accepted setup owner')
+                    _require(_key(info) in owned_keys, 'cache inode has no accepted setup owner')
                 collection[_key(info)] = max(collection.get(_key(info), 0),
                     info['logical_bytes'] if group == 'retained_cache_files' else
                     max(info['logical_bytes'], info['allocated_bytes']))

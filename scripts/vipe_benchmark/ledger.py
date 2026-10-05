@@ -67,9 +67,11 @@ class Ledger:
                 allocated[JOB] = dict(id=JOB, resource='gpu', seconds=proposal['seconds'],
                     scope='approved D6 driver-aware import and two strict CPU model loads')
             if event['event'] == 'depth_attempt_authorized':
+                from .depth_map_retry import event_job, voided_grant_hashes
+                if event.get('event_sha256') in voided_grant_hashes(events):
+                    continue  # A voided, provably unstarted grant allocates nothing; its request files are relocated.
                 for key in ('review', 'authorization', 'source_review', 'admission'):
                     verify_record(event[key])
-                from .depth_map_retry import event_job
                 job_id = event_job(event)
                 allocated[job_id] = dict(id=job_id, resource='gpu',
                     seconds=event['seconds'],
@@ -205,9 +207,8 @@ class Ledger:
                     from .depth_d9_continuation import protected_continuation
                     continuation = protected_continuation(events, self.config, self.path.parent,
                         phase='reserve')
-                authorized = [row for row in events if
-                    row['event'] == 'depth_attempt_authorized' and
-                    row['candidate'] == candidate and event_job(row) == job_id]
+                from .depth_map_retry import active_grants
+                authorized = [row for row in active_grants(events, candidate) if event_job(row) == job_id]
                 if len(authorized) != 1 or (continuation is None and
                         (events[-1] != authorized[0] or
                          time.time() - authorized[0]['recorded_unix'] > 30)):
@@ -706,14 +707,13 @@ class Ledger:
             states = self.states(events)
             if map_job(candidate, events) != job_id:
                 raise ValueError('current map job changed during authorization')
-            if job_id in states or any(row['event'] == 'depth_attempt_authorized' and
-                                       row['candidate'] == candidate and event_job(row) == job_id
-                                       for row in events):
+            from .depth_map_retry import active_grants
+            if job_id in states or any(row['candidate'] == candidate and event_job(row) == job_id
+                                       for row in active_grants(events)):
                 raise ValueError('depth model attempt already authorized or consumed')
             if any(row['event'] == 'reserve' for row in states.values()):
                 raise ValueError('active attempt prevents depth GPU allocation')
-            if any(row['event'] == 'depth_attempt_authorized' and
-                   event_job(row) not in states for row in events):
+            if any(event_job(row) not in states for row in active_grants(events)):
                 raise ValueError('unstarted depth GPU allocation prevents another')
             retry = None
             if job_id != first_job(candidate):
@@ -781,6 +781,43 @@ class Ledger:
                 admission=admission, resource_snapshot=reading, map_stage_allowance=stage,
                 slot_byte_budget=slot_budget,
                 command=command, **binding, **({} if retry is None else dict(job_id=job_id, retry=retry))))
+
+    def void_unstarted_depth_attempt(self, approval):
+        """Void one map grant that provably never started, under an explicit user approval.
+
+        The grant stays in the ledger; it only stops counting as the job's allocation. Its job
+        must have no reservation, start, finish, account or temporary-directory event and no
+        output. Caps, attempts and every other grant are unchanged. Only the reviewed approval pinned
+        in depth_map_retry.VOID_APPROVALS can void a grant. Afterwards the operator moves the voided
+        attempt's immutable request and admission files out of requests/ into a prepare/ evidence
+        directory (still inside the run, so their bytes stay counted) before a fresh dispatch.
+        """
+        from .depth_map_retry import VOID_APPROVALS, VOID_EVENT, VOID_SCHEMA, active_grants, event_job
+        from .files import file_record
+        record = verify_record(approval)
+        document = read_json(record['path'])
+        pinned = VOID_APPROVALS.get(document.get('candidate'))
+        if pinned is None or record != file_record(pinned):
+            raise ValueError('pinned reviewed void approval required')
+        with self.locked() as (stream, events):
+            grants = [row for row in active_grants(events) if row.get('event_sha256') == document.get('grant_event_sha256')]
+            if (document.get('schema') != VOID_SCHEMA or document.get('status') != 'approved' or
+                    not document.get('approval_basis') or len(grants) != 1 or
+                    grants[0].get('candidate') != document.get('candidate') or
+                    grants[0].get('sequence') != document.get('grant_sequence') or
+                    event_job(grants[0]) != document.get('job_id')):
+                raise ValueError('exact approved void of one active map grant required')
+            job_id = document['job_id']
+            if any(row.get('job_id') == job_id and row.get('event') in
+                   ('reserve', 'started', 'start', 'finish', 'account', 'temporary_directory') for row in events):
+                raise ValueError('map grant already started; it cannot be voided')
+            output = self.path.parent / 'jobs' / job_id
+            if output.exists() or output.is_symlink() or output.with_suffix('.log').exists():
+                raise ValueError('map grant has worker output; it cannot be voided')
+            if any(row['event'] == 'reserve' for row in self.states(events).values()):
+                raise ValueError('active attempt prevents voiding a grant')
+            return self._append(stream, events, dict(event=VOID_EVENT, candidate=grants[0]['candidate'],
+                job_id=job_id, grant_event_sha256=grants[0]['event_sha256'], approval=record))
 
     def continue_depth_d9_attempt(self, request_record):
         """Continue only the already allocated, unstarted grant851."""
@@ -865,7 +902,7 @@ class Ledger:
     def note(self, event, **fields):
         if event in ('reserve', 'finish', 'account', 'resume_unstarted', 'checkpoint',
                      'checkpoint_resume', 'depth_driver_qualification_triton_cache_authorized', 'depth_driver_qualification_local_listen_authorized', 'depth_driver_qualification_local_bind_authorized', 'depth_driver_qualification_recovery_authorized', 'depth_driver_diagnostic_authorized', 'depth_driver_qualification_authorized',
-                     'depth_setup_authorized', 'depth_attempt_authorized', 'depth_d9_attempt_continued', 'depth_setup_bytes_reconciled',
+                     'depth_setup_authorized', 'depth_attempt_authorized', 'depth_attempt_voided', 'depth_d9_attempt_continued', 'depth_setup_bytes_reconciled',
                      'depth_setup_recovery_authorized',
                      'native_qualification_authorized', 'final_render_do_authorized', 'cpu_preparation_charge', 'setup_recovery_authorized', 'component_recovery_authorized',
                      'reconstruction_recovery_authorized', 'memory_diagnostic_authorized'):

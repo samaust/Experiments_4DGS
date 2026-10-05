@@ -223,8 +223,8 @@ def video_slot_guard(request, ledger):
     from .budgets import budget_snapshot
     from .depth_map_allowance import remaining_map_allocation, check_slot_byte_budget
     events = ledger.events()
-    grants = [event for event in events if event.get('event') == 'depth_attempt_authorized'
-              and event.get('candidate') == request['component']]
+    from .depth_map_retry import active_grants
+    grants = active_grants(events, request['component'])
     if len(grants) != 1 or not grants[0].get('slot_byte_budget'):
         raise ValueError('video whole-slot byte proof required')
     grant = grants[0]
