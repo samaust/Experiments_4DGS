@@ -305,7 +305,22 @@ class QualificationReplacementSetupTests(unittest.TestCase):
    module.select_triton_cache({name:temporary+folder for name,folder in module.SUPERVISED_TRITON},output,dict(cache_directory='/bound'))
   guard=lambda n:(ROOT/f'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-0{n}/network_guard.py').read_bytes()
   self.assertEqual(guard(12),guard('07'))
+ def test_010_follows_the_failed_009_on_the_replacement_runtime(self):
+  from vipe_benchmark.depth_driver_qualification_triton_cache import ATTEMPTS
+  row=ATTEMPTS['plan069-D6-driver-qualification-010']
+  self.assertEqual((row['method'],row['previous'],row.get('previous_status','failed'),row['runtime'],row.get('replaced_setup_job')),
+                   ('moge-driver-method-013','plan069-D6-driver-qualification-009','failed','replacement',None))
+  self.assertEqual(row['lineage'][-2:],('ninth_predecessor_finish','ninth_predecessor_trace'))
+  self.assertEqual([job for job,attempt in ATTEMPTS.items() if attempt.get('runtime')=='replacement'],
+                   ['plan069-D6-driver-qualification-009','plan069-D6-driver-qualification-010'])
+ def test_method013_differs_from_method012_only_in_job_and_labels(self):
+  from vipe_benchmark.config import ROOT
+  method=lambda n,f:(ROOT/f'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-0{n}/{f}').read_text()
+  self.assertEqual(method(13,'network_guard.py'),method(12,'network_guard.py'))
+  for name in ('producer.py','startup.py'):
+   relabelled=method(12,name).replace('qualification-009','qualification-010').replace('qualification009','qualification010').replace('method012','method013')
+   self.assertEqual(method(13,name).splitlines()[1:],relabelled.splitlines()[1:])
  def test_attempt_runtime_pins_the_helper_cache_schema(self):
   import inspect
   from vipe_benchmark import depth_driver_qualification_triton_cache as module
-  self.assertIn("(SCHEMA_V2 if attempt.get('replaced_setup_job') else SCHEMA)",inspect.getsource(module.validate_request))
+  self.assertIn("(SCHEMA_V2 if attempt.get('runtime') == 'replacement' else SCHEMA)",inspect.getsource(module.validate_request))

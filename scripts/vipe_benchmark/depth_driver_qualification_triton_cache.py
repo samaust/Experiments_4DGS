@@ -29,12 +29,21 @@ ATTEMPTS = {
     # First attempt on the approved replacement runtime: the only attempt allowed to change setup.
     'plan069-D6-driver-qualification-009': dict(method='moge-driver-method-012',
               previous='plan069-D6-driver-qualification-008', previous_status='complete',
-              replaced_setup_job='plan069-D6-setup-recovery-002',
+              replaced_setup_job='plan069-D6-setup-recovery-002', runtime='replacement',
               lineage=('fourth_predecessor_finish', 'fourth_predecessor_trace',
                        'fifth_predecessor_finish', 'fifth_predecessor_trace',
                        'sixth_predecessor_finish', 'sixth_predecessor_trace',
                        'seventh_predecessor_finish', 'seventh_predecessor_trace',
                        'eighth_predecessor_finish', 'eighth_predecessor_trace')),
+    # 009 failed before CUDA: the cached-wheel FlexGEMM install left no owned cache directory.
+    'plan069-D6-driver-qualification-010': dict(method='moge-driver-method-013',
+              previous='plan069-D6-driver-qualification-009', runtime='replacement',
+              lineage=('fourth_predecessor_finish', 'fourth_predecessor_trace',
+                       'fifth_predecessor_finish', 'fifth_predecessor_trace',
+                       'sixth_predecessor_finish', 'sixth_predecessor_trace',
+                       'seventh_predecessor_finish', 'seventh_predecessor_trace',
+                       'eighth_predecessor_finish', 'eighth_predecessor_trace',
+                       'ninth_predecessor_finish', 'ninth_predecessor_trace')),
 }
 BASE_LINEAGE = ('predecessor_finish', 'diagnostic_finish', 'diagnostic_result', 'diagnostic_trace',
                 'second_predecessor_finish', 'second_predecessor_trace', 'third_predecessor_finish',
@@ -86,8 +95,8 @@ def validate_request(request_record, *, current_sources=None, completed=False):
     if not completed:
         from .triton_helper_cache import SCHEMA, SCHEMA_V2, validate_binding
         binding = validate_binding(request['triton_cache'])
-        # Only the runtime-replacing attempt runs Triton >= 3.3, which needs the bound libcuda (v2).
-        require(binding.get('schema') == (SCHEMA_V2 if attempt.get('replaced_setup_job') else SCHEMA),
+        # Only attempts on the replacement runtime run Triton >= 3.3, which needs the bound libcuda (v2).
+        require(binding.get('schema') == (SCHEMA_V2 if attempt.get('runtime') == 'replacement' else SCHEMA),
                 'Triton helper cache schema differs from the attempt runtime')
         built = read_json(verify_record(binding['build_receipt'])['path'])
         require(built.get('python') == request.get('interpreter_invocation') and built.get('gpu_operations') is False,
@@ -333,8 +342,10 @@ def _check_previous_triton_attempt(events, request):
     replaced = ATTEMPTS[request['job_id']].get('replaced_setup_job')
     if replaced is not None:
         _require_replacement_setup(request, retained, replaced, events)
+    # After the switch, later attempts keep the exact replacement setup and its request/review bindings.
+    kept_setup = ('setup',) + (('setup_request', 'setup_dispatch') if ATTEMPTS[previous].get('runtime') == 'replacement' else ())
     require(all(retained[key] == request[key] for key in
-            (() if replaced is not None else ('setup',)) + ('strace',) + BASE_LINEAGE + ATTEMPTS[previous]['lineage']) and
+            (() if replaced is not None else kept_setup) + ('strace',) + BASE_LINEAGE + ATTEMPTS[previous]['lineage']) and
             reserves[0].get('command') == retained['command'], 'previous Triton-cache retained lineage differs')
     trace = verify_record(request[trace_key])
     require(trace['path'] == str(Path(retained['output']).with_suffix('.syscalls.log')),

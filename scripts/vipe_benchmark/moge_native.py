@@ -51,7 +51,11 @@ def load_adapter(candidate, setup_result_record, *, device='cuda'):
     verify_derivation(flex_sources[0])
     scoped_cache = str(cache_path(Path(runtime_record['path']).parent))
     if (runtime.get('candidate') != candidate or runtime.get('status') != 'complete' or
-            runtime.get('flex_cache_path') != scoped_cache or not Path(scoped_cache).parent.is_dir()):
+            runtime.get('flex_cache_path') != scoped_cache):
+        raise ValueError('owned FlexGEMM runtime cache binding required')
+    # A source build created this directory as a side effect; a cached-wheel install does not.
+    Path(scoped_cache).parent.mkdir(exist_ok=True)
+    if not Path(scoped_cache).parent.is_dir() or Path(scoped_cache).parent.is_symlink():
         raise ValueError('owned FlexGEMM runtime cache binding required')
     cached_config = sys.modules.get('flex_gemm.config')
     if cached_config is not None and getattr(cached_config, 'AUTOTUNE_CACHE_PATH', None) != scoped_cache:

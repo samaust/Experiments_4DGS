@@ -119,7 +119,7 @@ class MoGeSetupTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unsafe MoGe source archive'):
             run_moge_setup(request, self.root / request['job_id'], acquire=unsafe_acquire)
 
-    def runtime_fixture(self, parent, candidate):
+    def runtime_fixture(self, parent, candidate, *, cache_directory=True):
         from vipe_benchmark.moge_source_build import REVISION, derive_flex_archive, cache_path
         runtime = parent / 'runtime'
         runtime.mkdir()
@@ -131,7 +131,8 @@ class MoGeSetupTests(unittest.TestCase):
             archive.addfile(info, BytesIO(payload))
         derived = derive_flex_archive(file_record(original), parent / 'flex-derived.tar.gz')
         cache = cache_path(runtime)
-        cache.parent.mkdir()
+        if cache_directory:
+            cache.parent.mkdir()
         result = runtime / 'result.json'
         write_json(result, dict(status='complete', candidate=candidate,
             source_packages=[derived], flex_cache_path=str(cache)))
@@ -213,7 +214,9 @@ class MoGeSetupTests(unittest.TestCase):
                     source_revision='74fbce054ebed49800de42d0ad0e83495065719a',
                     source_dir=str(source), source_archive=file_record(archive),
                     source_tree=records, checkpoint=file_record(checkpoint),
-                    runtime_environment=self.runtime_fixture(checkpoint.parent, candidate)))
+                    # A cached-wheel install (the D6 replacement) leaves no cache directory.
+                    runtime_environment=self.runtime_fixture(checkpoint.parent, candidate,
+                                                             cache_directory=candidate == 'D5')))
                 with patch.object(sys, 'dont_write_bytecode', False), patch.dict(
                         sys.modules, {'fixture_moge_model': native}), patch(
                         'torch.load', return_value=dict(model_config={}, model={})):
@@ -222,6 +225,7 @@ class MoGeSetupTests(unittest.TestCase):
                         self.assertIsNotNone(adapter)
                         self.assertFalse(sys.dont_write_bytecode)
                     self.assertEqual(source_tree_records(source), records)
+                    self.assertTrue((checkpoint.parent / 'runtime/flex-cache').is_dir())
 
 
 if __name__ == '__main__':
