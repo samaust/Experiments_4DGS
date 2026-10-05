@@ -309,6 +309,16 @@ class FrameAuthorityTests(unittest.TestCase):
         with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value=dict(finish=rows[0])):
             with self.assertRaisesRegex(ValueError,'successor'):
                 validate_D9_prerequisite(bound,ledger_prefix=prefix)
+        # A correctly named qualification outside the run's prepare directory is never selected.
+        outside=self.root/'elsewhere/plan069-D9-native-qualification-009/runtime-qualification.json'
+        outside.parent.mkdir(parents=True);outside.write_bytes(Path(successor['path']).read_bytes())
+        rows=rows[:2]
+        row=dict(event='cpu_preparation_charge',resource='cpu',evidence=file_record(outside),elapsed_seconds=.001,sequence=2,previous_sha256=rows[1]['event_sha256'])
+        row['event_sha256']=object_hash(row);rows.append(row)
+        (self.root/'ledger.jsonl').write_text(''.join(json.dumps(r)+'\n' for r in rows))
+        with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value=dict(finish=rows[0])):
+            with self.assertRaisesRegex(ValueError,'passed actual D9'):
+                validate_D9_prerequisite(bound,ledger_prefix=prefix)
     def test_successor_with_changed_installed_runtime_rejected(self):
         from unittest.mock import patch
         from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
