@@ -152,7 +152,7 @@ def owned_slot_bytes(run_root, candidate, *, recovery_lineage=None):
                      [row.get('job_id') for row in recovery_lineage.get('failed_recoveries', [])] ==
                      ([JOB] if job_id == REPAIR_JOB else []), 'exact approved recovery union required')
         else:
-            _require(candidate_for_job(job_id) == candidate and not recovery_lineage.get('failed_recoveries'),
+            _require(candidate_for_job(job_id) == candidate and recovery_lineage.get('failed_recoveries', []) == [],
                      'exact approved recovery union required')
         approved_jobs.update([job_id, *[row['job_id'] for row in recovery_lineage.get('failed_recoveries', [])]])
     for path in jobs.glob(f'plan069-{candidate}-*'):
@@ -215,8 +215,11 @@ def _table_recovery_marker(budget, marker, events, run_root):
     from .setup_recovery_core import candidate_for_job, completed_recovery
     candidate, job_id = budget.get('candidate'), marker.get('job_id')
     _require(candidate_for_job(job_id) == candidate, 'exact table recovery marker required')
-    record = verify_record(budget['setup'])
-    _require(record == budget['setup'] and
+    setup = budget.get('setup')
+    _require(isinstance(setup, dict) and isinstance(setup.get('path'), str) and isinstance(marker.get('request'), dict),
+             'owned accepted recovery marker required')
+    record = verify_record(setup)
+    _require(record == setup and
              Path(record['path']) == Path(run_root).resolve() / 'jobs' / job_id / 'result.json',
              'owned accepted recovery marker required')
     completion = completed_recovery(candidate, job_id, record, events)

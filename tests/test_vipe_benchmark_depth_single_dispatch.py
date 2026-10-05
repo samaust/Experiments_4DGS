@@ -153,6 +153,40 @@ class SingleDispatchTest(unittest.TestCase):
             supervise.assert_not_called()
         self.assertFalse(self.ledger.authorizations)
 
+    def recovered_d8(self):
+        do, qualified, original_setup, source = self.candidate('D8')
+        job = 'plan069-D8-setup-recovery-001'
+        result = dict(read_json(original_setup), schema='plan069-depth-setup-recovery-result/v1', job_id=job)
+        setup = self.record(self.local / 'jobs' / job / 'result.json', result)
+        qualified_doc = read_json(qualified)
+        runtime = dict(read_json(qualified_doc['runtime']['receipt']['path']), setup=setup)
+        runtime_receipt = self.record(self.root / 'D8-recovered-runtime.json', runtime)
+        Path(qualified).unlink()
+        self.record(qualified, dict(qualified_doc, setup=setup, runtime=dict(receipt=runtime_receipt)))
+        return do, qualified, self.local / 'jobs' / job / 'result.json', source, setup, result
+
+    def test_accepted_recovered_d8_setup_is_admitted_through_dispatch(self):
+        do, qualified, setup_path, source, setup, result = self.recovered_d8()
+        with patch('vipe_benchmark.setup_recovery_core.accepted_setup',
+                   return_value=(result, 'plan069-D8-setup-recovery-001')) as accepted, \
+             patch.object(dispatch, 'execution_authorization', side_effect=self.authorization(do)), \
+             patch.object(dispatch, 'supervise', side_effect=self.supervise), \
+             patch.object(dispatch, 'validate_result'):
+            dispatch.dispatch('D8', self.context_path, qualified, setup_path, source)
+        self.assertEqual(accepted.call_args.args[1], setup)
+        self.assertEqual(self.checks[-1]['completed_setup'], setup)
+
+    def test_unaccepted_recovered_d8_setup_never_authorizes(self):
+        do, qualified, setup_path, source, setup, result = self.recovered_d8()
+        with patch('vipe_benchmark.setup_recovery_core.accepted_setup',
+                   side_effect=ValueError('clean independently authorized recovery completion required')), \
+             patch.object(dispatch, 'execution_authorization', side_effect=self.authorization(do)), \
+             patch.object(dispatch, 'supervise') as supervise:
+            with self.assertRaisesRegex(ValueError, 'recovery completion'):
+                dispatch.dispatch('D8', self.context_path, qualified, setup_path, source)
+            supervise.assert_not_called()
+        self.assertFalse(self.ledger.authorizations)
+
     def test_setup_ledger_result_must_match(self):
         do, qualified, setup, source = self.candidate('D5')
         self.ledger.current['plan069-D5-setup-001']['result'] = {}

@@ -80,6 +80,12 @@ class RecoveredSetupMapsTests(NativeSetupRecoveryRunTests):
         with self.assertRaises(ValueError):
             bind_slot_byte_budget(self.maps, tampered, ledger.events(), self.run_root, reading)
 
+    def test_byte_reconciliation_refuses_a_recovered_d8_setup(self):
+        from vipe_benchmark.depth_budget_reconciliation import prepare_reconciliation
+        ledger, _ = self.completed_recovery()
+        with self.assertRaisesRegex(ValueError, 'not defined for this recovered candidate'):
+            prepare_reconciliation(self.run_root, 'D8', ledger.events())
+
 
 for name in [n for n in vars(NativeSetupRecoveryRunTests) if n.startswith('test_')]:
     setattr(RecoveredSetupMapsTests, name, None)

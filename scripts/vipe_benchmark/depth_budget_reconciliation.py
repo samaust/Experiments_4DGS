@@ -113,6 +113,13 @@ def _accepted(root, candidate, events, *, verifier=verify_record):
                                           verifier=verifier)
         return (accepted['lineage']['grant'], accepted['finish'],
                 accepted['accepted_result'], accepted['map_proposal'])
+    from .setup_recovery_core import candidate_for_job
+    # Two-attempt (failed original + recovery) byte reconciliation exists only for D9;
+    # nothing consumes it for other recovered candidates, so refuse rather than guess.
+    _require(candidate == 'D9' or not any(
+        row.get('event') == 'depth_setup_recovery_authorized' and
+        candidate_for_job(row.get('job_id')) == candidate for row in events),
+        'setup byte reconciliation is not defined for this recovered candidate')
     grants = [row for row in events if row.get('event') == 'depth_setup_authorized' and
               row.get('candidate') == candidate]
     finishes = [row for row in events if row.get('event') == 'finish' and

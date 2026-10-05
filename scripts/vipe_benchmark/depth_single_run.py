@@ -131,11 +131,13 @@ def _actual_gate(request, request_path, output):
         check_slot_byte_budget(proposal, allocation_events[0]['slot_byte_budget'],
                                ledger_path.parent, budget_snapshot(ledger_path.parent))
     setup = read_json(verify_record(request['setup'])['path'])
-    recovered = setup.get('schema') == 'plan069-depth-setup-recovery-result/v1'
+    from .setup_recovery_core import candidate_for_job
+    recovered = candidate_for_job(Path(request['setup']['path']).parent.name) == candidate
     if recovered:
         from .setup_recovery_core import accepted_setup
         _, setup_job = accepted_setup(candidate, request['setup'], events, ledger_path.parent)
-    _require(setup.get('schema') in ('plan069-depth-setup-result/v1', 'plan069-depth-setup-recovery-result/v1') and
+    _require(setup.get('schema') == ('plan069-depth-setup-recovery-result/v1' if recovered
+                                     else 'plan069-depth-setup-result/v1') and
              setup.get('status') == 'complete' and setup.get('record_kind') == 'actual' and
              setup.get('candidate') == candidate and setup.get('job_id') ==
                  (setup_job if recovered else f'plan069-{candidate}-setup-001') and
@@ -205,7 +207,9 @@ def _actual_output_guard(request, output):
         return lambda additional_bytes=0: None
     review = read_json(verify_record(request['review'])['path'])
     proposal = next(row for row in review['proposals'] if row['candidate'] == request['candidate'])
-    other_owned = owned_slot_bytes(root, request['candidate']) - directory_bytes(output)
+    marker = budget.get('recovery_lineage')
+    other_owned = owned_slot_bytes(root, request['candidate'],
+                                   **({'recovery_lineage': marker} if marker else {})) - directory_bytes(output)
     available = proposal['allocation']['artifact_bytes'] - budget['shared_setup_artifact_bytes'] - other_owned
 
     def check(additional_bytes=0):
