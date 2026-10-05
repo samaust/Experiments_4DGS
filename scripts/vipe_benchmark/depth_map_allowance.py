@@ -1,12 +1,50 @@
 """Remaining map-stage bounds after independently accepted, retained setup assets."""
 from pathlib import Path
 
-from .files import object_hash, read_json, verify_record
+from .config import ROOT
+from .files import file_record, object_hash, read_json, verify_record
+
+# User-approved whole-slot artifact amendments, bound to one exact candidate proposal.
+# Only the whole-slot byte budget adds them; proposals, grants and global caps are unchanged.
+SLOT_ARTIFACT_AMENDMENTS = {
+    'D6': ROOT / 'docs/research/vipe-alternatives/plan031-execution/depth-D6-slot-artifact-amendment-001.json'}
+SLOT_ARTIFACT_AMENDMENT_SCHEMA = 'plan069-depth-slot-artifact-amendment/v1'
 
 
 def _require(condition, reason):
     if not condition:
         raise ValueError(reason)
+
+
+def slot_artifact_amendment(proposal):
+    """Return (record, extra_bytes) for the candidate's approved amendment, or (None, 0)."""
+    path = SLOT_ARTIFACT_AMENDMENTS.get(proposal['candidate'])
+    if path is None or not path.exists():
+        return None, 0
+    record = file_record(path)
+    amendment = read_json(path)
+    extra = amendment.get('additional_artifact_bytes')
+    _require(amendment.get('schema') == SLOT_ARTIFACT_AMENDMENT_SCHEMA and amendment.get('status') == 'approved' and
+             amendment.get('candidate') == proposal['candidate'] and
+             amendment.get('proposal_sha256') == object_hash(proposal) and
+             type(extra) is int and 0 < extra <= 8 * 2**30 and bool(amendment.get('approval_basis')),
+             'exact approved whole-slot artifact amendment required')
+    return record, extra
+
+
+def budget_slot_allocation(proposal, budget):
+    """Amended allocation for an allocated slot budget; its bound amendment must still be current."""
+    amendment, _ = slot_artifact_amendment(proposal)
+    _require(budget.get('artifact_amendment') == amendment, 'whole-slot artifact amendment differs from allocation')
+    return slot_allocation(proposal)
+
+
+def slot_allocation(proposal):
+    """The proposal's byte allocation with any approved whole-slot artifact amendment added."""
+    _, extra = slot_artifact_amendment(proposal)
+    allocation = dict(proposal['allocation'])
+    allocation['artifact_bytes'] += extra
+    return allocation
 
 
 def remaining_map_allocation(proposal, setup, events, run_root, assets, *, verifier=verify_record,
@@ -250,11 +288,13 @@ def bind_slot_byte_budget(proposal, stage, events, run_root, reading):
         for key in ('download_bytes', 'artifact_bytes'):
             effective[key] = max(reading[key], credits['snapshot'][key]) - credits[key]
     limits = {}
+    amendment, _ = slot_artifact_amendment(proposal)
+    allocation = slot_allocation(proposal)
     for key in ('download_bytes', 'artifact_bytes'):
         _require(type(baseline.get(key)) is int and baseline[key] >= 0 and
                  type(effective.get(key)) is int and effective[key] >= baseline[key],
                  'accounted monotonic setup baseline required for whole-slot budget')
-        limits[key] = baseline[key] + proposal['allocation'][key]
+        limits[key] = baseline[key] + allocation[key]
         _require(effective[key] <= limits[key], key + ' whole-slot allocation exceeded')
     marker = stage.get('recovery_lineage')
     if marker is not None:
@@ -262,13 +302,15 @@ def bind_slot_byte_budget(proposal, stage, events, run_root, reading):
             setup_finish_event_sha256=stage['setup_finish_event_sha256'], recovery_lineage=marker), events, run_root)
     owned = owned_slot_bytes(run_root, candidate, **({'recovery_lineage': marker} if marker else {}))
     overhead = max(0, effective['artifact_bytes'] - baseline['artifact_bytes'] - owned)
-    _require(owned + overhead <= proposal['allocation']['artifact_bytes'],
+    _require(owned + overhead <= allocation['artifact_bytes'],
              'retained setup artifacts exceed whole-slot allocation')
     budget = dict(schema='plan069-depth-slot-byte-budget/v1', candidate=candidate,
                 proposal_sha256=object_hash(proposal), setup=stage['setup'],
                 setup_finish_event_sha256=stage['setup_finish_event_sha256'],
                 setup_baseline=baseline, absolute_limits=limits,
                 shared_setup_artifact_bytes=overhead)
+    if amendment is not None:
+        budget['artifact_amendment'] = amendment
     if credits is not None:
         budget.update(schema='plan069-depth-slot-byte-budget/v2',
             setup_grant_sha256=grants[0]['event_sha256'],
@@ -293,9 +335,10 @@ def check_slot_byte_budget(proposal, budget, run_root, reading, *, historical=Fa
              all(type(budget.get('setup_baseline', {}).get(key)) is int and
                  budget['setup_baseline'][key] >= 0 and
                  budget.get('absolute_limits', {}).get(key) ==
-                    budget['setup_baseline'][key] + proposal['allocation'][key]
+                    budget['setup_baseline'][key] + slot_allocation(proposal)[key]
                  for key in ('download_bytes', 'artifact_bytes')),
              'exact approved whole-slot byte budget required')
+    allocation = budget_slot_allocation(proposal, budget)
     effective = dict(reading)
     marker = None
     if budget.get('recovery_lineage') is not None:
@@ -326,7 +369,7 @@ def check_slot_byte_budget(proposal, budget, run_root, reading, *, historical=Fa
                      key + ' whole-slot allocation exceeded')
     _require(owned_slot_bytes(run_root, proposal['candidate'], **(
              {'recovery_lineage': marker} if marker else {})) +
-             budget['shared_setup_artifact_bytes'] <= proposal['allocation']['artifact_bytes'],
+             budget['shared_setup_artifact_bytes'] <= allocation['artifact_bytes'],
              'retained candidate artifacts exceed whole-slot allocation')
 
 
@@ -408,7 +451,8 @@ def historical_slot_output_guard(ledger, candidate, output):
         historical_slot_byte_guard(ledger, candidate)
     other_owned = owned_slot_bytes(root, candidate, **(
         {'recovery_lineage': recovery} if recovery else {})) - directory_bytes(output)
-    available = proposal['allocation']['artifact_bytes'] - budget['shared_setup_artifact_bytes'] - other_owned
+    available = (budget_slot_allocation(proposal, budget)['artifact_bytes'] -
+                 budget['shared_setup_artifact_bytes'] - other_owned)
 
     def check(additional_bytes=0):
         _require(type(additional_bytes) is int and additional_bytes >= 0 and

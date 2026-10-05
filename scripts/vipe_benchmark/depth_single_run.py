@@ -209,7 +209,9 @@ def _actual_output_guard(request, output):
     marker = budget.get('recovery_lineage')
     other_owned = owned_slot_bytes(root, request['candidate'],
                                    **({'recovery_lineage': marker} if marker else {})) - directory_bytes(output)
-    available = proposal['allocation']['artifact_bytes'] - budget['shared_setup_artifact_bytes'] - other_owned
+    from .depth_map_allowance import budget_slot_allocation
+    available = (budget_slot_allocation(proposal, budget)['artifact_bytes'] -
+                 budget['shared_setup_artifact_bytes'] - other_owned)
 
     def check(additional_bytes=0):
         _require(type(additional_bytes) is int and additional_bytes >= 0 and

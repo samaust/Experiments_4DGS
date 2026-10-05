@@ -341,6 +341,63 @@ class WholeSlotBudgetTests(unittest.TestCase):
             check_slot_byte_budget(proposal,budget,'/tmp',
                 dict(download_bytes=999999,artifact_bytes=999999),historical=True)
 
+    def test_approved_slot_artifact_amendment_raises_only_the_artifact_slot(self):
+        import tempfile
+        from vipe_benchmark import depth_map_allowance as allowance
+        proposal = dict(candidate='D11',allocation=dict(download_bytes=100,artifact_bytes=200))
+        stage = dict(setup=dict(path='accepted-result'), setup_finish_event_sha256='f'*64)
+        events = [dict(event='depth_setup_authorized',candidate='D11',
+                       resource_snapshot=dict(download_bytes=1000,artifact_bytes=2000))]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'amendment.json'
+            amendment = dict(schema=allowance.SLOT_ARTIFACT_AMENDMENT_SCHEMA, status='approved', candidate='D11',
+                             proposal_sha256=object_hash(proposal), additional_artifact_bytes=50,
+                             approval_basis='fixture user approval')
+            write_json(path, amendment)
+            over = dict(download_bytes=1090,artifact_bytes=2230)
+            with patch('vipe_benchmark.depth_map_allowance.owned_slot_bytes',return_value=140):
+                with self.assertRaisesRegex(ValueError,'artifact_bytes whole-slot'):
+                    allowance.bind_slot_byte_budget(proposal,stage,events,'/tmp',over)
+                with patch.dict(allowance.SLOT_ARTIFACT_AMENDMENTS,{'D11':path}):
+                    budget = allowance.bind_slot_byte_budget(proposal,stage,events,'/tmp',over)
+                    self.assertEqual(budget['absolute_limits'],dict(download_bytes=1100,artifact_bytes=2250))
+                    self.assertEqual(budget['artifact_amendment'],file_record(path))
+                    allowance.check_slot_byte_budget(proposal,budget,'/tmp',dict(download_bytes=1100,artifact_bytes=2250))
+                    with self.assertRaisesRegex(ValueError,'whole-slot'):
+                        allowance.check_slot_byte_budget(proposal,budget,'/tmp',dict(download_bytes=1101,artifact_bytes=2250))
+                    with self.assertRaisesRegex(ValueError,'amendment differs'):
+                        allowance.check_slot_byte_budget(proposal,{k:v for k,v in budget.items() if k!='artifact_amendment'},
+                                                         '/tmp',dict(download_bytes=1100,artifact_bytes=2250))
+                    for changed in (dict(proposal_sha256='0'*64), dict(candidate='D5'), dict(status='review'),
+                                    dict(additional_artifact_bytes=9*2**30), dict(approval_basis='')):
+                        with self.subTest(changed=sorted(changed)):
+                            path.unlink(); write_json(path, dict(amendment, **changed))
+                            with self.assertRaisesRegex(ValueError,'exact approved whole-slot artifact amendment'):
+                                allowance.bind_slot_byte_budget(proposal,stage,events,'/tmp',over)
+                    path.unlink(); write_json(path, dict(amendment, additional_artifact_bytes=60))
+                    with self.assertRaisesRegex(ValueError,'whole-slot byte budget|amendment differs'):
+                        allowance.check_slot_byte_budget(proposal,budget,'/tmp',dict(download_bytes=1100,artifact_bytes=2250))
+
+    def test_output_headroom_guards_use_the_bound_amended_allocation(self):
+        import inspect, tempfile
+        from vipe_benchmark import depth_map_allowance as allowance, depth_single_run
+        proposal = dict(candidate='D11',allocation=dict(download_bytes=100,artifact_bytes=200))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'amendment.json'
+            write_json(path, dict(schema=allowance.SLOT_ARTIFACT_AMENDMENT_SCHEMA, status='approved', candidate='D11',
+                                  proposal_sha256=object_hash(proposal), additional_artifact_bytes=50,
+                                  approval_basis='fixture user approval'))
+            self.assertEqual(allowance.budget_slot_allocation(proposal,{})['artifact_bytes'],200)
+            with patch.dict(allowance.SLOT_ARTIFACT_AMENDMENTS,{'D11':path}):
+                self.assertEqual(allowance.budget_slot_allocation(
+                    proposal,dict(artifact_amendment=file_record(path)))['artifact_bytes'],250)
+                with self.assertRaisesRegex(ValueError,'amendment differs'):
+                    allowance.budget_slot_allocation(proposal,{})
+        for guard in (depth_single_run._actual_output_guard, allowance.historical_slot_output_guard):
+            source = inspect.getsource(guard)
+            self.assertIn('budget_slot_allocation(proposal, budget)',source)
+            self.assertNotIn("proposal['allocation']['artifact_bytes']",source)
+
     def test_owned_scope_counts_preserved_revisions_and_excludes_other_candidates(self):
         import tempfile
         from vipe_benchmark.budgets import directory_bytes

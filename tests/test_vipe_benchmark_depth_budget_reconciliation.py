@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from vipe_benchmark.budgets import budget_snapshot
 from vipe_benchmark.config import load
@@ -59,7 +60,12 @@ from vipe_benchmark.depth_map_allowance import bind_slot_byte_budget, check_slot
 
 
 class RetainedCausalTests(unittest.TestCase):
-    setUp = fixtures.MapAllowanceTests.setUp
+    def setUp(self):
+        fixtures.MapAllowanceTests.setUp(self)
+        # Fixture proposals reuse real candidate names; keep the real approved slot amendments out.
+        amendments = patch.dict('vipe_benchmark.depth_map_allowance.SLOT_ARTIFACT_AMENDMENTS', {}, clear=True)
+        amendments.start()
+        self.addCleanup(amendments.stop)
     tearDown = fixtures.MapAllowanceTests.tearDown
     prepare_completed_setup = fixtures.MapAllowanceTests.prepare_completed_setup
     """Use the existing accepted setup boundary, with real temp ledger/inodes."""
