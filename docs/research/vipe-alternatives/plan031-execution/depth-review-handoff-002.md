@@ -9,7 +9,7 @@ Private review page with synchronized clips (now including D6): https://claude.a
 
 | Candidate | Model | Domain | Maps / clips | Fit → frozen check | Metric D* | GPU s | Outcome record |
 |---|---|---|---|---|---|---|---|
-| D2 | Depth Anything 3 Metric Large (control) | camera-z m | 200 / 4 | 1.0899 pass → pass (historical) | eligible | 50.5 | `depth-D2-outcome-001.json` |
+| D2 | Depth Anything 3 Metric Large (control) | camera-z m | 200 / 4 | 1.0899 pass → pass (historical) | not eligible (control lineage) | 50.5 | `depth-D2-outcome-001.json` |
 | D5 | MoGe-2 ViT-L | camera-z m | 256 / 4 | 1.5309 pass → pass | eligible | 129.6 | `depth-D5-outcome-001.json` |
 | D6 | MoGe-3 ViT-L | camera-z m | 256 / 4 | 1.5350 pass → pass | eligible | 223.6 | `depth-D6-outcome-001.json` |
 | D7 | Depth Anything V2 Metric Hypersim Small | camera-z m | 256 / 4 | 0.7052 pass → blocked | ineligible | 52.3 | `depth-D7-outcome-001.json` |
@@ -19,7 +19,7 @@ Private review page with synchronized clips (now including D6): https://claude.a
 | D11 | Marigold V2 Log-stage2 | relative log | 256 / 4 | not metric | visual only | 361.9 | `depth-D11-outcome-001.json` |
 
 D2 is the control: its fit/check are the historical `jobs/D2-fit` / `jobs/D2-check` scale results (both
-passed; worst camera 13.3%), which `depth_review` uses for its D* eligibility; the package itself marks the
+passed; worst camera 13.3%), but `depth_review` cannot bind the control run to a completed runtime qualification, so D2 is not a D* choice; the package itself marks the
 control "unverified" because it only computes eligibility for D5–D8/D10. D0–D4 remain historical references (60 anchor previews each). Physical accuracy is unverified for every
 candidate. Package viewer: 60 matched frozen-frame selections (30 cameras × frames 100/175) and four
 synchronized 50-frame clips (cameras 1/11/21/31, frames 150–199, 25 fps). Metric arms share the fixed
@@ -39,4 +39,4 @@ completed 256 maps with both scale gates passing.
 ## Decision needed
 
 **Human review (#62 → #45).** Record a visual favourite and, separately, a metric D* from the eligible set
-(D2, D5, D6, D8, D10), using the package viewer or the review page. Ties, "unclear" and "not applicable" are valid.
+(D5, D6, D8, D10), using the package viewer or the review page. Ties, "unclear" and "not applicable" are valid.
