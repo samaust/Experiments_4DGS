@@ -88,6 +88,24 @@ LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py',
          'depth_setup.py', 'depth_setup_other.py'))
 
 
+def d6_driver_qualification_exception(qualification, *, events=None, run_root=None):
+    """Check a D6 driver-aware runtime qualification with the validator of the attempt that produced it."""
+    receipt = qualification.get('driver_qualification', {})
+    finish = read_json(verify_record(receipt['finish'])['path'])
+    from .depth_driver_qualification_triton_cache import ATTEMPTS as triton_cache_attempts
+    if finish.get('job_id') in triton_cache_attempts:
+        from .depth_driver_qualification_triton_cache import qualification_exception
+    elif finish.get('job_id') == 'plan069-D6-driver-qualification-004':
+        from .depth_driver_qualification_local_listen import qualification_exception
+    elif finish.get('job_id') == 'plan069-D6-driver-qualification-003':
+        from .depth_driver_qualification_local_bind import qualification_exception
+    elif finish.get('job_id') == 'plan069-D6-driver-qualification-002':
+        from .depth_driver_qualification_recovery import qualification_exception
+    else:
+        from .depth_driver_qualification import qualification_exception
+    qualification_exception(qualification, events=events, run_root=run_root)
+
+
 def local_source_records(candidate):
     """Rehash every local inference and publication source bound by review."""
     records = [file_record(ROOT / 'scripts/vipe_benchmark' / name)
@@ -353,24 +371,7 @@ def review(proposal, *, config, commercial, assets, runtime, live,
     if candidate == 'D6' and ('qualification_kind' in qualification or
             'driver_qualification' in qualification or qualification.get('cuda_initialized') is True):
         try:
-            receipt = qualification.get('driver_qualification', {})
-            finish = read_json(verify_record(receipt['finish'])['path'])
-            from .depth_driver_qualification_triton_cache import ATTEMPTS as triton_cache_attempts
-            if finish.get('job_id') in triton_cache_attempts:
-                from .depth_driver_qualification_triton_cache import qualification_exception as triton_cache_exception
-                triton_cache_exception(qualification, events=setup_events, run_root=run_root)
-            elif finish.get('job_id') == 'plan069-D6-driver-qualification-004':
-                from .depth_driver_qualification_local_listen import qualification_exception as local_listen_exception
-                local_listen_exception(qualification, events=setup_events, run_root=run_root)
-            elif finish.get('job_id') == 'plan069-D6-driver-qualification-003':
-                from .depth_driver_qualification_local_bind import qualification_exception as local_bind_exception
-                local_bind_exception(qualification, events=setup_events, run_root=run_root)
-            elif finish.get('job_id') == 'plan069-D6-driver-qualification-002':
-                from .depth_driver_qualification_recovery import qualification_exception as recovery_exception
-                recovery_exception(qualification, events=setup_events, run_root=run_root)
-            else:
-                from .depth_driver_qualification import qualification_exception
-                qualification_exception(qualification, events=setup_events, run_root=run_root)
+            d6_driver_qualification_exception(qualification, events=setup_events, run_root=run_root)
         except (KeyError, TypeError, ValueError, OSError) as error:
             blockers.append('D6 driver qualification exception invalid: ' + str(error))
     check(approval is not None and

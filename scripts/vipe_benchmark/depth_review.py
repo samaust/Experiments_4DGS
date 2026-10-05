@@ -79,7 +79,10 @@ def _metric_evidence(candidate, slot, package, actual):
         check.get('frozen_fit') == scales['fit'], candidate + ': frozen fit/check lineage required')
     _require(all(scale.get('provenance', {}).get('inputs') == package['bindings']['inputs']
         for scale in (fit, check)), candidate + ': scale input binding changed')
-    _require(evidence.get('scale') == scales['check'], candidate + ': package scale binding changed')
+    # The D2 control's scale lineage is its bound historical fit/check receipts; the
+    # aggregate declares no separate package scale record for it.
+    _require(evidence.get('scale') == scales['check'] or (candidate == 'D2' and 'scale' not in evidence),
+             candidate + ': package scale binding changed')
     normalized = dict(evidence, fit=scales['fit'], check=scales['check'], inputs=package['bindings']['inputs'])
     blockers = []
     if fit.get('status') != 'passed' or check.get('status') != 'passed':
@@ -137,17 +140,20 @@ def _completed_qualification(candidate, slot, generation, actual):
         qualification.get('source_files') != runtime['source_files'] or
         source_review.get('source_files') != runtime['source_files']):
         return None
-    if candidate == 'D6' and ('qualification_kind' in runtime or
-            'driver_qualification' in runtime or runtime.get('cuda_initialized') is True):
-        from .depth_driver_qualification import qualification_exception
-        qualification_exception(runtime)
-    _verify_file(runtime['source_archive'])
+    events = root = None
     if actual:
         from .config import load
         from .ledger import Ledger
         root = Path(evidence['generation']['path']).resolve().parents[2]
         events = Ledger(root/'ledger.jsonl', dict(load(),new_download_gib_limit=110,
             new_artifact_disk_gib_limit=210)).events()
+    if candidate == 'D6' and ('qualification_kind' in runtime or
+            'driver_qualification' in runtime or runtime.get('cuda_initialized') is True):
+        # The same per-attempt validator admission used for the completed maps run.
+        from .depth_admission import d6_driver_qualification_exception
+        d6_driver_qualification_exception(runtime, events=events, run_root=root)
+    _verify_file(runtime['source_archive'])
+    if actual:
         reserves = [event for event in events if event.get('event') == 'reserve' and
             event.get('job_id') == finish['job_id']]
         if finish not in events or len(reserves) != 1:
@@ -191,8 +197,10 @@ def _qualification_blockers(candidate, evidence, generation, actual, completed):
     check(dependencies.get('schema') == 'plan069-depth-installed-dependencies/v1' and
         dependencies.get('candidate') == candidate and dependencies.get('source_revision') == revision and
         bool(dependencies.get('files')), 'installed dependency closure required')
+    # Installed-closure records keep the inventory's path spelling (console scripts may
+    # be recorded as site-packages/../../../bin/...); admission verifies their bytes the same way.
     for record in dependencies.get('files', []):
-        _verify_file(record)
+        verify_record(record)
     if candidate == 'D10' and runtime.get('profile', {}).get('runtime_profile', {}).get('id') in ('D9-D10-torch-2.14.1-pypi-cuda13', 'D9-D10-torch-2.14.1-pypi-frame-input'):
         from .video_environment import PYPI_RECIPE, FRAME_RECIPE, validate_runtime_versions, validate_runtime_observation
         from .files import file_record

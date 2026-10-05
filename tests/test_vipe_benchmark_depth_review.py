@@ -3,6 +3,7 @@ import copy
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from vipe_benchmark import depth_review
 from vipe_benchmark.depth_admission import D2_SPEC, PROFILES
@@ -262,3 +263,49 @@ class DepthReviewTests(unittest.TestCase):
         self.archive.write_bytes(b'immutable native source fixture')
         Path(self.qualification['path']).write_text('{}')
         with self.assertRaises(ValueError): depth_review.validate_review(self.form,actual=False)
+
+
+class ActualReceiptIntegrationTests(unittest.TestCase):
+    """Regressions from validating the first actual extended package (plan069-depth-comparison-002)."""
+
+    def test_d6_review_uses_the_admission_per_attempt_driver_validator(self):
+        import inspect
+        import tempfile
+        from vipe_benchmark import depth_admission, depth_review
+        from vipe_benchmark.files import file_record, write_json
+        self.assertIn('d6_driver_qualification_exception(runtime, events=events, run_root=root)',
+                      inspect.getsource(depth_review._completed_qualification))
+        self.assertIn('d6_driver_qualification_exception(qualification, events=setup_events, run_root=run_root)',
+                      inspect.getsource(depth_admission.review))
+        with tempfile.TemporaryDirectory() as directory:
+            finish = Path(directory) / 'finish.json'
+            write_json(finish, dict(event='finish', job_id='plan069-D6-driver-qualification-011'))
+            qualification = dict(driver_qualification=dict(finish=file_record(finish)))
+            with patch('vipe_benchmark.depth_driver_qualification_triton_cache.qualification_exception') as triton, \
+                    patch('vipe_benchmark.depth_driver_qualification.qualification_exception') as original:
+                depth_admission.d6_driver_qualification_exception(qualification, events=['e'], run_root='r')
+            triton.assert_called_once_with(qualification, events=['e'], run_root='r')
+            original.assert_not_called()
+
+    def test_dependency_records_keep_inventory_path_spelling(self):
+        import inspect
+        import tempfile
+        from vipe_benchmark import depth_review
+        from vipe_benchmark.files import file_record, verify_record
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            (root / 'bin').mkdir()
+            (root / 'lib/site-packages').mkdir(parents=True)
+            (root / 'bin/tool').write_text('console script')
+            record = dict(file_record(root / 'bin/tool'), path=str(root / 'lib/site-packages/../../bin/tool'))
+            self.assertEqual(verify_record(record)['sha256'], record['sha256'])
+            with self.assertRaisesRegex(ValueError, 'bytes/path mismatch'):
+                depth_review._verify_file(record)
+        source = inspect.getsource(depth_review._qualification_blockers)
+        self.assertIn("for record in dependencies.get('files', []):\n        verify_record(record)", source)
+
+    def test_only_the_d2_control_may_omit_its_package_scale_record(self):
+        import inspect
+        from vipe_benchmark import depth_review
+        source = inspect.getsource(depth_review._metric_evidence)
+        self.assertIn("evidence.get('scale') == scales['check'] or (candidate == 'D2' and 'scale' not in evidence)", source)
