@@ -497,13 +497,14 @@ class Ledger:
 
     def authorize_depth_setup_recovery(self, request, *, command, worker, executable):
         """Approve a fresh immutable recovery only under an explicit new DO."""
-        from .setup_recovery_core import RECOVERY_CANDIDATES, RECOVERY_EVENT as EVENT, recovery_profile
-        candidate = read_json(verify_record(request)['path']).get('candidate')
-        if candidate not in RECOVERY_CANDIDATES:
-            raise ValueError('setup recovery candidate has no recovery profile')
+        from .setup_recovery_core import (RECOVERY_CANDIDATES, RECOVERY_EVENT as EVENT, candidate_for_job,
+                                          recovery_profile)
         with self.locked() as (stream, events):
             if any(row['event'] == 'reserve' for row in self.states(events).values()):
                 raise ValueError('active attempt prevents setup recovery authorization')
+            # Route by the request's recovery job; unknown jobs keep the D9 profile's refusals.
+            document = read_json(verify_record(request)['path'])
+            candidate = candidate_for_job(document.get('job_id') if isinstance(document, dict) else None) or 'D9'
             normalized = recovery_profile(candidate).validate_recovery_request(request, events, self.path.parent)
             job_id = normalized['job_id']
             if job_id in self.states(events) or any(row.get('event') == EVENT and row.get('job_id') == job_id for row in events):

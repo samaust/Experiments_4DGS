@@ -14,6 +14,8 @@ ORIGINAL_JOB = RECOVERY_CANDIDATES[CANDIDATE]['original_job']
 JOBS = RECOVERY_CANDIDATES[CANDIDATE]['jobs']
 (JOB,) = JOBS
 EVENT = RECOVERY_EVENT
+RECOVERY_SECONDS = 1200
+WHEEL_HOST = 'https://files.pythonhosted.org/'
 RETAINED = dict(source_archive='source.tar.gz', utils3d_archive='utils3d-source.tar.gz',
                 setup_failure='failure.json', runtime_failure='runtime/failure.json',
                 dependency_lock='runtime/requirements.lock')
@@ -107,7 +109,8 @@ def validate_recovery_request(request_record, events, run_root, *, require_reser
              'recovery must keep the original approved D8 map proposal')
     seconds = proposal.get('recovery_seconds')
     elapsed = lineage['finish'].get('elapsed_seconds')
-    _require(type(seconds) is int and seconds > 0 and type(elapsed) in (int, float) and elapsed >= 0 and
+    _require(type(seconds) is int and seconds == RECOVERY_SECONDS and
+             type(elapsed) in (int, float) and elapsed >= 0 and
              elapsed + seconds <= map_proposal['allocation']['setup_seconds'],
              'recovery setup time must fit original remaining candidate allowance')
     from .depth_native_runtime import recipe
@@ -115,12 +118,25 @@ def validate_recovery_request(request_record, events, run_root, *, require_reser
     _require(environment == proposal.get('runtime_recipe') == recipe(CANDIDATE, root),
              'exact reviewed amended recovery environment required')
     acquisitions = request.get('acquisitions')
-    _require(isinstance(acquisitions, list) and acquisitions == proposal.get('acquisitions') and
-             all(isinstance(row, dict) and isinstance(row.get('url'), str) and
+    pinned = set(environment.get('requirements', [])) if isinstance(environment, dict) else set()
+    _require(isinstance(acquisitions, list) and bool(acquisitions) and
+             acquisitions == proposal.get('acquisitions') and
+             all(isinstance(row, dict) and isinstance(row.get('name'), str) and
+                 isinstance(row.get('version'), str) and
+                 f"{row['name']}=={row['version']}" in pinned and
+                 isinstance(row.get('license'), str) and bool(row['license']) and
+                 isinstance(row.get('url'), str) and row['url'].startswith(WHEEL_HOST) and
                  isinstance(row.get('sha256'), str) and len(row['sha256']) == 64 and
                  type(row.get('bytes')) is int and row['bytes'] > 0 for row in acquisitions) and
              len({row['name'] for row in acquisitions}) == len(acquisitions),
              'exact reviewed acquisition allowlist required')
+    setup_failure = read_json(proposal['original_setup']['setup_failure']['path'])
+    inventory = read_json(verifier(map_proposal['required_assets'])['path'])['candidates'][CANDIDATE]['files']
+    received = setup_failure.get('bytes_received')
+    _require(type(received) is int and received >= 0 and
+             received + sum(row['bytes'] for row in inventory) + sum(row['bytes'] for row in acquisitions)
+             <= map_proposal['allocation']['download_bytes'],
+             'recovery transfers exceed the unconsumed original download allowance')
     source_record = request['source_review']
     source = read_json(verifier(source_record)['path'])
     from .depth_admission import local_source_records

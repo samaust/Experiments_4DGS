@@ -13,9 +13,9 @@ from vipe_benchmark.files import file_record, object_hash, write_json
 ORIGINAL = 'plan069-D8-setup-001'
 JOB = 'plan069-D8-setup-recovery-001'
 CLEAN = dict(cleanup_confirmed=True, cleanup_uncertain=False, surviving_pids=[], deadline_exceeded=False)
-WHEELS = [dict(name='moderngl', version='5.12.0', url='https://files.example/moderngl.whl',
+WHEELS = [dict(name='moderngl', version='5.12.0', license='MIT', url='https://files.pythonhosted.org/moderngl.whl',
                sha256='7fc0f8788bc84433d2124e9a4893adbe40f93c7d213abb8ad7b909540cb0161f', bytes=293468),
-          dict(name='glcontext', version='3.0.0', url='https://files.example/glcontext.whl',
+          dict(name='glcontext', version='3.0.0', license='MIT', url='https://files.pythonhosted.org/glcontext.whl',
                sha256='7fa413f4420abff2bbb5aa5770a3e1deffcdc13e0ef2f459b145fa79c36909e7', bytes=51680)]
 
 
@@ -29,11 +29,14 @@ class NativeSetupRecoveryAuthorityTests(unittest.TestCase):
         (job / 'runtime').mkdir(parents=True)
         (self.run_root / 'requests').mkdir()
         self.environment = dict(schema='plan069-depth-environment-request/v1', candidate='D8',
-                                record_kind='actual', requirements=['moderngl==5.12.0', 'glcontext==3.0.0'])
+                                record_kind='actual', requirements=['torch==2.14.1+cu130',
+                                                                    'moderngl==5.12.0', 'glcontext==3.0.0'])
         adapter = patch('vipe_benchmark.depth_native_runtime.recipe', return_value=self.environment)
         adapter.start()
         self.addCleanup(adapter.stop)
-        self.maps = dict(candidate='D8', max_attempts=1, allocation=dict(
+        assets = self.write('assets.json', dict(candidates=dict(D8=dict(files=[dict(
+            repository='metricanything', path='student_pointmap.pt', bytes=1304997680, lfs_sha256='e' * 64)]))))
+        self.maps = dict(candidate='D8', max_attempts=1, required_assets=assets, allocation=dict(
             setup_seconds=1800, download_bytes=7747448624, artifact_bytes=9663676416, gpu_seconds=3600))
         review002 = self.write('review002.json', dict(schema='plan069-depth-execution-review/v1',
                                                       status='REVIEW', proposals=[self.maps]))
@@ -47,7 +50,8 @@ class NativeSetupRecoveryAuthorityTests(unittest.TestCase):
             utils3d_archive=self.raw('jobs/%s/utils3d-source.tar.gz' % ORIGINAL),
             dependency_lock=self.raw('jobs/%s/runtime/requirements.lock' % ORIGINAL),
             setup_failure=self.write('jobs/%s/failure.json' % ORIGINAL, dict(
-                schema='plan069-depth-setup-failure/v1', candidate='D8', job_id=ORIGINAL, status='failed')),
+                schema='plan069-depth-setup-failure/v1', candidate='D8', job_id=ORIGINAL, status='failed',
+                bytes_received=3443909244)),
             runtime_failure=self.write('jobs/%s/runtime/failure.json' % ORIGINAL, dict(
                 schema='plan069-depth-environment-failure/v1', candidate='D8', status='failed',
                 record_kind='actual')))
@@ -144,6 +148,13 @@ class NativeSetupRecoveryAuthorityTests(unittest.TestCase):
         self.approve(request_changes=dict(acquisitions=extra))
         self.assert_refused('exact reviewed acquisition allowlist')
 
+    def test_malformed_acquisition_rows_are_refused_as_value_errors(self):
+        for row in (dict(WHEELS[0], name=None), {k: v for k, v in WHEELS[0].items() if k != 'name'}):
+            with self.subTest(row=row):
+                self.proposal['acquisitions'] = [row, WHEELS[1]]
+                self.approve(request_changes=dict(acquisitions=[row, WHEELS[1]]))
+                self.assert_refused('exact reviewed acquisition allowlist')
+
     def test_unbound_or_completed_original_is_refused(self):
         self.original = dict(self.original, failed_finish_event_sha256='0' * 64)
         self.proposal['original_setup'] = self.original
@@ -155,10 +166,28 @@ class NativeSetupRecoveryAuthorityTests(unittest.TestCase):
         self.approve()
         self.assert_refused('active attempt')
 
-    def test_recovery_time_must_fit_the_original_setup_allowance(self):
-        self.proposal['recovery_seconds'] = 1700
-        self.approve()
-        self.assert_refused('original remaining candidate allowance')
+    def test_recovery_time_is_exactly_the_approved_bound(self):
+        for seconds in (1700, 600):
+            with self.subTest(seconds=seconds):
+                self.proposal['recovery_seconds'] = seconds
+                self.approve()
+                self.assert_refused('original remaining candidate allowance')
+
+    def test_wheels_must_be_pinned_licensed_pypi_and_fit_the_allowance(self):
+        for changes in (dict(version='5.11.0'), dict(license=''), dict(url='https://example.org/m.whl'),
+                        dict(bytes=4 * 2**30)):
+            with self.subTest(changes=changes):
+                wheels = [dict(WHEELS[0], **changes), WHEELS[1]]
+                self.proposal['acquisitions'] = wheels
+                self.approve(request_changes=dict(acquisitions=wheels))
+                self.assert_refused('allowlist|download allowance')
+
+    def test_generic_note_cannot_create_the_recovery_event(self):
+        from vipe_benchmark.ledger import Ledger
+        ledger = Ledger(self.run_root / 'ledger.jsonl', dict(load(), new_download_gib_limit=110,
+                                                              new_artifact_disk_gib_limit=210))
+        with self.assertRaises(ValueError):
+            ledger.note('depth_setup_recovery_authorized', candidate='D8', job_id=JOB)
 
 
 class AmendedNativeRecipeTests(unittest.TestCase):
