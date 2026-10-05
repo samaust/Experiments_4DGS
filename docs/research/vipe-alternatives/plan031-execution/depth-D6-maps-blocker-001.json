@@ -1,0 +1,71 @@
+{
+  "schema": "plan069-depth-candidate-blocker/v1",
+  "candidate": "D6",
+  "status": "blocked",
+  "record_kind": "actual",
+  "blocker": "whole-slot artifact allocation",
+  "gpu_attempt_consumed": false,
+  "ledger_events_for_maps": [],
+  "qualification": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/prepare/plan069-D6-qualification-002/qualification.json",
+    "sha256": "913f5a9eb98a92cc24ab9e210e3ac6445bc6ce22313aeabc0baa6749a63b4ea0",
+    "bytes": 49670
+  },
+  "driver_qualification_outcome": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/depth-D6-driver-outcome-006.json",
+    "sha256": "a8d6cd1cc911e02efab0b29db2675f0df4bf4ffb0a5ed57186134a09c65f8181",
+    "bytes": 3121
+  },
+  "source_review": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/depth-D6-source-review-019.json",
+    "sha256": "b964859e1553faf2c467373ecf95c7b01a9e2470a9216aca4077bad0fc77fe1a",
+    "bytes": 107303
+  },
+  "rejected_allocation": {
+    "request": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/prepare/plan069-D6-maps-001-rejected-allocation-001/plan069-D6-maps-001.json",
+      "sha256": "4d1dee05deee7575a5148611764feb9484da237747b09cbba2e75dab460d26c6",
+      "bytes": 2829
+    },
+    "admission": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/prepare/plan069-D6-maps-001-rejected-allocation-001/plan069-D6-maps-001-admission.json",
+      "sha256": "d9626199445ea1098a2a12097ca5843941b1f66316270ebad002ade3376df6e9",
+      "bytes": 4194
+    },
+    "dispatch_log": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/prepare/plan069-D6-maps-001-rejected-allocation-001/dispatch.err",
+      "sha256": "21ab9f3de06428f440f83d4be5cb2a8486ebd5303312a97a1e2b14f97472e5ba",
+      "bytes": 1773
+    }
+  },
+  "measurement": {
+    "setup_grant_sequence": 708,
+    "setup_baseline_artifact_bytes": 188424306688,
+    "allocation_artifact_bytes": 9663676416,
+    "absolute_limit_bytes": 198087983104,
+    "current_artifact_bytes": 205282656256,
+    "causal_credit_artifact_bytes": 5822607360,
+    "effective_artifact_bytes": 199460048896,
+    "over_by_bytes": 1372065792,
+    "expected_D6_maps_bytes_from_D5": "~2.1 GiB"
+  },
+  "diagnosis": "bind_slot_byte_budget measures run-wide artifact growth since the D6 setup grant (ledger 708). Later D10, D11-related outputs, D8 setup/recovery and maps, D9/D10 outputs and clips were written after it; only D9 setup bytes were reconciled (ledger 818). The setup-byte reconciliation cannot be performed retroactively for D10 (attempts 001/002 at ledger 948-949 failed: global cap with base config, then acquisition no longer equals the post-setup download delta) and is undefined for recovered D8.",
+  "attempts": [
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/prepare/plan069-D10-setup-byte-reconciliation-001/receipt.json",
+      "sha256": "31bcaed3394d4c8b000a976126f0358ce40124a159280894fe9d8a497630d7dd",
+      "bytes": 792
+    },
+    {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/prepare/plan069-D10-setup-byte-reconciliation-002/receipt.json",
+      "sha256": "7ae20c1e1ab22cceeba4205ba2c7e78b89933fd57157f179eda6dad776123bae",
+      "bytes": 806
+    }
+  ],
+  "resolution_options": [
+    "User-approved artifact-byte cap amendment for the D6 slot (existing cap_amendment mechanism)",
+    "A reviewed change to whole-slot attribution that excludes later candidates' owned outputs",
+    "Record a terminal D6 disposition (qualified, maps not run)"
+  ],
+  "authority_note": "Standing approvals of 2026-10-05 cover CPU allowance raises and GPU limits, not artifact-byte caps; stopped for user decision."
+}
