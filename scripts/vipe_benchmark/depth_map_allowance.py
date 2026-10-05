@@ -333,13 +333,12 @@ def historical_slot_byte_guard(ledger, candidate):
     """Return a no-download CPU guard for an already admitted native slot."""
     from .budgets import budget_snapshot
     events = ledger.events()
-    allocations = [event for event in events if event.get('event') == 'depth_attempt_authorized'
-                   and event.get('candidate') == candidate]
-    if len(allocations) != 1 or allocations[0].get('slot_byte_budget') is None:
+    from .depth_map_retry import current_allocation
+    allocation = current_allocation(candidate, events)
+    if allocation is None or allocation.get('slot_byte_budget') is None:
         _require(candidate not in ('D5', 'D6', 'D8', 'D9', 'D10', 'D11'),
                  'native depth diagnostics require whole-slot byte proof')
         return lambda: None
-    allocation = allocations[0]
     review = read_json(verify_record(allocation['review'])['path'])
     proposal = next(row for row in review['proposals'] if row['candidate'] == candidate)
     budget = allocation['slot_byte_budget']
@@ -393,11 +392,9 @@ def historical_slot_output_guard(ledger, candidate, output):
     _require(output.parent == root / 'jobs' and
              output.name.startswith(f'plan069-{candidate}-anchor-previews-'),
              'owned CPU preview output directory required')
-    allocations = [event for event in ledger.events()
-                   if event.get('event') == 'depth_attempt_authorized' and
-                   event.get('candidate') == candidate]
-    _require(len(allocations) == 1, 'exact whole-slot preview authorization required')
-    allocation = allocations[0]
+    from .depth_map_retry import current_allocation
+    allocation = current_allocation(candidate, ledger.events())
+    _require(allocation is not None, 'exact whole-slot preview authorization required')
     budget = allocation.get('slot_byte_budget')
     _require(budget is not None, 'native depth diagnostics require whole-slot byte proof')
     review = verify_record(allocation['review'])

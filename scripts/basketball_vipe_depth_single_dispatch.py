@@ -156,7 +156,8 @@ def dispatch(candidate, context, qualification, setup, source_review, *,
             schema='plan069-depth-qualitative-admission/v1', record_kind='actual',
             component=candidate, inputs=inputs, purpose='qualitative-only', status='admitted'),
             'qualitative-only admission differs from candidate and accepted inputs')
-    job = f'plan069-{candidate}-maps-001'
+    from vipe_benchmark.depth_map_retry import map_job
+    job = map_job(candidate, ledger.events())
     output = local / 'jobs' / job
     request_path = local / 'requests' / (job + '.json')
     admission_path = local / 'requests' / (job + '-admission.json')

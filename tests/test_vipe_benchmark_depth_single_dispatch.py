@@ -176,6 +176,21 @@ class SingleDispatchTest(unittest.TestCase):
         self.assertEqual(accepted.call_args.args[1], setup)
         self.assertEqual(self.checks[-1]['completed_setup'], setup)
 
+    def test_d8_dispatches_the_approved_retry_job_after_the_first_attempt_finished(self):
+        do, qualified, setup_path, source, setup, result = self.recovered_d8()
+        self.ledger.history.append(dict(event='finish', job_id='plan069-D8-maps-001', status='failed'))
+
+        with patch('vipe_benchmark.setup_recovery_core.accepted_setup',
+                   return_value=(result, 'plan069-D8-setup-recovery-001')), \
+             patch.object(dispatch, 'execution_authorization', side_effect=self.authorization(do)), \
+             patch.object(dispatch, 'supervise', side_effect=self.supervise) as supervise, \
+             patch.object(dispatch, 'validate_result'):
+            dispatch.dispatch('D8', self.context_path, qualified, setup_path, source)
+        self.assertEqual(supervise.call_args.args[1], 'plan069-D8-maps-002')
+        request = read_json(self.local / 'requests/plan069-D8-maps-002.json')
+        self.assertEqual(request['job_id'], 'plan069-D8-maps-002')
+        self.assertEqual(supervise.call_args.args[2][-1], str(self.local / 'jobs/plan069-D8-maps-002'))
+
     def test_unaccepted_recovered_d8_setup_never_authorizes(self):
         do, qualified, setup_path, source, setup, result = self.recovered_d8()
         with patch('vipe_benchmark.setup_recovery_core.accepted_setup',

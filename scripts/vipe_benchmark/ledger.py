@@ -61,11 +61,12 @@ class Ledger:
             if event['event'] == 'depth_attempt_authorized':
                 for key in ('review', 'authorization', 'source_review', 'admission'):
                     verify_record(event[key])
-                candidate = event['candidate']
-                job_id = f'plan069-{candidate}-maps-001'
+                from .depth_map_retry import event_job
+                job_id = event_job(event)
                 allocated[job_id] = dict(id=job_id, resource='gpu',
                     seconds=event['seconds'],
-                    scope='approved one-attempt Plan 069 native depth inference')
+                    scope=('operator-approved Plan 069 native depth map retry' if 'retry' in event
+                           else 'approved one-attempt Plan 069 native depth inference'))
             if event['event'] == 'depth_setup_authorized':
                 verify_record(event['review'])
                 verify_record(event['authorization'])
@@ -188,7 +189,8 @@ class Ledger:
             from .setup_recovery_core import candidate_for_job
             if candidate_for_job(job_id) is not None:
                 self._depth_recovery_reservation(events, evidence, command, job_id=job_id)
-            if re.fullmatch(r'plan069-(D2|D5|D6|D7|D8|D9|D10|D11)-maps-001', job_id):
+            from .depth_map_retry import event_job, is_map_job
+            if is_map_job(job_id):
                 candidate = job_id.split('-')[1]
                 continuation = None
                 if candidate == 'D9':
@@ -197,7 +199,7 @@ class Ledger:
                         phase='reserve')
                 authorized = [row for row in events if
                     row['event'] == 'depth_attempt_authorized' and
-                    row['candidate'] == candidate]
+                    row['candidate'] == candidate and event_job(row) == job_id]
                 if len(authorized) != 1 or (continuation is None and
                         (events[-1] != authorized[0] or
                          time.time() - authorized[0]['recorded_unix'] > 30)):
@@ -221,7 +223,13 @@ class Ledger:
                     if evidence != expected:
                         raise ValueError('exact original evidence plus protected continuation required')
                     self._depth_d9_continuation_resources(events)
-                self._depth_command(candidate, bound, source, evidence, command)
+                if 'retry' in bound:
+                    from .depth_map_retry import validate_retry
+                    review = read_json(verify_record(bound['review'])['path'])
+                    proposal = next(row for row in review['proposals'] if row['candidate'] == candidate)
+                    if validate_retry(candidate, proposal, events, self.path.parent) != bound['retry']:
+                        raise ValueError('map retry approval changed after authorization')
+                self._depth_command(candidate, bound, source, evidence, command, job_id=job_id)
             if job_id == 'plan069-D6-driver-qualification-004':
                 from .depth_driver_qualification_local_listen import check_predecessor as local_listen_predecessor, validate_request as local_listen_request
                 grants = [row for row in events if row['event'] == 'depth_driver_qualification_local_listen_authorized']
@@ -583,9 +591,10 @@ class Ledger:
             return self._append(stream, events, dict(event='depth_setup_bytes_reconciled',
                 candidate=candidate, proof=proof))
 
-    def _depth_command(self, candidate, bound, source, evidence, command):
+    def _depth_command(self, candidate, bound, source, evidence, command, job_id=None):
         """Rehash the exact authorized worker, interpreter and immutable request."""
-        job_id = f'plan069-{candidate}-maps-001'
+        from .depth_map_retry import first_job
+        job_id = job_id or first_job(candidate)
         if not all(isinstance(evidence.get(key), dict) for key in
                    ('request', 'worker', 'executable')):
             raise ValueError('exact executable worker request command binding required')
@@ -641,22 +650,30 @@ class Ledger:
             raise ValueError('exact approved depth attempt and admission required')
         binding = dict(request=request, worker=worker, executable=executable)
         source = read_json(verify_record(source_review)['path'])
+        from .depth_map_retry import event_job, first_job, map_job, validate_retry
+        job_id = map_job(candidate, self.events())
         self._depth_command(candidate, dict(review=review, authorization=authorization,
-            source_review=source_review, admission=admission), source, binding, command)
+            source_review=source_review, admission=admission), source, binding, command, job_id=job_id)
         seconds = proposal.get('allocation', {}).get('gpu_seconds')
         if type(seconds) is not int or seconds <= 0:
             raise ValueError('bounded depth GPU seconds required')
         with self.locked() as (stream, events):
             states = self.states(events)
-            job_id = f'plan069-{candidate}-maps-001'
+            if map_job(candidate, events) != job_id:
+                raise ValueError('current map job changed during authorization')
             if job_id in states or any(row['event'] == 'depth_attempt_authorized' and
-                                       row['candidate'] == candidate for row in events):
+                                       row['candidate'] == candidate and event_job(row) == job_id
+                                       for row in events):
                 raise ValueError('depth model attempt already authorized or consumed')
             if any(row['event'] == 'reserve' for row in states.values()):
                 raise ValueError('active attempt prevents depth GPU allocation')
             if any(row['event'] == 'depth_attempt_authorized' and
-                   f"plan069-{row['candidate']}-maps-001" not in states for row in events):
+                   event_job(row) not in states for row in events):
                 raise ValueError('unstarted depth GPU allocation prevents another')
+            retry = None
+            if job_id != first_job(candidate):
+                retry = validate_retry(candidate, proposal, events, self.path.parent)
+                seconds = retry['seconds']
             self._depth_frame_prerequisite(candidate, approved, events)
             head = events[-1]['event_sha256'] if events else '0' * 64
             live = evidence.get('live', {})
@@ -718,7 +735,7 @@ class Ledger:
                 authorization=authorization, source_review=source_review,
                 admission=admission, resource_snapshot=reading, map_stage_allowance=stage,
                 slot_byte_budget=slot_budget,
-                command=command, **binding))
+                command=command, **binding, **({} if retry is None else dict(job_id=job_id, retry=retry))))
 
     def continue_depth_d9_attempt(self, request_record):
         """Continue only the already allocated, unstarted grant851."""

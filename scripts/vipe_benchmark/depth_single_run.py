@@ -71,17 +71,18 @@ def _actual_gate(request, request_path, output):
     """Rehash admitted qualification and source/assets before constructing models."""
     from .depth_admission import review as admit
     from .moge_setup import source_tree_records
+    from .depth_map_retry import current_allocation, map_job
     candidate = request['candidate']
-    job = f'plan069-{candidate}-maps-001'
-    _require(request_path is not None and request['job_id'] == job,
-             'actual request path and exact map identity required')
-    request_path = Path(request_path).resolve()
     ledger_path = Path(request['ledger_path']).resolve()
-    _require(output.resolve() == ledger_path.parent / 'jobs' / job,
-             'actual output differs from shared reservation')
     config = dict(load(), new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
     ledger = Ledger(ledger_path, config)
     events = ledger.events()
+    job = map_job(candidate, events)
+    _require(request_path is not None and request['job_id'] == job,
+             'actual request path and exact map identity required')
+    request_path = Path(request_path).resolve()
+    _require(output.resolve() == ledger_path.parent / 'jobs' / job,
+             'actual output differs from shared reservation')
     state = ledger.states(events).get(job, {})
     command = state.get('command', [])
     _require(state.get('event') == 'reserve' and
@@ -125,10 +126,9 @@ def _actual_gate(request, request_path, output):
     if completed_setup is not None:
         from .budgets import budget_snapshot
         from .depth_map_allowance import check_slot_byte_budget
-        allocation_events = [event for event in events if event.get('event') == 'depth_attempt_authorized'
-                             and event.get('candidate') == candidate]
-        _require(len(allocation_events) == 1, 'exact map slot byte authorization required')
-        check_slot_byte_budget(proposal, allocation_events[0]['slot_byte_budget'],
+        allocation = current_allocation(candidate, events)
+        _require(allocation is not None, 'exact map slot byte authorization required')
+        check_slot_byte_budget(proposal, allocation['slot_byte_budget'],
                                ledger_path.parent, budget_snapshot(ledger_path.parent))
     setup = read_json(verify_record(request['setup'])['path'])
     from .setup_recovery_core import candidate_for_job
@@ -172,10 +172,10 @@ def _check_actual_slot(request):
     from .depth_map_allowance import check_slot_byte_budget
     ledger_path = Path(request['ledger_path']).resolve()
     events = Ledger(ledger_path, load()).events()
-    allocations = [event for event in events if event.get('event') == 'depth_attempt_authorized'
-                   and event.get('candidate') == request['candidate']]
-    _require(len(allocations) == 1, 'exact whole-slot map authorization required')
-    budget = allocations[0].get('slot_byte_budget')
+    from .depth_map_retry import current_allocation
+    allocation = current_allocation(request['candidate'], events)
+    _require(allocation is not None, 'exact whole-slot map authorization required')
+    budget = allocation.get('slot_byte_budget')
     if budget is None:
         _require(request['candidate'] not in (*CANDIDATES,'D11'), 'new native slot whole-slot byte proof required')
         return
@@ -197,11 +197,10 @@ def _actual_output_guard(request, output):
     from .budgets import directory_bytes
     from .depth_map_allowance import owned_slot_bytes
     root = Path(request['ledger_path']).resolve().parent
-    allocations = [event for event in Ledger(root / 'ledger.jsonl', load()).events()
-                   if event.get('event') == 'depth_attempt_authorized' and
-                   event.get('candidate') == request['candidate']]
-    _require(len(allocations) == 1, 'exact whole-slot map authorization required')
-    budget = allocations[0].get('slot_byte_budget')
+    from .depth_map_retry import current_allocation
+    allocation = current_allocation(request['candidate'], Ledger(root / 'ledger.jsonl', load()).events())
+    _require(allocation is not None, 'exact whole-slot map authorization required')
+    budget = allocation.get('slot_byte_budget')
     if budget is None:
         _require(request['candidate'] not in (*CANDIDATES,'D11'), 'new native slot whole-slot byte proof required')
         return lambda additional_bytes=0: None

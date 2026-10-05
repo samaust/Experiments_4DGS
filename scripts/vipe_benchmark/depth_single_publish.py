@@ -26,17 +26,21 @@ def publish_after_gpu(map_result_record, output):
     if candidate == 'D11':
         from .depth_d11_run import RESULT as d11_schema
         expected_schema = d11_schema
-    JOB = f'plan069-{candidate}-maps-001'
+    from .depth_map_retry import current_allocation, is_map_job, map_job
     CLIPS_JOB = f'plan069-{candidate}-clips-001'
     local = map_path.parents[2]
+    _require(map_path.name == 'result.json' and map_path.parent.parent == local / 'jobs' and
+             is_map_job(map_path.parent.name) and map_path.parent.name.split('-')[1] == candidate,
+             'accepted single-image GPU result path required')
+    config = dict(load(), new_download_gib_limit=110,
+                  new_artifact_disk_gib_limit=210)
+    ledger = Ledger(local / 'ledger.jsonl', config)
+    JOB = map_job(candidate, ledger.events())
     _require(map_path == local / 'jobs' / JOB / 'result.json',
              'accepted single-image GPU result path required')
     output = Path(output)
     _require(output.resolve() == (local / 'jobs' / CLIPS_JOB).resolve() and
              not output.exists(), 'immutable single-image clip output identity changed or exists')
-    config = dict(load(), new_download_gib_limit=110,
-                  new_artifact_disk_gib_limit=210)
-    ledger = Ledger(local / 'ledger.jsonl', config)
     state = ledger.states().get(JOB, {})
     _require(state.get('event') == 'finish' and state.get('status') == 'complete' and
              state.get('result') == map_result_record and
@@ -73,9 +77,8 @@ def publish_after_gpu(map_result_record, output):
     review = read_json(verify_record(request['review'])['path'])
     proposal = next(row for row in review['proposals'] if row['candidate'] == candidate)
     from .depth_map_allowance import check_slot_byte_budget
-    allocation_events = [event for event in ledger.events() if event.get('event') == 'depth_attempt_authorized'
-                         and event.get('candidate') == candidate]
-    slot_budget = allocation_events[0].get('slot_byte_budget') if len(allocation_events) == 1 else None
+    allocation = current_allocation(candidate, ledger.events())
+    slot_budget = allocation.get('slot_byte_budget') if allocation is not None else None
     _require(slot_budget is not None, 'native publication requires whole-slot byte budget')
     def check_slot():
         if slot_budget is not None:

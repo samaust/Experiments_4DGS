@@ -231,6 +231,93 @@ class MapAllowanceTests(unittest.TestCase):
         self.assertEqual(event['map_stage_allowance']['setup_finish_event_sha256'],events[-1]['event_sha256'])
 
 
+    def map_command(self, ledger, job):
+        import sys
+        import time
+        from vipe_benchmark.config import ROOT
+        events = ledger.events()
+        live = dict(self.live, sampled_unix=time.time(), ledger_head_sha256=events[-1]['event_sha256'])
+        admission_path = self.root / f'{job}-admission.json'
+        request_path = self.root / f'requests/{job}.json'
+        for path in (admission_path, request_path):
+            path.unlink(missing_ok=True)
+        write_json(admission_path,dict(schema='plan069-depth-admission-result/v1',status='passed',candidate='D5',
+            proposal_sha256=object_hash(self.proposal),review=self.review,authorization=self.authorization,
+            source_review=self.source_review,commercial=self.commercial,assets=self.assets,runtime=self.runtime,
+            live=live,completed_setup=file_record(self.setup)))
+        admission = file_record(admission_path)
+        write_json(request_path,dict(candidate='D5',job_id=job,record_kind='actual',
+            review=self.review,authorization=self.authorization,source_review=self.source_review,
+            admission=admission,setup=file_record(self.setup)))
+        worker = file_record(ROOT / 'scripts/basketball_vipe_depth_single_maps.py')
+        command = [sys.executable,worker['path'],'--request',str(request_path),'--output',str(self.root/'jobs'/job)]
+        binding = dict(command=command,request=file_record(request_path),worker=worker,
+                       executable=file_record(sys.executable))
+        return admission, binding
+
+    def test_approved_retry_after_clean_no_output_failure_allocates_one_new_job(self):
+        import sys
+        from vipe_benchmark import depth_map_retry
+        from vipe_benchmark.ledger import Ledger
+        self.prepare_completed_setup()
+        ledger = Ledger(self.root / 'ledger.jsonl', self.config)
+        reading = dict(gpu_pids=[], download_bytes=2**30, artifact_bytes=2**30, device_bytes=0)
+        approval = self.root / 'retry-approval.json'
+        retries = dict(D5=dict(failed_job='plan069-D5-maps-001', job='plan069-D5-maps-002', approval=approval))
+        with patch('vipe_benchmark.execution.resources', return_value=reading), \
+                patch('vipe_benchmark.depth_map_allowance.owned_slot_bytes', return_value=12), \
+                patch('vipe_benchmark.depth_map_allowance.bind_slot_byte_budget', return_value={}), \
+                patch.object(ledger, '_depth_frame_prerequisite'), \
+                patch.dict(depth_map_retry.RETRIES, retries):
+            ledger.authorize_depth_setup('D5',self.review,self.authorization,self.source_review)
+            ledger.reserve('plan069-D5-setup-001',['bounded-fixture-setup'],self.events[1]['evidence'])
+            ledger.finish('plan069-D5-setup-001','complete',1.,result=file_record(self.setup),
+                cleanup_confirmed=True,cleanup_uncertain=False,surviving_pids=[])
+            for key in ('download_bytes', 'artifact_bytes'):
+                self.live['used'][key] = reading[key]
+            admission, binding = self.map_command(ledger, 'plan069-D5-maps-001')
+            first = ledger.authorize_depth_attempt('D5',self.review,self.authorization,self.source_review,
+                admission,**binding)
+            self.assertNotIn('job_id', first)
+            evidence = dict(review=self.review, authorization=self.authorization,
+                source_review=self.source_review, admission=admission,
+                **{key: binding[key] for key in ('request','worker','executable')})
+            ledger.reserve('plan069-D5-maps-001', binding['command'], evidence, seconds_limit=first['seconds'])
+            with self.assertRaisesRegex(ValueError, 'already authorized or consumed'):
+                ledger.authorize_depth_attempt('D5',self.review,self.authorization,self.source_review,
+                    admission,**binding)
+            finish = ledger.finish('plan069-D5-maps-001','failed',19.4,failure_kind='worker_failure',
+                cleanup_confirmed=True,cleanup_uncertain=False,surviving_pids=[])
+            failure = self.root / 'jobs/plan069-D5-maps-001/failure.json'
+            write_json(failure, dict(status='failed', candidate='D5', job_id='plan069-D5-maps-001',
+                                     completed_map_rows=0))
+            admission, binding = self.map_command(ledger, 'plan069-D5-maps-002')
+            with self.assertRaisesRegex(ValueError, 'retry'):
+                ledger.authorize_depth_attempt('D5',self.review,self.authorization,self.source_review,
+                    admission,**binding)
+            seconds = self.proposal['allocation']['gpu_seconds'] - 20
+            write_json(approval, dict(schema=depth_map_retry.SCHEMA, status='DO', candidate='D5',
+                failed_job='plan069-D5-maps-001', job='plan069-D5-maps-002',
+                failed_finish_event_sha256=finish['event_sha256'], failure=file_record(failure),
+                proposal_sha256=object_hash(self.proposal), gpu_seconds=seconds, max_attempts=1,
+                review=self.review, authorization=self.authorization, device_ceiling_unchanged=True))
+            admission, binding = self.map_command(ledger, 'plan069-D5-maps-002')
+            second = ledger.authorize_depth_attempt('D5',self.review,self.authorization,self.source_review,
+                admission,**binding)
+            self.assertEqual((second['job_id'], second['seconds']), ('plan069-D5-maps-002', seconds))
+            self.assertEqual(second['retry']['approval'], file_record(approval))
+            evidence = dict(evidence, admission=admission,
+                **{key: binding[key] for key in ('request','worker','executable')})
+            reservation = ledger.reserve('plan069-D5-maps-002', binding['command'], evidence,
+                                         seconds_limit=second['seconds'])
+            self.assertEqual(reservation['seconds'], seconds)
+            ledger.finish('plan069-D5-maps-002','failed',1.,failure_kind='worker_failure',
+                cleanup_confirmed=True,cleanup_uncertain=False,surviving_pids=[])
+            with self.assertRaisesRegex(ValueError, 'already authorized or consumed'):
+                ledger.authorize_depth_attempt('D5',self.review,self.authorization,self.source_review,
+                    admission,**binding)
+
+
 class WholeSlotBudgetTests(unittest.TestCase):
     def test_setup_runtime_and_source_costs_leave_no_second_full_allocation(self):
         from vipe_benchmark.depth_map_allowance import bind_slot_byte_budget, check_slot_byte_budget
