@@ -110,8 +110,10 @@ def normalization_matrix(normalization, *, actual=False):
         _require(matrix.shape==(4,4) and np.isfinite(matrix).all(),'finite 4x4 normalization transform required')
         _require(np.array_equal(matrix[3],np.array([0.,0.,0.,1.])),'normalization transform must be affine')
         linear=matrix[:3,:3];gram=linear.T@linear;scale_squared=float(np.trace(gram)/3)
+        # Isotropy is relative to the scale: an absolute 1e-12 cannot hold for
+        # float32-derived real transforms whose squared scale is far below one.
         _require(scale_squared>0 and np.linalg.det(linear)>0 and
-            np.allclose(gram,np.eye(3)*scale_squared,rtol=1e-6,atol=1e-12),
+            np.allclose(gram,np.eye(3)*scale_squared,rtol=1e-6,atol=1e-6*scale_squared),
             'normalization requires positive isotropic similarity scale and proper rotation')
         return matrix
     _require(not actual,'actual initializer normalization requires bound full transform')

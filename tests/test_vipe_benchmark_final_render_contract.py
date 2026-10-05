@@ -216,3 +216,23 @@ class ContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'iterations'):validate_worker_result(self.request,'QF-B','train',result)
         result['completed_iterations']=5000;result['record_kind']='actual'
         with self.assertRaisesRegex(ValueError,'adapter'):validate_worker_result(self.request,'QF-B','train',result)
+
+
+class NormalizationPrecisionTests(unittest.TestCase):
+    def test_float32_rounded_similarity_at_small_scale_is_accepted_and_shear_rejected(self):
+        import numpy as np
+        from vipe_benchmark.final_render_contract import normalization_matrix
+        angle = 0.7
+        rotation = np.array([[np.cos(angle), -np.sin(angle), 0], [np.sin(angle), np.cos(angle), 0], [0, 0, 1]])
+        matrix = np.eye(4)
+        matrix[:3, :3] = (0.1315 * rotation).astype(np.float32).astype(np.float64)
+        matrix[:3, 3] = [-0.0068, 0.0057, -0.034]
+        self.assertTrue(np.allclose(normalization_matrix(dict(transform=matrix.tolist()), actual=True), matrix))
+        sheared = matrix.copy()
+        sheared[0, 1] += 1e-3
+        with self.assertRaisesRegex(ValueError, 'isotropic'):
+            normalization_matrix(dict(transform=sheared.tolist()), actual=True)
+        mirrored = matrix.copy()
+        mirrored[:3, 0] *= -1
+        with self.assertRaisesRegex(ValueError, 'isotropic'):
+            normalization_matrix(dict(transform=mirrored.tolist()), actual=True)
