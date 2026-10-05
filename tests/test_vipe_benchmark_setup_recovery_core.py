@@ -42,7 +42,8 @@ class SetupRecoveryCoreTests(unittest.TestCase):
             jobs=('plan069-D9-setup-recovery-001', 'plan069-D9-setup-recovery-002'),
             result_schemas={'plan069-D9-setup-recovery-001': 'plan069-video-setup-recovery-result/v1',
                             'plan069-D9-setup-recovery-002': 'plan069-video-setup-recovery-result/v2'},
-            maps_job='plan069-D9-maps-001', approval_field='setup_recovery_approval'))
+            maps_job='plan069-D9-maps-001', approval_field='setup_recovery_approval',
+            profile_module='depth_setup_recovery', worker='basketball_vipe_video_setup_recovery.py'))
 
     def test_shared_core_names_no_candidate(self):
         import inspect

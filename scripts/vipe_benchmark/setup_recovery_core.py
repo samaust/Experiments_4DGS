@@ -29,6 +29,12 @@ def candidate_for_job(job_id):
     return owners[0] if len(owners) == 1 else None
 
 
+def recovery_profile(candidate):
+    """Import the candidate's setup-specific recovery profile module."""
+    import importlib
+    return importlib.import_module('.' + RECOVERY_CANDIDATES[candidate]['profile_module'], __package__)
+
+
 def _clean(finish):
     return all(finish.get(key) == value for key, value in CLEAN_FINISH.items())
 

@@ -44,14 +44,15 @@ class Ledger:
                 allocated[JOB] = dict(id=JOB, resource='gpu', seconds=proposal['seconds'],
                     scope='separately approved D6 driver-only syscall diagnostic')
             if event['event'] == 'depth_setup_recovery_authorized':
-                from .depth_setup_recovery import JOBS
+                from .setup_recovery_core import candidate_for_job
                 recovery_job = event.get('job_id')
-                if recovery_job not in JOBS:
+                recovery_candidate = candidate_for_job(recovery_job)
+                if recovery_candidate is None or event.get('candidate', 'D9') != recovery_candidate:
                     raise ValueError('unknown checked setup recovery job')
                 for key in ('request','review','authorization','source_review'):
                     verify_record(event[key])
                 allocated[recovery_job] = dict(id=recovery_job,resource='setup',seconds=event['seconds'],
-                    scope='explicitly approved one-attempt D9 retained-input recovery')
+                    scope=f'explicitly approved one-attempt {recovery_candidate} retained-input recovery')
             if event['event'] == 'depth_driver_qualification_authorized':
                 from .depth_driver_qualification import JOB, validate_request
                 _, proposal = validate_request(event['request'], completed=True)
@@ -184,8 +185,8 @@ class Ledger:
                 raise ValueError('job already consumed or accounted for; no automatic retry')
             if any(r['event'] == 'reserve' for r in states.values()):
                 raise ValueError('unreconciled active attempt; refusing concurrent dispatch')
-            from .depth_setup_recovery import JOBS as RECOVERY_JOBS
-            if job_id in RECOVERY_JOBS:
+            from .setup_recovery_core import candidate_for_job
+            if candidate_for_job(job_id) is not None:
                 self._depth_recovery_reservation(events, evidence, command, job_id=job_id)
             if re.fullmatch(r'plan069-(D2|D5|D6|D7|D8|D9|D10|D11)-maps-001', job_id):
                 candidate = job_id.split('-')[1]
@@ -496,11 +497,14 @@ class Ledger:
 
     def authorize_depth_setup_recovery(self, request, *, command, worker, executable):
         """Approve a fresh immutable recovery only under an explicit new DO."""
-        from .depth_setup_recovery import EVENT, validate_recovery_request
+        from .setup_recovery_core import RECOVERY_CANDIDATES, RECOVERY_EVENT as EVENT, recovery_profile
+        candidate = read_json(verify_record(request)['path']).get('candidate')
+        if candidate not in RECOVERY_CANDIDATES:
+            raise ValueError('setup recovery candidate has no recovery profile')
         with self.locked() as (stream, events):
             if any(row['event'] == 'reserve' for row in self.states(events).values()):
                 raise ValueError('active attempt prevents setup recovery authorization')
-            normalized = validate_recovery_request(request, events, self.path.parent)
+            normalized = recovery_profile(candidate).validate_recovery_request(request, events, self.path.parent)
             job_id = normalized['job_id']
             if job_id in self.states(events) or any(row.get('event') == EVENT and row.get('job_id') == job_id for row in events):
                 raise ValueError('setup recovery already authorized or consumed')
@@ -510,7 +514,7 @@ class Ledger:
             if verify_record(worker) != worker or verify_record(executable) != executable or \
                     executable != file_record(sys.executable) or command != expected or \
                     worker not in source.get('local_sources',[]) or \
-                    Path(worker['path']) != Path(__file__).parents[1] / 'basketball_vipe_video_setup_recovery.py':
+                    Path(worker['path']) != Path(__file__).parents[1] / RECOVERY_CANDIDATES[candidate]['worker']:
                 raise ValueError('exact independently reviewed recovery executable worker command required')
             seconds = normalized['allocation']['setup_seconds']
             if self.totals(events)['setup']['elapsed_seconds'] + seconds > self.config['setup_wall_seconds_limit']:
@@ -523,20 +527,22 @@ class Ledger:
                              ('artifact_bytes','new_artifact_disk_gib_limit')):
                 if reading[key] > min(self.config[cap] * 2**30,normalized['byte_limits'][key]):
                     raise ValueError(key + ' recovery exceeds unchanged original/global byte cap')
-            return self._append(stream, events, dict(event=EVENT,candidate='D9',job_id=job_id,
+            acquisitions = {'acquisitions': normalized['acquisitions']} if 'acquisitions' in normalized else {}
+            return self._append(stream, events, dict(event=EVENT,candidate=candidate,job_id=job_id,
                 seconds=seconds,proposal_sha256=object_hash(normalized['proposal']),request=request,
                 review=normalized['review'],authorization=normalized['authorization'],
                 source_review=normalized['source_review'],command=command,worker=worker,
                 executable=executable,resource_snapshot=reading,
-                original_setup=normalized['original'],byte_limits=normalized['byte_limits']))
+                original_setup=normalized['original'],byte_limits=normalized['byte_limits'],**acquisitions))
 
     def _depth_recovery_reservation(self, events, evidence, command, *, job_id):
-        from .depth_setup_recovery import EVENT, validate_recovery_request
+        from .setup_recovery_core import RECOVERY_EVENT as EVENT, candidate_for_job, recovery_profile
         grants = [row for row in events if row.get('event') == EVENT and row.get('job_id') == job_id]
         if len(grants) != 1 or events[-1] != grants[0] or time.time()-grants[0]['recorded_unix'] > 30:
             raise ValueError('fresh exact setup recovery authorization required')
         grant = grants[0]
-        normalized = validate_recovery_request(grant['request'], events, self.path.parent)
+        normalized = recovery_profile(candidate_for_job(job_id)).validate_recovery_request(
+            grant['request'], events, self.path.parent)
         if command != grant['command'] or not isinstance(evidence,dict) or any(
                 evidence.get(key) != grant[key] for key in
                 ('request','review','authorization','source_review','worker','executable')):

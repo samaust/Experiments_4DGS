@@ -77,7 +77,7 @@ LOCAL_ADAPTERS = dict(D2=('backends.py', 'contracts.py', 'stages.py',
     D7=('dav2_metric.py', 'moge_metric.py', 'depth_setup.py', 'depth_metric_scale.py', 'depth_d7_run.py', 'depth_d7_publish.py'),
     D8=('depth_authorization.py', 'moge_metric.py', 'depth_metric_scale.py', 'depth_single_run.py', 'depth_single_publish.py', 'native_d8.py', 'depth_native_packages.py', 'depth_source_integrity.py',
         'depth_native_runtime.py', 'depth_environment.py', 'moge_source_build.py', 'runtime_inventory.py',
-        'depth_setup.py', 'depth_setup_other.py'),
+        'depth_setup.py', 'depth_setup_other.py', 'depth_native_setup_recovery.py'),
     D9=('depth_d9_continuation.py', 'video_setup_recovery.py', 'depth_setup.py', 'contracts.py', 'video_depth.py', 'video_native.py', 'video_setup.py',
         'video_environment.py', 'video_setup_budget.py', 'depth_environment.py', 'moge_source_build.py', 'runtime_inventory.py'),
     D10=('depth_setup.py', 'contracts.py', 'video_depth.py', 'video_native.py', 'video_setup.py',
@@ -106,6 +106,8 @@ def local_source_records(candidate):
     if candidate in ('D8', 'D11'):
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_setup_other.py'))
         records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_setup_other_dispatch.py'))
+    if candidate == 'D8':
+        records.append(file_record(ROOT / 'scripts/basketball_vipe_depth_setup_recovery.py'))
     if candidate == 'D11':
         records.extend(file_record(ROOT / 'scripts' / name) for name in (
             'basketball_vipe_depth_d11_maps.py', 'basketball_vipe_depth_d11_dispatch.py',
