@@ -1190,12 +1190,15 @@ class HelperSessionTests(unittest.TestCase):
                 def finish(self, job, status, elapsed, **evidence):
                     outcome.update(status=status, elapsed=elapsed, **evidence)
             phases = []
+            monitor_snapshot=dict(schema='s1-monitor-failure-diagnostic/v1',diagnostic_only=True,
+                                  phase='prelaunch',pending_sample=dict(stage='wire',id=1))
             def monitor(*args, **kwargs):
                 phase = kwargs['phase']
                 phases.append(phase)
                 if phase == 'initial_sample': return self.reading
                 if phase == 'prelaunch':
                     error = TimeoutError('S1 resource sample timeout')
+                    error.s1_monitor_failure=monitor_snapshot
                     sup.record_progress_failure(life, error, phase)
                     raise error
                 raise AssertionError('poisoned helper was reused: ' + phase)
@@ -1207,6 +1210,7 @@ class HelperSessionTests(unittest.TestCase):
             self.assertEqual(phases, ['initial_sample', 'prelaunch'])
             self.assertEqual(outcome['primary_failure']['error_class'], 'TimeoutError')
             self.assertEqual(outcome['primary_failure']['phase'], 'prelaunch')
+            self.assertEqual(outcome['primary_failure']['monitor_diagnostic'],monitor_snapshot)
             self.assertEqual(outcome['failure_kind'], 'job_deadline')
             self.assertEqual(outcome['secondary_failures'][0]['phase'], 'evidence_publication')
             self.assertEqual(outcome['terminal_publication_block_reason'], 'poisoned_helper')
@@ -1284,9 +1288,28 @@ class HelperSessionTests(unittest.TestCase):
             session.cleanup_deadline = self.time.monotonic()+4.
             lifecycle = HelperLifecycle(retain=True)
             lifecycle.helpers.append(session)
-            with self.assertRaisesRegex(TimeoutError, 'deadline'):
+            with self.assertRaisesRegex(TimeoutError, 'deadline') as caught:
                 monitored_call(self.sampler, self.time.monotonic()+2.3, self.sampler,
                                load(), {}, lifecycle=lifecycle, phase='worker_sample')
+            diagnostic=caught.exception.s1_monitor_failure
+            self.assertTrue(diagnostic['diagnostic_only'])
+            self.assertEqual(diagnostic['phase'],'worker_sample')
+            self.assertFalse(diagnostic['poisoned'])
+            self.assertGreaterEqual(diagnostic['sample_expiry_count'],1)
+            self.assertEqual(diagnostic['pending_sample']['stage'],'wire')
+            self.assertGreaterEqual(diagnostic['pending_sample']['id'],2)
+            self.assertEqual(diagnostic['last_expired_sample']['id'],1)
+            self.assertIsNotNone(diagnostic['last_expired_sample']['candidate']['acquisition_end'])
+            self.assertIsNotNone(diagnostic['pending_sample']['pre']['completed'])
+            self.assertIn('sample_expired',[event['event'] for event in diagnostic['events']])
+            self.assertIn('sample_discarded',[event['event'] for event in diagnostic['events']])
+            self.assertIsNotNone(diagnostic['transport']['sample']['turn_started'])
+            self.assertIsNotNone(diagnostic['progress_io']['monitor']['attempted'])
+            import json
+            encoded=json.dumps(diagnostic,allow_nan=False)
+            self.assertLess(len(encoded),32768)
+            self.assertNotIn('operation_payload',encoded)
+            self.assertNotIn('gpu_pids',encoded)
             self.assertIsNone(session.last_sample)
             self.assertGreaterEqual(session.sample_expiry_count, 1)
             self.assertFalse(session.recover_samples)
@@ -2386,7 +2409,7 @@ class HelperSessionTests(unittest.TestCase):
                     elif kind=='sources':
                         with patch.object(p,'MAX_SOURCES',1),self.assertRaises(ValueError):p.candidate_inventory(output,None,None)
                     elif kind=='bytes':
-                        with patch.object(p,'MAX_METADATA',1),self.assertRaises(ValueError):p.candidate_inventory(output,None,None)
+                        with patch.object(p,'MAX_INVENTORY_METADATA',1),self.assertRaises(ValueError):p.candidate_inventory(output,None,None)
                     elif kind=='traversal':
                         with self.assertRaises(ValueError):p.read_bytes(str(root)+'/output/../output/one-produced-row.json',1024)
                     elif kind=='write':
@@ -2850,10 +2873,14 @@ class HelperSessionTests(unittest.TestCase):
         self.control_record('plan047-recovery',evidence)
     def test_progress_plan047_limits(self):
         import copy
+        from contextlib import ExitStack
         from vipe_benchmark import s1_progress as p,s1_evidence as e
         from vipe_benchmark.files import write_json
         from test_vipe_benchmark_s1_helper_fixtures import progress_fixture,plan047_state
         evidence=[]
+        self.assertEqual(p.MAX_RESULT_BYTES,510*256*1024+p.MAX_METADATA)
+        self.assertEqual(p.MAX_INVENTORY_METADATA,p.MAX_RESULT_BYTES+p.MAX_CANDIDATES*256*1024)
+        self.assertEqual(p.MAX_RESULT_NODES,510*65536+1048576)
         limits={'inventory_depth':4,'variants':4,'identities':510,'candidates':2048,'inventory_sources':2048,'directory_entries':4096,'embedded_refs':4096,'metadata_bytes':33554432,'row_bytes':262144,'path_utf8_bytes':2048,'checkpoint_bytes':1048576,'checkpoint_depth':12,'checkpoint_nodes':65536,'producer_generations':1024,'total_generations':2048,'committed_bytes':2147483648,'tree_entries':2057,'retained_bytes':4194304,'context_bytes':8192,'head_bytes':8192,'reference_bytes':8192,'control_bytes':4096,'result_bytes':33554432,'result_depth':64,'result_nodes':1048576,'error_count':32,'error_utf8_bytes':1024,'socket_address_bytes':96}
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);fixture=progress_fixture(root/'fixture')
@@ -2960,7 +2987,12 @@ class HelperSessionTests(unittest.TestCase):
                         def counter(counter_name,observed_value,maximum):
                             counters[counter_name]=max(counters.get(counter_name,0),observed_value)
                             return actual_counter(counter_name,observed_value,maximum)
-                        with patch.object(p,'inventory_capacity',side_effect=counter):
+                        # Exercise exact capacity endpoints with a smaller injected
+                        # budget; the real aggregate regression covers defaults.
+                        with ExitStack() as capacity_scope:
+                            capacity_scope.enter_context(patch.object(p,'inventory_capacity',side_effect=counter))
+                            if name=='metadata_bytes':capacity_scope.enter_context(patch.object(p,'MAX_INVENTORY_METADATA',limit))
+                            if name=='result_bytes':capacity_scope.enter_context(patch.object(p,'MAX_RESULT_BYTES',limit))
                             if value>limit:
                                 with self.assertRaises((ValueError,OverflowError)) as caught:action()
                                 observed=type(caught.exception).__name__

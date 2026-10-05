@@ -133,3 +133,80 @@ reviewed controls, current qualification, live admission, confirmed cleanup and 
 unrelated allocation is permitted. Continue until accepted complete calibration
 or a concrete remaining budget/access/input blocker. Finishing a commit does not
 pause the cycle.
+
+### S1-010 standing retry checkpoint
+
+Standing retry controls are integrated and independently reviewed. Qualification015
+passed339 tests/1063 subtests in476.541 seconds, zero failures/errors/skips;
+corrected full integration1182 tests has no failures, six known unrelated errors
+and five skips. CPU evidence is committed as af603858; exact reviewed REVIEW/DO
+and live resource/ledger binding as b1b43c58.
+
+S1-010 consumed one fresh identity under standing authority. It generated and
+individually qualified510 rows and wrote an intermediate passed acceptance,
+then failed accepted-progress publication because the35,338,620-byte aggregate
+result exceeded the32MiB progress metadata limit. No accepted finish result or
+terminal receipt exists. Cleanup is confirmed, survivors empty, stop_required
+true; exact failed/helper/unpublished acceptance evidence is preserved in
+s1-recovery-010/outcome (69f7884d). The prior alias correction reached local
+acceptance; this does not retroactively accept010. It was not a timeout.
+
+Next: correct the finite aggregate result/inventory bounds while preserving
+256KiB row and control/checkpoint caps, validate the actual aggregate-size paths,
+obtain independent reviews and current qualification016, then review/admit a fresh
+S1-011 under standing authority. No reset, duplicate replay or historical result
+promotion. Current GPU charge11141.708 seconds, allocated artifacts115691421696
+bytes, no active allocations; recheck live budgets before dispatch.
+
+Aggregate correction273d80a1 is integrated with both independent reviews clear.
+Full integration015 ran1185 tests, no failures, six known unrelated errors/five
+skips. Qualification016 passed342 tests/1063 subtests in475.427 seconds under600
+seconds with unchanged104-source inventory; wrapper SHA256
+ce21a33039649f2cf6c1727fd8278e756512418699c6af22cbaa52d1cceaba21.
+Fresh011 preparation/review/live admission follows under standing authority.
+
+### S1-011 monitor correction checkpoint
+
+Fresh011 followed qualified aggregate correction and exact reviewed authority,
+then failed after977.926 seconds at211 qualified rows when the15-second monitor
+recovery window expired. The3600-second allocation deadline was not reached.
+Cleanup is confirmed, no accepted result or terminal receipt; stopped helper and
+consumed charges are preserved in outcome92fb54bf. Exactfailedsample timing was
+not retained, so active-load cause remains unproven.
+
+Fresh accounting optimizer29325ff3 and bounded diagnostic capturea838d39d are
+integrated. Everyalias still receives a fresh non-following stat; no cross-call
+cache or deadline/ceiling/ownership change. Production helper benchmarks improved
+from1.69–1.76 seconds to1.59–1.69 seconds with exactunchangedtotals, zeroexpiries
+and confirmedcleanup.33 budget tests and8 focusedmonitoring/failuretests pass;
+both independent audits report no blocking findings. Diagnostics retainneutral
+bounded pending-stage/timing/transport observations beforepoison/cleanup, without
+authority or first-error replacement. They do not prove retrospectively why011
+failed. Full integration016 and currentqualification017 precede reviewedfresh012
+understandingauthority; keep2-secondfreshness and15-secondrecovery bounds.
+
+Current qualification017 passed 343 tests / 1,063 subtests in449.188 seconds,
+zero failures/errors/skips, matching104-source inventories. Wrapper SHA256
+63a97643fe11679451c21bf8f40ba60e7316bb66635c7baa56cea2139ad045a3.
+Full integration016 ran1,186 tests with no failures, six known unrelated errors
+and five skips in544.791 seconds. Fresh012 review/live admission follows.
+
+### Accepted S1 calibration — recovery012
+
+S1-012 completed in 2,195.635 seconds (36.6 minutes). Supervised finish603
+accepts all 510 calibration rows with a passed acceptance and complete terminal
+receipt. The original S1-calibration result resolver passed strict lineage,
+scientific, evidence and cleanup verification. Cleanup is confirmed, no survivors,
+stop_required=false and no deadline overrun. Host GPU compute PID list is empty;
+no active allocation remains. Outcome is preserved in s1-recovery-012/outcome.
+
+The standing S1 calibration fix/retry objective is complete; no additional
+calibration retry is needed or permitted by the successful-predecessor guard.
+Historical failed attempts, evidence and charges remain immutable. GPU total
+14,315.268 seconds and allocated artifacts 132,898,312,192 bytes remain within
+original ceilings. Qualification017 passed343 tests/1063 subtests; full integration
+retains the six known unrelated errors/five skips.
+
+Execution parent18 remains open for its unfinished children, including prospective
+depth extension and final-render/human-report work. No new depth, setup, download,
+reconstruction or final-render allocation follows from this calibration success.

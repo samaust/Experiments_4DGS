@@ -6,7 +6,7 @@ import runpy
 import subprocess
 import time
 
-from .budgets import budget_snapshot, _inventory, _snapshot
+from .budgets import budget_snapshot, _stat_inventory, _snapshot
 from .config import ROOT
 from .depth_environment import _validate_inventory, _requirements
 from .files import file_record, read_json, safe_path, verify_record, write_json
@@ -46,7 +46,7 @@ def _request_job(request):
 
 def _old_snapshot(root):
     # Hardlink installation may change link counts/ctime, but never old bytes.
-    return {path:(s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns) for path,s in _inventory(root).items()}
+    return {path:(s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns) for path,s in _stat_inventory(root).items()}
 
 
 def _runtime_profile(environment):

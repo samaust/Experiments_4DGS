@@ -11,7 +11,7 @@ import os
 import re
 import time
 
-from .budgets import _inventory, _snapshot
+from .budgets import _stat_inventory, _snapshot
 from .files import file_record, object_hash, read_json, safe_path, verify_record, write_json
 
 
@@ -62,7 +62,7 @@ def _files(root, deadline=None):
     # String prefixing keeps relative_to semantics for this inventory without its per-path cost.
     prefix = str(root).rstrip(os.sep) + os.sep
     files = {}
-    for path, info in _inventory(root, deadline_check=lambda: _check_deadline(deadline)).items():
+    for path, info in _stat_inventory(root, deadline_check=lambda: _check_deadline(deadline)).items():
         text = str(path)
         _require(text.startswith(prefix), 'inventory path escaped the run root')
         files[text[len(prefix):]] = _metadata(info)

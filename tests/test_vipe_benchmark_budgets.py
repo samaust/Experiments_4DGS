@@ -149,6 +149,41 @@ class BudgetTests(unittest.TestCase):
         self.assertEqual(result['logical_artifact_bytes'], 2)
         self.assertEqual(budgets.directory_bytes(self.root), physical)
 
+    def test_fresh_scan_preserves_maximum_growth_observed_through_each_alias(self):
+        from contextlib import contextmanager
+        path = self.payload('payload', 1)
+        alias = self.root / 'alias'
+        os.link(path, alias)
+        scanned = []
+        actual_scan = budgets.os.scandir
+        class Entry:
+            def __init__(self, entry):self.entry = entry
+            def __getattr__(self, name):return getattr(self.entry, name)
+            def stat(self, *, follow_symlinks):
+                self_info = self.entry.stat(follow_symlinks=follow_symlinks)
+                scanned.append(self_info)
+                # Grow after the first observation, shrink after the second.
+                # The final tree alone cannot reconstruct the maximum seen.
+                path.write_bytes(b'x' * (16384 if len(scanned) == 1 else 1))
+                return self_info
+        @contextmanager
+        def scan(base):
+            with actual_scan(base) as entries:
+                yield (Entry(entry) for entry in entries)
+        with mock.patch.object(budgets.os, 'scandir', side_effect=scan):
+            result = budgets.budget_snapshot(self.root)
+        self.assertEqual(len(scanned), 2)
+        self.assertEqual(result['artifact_bytes'], max(max(info.st_size, info.st_blocks * 512) for info in scanned))
+        self.assertEqual(result['logical_artifact_bytes'], sum(info.st_size for info in scanned))
+        self.assertGreater(result['artifact_bytes'], max(path.stat().st_size, path.stat().st_blocks * 512))
+        # A later call must stat both names again and detect inode replacement.
+        alias.unlink()
+        alias.write_bytes(b'y' * 32768)
+        current = budgets.budget_snapshot(self.root)
+        infos = [path.stat(), alias.stat()]
+        self.assertEqual(current['artifact_bytes'], sum(max(info.st_size, info.st_blocks * 512) for info in infos))
+        self.assertEqual(current['logical_artifact_bytes'], 32769)
+
     def test_symlinks_and_prompts_directories_are_not_traversed(self):
         path = self.payload('visible', 1)
         forbidden = self.root / 'prompts'

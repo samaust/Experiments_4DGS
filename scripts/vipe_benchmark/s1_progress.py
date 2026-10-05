@@ -31,6 +31,13 @@ MAX_CANDIDATES = 2048
 MAX_ENTRIES = 4096
 MAX_SOURCES = 2048
 MAX_METADATA = 32 * 1024 * 1024
+ROW_BYTES = 256 * 1024
+RESULT_ROWS = 510
+# A final result contains all qualified rows plus its bounded outer metadata.
+MAX_RESULT_BYTES = RESULT_ROWS * ROW_BYTES + MAX_METADATA
+MAX_RESULT_NODES = RESULT_ROWS * 65536 + 1048576
+# Inventory retains the raw aggregate and at most MAX_CANDIDATES row projections.
+MAX_INVENTORY_METADATA = MAX_RESULT_BYTES + MAX_CANDIDATES * ROW_BYTES
 MAX_ERRORS = 32
 
 
@@ -134,6 +141,25 @@ def decode(raw, limit=CHECKPOINT_BYTES, *, max_depth=12, max_nodes=65536):
     before()
     primitives(value, max_depth=max_depth, max_nodes=max_nodes)
     before()
+    return value
+
+
+def decode_result(raw):
+    """Bound the aggregate, every row and its outer metadata independently."""
+    value = decode(raw, MAX_RESULT_BYTES, max_depth=64, max_nodes=MAX_RESULT_NODES)
+    if type(value) is not dict or type(value.get('rows')) is not list:
+        raise ValueError('progress result rows')
+    inventory_capacity('candidates', len(value['rows']), MAX_CANDIDATES)
+    envelope = {key: item for key, item in value.items() if key != 'rows'}
+    primitives(envelope, max_depth=64, max_nodes=1048576)
+    before()
+    envelope_raw = json.dumps(envelope, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
+    before()
+    if len(envelope_raw) > MAX_METADATA:
+        raise ValueError('progress result envelope capacity')
+    for row in value['rows']:
+        before()
+        encode(row, ROW_BYTES)
     return value
 
 
@@ -1060,7 +1086,7 @@ class ClosedInventory(list):
             finally:retire(os.close,fd)
         for rec in self:
             if deadline is not None:before(deadline)
-            raw=read_bytes(rec['path'],MAX_METADATA if rec['path'].endswith('/result.json') else 256*1024)
+            raw=read_bytes(rec['path'],MAX_RESULT_BYTES if rec['path'].endswith('/result.json') else ROW_BYTES)
             if record(rec['path'],raw)!=rec:raise ValueError('progress inventory content mutation')
         if deadline is not None:before(deadline)
 
@@ -1087,17 +1113,17 @@ def _candidate_inventory(output, result, deadline):
         raw=encode(row,256*1024)
         before()
         total+=len(raw)
-        inventory_capacity('metadata_bytes',total,MAX_METADATA)
+        inventory_capacity('metadata_bytes',total,MAX_INVENTORY_METADATA)
         before()
         candidates.append((source,row,rec,hashlib.sha256(raw).hexdigest()))
     try:
-        raw=operation(read_bytes, root/'result.json', MAX_METADATA, deadline=deadline)
+        raw=operation(read_bytes, root/'result.json', MAX_RESULT_BYTES, deadline=deadline)
     except FileNotFoundError:
         if result is not None:raise
         raw=None
     if raw is not None:
         before()
-        parsed=decode(raw, MAX_METADATA, max_depth=64, max_nodes=1048576)
+        parsed=decode_result(raw)
         before()
         if result is None:result=parsed
         if type(result) is not dict or type(result.get('rows')) is not list:raise ValueError('progress result rows')
@@ -1106,7 +1132,7 @@ def _candidate_inventory(output, result, deadline):
         if not typed_equal(parsed,result):raise ValueError('progress result snapshot mismatch')
         inventory_capacity('inventory_sources',len(sources)+1,MAX_SOURCES)
         total+=len(raw)
-        inventory_capacity('metadata_bytes',total,MAX_METADATA)
+        inventory_capacity('metadata_bytes',total,MAX_INVENTORY_METADATA)
         rec=record(root/'result.json',raw);sources.append(rec)
         for row in result['rows']:
             if deadline is not None:before(deadline)
@@ -1182,9 +1208,9 @@ def _accepted_progress(publisher,result,result_record,acceptance):
     accepted=operation(read_record,acceptance)
     if accepted.get('result')!=result_record or accepted.get('status')!='passed' or accepted.get('count')!=510:
         raise ValueError('progress acceptance result binding')
-    raw=operation(read_bytes,result_record['path'],MAX_METADATA)
+    raw=operation(read_bytes,result_record['path'],MAX_RESULT_BYTES)
     from .s1_clock import typed_equal
-    if record(result_record['path'],raw)!=result_record or not typed_equal(decode(raw,MAX_METADATA,max_depth=64,max_nodes=1048576),result):raise ValueError('progress accepted result bytes')
+    if record(result_record['path'],raw)!=result_record or not typed_equal(decode_result(raw),result):raise ValueError('progress accepted result bytes')
     if len(result['rows'])!=510:raise ValueError('progress accepted row count')
     publisher.coverage='closed'
     for row in result['rows']:

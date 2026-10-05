@@ -198,7 +198,7 @@ def _retained_asset_credit(proposal, result, assets, root, job, allocation, *, v
 
 def owned_slot_bytes(run_root, candidate, *, recovery_lineage=None):
     """Count all retained candidate job revisions, including preserved failures."""
-    from .budgets import directory_bytes, _inventory, _footprint
+    from .budgets import directory_bytes, _stat_inventory, _footprint
     jobs = Path(run_root).resolve() / 'jobs'
     total = 0
     union = {}
@@ -224,7 +224,7 @@ def owned_slot_bytes(run_root, candidate, *, recovery_lineage=None):
         _require(not path.is_symlink(), 'owned candidate job must not be a symlink')
         if path.is_dir():
             if recovery_lineage is not None and path.name in approved_jobs:
-                union.update(_inventory(path))
+                union.update(_stat_inventory(path))
             else:
                 total += directory_bytes(path)
     return total + _footprint(union)
