@@ -82,6 +82,49 @@ def validate_frame_amendment(candidate, approved, reviewed, *, root):
         raise ValueError('D10 frame amendment differs from approved budget or lineage')
 
 
+SUCCESSOR_CONTINUITY = ('schema', 'record_kind', 'candidate', 'status', 'setup', 'source_revision',
+                        'source_archive', 'source_files', 'profile', 'python', 'python_executable')
+
+
+def protected_successor(record):
+    """Return the newest protected D9 qualification re-run for unchanged installed bytes.
+
+    A DO binds one exact qualification record. When later D9 helper changes make
+    it stale, only a later qualification of the same setup, native source,
+    interpreter, profile and dependency bytes, charged in the run ledger with its
+    own finalization prefix, may stand in for it. The successor is then subject
+    to every check the bound record would have faced.
+    """
+    bound = read_json(verify_record(record)['path'])
+    if not isinstance(bound.get('setup'), dict):
+        return None
+    ledger_path = Path(bound['setup']['path']).resolve().parents[2] / 'ledger.jsonl'
+    if not ledger_path.is_file():
+        return None
+    with ledger_path.open('rb') as stream:
+        fcntl.flock(stream, fcntl.LOCK_SH)
+        events = checked_events(stream.read())
+    bound_charges = [row['sequence'] for row in events if row.get('event') == 'cpu_preparation_charge'
+                     and row.get('evidence') == record]
+    if len(bound_charges) != 1:
+        return None
+    later = [row for row in events if row.get('event') == 'cpu_preparation_charge' and
+             row['sequence'] > bound_charges[0] and
+             Path(row['evidence']['path']).name == 'runtime-qualification.json' and
+             Path(row['evidence']['path']).parent.name.startswith('plan069-D9-native-qualification-')]
+    if not later:
+        return None
+    successor = verify_record(later[-1]['evidence'])
+    current = read_json(successor['path'])
+    old_manifest, new_manifest = bound.get('dependency_manifest', {}), current.get('dependency_manifest', {})
+    if (any(current.get(key) != bound.get(key) for key in SUCCESSOR_CONTINUITY) or
+            (old_manifest.get('sha256'), old_manifest.get('bytes')) !=
+            (new_manifest.get('sha256'), new_manifest.get('bytes'))):
+        raise ValueError('D9 qualification successor changes installed runtime or setup lineage')
+    prefix = file_record(Path(successor['path']).parent / 'finalization-ledger-prefix.jsonl')
+    return successor, prefix
+
+
 def validate_D9_prerequisite(record, *, ledger_prefix=None, approved=None,
                              current_events=None, allow_owned_active=True):
     """Validate retained actual native CPU qualification and its receipt chain."""
@@ -89,6 +132,11 @@ def validate_D9_prerequisite(record, *, ledger_prefix=None, approved=None,
     from .depth_extension import CONFIG
     from .video_environment import FRAME_RECIPE, validate_runtime_versions, validate_runtime_observation
     qualified = read_json(verify_record(record)['path'])
+    if qualified.get('local_sources') != local_source_records('D9'):
+        successor = protected_successor(record)
+        if successor is not None:
+            record, ledger_prefix = successor
+            qualified = read_json(record['path'])
     profile = read_json(VIDEO_FRAME_PROFILES)['profiles']['D9']
     candidate_config = read_json(CONFIG)['candidates']['D9']
     revision = candidate_config['code']['revision']

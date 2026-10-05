@@ -236,6 +236,51 @@ class FrameAuthorityTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'differs from protected exact'):
                 validate_D9_prerequisite(record,ledger_prefix=prefix,approved=wrong)
 
+    def stale_bound_with_successor(self, *, successor_changes=None):
+        """DO-bound record from older D9 sources plus a later protected successor."""
+        _,_,rows=self.recovery_prerequisite_fixture(repair=True)
+        current=read_json(self.qual_path)
+        bound_path=self.root/'prepare/plan069-D9-native-qualification-002/runtime-qualification.json'
+        bound_path.parent.mkdir(parents=True)
+        write_json(bound_path,dict(current,local_sources=current['local_sources'][:-1]))
+        successor_path=self.root/'prepare/plan069-D9-native-qualification-003/runtime-qualification.json'
+        successor_path.parent.mkdir(parents=True)
+        write_json(successor_path,dict(current,**(successor_changes or {})))
+        bound,successor=file_record(bound_path),file_record(successor_path)
+        rows=rows[:1]
+        ledger=self.root/'ledger.jsonl'
+        for evidence,prefix in ((bound,bound_path.parent/'finalization-ledger-prefix.jsonl'),
+                                (successor,successor_path.parent/'finalization-ledger-prefix.jsonl')):
+            row=dict(event='cpu_preparation_charge',resource='cpu',evidence=evidence,elapsed_seconds=.001,
+                     sequence=len(rows),previous_sha256=rows[-1]['event_sha256'])
+            row['event_sha256']=object_hash(row);rows.append(row)
+            ledger.write_text(''.join(json.dumps(row)+'\n' for row in rows))
+            prefix.write_bytes(ledger.read_bytes())
+        return bound,file_record(bound_path.parent/'finalization-ledger-prefix.jsonl'),successor,rows
+    def test_stale_bound_qualification_uses_protected_successor(self):
+        from unittest.mock import patch
+        from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
+        bound,prefix,successor,rows=self.stale_bound_with_successor()
+        with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value=dict(finish=rows[0])) as accept:
+            validate_D9_prerequisite(bound,ledger_prefix=prefix)
+        self.assertEqual(accept.call_args.args[1],rows)
+    def test_successor_with_changed_installed_runtime_rejected(self):
+        from unittest.mock import patch
+        from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
+        other=self.root/'other-dependencies.json';other.write_text('{"different": true}\n')
+        bound,prefix,_,rows=self.stale_bound_with_successor(successor_changes=dict(dependency_manifest=file_record(other)))
+        with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value=dict(finish=rows[0])):
+            with self.assertRaisesRegex(ValueError,'successor'):
+                validate_D9_prerequisite(bound,ledger_prefix=prefix)
+    def test_stale_bound_qualification_without_successor_rejected(self):
+        from unittest.mock import patch
+        from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
+        bound,prefix,_,rows=self.stale_bound_with_successor()
+        ledger=self.root/'ledger.jsonl';ledger.write_text(''.join(json.dumps(row)+'\n' for row in rows[:2]))
+        with patch('vipe_benchmark.depth_recovery_lineage.accepted_setup_lineage',return_value=dict(finish=rows[0])):
+            with self.assertRaisesRegex(ValueError,'passed actual D9'):
+                validate_D9_prerequisite(bound,ledger_prefix=prefix)
+
     def test_unrelated_resumed_checkpoint_remains_active(self):
         from unittest.mock import patch
         from vipe_benchmark.depth_video_frame_authorization import validate_D9_prerequisite
