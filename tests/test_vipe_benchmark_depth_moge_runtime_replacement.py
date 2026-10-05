@@ -77,7 +77,7 @@ class RuntimeReplacementFixture(unittest.TestCase):
         self.maps_rows = len(self.rows)
         self.original = dict(setup=setup, setup_finish_event_sha256=self.rows[2]['event_sha256'], request=request,
                              maps_failure=dict(finish_event_sha256=self.rows[3]['event_sha256'], failure=failure))
-        self.recipe = module.replacement_recipe(self.recipe0, self.run_root)
+        self.recipe = module.replacement_recipe(self.recipe0, self.run_root, JOB)
         self.proposal = dict(schema=module.PROPOSAL_SCHEMA, kind=module.KIND, candidate='D6', job_id=JOB, max_attempts=1,
             recovery_seconds=module.RECOVERY_SECONDS, downloads=0, user_authority=authority, original_setup=self.original,
             map_proposal_sha256=object_hash(self.maps), runtime_recipe=self.recipe)
@@ -202,6 +202,40 @@ class RuntimeReplacementAuthorityTests(RuntimeReplacementFixture):
         self.assert_refused('completed setup|original D6 setup')
 
 
+class RuntimeReplacementRetryTests(RuntimeReplacementFixture):
+    def test_002_requires_the_exact_clean_failed_001(self):
+        grant = self.authorize()
+        self.rows = [json.loads(line) for line in (self.run_root / 'ledger.jsonl').read_text().splitlines()]
+        self.append(dict(event='reserve', job_id=JOB, resource='setup', seconds=900, evidence=dict(request=self.request)))
+        self.append(dict(event='finish', job_id=JOB, resource='setup', status='failed', elapsed_seconds=25.,
+                         failure_kind='supervisor', **CLEAN))
+        self.write('jobs/%s/runtime/failure.json' % JOB, dict(status='failed'))
+        job2 = 'plan069-D6-setup-recovery-002'
+        descriptor = dict(job_id=JOB, grant_event_sha256=grant['event_sha256'], failed_finish_event_sha256=self.rows[-1]['event_sha256'])
+        recipe2 = self.module.replacement_recipe(self.recipe0, self.run_root, job2)
+        def request2(failed):
+            proposal = dict(self.proposal, job_id=job2, runtime_recipe=recipe2, failed_recoveries=failed)
+            review = self.write('recovery-review-002.json', dict(schema='plan069-depth-execution-review/v1', status='REVIEW',
+                                                                  setup_recovery_proposal=proposal))
+            do = self.write('recovery-do-002.json', dict(schema='plan069-depth-user-authorization/v1', status='DO', review=review,
+                setup_recovery_approval=dict(candidate='D6', job_id=job2, status='approved', max_attempts=1,
+                                             proposal_sha256=object_hash(proposal))))
+            source = self.write('source-review-002.json', dict(schema='plan069-depth-source-review/v1', status='passed',
+                candidate='D6', reviewer='fixture', local_sources=self.sources, setup_recovery_proposal_sha256=object_hash(proposal)))
+            return self.write('requests/' + job2 + '.json', dict(schema='plan069-depth-setup-recovery-request/v1',
+                record_kind='actual', candidate='D6', job_id=job2, ledger_path=str(self.run_root / 'ledger.jsonl'),
+                review=review, authorization=do, source_review=source, original_setup=self.original, runtime_environment=recipe2))
+        normalized = self.module.validate_recovery_request(request2([descriptor]), self.ledger().events(), self.run_root)
+        self.assertEqual((normalized['job_id'], normalized['failed_recoveries']), (job2, [descriptor]))
+        (self.run_root / 'jobs' / JOB / 'result.json').write_text('{}')
+        with self.assertRaisesRegex(ValueError, 'preserved failure'):
+            self.module.validate_recovery_request(request2([descriptor]), self.ledger().events(), self.run_root)
+        (self.run_root / 'jobs' / JOB / 'result.json').unlink()
+        for failed in ([], [dict(descriptor, failed_finish_event_sha256='0' * 64)]):
+            with self.subTest(failed=failed), self.assertRaisesRegex(ValueError, 'earlier failed|exact consumed failed setup'):
+                self.module.validate_recovery_request(request2(failed), self.ledger().events(), self.run_root)
+
+
 class RuntimeReplacementRunTests(RuntimeReplacementFixture):
     def fake_provision(self, request, output, config, **kwargs):
         self.provisioned = dict(request=request, kwargs=kwargs)
@@ -212,20 +246,22 @@ class RuntimeReplacementRunTests(RuntimeReplacementFixture):
         write_json(output / 'result.json', result)
         return result
 
-    def run_replacement(self, *, downloads=(10, 10), owned=12 * 2**30):
+    def run_replacement(self, *, after=dict(direct_download_bytes=0, uv_metered_bytes=5, download_bytes=3154),
+                        owned=12 * 2**30):
         self.authorize()
         output = self.run_root / 'jobs' / JOB
         config = dict(load(), new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
-        snapshots = iter([dict(download_bytes=value, artifact_bytes=20) for value in downloads] * 2)
+        snapshots = iter([dict(direct_download_bytes=0, uv_metered_bytes=5, download_bytes=10), after])
         with patch('vipe_benchmark.moge_setup._active_reservation', return_value=(self.run_root, config)), \
                 patch('vipe_benchmark.depth_environment.provision_depth_environment', side_effect=self.fake_provision), \
-                patch('vipe_benchmark.budgets.budget_snapshot', side_effect=lambda root: next(snapshots)), \
+                patch('vipe_benchmark.budgets._snapshot', side_effect=lambda root: next(snapshots)), \
+                patch('vipe_benchmark.budgets.budget_snapshot', return_value=dict(download_bytes=10, artifact_bytes=20)), \
                 patch('vipe_benchmark.depth_map_allowance.owned_slot_bytes', return_value=owned):
             return self.module.run_runtime_replacement(read_json(self.request['path']), output, request_path=self.request['path'])
 
     def test_transferred_bytes_or_slot_overrun_fail_the_replacement(self):
         with self.assertRaisesRegex(ValueError, 'transferred bytes'):
-            self.run_replacement(downloads=(10, 11))
+            self.run_replacement(after=dict(direct_download_bytes=0, uv_metered_bytes=6, download_bytes=11))
         failure = read_json(self.run_root / 'jobs' / JOB / 'failure.json')
         self.assertEqual(failure['status'], 'failed')
         self.assertIn('transferred bytes', failure['error'])
@@ -246,7 +282,8 @@ class RuntimeReplacementRunTests(RuntimeReplacementFixture):
         result = self.run_replacement()
         output = self.run_root / 'jobs' / JOB
         self.assertTrue(self.provisioned['kwargs']['offline'])
-        self.assertEqual(self.provisioned['kwargs']['download_limit'], 10)
+        self.assertEqual(self.provisioned['kwargs']['download_limit'], 10 + 2**20)
+        self.assertEqual(result['cache_metadata_bytes'], 3144)
         self.assertEqual(self.provisioned['request']['constraints'], self.recipe['constraints'])
         self.assertEqual(os.stat(output / 'model.pt').st_ino, os.stat(self.original_setup['checkpoint']['path']).st_ino)
         self.assertEqual(os.stat(output / 'source/moge/model/v3.py').st_ino,
@@ -333,3 +370,15 @@ class AmendmentChainTests(unittest.TestCase):
         self.assertEqual([extra for _, extra in chain], [8 * 2**30, 4 * 2**30])
         self.assertEqual(budget_slot_allocation(proposal, dict(artifact_amendment=chain[1][0]))['artifact_bytes'],
                          proposal['allocation']['artifact_bytes'] + 4 * 2**30)
+
+
+class CacheMetadataGrowthTests(unittest.TestCase):
+    def test_only_bounded_uv_interpreter_metadata_may_grow(self):
+        from vipe_benchmark.depth_moge_runtime_replacement import CACHE_METADATA_ALLOWANCE, _metadata_growth
+        before = {'archive-v0/x/torch.py': 10, 'interpreter-v4/a/b.msgpack': 3144}
+        self.assertEqual(_metadata_growth(before, dict(before)), [])
+        self.assertEqual(_metadata_growth(before, dict(before, **{'interpreter-v4/c/d.msgpack': 100})), ['interpreter-v4/c/d.msgpack'])
+        for after in (dict(before, **{'simple-v24/pypi/numpy.rkyv': 5}), dict(before, **{'archive-v0/x/torch.py': 11}),
+                      dict(before, **{'interpreter-v4/big.msgpack': CACHE_METADATA_ALLOWANCE + 1})):
+            with self.subTest(after=sorted(after)), self.assertRaisesRegex(ValueError, 'beyond uv interpreter metadata'):
+                _metadata_growth(before, after)

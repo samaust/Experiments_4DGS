@@ -1,0 +1,32 @@
+{
+  "schema": "plan069-depth-setup-recovery-outcome/v1",
+  "candidate": "D6",
+  "job_id": "plan069-D6-setup-recovery-001",
+  "status": "failed",
+  "finish_sequence": 983,
+  "finish_event_sha256": "c755d87e3d8eb59adfeac9592db529b538cc556e38cded7599493009a54ebc92",
+  "elapsed_seconds": 25.460135732006165,
+  "runtime_failure": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-setup-recovery-001/runtime/failure.json",
+    "sha256": "4c67967c56092ef90210dfeedb753c0bedd64af3564cc6d70d6e91e53119e6e5",
+    "bytes": 1201
+  },
+  "job_failure": null,
+  "resolve_log": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-setup-recovery-001/runtime/commands/02-resolve.log",
+    "sha256": "7fd08f5b078af503f048c97069ecd168598c0e6f8df26d57fee8a80f94ba2c6f",
+    "bytes": 148972
+  },
+  "log": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/jobs/plan069-D6-setup-recovery-001.log",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  "cache_metadata_write": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternatives/plan031-20260913T032700Z/setup-cache/interpreter-v4/849831b06a90a36f/43e9d245e15232ae.msgpack",
+    "sha256": "25b1fb36a695d3be91f2f01fb61295a85b1d6340265917fa6ca09d4839d72a94",
+    "bytes": 3144
+  },
+  "cause": "The offline resolve succeeded, then the zero-download ceiling (download_limit = baseline) tripped: uv wrote a 3,144-byte interpreter-metadata cache file, and the run download metric counts setup-cache growth (max(uv-metered, cache bytes)). No network transfer occurred (no proxy receipt); nothing was installed.",
+  "fix": "Distinguish network transfers (direct and proxy-metered deltas must be 0) from bounded local cache metadata (<= 1 MiB, recorded); retry as recovery-002 under the AGENTS.md post-fix retry approval."
+}

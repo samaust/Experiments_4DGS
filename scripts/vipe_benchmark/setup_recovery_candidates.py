@@ -46,8 +46,9 @@ RECOVERY_CANDIDATES: dict[str, RecoveryCandidate] = {
     # D6's original setup completed; this approved recovery only replaces its unusable runtime.
     'D6': RecoveryCandidate(
         original_job='plan069-D6-setup-001',
-        jobs=('plan069-D6-setup-recovery-001',),
-        result_schemas={'plan069-D6-setup-recovery-001': 'plan069-depth-setup-recovery-result/v1'},
+        jobs=('plan069-D6-setup-recovery-001', 'plan069-D6-setup-recovery-002'),
+        result_schemas={'plan069-D6-setup-recovery-001': 'plan069-depth-setup-recovery-result/v1',
+                        'plan069-D6-setup-recovery-002': 'plan069-depth-setup-recovery-result/v1'},
         approval_field='setup_recovery_approval',
         profile_module='depth_moge_runtime_replacement',
         worker='basketball_vipe_moge_runtime_replacement.py',

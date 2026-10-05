@@ -29,8 +29,9 @@ def _evidence(grant):
 
 def dispatch(run_root, inputs):
     """``inputs`` names the exact REVIEW, its DO and the current source review."""
-    from vipe_benchmark.depth_moge_runtime_replacement import (CANDIDATE, JOB, validate_recovery_request,
-                                                              validate_recovery_result)
+    from vipe_benchmark.depth_moge_runtime_replacement import (CACHE_METADATA_ALLOWANCE, CANDIDATE, JOBS,
+                                                              validate_recovery_request, validate_recovery_result)
+    from vipe_benchmark.budgets import _snapshot
     from vipe_benchmark.setup_recovery_core import RECOVERY_CANDIDATES, RECOVERY_EVENT
     if Path('/proc/1/comm').read_text().strip() != 'systemd':
         raise PermissionError('runtime replacement supervision requires host PID visibility')
@@ -39,6 +40,9 @@ def dispatch(run_root, inputs):
     ledger = Ledger(run_root / 'ledger.jsonl', config)
     review = verify_record(inputs['review'])
     proposal = read_json(review['path'])['setup_recovery_proposal']
+    JOB = proposal['job_id']
+    if JOB not in JOBS:
+        raise ValueError('unknown runtime replacement attempt')
     output = run_root / 'jobs' / JOB
     request_path = run_root / 'requests' / (JOB + '.json')
     request = dict(schema='plan069-depth-setup-recovery-request/v1', record_kind='actual', candidate=CANDIDATE,
@@ -60,11 +64,14 @@ def dispatch(run_root, inputs):
     command = [sys.executable, str(worker), '--request', str(request_path), '--output', str(output)]
     grant = ledger.authorize_depth_setup_recovery(request_record, command=command, worker=file_record(worker),
                                                   executable=file_record(sys.executable))
-    baseline = resources(run_root, gpu=True)['download_bytes']
+    before = _snapshot(run_root)
 
     def sample():
         reading = resources(run_root, gpu=True)
-        if reading['download_bytes'] > baseline:
+        now = _snapshot(run_root)
+        if (now['direct_download_bytes'] != before['direct_download_bytes'] or
+                now['uv_metered_bytes'] != before['uv_metered_bytes'] or
+                now['download_bytes'] - before['download_bytes'] > CACHE_METADATA_ALLOWANCE):
             raise ValueError('offline runtime replacement transferred bytes')
         if reading['artifact_bytes'] > grant['byte_limits']['artifact_bytes']:
             raise ValueError('runtime replacement exceeds the shared artifact cap')
