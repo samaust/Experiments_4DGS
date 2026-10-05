@@ -5,12 +5,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from test_vipe_benchmark_depth_native_setup_recovery import JOB, ORIGINAL
-from test_vipe_benchmark_depth_native_setup_recovery_run import NativeSetupRecoveryRunTests
+import test_vipe_benchmark_depth_native_setup_recovery_run as runner
 from vipe_benchmark.config import load
 from vipe_benchmark.files import file_record, read_json
 
 
-class RecoveredSetupMapsTests(NativeSetupRecoveryRunTests):
+class RecoveredSetupMapsTests(runner.NativeSetupRecoveryRunTests):
     """Runner tests are inherited only as fixture helpers; they are not re-collected."""
 
     def completed_recovery(self):
@@ -87,7 +87,7 @@ class RecoveredSetupMapsTests(NativeSetupRecoveryRunTests):
             prepare_reconciliation(self.run_root, 'D8', ledger.events())
 
 
-for name in [n for n in vars(NativeSetupRecoveryRunTests) if n.startswith('test_')]:
+for name in [n for n in vars(runner.NativeSetupRecoveryRunTests) if n.startswith('test_')]:
     setattr(RecoveredSetupMapsTests, name, None)
 
 if __name__ == '__main__':
