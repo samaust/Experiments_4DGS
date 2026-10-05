@@ -254,3 +254,14 @@ class QualificationTritonCacheRebindTests(unittest.TestCase):
   with patch('vipe_benchmark.depth_admission.file_record',side_effect=lambda path:dict(path=str(path))):paths={r['path'] for r in local_source_records('D6')}
   for suffix in ['moge-driver-method-010/producer.py','moge-driver-method-010/network_guard.py','moge-driver-method-010/startup.py']:
    self.assertTrue(any(p.endswith(suffix) for p in paths),suffix)
+
+ def test_008_rebinds_after_passed007_with_method011(self):
+  from vipe_benchmark.config import ROOT
+  from vipe_benchmark.depth_driver_qualification_triton_cache import ATTEMPTS
+  row=ATTEMPTS['plan069-D6-driver-qualification-008']
+  self.assertEqual((row['method'],row['previous'],row['previous_status']),('moge-driver-method-011',JOB7,'complete'))
+  self.assertEqual(row['lineage'][:-2],ATTEMPTS[JOB7]['lineage'])
+  source=(ROOT/'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-011/producer.py').read_text()
+  self.assertIn("require(JOB == 'plan069-D6-driver-qualification-008'",source)
+  guard=lambda n:(ROOT/f'docs/research/vipe-alternatives/plan031-execution/moge-driver-method-0{n}/network_guard.py').read_bytes()
+  self.assertEqual(guard(11),guard('07'))
