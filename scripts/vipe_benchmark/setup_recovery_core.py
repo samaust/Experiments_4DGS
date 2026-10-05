@@ -98,3 +98,31 @@ def owned_active_attempt(candidate, events, active_map_admission):
              active[0].get('evidence', {}).get('admission') == active_map_admission,
              'active attempt prevents accepted recovery lineage')
     return active[0]
+
+
+def accepted_setup(candidate, setup_record, events, run_root, *, verifier=None):
+    """Return (result, job_id) for the candidate's accepted completed setup.
+
+    The original setup qualifies only through its own clean completed finish; a
+    recovery qualifies only through its candidate profile's accepted lineage.
+    A consumed failed setup never qualifies.
+    """
+    from pathlib import Path
+    from .files import read_json, verify_record
+    verifier = verifier or verify_record
+    root = Path(run_root).resolve()
+    _require(isinstance(setup_record, dict) and isinstance(setup_record.get('path'), str),
+             'owned completed setup result required')
+    job_id = Path(setup_record['path']).parent.name
+    _require(Path(setup_record['path']) == root / 'jobs' / job_id / 'result.json' and
+             verifier(setup_record) == setup_record, 'owned completed setup result required')
+    if candidate_for_job(job_id) == candidate:
+        lineage = recovery_profile(candidate).accepted_setup_lineage(setup_record, events, root,
+                                                                     verifier=verifier)
+        return lineage['accepted_result'], job_id
+    _require(job_id == f'plan069-{candidate}-setup-001', 'owned completed setup result required')
+    finishes = [row for row in events if row.get('event') == 'finish' and row.get('job_id') == job_id]
+    _require(len(finishes) == 1 and finishes[0].get('status') == 'complete' and
+             finishes[0].get('result') == setup_record and _clean(finishes[0]),
+             'clean exact completed setup required')
+    return read_json(setup_record['path']), job_id

@@ -102,20 +102,31 @@ def dispatch(candidate, context, qualification, setup, source_review, *,
     _require(qualified.get('schema') == f'plan069-depth-{candidate}-qualification/v1' and
              qualified.get('candidate') == candidate, 'exact single-image qualification bundle required')
     setup_record = file_record(setup)
-    _require(Path(setup).resolve() == (local / 'jobs' / f'plan069-{candidate}-setup-001/result.json').resolve(),
-             'exact accepted native setup path required')
-    setup_result = read_json(setup_record['path'])
-    state = ledger.states().get(f'plan069-{candidate}-setup-001', {})
-    _require(setup_result.get('schema') == 'plan069-depth-setup-result/v1' and
-             setup_result.get('status') == 'complete' and setup_result.get('record_kind') == 'actual' and
-             setup_result.get('candidate') == candidate and
-             setup_result.get('job_id') == f'plan069-{candidate}-setup-001' and
-             setup_result.get('review') == review and setup_result.get('authorization') == authorization and
-             setup_result.get('source_revision') == proposal['candidate_config']['code']['revision'] and
-             setup_result.get('weight_revision') == proposal['candidate_config']['weights']['revision'] and
-             state.get('event') == 'finish' and state.get('status') == 'complete' and
-             state.get('result') == setup_record and qualified.get('setup') == setup_record,
-             'successful ledger-bound single-image native setup required')
+    from vipe_benchmark.setup_recovery_core import accepted_setup, candidate_for_job
+    if candidate_for_job(Path(setup).resolve().parent.name) == candidate:
+        # The candidate's accepted recovery; its failed original setup never qualifies.
+        setup_result, setup_job = accepted_setup(candidate, setup_record, ledger.events(), local)
+        _require(setup_result.get('schema') == 'plan069-depth-setup-recovery-result/v1' and
+                 setup_result.get('job_id') == setup_job and
+                 setup_result.get('source_revision') == proposal['candidate_config']['code']['revision'] and
+                 setup_result.get('weight_revision') == proposal['candidate_config']['weights']['revision'] and
+                 qualified.get('setup') == setup_record,
+                 'successful ledger-bound single-image native setup required')
+    else:
+        _require(Path(setup).resolve() == (local / 'jobs' / f'plan069-{candidate}-setup-001/result.json').resolve(),
+                 'exact accepted native setup path required')
+        setup_result = read_json(setup_record['path'])
+        state = ledger.states().get(f'plan069-{candidate}-setup-001', {})
+        _require(setup_result.get('schema') == 'plan069-depth-setup-result/v1' and
+                 setup_result.get('status') == 'complete' and setup_result.get('record_kind') == 'actual' and
+                 setup_result.get('candidate') == candidate and
+                 setup_result.get('job_id') == f'plan069-{candidate}-setup-001' and
+                 setup_result.get('review') == review and setup_result.get('authorization') == authorization and
+                 setup_result.get('source_revision') == proposal['candidate_config']['code']['revision'] and
+                 setup_result.get('weight_revision') == proposal['candidate_config']['weights']['revision'] and
+                 state.get('event') == 'finish' and state.get('status') == 'complete' and
+                 state.get('result') == setup_record and qualified.get('setup') == setup_record,
+                 'successful ledger-bound single-image native setup required')
     verify_record(setup_result['source_archive'])
     runtime = read_json(verify_record(qualified['runtime']['receipt'])['path'])
     interpreter = runtime.get('python_executable')

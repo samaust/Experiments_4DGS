@@ -1,5 +1,6 @@
 """D8 setup-recovery authority at the ledger authorization seam (CPU fixtures only)."""
 import copy
+import hashlib
 import json
 import sys
 import tempfile
@@ -12,6 +13,7 @@ from vipe_benchmark.files import file_record, object_hash, write_json
 
 ORIGINAL = 'plan069-D8-setup-001'
 JOB = 'plan069-D8-setup-recovery-001'
+CHECKPOINT = b'fixture checkpoint bytes'
 CLEAN = dict(cleanup_confirmed=True, cleanup_uncertain=False, surviving_pids=[], deadline_exceeded=False)
 WHEELS = [dict(name='moderngl', version='5.12.0', license='MIT', url='https://files.pythonhosted.org/moderngl.whl',
                sha256='7fc0f8788bc84433d2124e9a4893adbe40f93c7d213abb8ad7b909540cb0161f', bytes=293468),
@@ -36,7 +38,8 @@ class NativeSetupRecoveryFixture(unittest.TestCase):
         adapter.start()
         self.addCleanup(adapter.stop)
         assets = self.write('assets.json', dict(candidates=dict(D8=dict(files=[dict(
-            repository='metricanything', path='student_pointmap.pt', bytes=1304997680, lfs_sha256='e' * 64)]))))
+            repository='metricanything', path='student_pointmap.pt', bytes=len(CHECKPOINT),
+            lfs_sha256=hashlib.sha256(CHECKPOINT).hexdigest())]))))
         self.maps = dict(candidate='D8', max_attempts=1, required_assets=assets, candidate_config=dict(
             code=dict(url='https://github.com/metric-anything/metric-anything', revision='0' * 40),
             weights=dict(url='https://huggingface.co/fixture/metricanything', revision='1' * 40)), allocation=dict(
@@ -182,7 +185,7 @@ class NativeSetupRecoveryAuthorityTests(NativeSetupRecoveryFixture):
 
     def test_wheels_must_be_pinned_licensed_pypi_and_fit_the_allowance(self):
         for changes in (dict(version='5.11.0'), dict(license=''), dict(url='https://example.org/m.whl'),
-                        dict(bytes=4 * 2**30)):
+                        dict(bytes=5 * 2**30)):
             with self.subTest(changes=changes):
                 wheels = [dict(WHEELS[0], **changes), WHEELS[1]]
                 self.proposal['acquisitions'] = wheels

@@ -131,12 +131,16 @@ def _actual_gate(request, request_path, output):
         check_slot_byte_budget(proposal, allocation_events[0]['slot_byte_budget'],
                                ledger_path.parent, budget_snapshot(ledger_path.parent))
     setup = read_json(verify_record(request['setup'])['path'])
-    _require(setup.get('schema') == 'plan069-depth-setup-result/v1' and
+    recovered = setup.get('schema') == 'plan069-depth-setup-recovery-result/v1'
+    if recovered:
+        from .setup_recovery_core import accepted_setup
+        _, setup_job = accepted_setup(candidate, request['setup'], events, ledger_path.parent)
+    _require(setup.get('schema') in ('plan069-depth-setup-result/v1', 'plan069-depth-setup-recovery-result/v1') and
              setup.get('status') == 'complete' and setup.get('record_kind') == 'actual' and
              setup.get('candidate') == candidate and setup.get('job_id') ==
-                 f'plan069-{candidate}-setup-001' and
-             setup.get('review') == request['review'] and
-             setup.get('authorization') == request['authorization'] and
+                 (setup_job if recovered else f'plan069-{candidate}-setup-001') and
+             (recovered or (setup.get('review') == request['review'] and
+                            setup.get('authorization') == request['authorization'])) and
              setup.get('source_revision') == proposal['candidate_config']['code']['revision'] and
              setup.get('weight_revision') == proposal['candidate_config']['weights']['revision'],
              'successful exact native setup required')

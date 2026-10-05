@@ -7,7 +7,7 @@ checkpoint plus an exact wheel allowlist, and installs the amended lock.
 from pathlib import Path
 
 from .files import object_hash, read_json, verify_record
-from .setup_recovery_core import RECOVERY_CANDIDATES, RECOVERY_EVENT, failed_setup_ancestry
+from .setup_recovery_core import RECOVERY_CANDIDATES, RECOVERY_EVENT, completed_recovery, failed_setup_ancestry
 
 CANDIDATE = 'D8'
 ORIGINAL_JOB = RECOVERY_CANDIDATES[CANDIDATE]['original_job']
@@ -160,3 +160,34 @@ def validate_recovery_request(request_record, events, run_root, *, require_reser
                 request=request_record, allocation=dict(allocation, setup_seconds=seconds),
                 byte_limits=limits, config=config, review=review_record,
                 authorization=authorization_record, source_review=source_record)
+
+
+def accepted_setup_lineage(setup_record, events, run_root, *, verifier=verify_record):
+    """Validate the clean completed D8 recovery and its immutable bindings."""
+    root = Path(run_root).resolve()
+    _require(Path(setup_record['path']) == root / 'jobs' / JOB / 'result.json' and
+             verifier(setup_record) == setup_record, 'owned accepted recovery result required')
+    result = read_json(setup_record['path'])
+    _require(result.get('schema') == RECOVERY_CANDIDATES[CANDIDATE]['result_schemas'][JOB] and
+             result.get('record_kind') == 'actual' and result.get('status') == 'complete' and
+             result.get('candidate') == CANDIDATE and result.get('job_id') == JOB,
+             'actual completed D8 recovery required')
+    completion = completed_recovery(CANDIDATE, JOB, setup_record, events)
+    grant, reserve, finish = completion['grant'], completion['reserve'], completion['finish']
+    request_record = result.get('request')
+    _require(request_record == grant.get('request') == reserve.get('evidence', {}).get('request'),
+             'exact completed recovery request binding required')
+    normalized = validate_recovery_request(request_record, events, root, verifier=verifier, historical=True)
+    for key in ('review', 'authorization', 'source_review'):
+        _require(result.get(key) == grant.get(key) == normalized[key],
+                 'completed recovery approval binding changed: ' + key)
+    proposal = normalized['map_proposal']
+    _require(result.get('original_setup') == normalized['original'] and
+             result.get('source_archive') == normalized['original']['source_archive'] and
+             result.get('source_revision') == proposal['candidate_config']['code']['revision'] and
+             result.get('weight_revision') == proposal['candidate_config']['weights']['revision'] and
+             result.get('original_failure_preserved') is True and result.get('automatic_retries') == 0 and
+             type(result.get('bytes_received')) is int,
+             'recovery changed original sources, model or accounting')
+    return dict(normalized, accepted_result=result, setup=setup_record, grant=grant, reserve=reserve,
+                finish=finish, job=JOB)
