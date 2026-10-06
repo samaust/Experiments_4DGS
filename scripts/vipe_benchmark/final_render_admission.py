@@ -53,11 +53,12 @@ class _Snapshot:
 def required_sources():
     """Return the fixed current admission/native control source closure."""
     names = ('final_render_admission.py','ledger.py','files.py','extended_final_render_contract.py',
-        'final_render_contract.py','final_render_inventory.py','final_render_loaders.py',
+        'final_render_contract.py','final_render_commercial.py','final_render_inventory.py','final_render_loaders.py',
         'final_render_matcher.py','final_render_geometry.py','final_render_initializer.py',
         'final_render_native.py','final_render_adapter.py','final_render_actual_result.py',
         'final_render_actual_worker.py','final_render_actual_dispatch.py','final_render_actual_control.py',
-        'final_render_actual_supervisor.py','final_render_workers.py','supervisor.py','config.py',
+        'final_render_actual_supervisor.py','final_render_workers.py','final_render_native_qualification.py',
+        'supervisor.py','config.py',
         'depth_review.py','s1_validation_contract.py','budgets.py',
         's1_helper_session.py','s1_progress.py','s1_identity.py')
     required = [file_record(Path(__file__).with_name(name)) for name in names]
@@ -82,11 +83,11 @@ def interpreter_invocation(interpreter, path, *, environment_prefix=None):
     return path
 
 
-def _actual_evidence(envelope, request, events):
+def _actual_evidence(envelope, request, events, ledger):
     fields = {'schema','record_kind','mode','request','approval','qualification','commercial',
         'source_review','commands','interpreter','interpreter_invocation','checkout','source_files','ledger_head_sha256','matcher_runtime'}
     _require(set(envelope) == fields, 'exact DO authority envelope required')
-    _require(envelope['record_kind'] == 'actual' and envelope['mode'] == 'DO', 'actual DO authority required')
+    _require(envelope['record_kind'] == 'actual' and envelope['mode'] in ('DO','QUALIFY'), 'actual DO authority required')
     approval = _bound(envelope['approval'])
     proposal = {k:v for k,v in envelope.items() if k != 'approval'}
     _require(approval.get('schema') == 'plan069-final-render-do-approval/v1' and
@@ -102,8 +103,7 @@ def _actual_evidence(envelope, request, events):
         interpreter_invocation(envelope['interpreter'], envelope['interpreter_invocation'],
             environment_prefix=inventory['environment_prefix'])
     commands = envelope['commands']
-    _require(type(commands) is dict and set(commands) ==
-        {a['arm']+'/'+a['phase'] for a in request['allocations'] if a['phase'] in PHASES} and
+    _require(type(commands) is dict and set(commands) == command_keys(envelope, request) and
         all(type(argv) is list and len(argv) >= 3 and
             all(type(arg) is str and arg for arg in argv) and argv[0] == envelope['interpreter_invocation']
             for argv in commands.values()), 'all exact approved native commands required')
@@ -120,61 +120,34 @@ def _actual_evidence(envelope, request, events):
         review.get('record_kind') == 'actual' and review.get('status') == 'passed' and
         bool(review.get('reviewer','').strip()) and review.get('request') == envelope['request'] and
         review.get('source_files') == sources, 'independent current native source review required')
-    qualification = _bound(envelope['qualification'])
     runtime_record = request['bindings']['runtime']
     runtime = _bound(runtime_record)
     from .final_render_inventory import validate_inventory
     validate_inventory(runtime,checkout=envelope['checkout'],interpreter=envelope['interpreter_invocation'],
         normalization=request['initializer_contract']['normalization'])
-    _require(qualification.get('schema') == 'plan069-final-render-native-qualification/v1' and
-        qualification.get('record_kind') == 'actual' and qualification.get('status') == 'passed' and
-        qualification.get('request') == envelope['request'] and qualification.get('runtime') == runtime_record and
-        qualification.get('source_files') == sources and qualification.get('interpreter') == envelope['interpreter'] and
+    from .final_render_commercial import validate_commercial
+    validate_commercial(envelope['commercial'], runtime_record, sources)
+    if envelope['mode'] == 'QUALIFY':
+        # One full arm under a distinct request identity produces the evidence below.
+        _require(envelope['qualification'] is None, 'QUALIFY envelope cannot carry qualification')
+        return None
+    from .final_render_native_qualification import verify
+    # Re-derived from the ledger: only a cleaned QUALIFY arm under identical settings qualifies.
+    qualification = verify(envelope['qualification'], envelope['request'], events, ledger.states(events))
+    _require(qualification.get('runtime') == runtime_record and qualification.get('source_files') == sources and
+        qualification.get('interpreter') == envelope['interpreter'] and
         qualification.get('matcher_runtime') == envelope['matcher_runtime'],
         'actual native qualification for exact runtime/request required')
-    runs = qualification.get('runs')
-    _require(type(runs) is dict and set(runs) == set(PHASES), 'all native phases require measured qualification')
-    for phase, record in runs.items():
-        run = _bound(record)
-        _require(run.get('job_id') not in {a['id'] for a in request['allocations']},
-            'qualification must precede and be independently allocated from production slots')
-        _require(run.get('schema') == 'plan069-final-render-native-phase-qualification/v1' and
-            run.get('record_kind') == 'actual' and run.get('status') == 'passed' and
-            run.get('phase') == phase and run.get('runtime') == runtime_record and
-            run.get('cleanup_confirmed') is True and run.get('native_adapter_qualified') is True and
-            run.get('request') == envelope['request'] and
-            type(run.get('elapsed_seconds')) in (int,float) and math.isfinite(run['elapsed_seconds']) and
-            0 < run['elapsed_seconds'] <= PHASES[phase][1] and
-            type(run.get('cpu_workers_used')) is int and 0 < run['cpu_workers_used'] <= request['cpu_workers_limit'] and
-            type(run.get('peak_device_bytes')) is int and 0 <= run['peak_device_bytes'] <= request['device_bytes_limit'] and
-            type(run.get('artifact_bytes')) is int and 0 <= run['artifact_bytes'] <= request['artifact_bytes_limit'],
-            'passing measured native phase qualification required')
-        _require(any(e.get('event') == 'finish' and e.get('status') == 'complete' and
-            e.get('job_id') == run.get('job_id') and e.get('result') == record and
-            e.get('cleanup_confirmed') is True and e.get('cleanup_uncertain') is False and
-            e.get('deadline_exceeded') is False for e in events),
-            'native qualification lacks cleaned successful ledger provenance')
-        starts = [e for e in events if e.get('event') == 'reserve' and e.get('job_id') == run['job_id']]
-        _require(len(starts) == 1 and starts[0].get('evidence',{}).get('record_kind') == 'actual' and
-            starts[0]['evidence'].get('role') == 'native-qualification' and
-            starts[0]['evidence'].get('runtime') == runtime_record and
-            starts[0]['evidence'].get('source_files') == sources and
-            starts[0].get('command') == run.get('command') and
-            type(run.get('command')) is list and bool(run['command']) and
-            run['command'][0] == envelope['interpreter_invocation'],
-            'independently allocated actual qualification command/source lineage required')
-    commercial = _bound(envelope['commercial'])
-    _require(commercial.get('schema') == 'plan069-final-render-commercial-assessment/v1' and
-        commercial.get('record_kind') == 'actual' and commercial.get('status') == 'allowed' and
-        commercial.get('runtime') == runtime_record and commercial.get('source_files') == sources and
-        bool(commercial.get('reviewer','').strip()) and
-        set(commercial.get('permissions',{})) == {'code','weights','dependencies','inference_outputs'} and
-        all(v == 'allowed' for v in commercial['permissions'].values()) and
-        type(commercial.get('primary_sources')) is list and bool(commercial['primary_sources']),
-        'exact native commercial permissions required')
-    for source in commercial['primary_sources']:
-        _verified(source)
     return qualification
+
+
+def command_keys(envelope, request):
+    """DO covers every arm/phase; QUALIFY covers all phases of exactly one arm."""
+    if envelope['mode'] == 'DO':
+        return {a['arm']+'/'+a['phase'] for a in request['allocations'] if a['phase'] in PHASES}
+    arms = {key.split('/')[0] for key in envelope['commands']}
+    _require(len(arms) == 1 and arms <= set(request['compositions']), 'one qualification arm required')
+    return {arm+'/'+phase for arm in arms for phase in PHASES}
 
 
 def _live(live, request, config, qualification=None):
@@ -197,6 +170,10 @@ def _live(live, request, config, qualification=None):
             amount = qualification.get(name)
             _require(type(amount) in (int,float) and math.isfinite(amount) and amount > 0,
                 'measured retention and cleanup viability required')
+        # The train worker keeps a 150 s deadline reserve for checkpoint publication;
+        # the measured save and the supervision tail must both fit inside it.
+        _require(qualification['checkpoint_seconds'] + qualification['cleanup_seconds'] < 150.,
+            'measured checkpoint publication and cleanup exceed the 150 s reserve')
         _require(qualification['initializer_bytes'] + qualification['checkpoint_bytes'] < request['artifact_bytes_limit'] and
             qualification['cleanup_seconds'] + qualification['checkpoint_seconds'] < PHASES['train'][1],
             'measured publication/cleanup reserves exceed allocation')
@@ -256,7 +233,7 @@ def _reserve(envelope_record, ledger, arm, phase, command, probe, parent_result,
                 e.get('request') == envelope['request']]
             _require(len(grants) <= 1 and (grants[0]['envelope'] == envelope_record if grants else
                 envelope.get('ledger_head_sha256') == head), 'DO grant missing or initial approval ledger head changed')
-            qualification = _actual_evidence(envelope,request,events)
+            qualification = _actual_evidence(envelope,request,events,ledger)
             expected = envelope['commands'].get(arm+'/'+phase)
             _require(command == expected and command[0] == envelope['interpreter_invocation'],
                 'exact approved command/interpreter required')
@@ -311,6 +288,10 @@ def _reserve(envelope_record, ledger, arm, phase, command, probe, parent_result,
             record_kind='actual' if actual else 'fixture',envelope=envelope_record,request=envelope['request'],
             arm=arm,phase=phase,parent_result=parent_result,live=live,
             execution_authorized=actual,native_adapter_qualified=actual)
+        if actual:
+            # Production admission later binds QUALIFY reservations by role and closure.
+            evidence.update(role='native-qualification' if envelope['mode'] == 'QUALIFY' else 'production',
+                runtime=request['bindings']['runtime'],source_files=envelope['source_files'])
         if actual and not grants:
             ledger._append(stream,events,dict(event='final_render_do_authorized',
                 envelope=envelope_record,request=envelope['request'],allocations=request['allocations']))
@@ -353,7 +334,7 @@ def invocation_binding(invocation_record, request, arm, phase, *, require_worker
             evidence.get('request') == invocation['request'] and evidence.get('arm') == arm and
             evidence.get('phase') == phase and evidence.get('parent_result') == invocation.get('parent_result'),
             'invocation does not match actual reservation authority')
-        _actual_evidence(envelope,request,events[:reservation['sequence']])
+        _actual_evidence(envelope,request,events[:reservation['sequence']],ledger)
         expected = envelope['commands'].get(arm+'/'+phase)
         _require(reservation['command'] == expected and invocation['interpreter'] == envelope['interpreter'] and
             invocation.get('interpreter_invocation') == envelope['interpreter_invocation'] and

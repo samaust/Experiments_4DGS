@@ -126,16 +126,8 @@ def validate_authority(record,*,actual=True):
         type(review.get('reviewer')) is str and bool(review['reviewer'].strip()) and
         review.get('request')==envelope['request'] and review.get('source_files')==sources,
         'independent qualification source review required')
-    commercial=_bound(envelope['commercial'])
-    _require(commercial.get('schema')=='plan069-final-render-commercial-assessment/v1' and
-        commercial.get('record_kind')=='actual' and commercial.get('status')=='allowed' and
-        commercial.get('runtime')==envelope['runtime'] and commercial.get('source_files')==sources and
-        type(commercial.get('reviewer')) is str and bool(commercial['reviewer'].strip()) and
-        commercial.get('permissions')==dict.fromkeys(('code','weights','dependencies','inference_outputs'),'allowed') and
-        type(commercial.get('primary_sources')) is list and bool(commercial['primary_sources']),
-        'exact qualification commercial permissions required')
-    for source in commercial['primary_sources']:
-        _require(verify_record(source)==source,'changed qualification license evidence')
+    from .final_render_commercial import validate_commercial
+    validate_commercial(envelope['commercial'],envelope['runtime'],sources)
     return envelope,request
 
 

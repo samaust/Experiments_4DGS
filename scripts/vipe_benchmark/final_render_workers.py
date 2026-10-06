@@ -229,12 +229,18 @@ def train(request, arm, parent, initializer, output, runtime, *, clock=time.mono
             budget.resources(runtime)
         budget.check(150.)
         checkpoint = output/'checkpoint-005000.pt'
+        # Measured for native qualification: save, metadata reload and hashing all
+        # run inside the 150 s publication reserve checked above.
+        saving = time.monotonic()
         runtime.save_checkpoint(checkpoint,5000)
         metadata = runtime.checkpoint_metadata(checkpoint)
         _require(type(metadata.get('iteration')) is int and
             metadata == dict(iteration=5000,provenance=provenance),
             'checkpoint endpoint/provenance differs')
         artifact = file_record(checkpoint)
+        save_seconds = time.monotonic()-saving
+        write_json(output/'checkpoint-timing.json',dict(schema='plan069-final-render-checkpoint-timing/v1',
+            checkpoint=artifact,save_seconds=save_seconds))
         budget.resources(runtime)
     return _publish(request,arm,parent,budget,dict(completed_iterations=5000,checkpoint=artifact))
 
