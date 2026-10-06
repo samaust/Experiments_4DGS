@@ -43,3 +43,18 @@ after the fixes.
   `final-render/abandoned/prelock-deadlock-001` under the run root. The fix runs
   the deep validation before the lock, with a regression test that checks the
   lock is free during it.
+
+## Production history
+
+- DO envelope `do-20261006T055025Z`: production grant at ledger 1043. QF-B,
+  QF-M1, QF-M2 and QF-N1 completed all four phases (ledger 1046–1091).
+- QF-N2 was refused at its first admission with `artifact cumulative ceiling
+  exhausted`: 250.5 GiB plus its 12 GiB per-request limit exceeded the 260 GiB
+  cap, because each arm retains about 11.6 GiB rather than the estimated 6. No
+  reservation was made; the refused invocation files are preserved under
+  `final-render/abandoned/artifact-cap-refusal-001`.
+- The user chose to delete the QUALIFY arm's two checkpoint files (10.94 GiB)
+  rather than raise the cap. A cap raise would have changed the bound contract
+  and forced a second QUALIFY arm. Hashes are in
+  `qualify-checkpoint-deletion-001.json`, and the native qualification still
+  verifies against the ledger. QF-N2 was then redispatched under the same envelope.
