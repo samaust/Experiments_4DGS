@@ -1,0 +1,81 @@
+2026-10-06T05:50:25.708214+00:00 dispatch QF-B/geometry
+QF-B/geometry complete: 1975.5s
+2026-10-06T06:27:20.263692+00:00 dispatch QF-B/initializer
+QF-B/initializer complete: 173.2s
+2026-10-06T06:34:23.612721+00:00 dispatch QF-B/train
+QF-B/train complete: 744.5s
+2026-10-06T06:51:31.841866+00:00 dispatch QF-B/render
+QF-B/render complete: 301.7s
+2026-10-06T07:01:26.966819+00:00 dispatch QF-M1/geometry
+QF-M1/geometry complete: 1977.1s
+2026-10-06T07:38:23.402771+00:00 dispatch QF-M1/initializer
+QF-M1/initializer complete: 173.4s
+2026-10-06T07:45:27.388765+00:00 dispatch QF-M1/train
+QF-M1/train complete: 743.9s
+2026-10-06T08:02:34.516807+00:00 dispatch QF-M1/render
+QF-M1/render complete: 314.2s
+2026-10-06T08:12:40.054539+00:00 dispatch QF-M2/geometry
+QF-M2/geometry complete: 1984.4s
+2026-10-06T08:49:44.158736+00:00 dispatch QF-M2/initializer
+QF-M2/initializer complete: 161.1s
+2026-10-06T08:56:36.221687+00:00 dispatch QF-M2/train
+QF-M2/train complete: 685.0s
+2026-10-06T09:12:43.002300+00:00 dispatch QF-M2/render
+QF-M2/render complete: 296.3s
+2026-10-06T09:22:28.944572+00:00 dispatch QF-N1/geometry
+QF-N1/geometry complete: 2000.4s
+2026-10-06T09:59:48.560950+00:00 dispatch QF-N1/initializer
+QF-N1/initializer complete: 173.4s
+2026-10-06T10:06:52.776914+00:00 dispatch QF-N1/train
+QF-N1/train complete: 747.0s
+2026-10-06T10:24:04.873466+00:00 dispatch QF-N1/render
+QF-N1/render complete: 302.4s
+2026-10-06T10:34:01.276384+00:00 dispatch QF-N2/geometry
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan069-final-render-authority-001/authority.py", line 185, in <module>
+    main()
+    ~~~~^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan069-final-render-authority-001/authority.py", line 179, in main
+    dispatch(args.envelope, args.arm, args.phases)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan069-final-render-authority-001/authority.py", line 144, in dispatch
+    outcome = dispatcher.dispatch(arm, phase, invocation, output, parent_result=parent,
+        initializer=initializer, voxel_width=width if phase == 'initializer' else None)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/final_render_actual_dispatch.py", line 105, in dispatch
+    reservation = reserve(self.envelope_record,self.ledger,arm,phase,command,
+                          probe=live_probe,parent_result=parent_result)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/final_render_admission.py", line 203, in reserve
+    return _reserve(envelope_record,ledger,arm,phase,command,probe,parent_result,actual=True)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/final_render_admission.py", line 264, in _reserve
+    admit_review(request,snapshot,storage,deep=False)  # Re-derived before the lock.
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/extended_final_render_contract.py", line 298, in admit_review
+    _require(storage['artifact_bytes'] + request['artifact_bytes_limit'] <= ledger.config['new_artifact_disk_gib_limit']*2**30,
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+             'artifact cumulative ceiling exhausted')
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/extended_final_render_contract.py", line 21, in _require
+    raise ValueError(message)
+ValueError: artifact cumulative ceiling exhausted
+2026-10-06T11:51:56.760650+00:00 dispatch QF-N2/geometry
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan069-final-render-authority-001/authority.py", line 185, in <module>
+    main()
+    ~~~~^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan069-final-render-authority-001/authority.py", line 179, in main
+    dispatch(args.envelope, args.arm, args.phases)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan069-final-render-authority-001/authority.py", line 144, in dispatch
+    outcome = dispatcher.dispatch(arm, phase, invocation, output, parent_result=parent,
+        initializer=initializer, voxel_width=width if phase == 'initializer' else None)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/final_render_actual_dispatch.py", line 66, in dispatch
+    raise FileExistsError('fresh immutable dispatch paths required')
+FileExistsError: fresh immutable dispatch paths required
+2026-10-06T11:52:22.937009+00:00 dispatch QF-N2/geometry
+QF-N2/geometry complete: 1987.8s
+2026-10-06T12:29:30.918051+00:00 dispatch QF-N2/initializer
+QF-N2/initializer complete: 173.0s
+2026-10-06T12:36:35.740911+00:00 dispatch QF-N2/train
+QF-N2/train complete: 732.0s
+2026-10-06T12:53:31.315423+00:00 dispatch QF-N2/render
+QF-N2/render complete: 300.3s
