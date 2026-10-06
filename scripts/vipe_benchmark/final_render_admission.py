@@ -198,6 +198,8 @@ def reserve(envelope_record, ledger, arm, phase, command, *, probe, parent_resul
         from .final_render_actual_result import validate_actual_worker_result
         previous = validate_actual_worker_result(request,arm,phases[phases.index(phase)-1],_bound(parent_result))
         _require(previous['status'] == 'complete', 'complete actual predecessor required')
+    from .extended_final_render_contract import validate_depth
+    validate_depth(request)  # Reads the shared ledger: before, never inside, the reservation lock.
     return _reserve(envelope_record,ledger,arm,phase,command,probe,parent_result,actual=True)
 
 
@@ -213,6 +215,8 @@ def reserve_fixture(envelope_record, ledger, arm, phase, command, *, probe, pare
         e.get('evidence',{}).get('record_kind') == 'fixture' or
         str(e.get('job_id','')).startswith('fixture/') for e in ledger.events()),
         'fixture simulator cannot consume an actual ledger')
+    from .extended_final_render_contract import validate_depth
+    validate_depth(_bound(envelope['request']))
     return _reserve(envelope_record,ledger,arm,phase,command,probe,parent_result,actual=False)
 
 
@@ -257,7 +261,7 @@ def _reserve(envelope_record, ledger, arm, phase, command, probe, parent_result,
             if ledger.states(events).get(identity,{}).get('event') == 'finish':
                 resource_credit = a['resource'] if actual else 'cpu'
                 snapshot.credit[resource_credit] = snapshot.credit.get(resource_credit,0) + a['seconds']
-        admit_review(request,snapshot,storage)
+        admit_review(request,snapshot,storage,deep=False)  # Re-derived before the lock.
         states = ledger.states(events)
         _require(not any(e.get('event') == 'finish' and
             (e.get('cleanup_uncertain') is True or e.get('cleanup_confirmed') is False)

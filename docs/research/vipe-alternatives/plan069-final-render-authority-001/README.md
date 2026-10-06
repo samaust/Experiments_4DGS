@@ -31,3 +31,15 @@ after the fixes.
 | QUALIFY admission does not check production feasibility | Checked numerically: 19,041 + ≤9,900 + 49,500 = 78,441 ≤ 93,600 GPU-s |
 | `save_seconds` uses the wall clock rather than the injected clock | Accepted: actual workers require `time.monotonic`, so the clocks agree |
 | Self-written human approvals | Recorded as transcriptions (`recorded_by`) of the user's explicit approval |
+
+## QUALIFY attempt history
+
+- `qualify-20261006T035014Z`: the envelope was approved and dispatch started at
+  03:50 UTC. Inside `reserve`, the deep D* re-derivation read the shared ledger
+  (`depth_review` uses `Ledger.events()`) while the reservation flock was held,
+  and the dispatcher deadlocked against itself. The dispatcher was stopped after
+  about 30 minutes. No reservation was appended and no allocation was consumed.
+  Its pre-reservation invocation files are preserved in
+  `final-render/abandoned/prelock-deadlock-001` under the run root. The fix runs
+  the deep validation before the lock, with a regression test that checks the
+  lock is free during it.

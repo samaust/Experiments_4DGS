@@ -53,6 +53,29 @@ class AdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'consumed'):
             reserve_fixture(envelope,ledger,'QF-B','geometry',['fixture-worker'],probe=lambda:live)
 
+    def test_deep_depth_validation_runs_before_the_ledger_lock(self):
+        # Actual D* re-derivation reads the shared ledger; under the reservation
+        # flock that read would deadlock the dispatcher against itself.
+        import fcntl
+        from unittest import mock
+        from vipe_benchmark import depth_review
+        from vipe_benchmark.final_render_admission import reserve_fixture
+        envelope,ledger,live=self.simulate()
+        original=depth_review.validate_decision
+        lock_free=[]
+        def probing(record,*,actual=True):
+            with ledger.path.open('r') as stream:
+                try:
+                    fcntl.flock(stream,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                    lock_free.append(True)
+                    fcntl.flock(stream,fcntl.LOCK_UN)
+                except BlockingIOError:
+                    lock_free.append(False)
+            return original(record,actual=actual)
+        with mock.patch.object(depth_review,'validate_decision',probing):
+            reserve_fixture(envelope,ledger,'QF-B','geometry',['fixture-worker'],probe=lambda:live)
+        self.assertEqual(lock_free,[True])
+
     def test_live_gpu_or_stale_probe_never_mutates_ledger(self):
         from vipe_benchmark.final_render_admission import reserve_fixture
         envelope,ledger,live=self.simulate()

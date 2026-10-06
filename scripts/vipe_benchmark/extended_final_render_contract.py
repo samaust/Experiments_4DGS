@@ -162,6 +162,11 @@ def _decision(record, *, deep=False, actual=True):
     return decision
 
 
+def validate_depth(value):
+    """Full D* re-derivation; it reads the shared ledger, so never call it under its lock."""
+    _validate_depth(parse_request(value), deep=True)
+
+
 def _validate_depth(value, *, deep=False):
     bindings = value['bindings']
     decision = _decision(bindings['depth_decision'], deep=deep, actual=value['record_kind'] == 'actual')
@@ -241,8 +246,13 @@ def _coverage(value, events):
     return 810
 
 
-def admit_review(value, ledger, storage):
-    """Read-only proposal admission; no reservation, dispatch or DO authority."""
+def admit_review(value, ledger, storage, *, deep=True):
+    """Read-only proposal admission; no reservation, dispatch or DO authority.
+
+    deep=False is only for callers that already re-derived the D* decision
+    outside the ledger lock (DO reservation), because that re-derivation reads
+    the shared ledger.
+    """
     request = parse_request(value)
     bindings = request['bindings']
     actual = request['record_kind'] == 'actual'
@@ -263,7 +273,7 @@ def admit_review(value, ledger, storage):
         validate_wrapper(qualification, qualification['semantic_amendment'], bindings['config'])
     else:
         _require(qualification.get('status') == 'passed' and qualification.get('record_kind') == 'fixture', 'passing fixture qualification required')
-    _validate_depth(request, deep=True)
+    _validate_depth(request, deep=deep)
     validate_scene_bindings(request)
     events = ledger.events()
     validate_budget_configuration(request, ledger.config)
