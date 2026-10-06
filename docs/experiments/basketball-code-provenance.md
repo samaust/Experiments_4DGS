@@ -25,7 +25,7 @@ The principal research and code dependencies are:
 |---|---|---|
 | [**FreeTimeGS: Free Gaussian Primitives at Anytime Anywhere for Dynamic Scene Reconstruction**, CVPR 2025](https://zju3dv.github.io/freetimegs/) | [OpsiClear-4DGS/FreeTimeGsVanilla](https://github.com/OpsiClear-4DGS/FreeTimeGsVanilla), `911dcf4` | Moving Gaussians with position, velocity, temporal center, and duration; reconstruction training and rendering. This is an independent minimal reproduction. |
 | [**Spacetime Gaussian Feature Splatting for Real-Time Dynamic View Synthesis**, CVPR 2024](https://oppo-us-research.github.io/SpacetimeGaussians-website/) | [oppo-us-research/SpacetimeGaussians](https://github.com/oppo-us-research/SpacetimeGaussians), `427abfc`, plus local patches | The STG Full comparison baseline. |
-| [**EDGS: Eliminating Densification for Efficient Convergence of 3DGS**](https://compvis.github.io/EDGS/) | [CompVis/EDGS](https://github.com/CompVis/EDGS), `f90b022` | Dense initialization approach and selected geometry/triangulation functions. |
+| [**EDGS: Eliminating Densification for Efficient Convergence of 3DGS**](https://compvis.github.io/EDGS/) | [CompVis/EDGS](https://github.com/CompVis/EDGS), `f90b022` | Dense initialization approach. Its extracted geometry functions are now exercised only by tests. |
 | [**RoMa: Robust Dense Feature Matching**, CVPR 2024](https://openaccess.thecvf.com/content/CVPR2024/papers/Edstedt_RoMa_Robust_Dense_Feature_Matching_CVPR_2024_paper.pdf) | [Parskatt/RoMa](https://github.com/Parskatt/RoMa), `3701174` | Pretrained dense correspondences between camera images. |
 | [**ViPE: Video Pose Engine for 3D Geometric Perception**](https://research.nvidia.com/labs/toronto-ai/vipe/) | [NVIDIA ViPE](https://github.com/nv-tlabs/vipe), through the user's `samaust/vipe` fork at `de50e6a` | Person/ball segmentation and adjacent-frame mask tracking. |
 | [**gsplat: An Open-Source Library for Gaussian Splatting**](https://arxiv.org/abs/2409.06765) | [nerfstudio-project/gsplat](https://github.com/nerfstudio-project/gsplat), `b60e917` | FreeTimeGsVanilla's CUDA rasterization and Gaussian optimization utilities. |
@@ -54,21 +54,34 @@ core, rather than execution of its complete stock pipeline. The boundary is
 explicit in [freetimegs_source.py](../../scripts/freetimegs_source.py) and
 [freetimegs_training.py](../../scripts/freetimegs_training.py).
 
-For **EDGS**, the loader extracts four unchanged upstream function bodies:
-`prepare_tensor`, `triangulate_points`, `pairwise_distances`, and
-`k_closest_vectors`. The Basketball pipeline uses the triangulation helper and
-reuses a calibrated projection adapter written in this repository during the
-earlier EDGS/SelfCap integration. **It does not run EDGS's Gaussian trainer.**
-See [edgs_source.py](../../scripts/edgs_source.py).
+For **EDGS**, [edgs_source.py](../../scripts/edgs_source.py) provides two
+things. `load_roma()` loads the RoMa matcher at the EDGS-pinned RoMa revision.
+`load_geometry()` extracts four unchanged upstream function bodies from a local
+EDGS checkout: `prepare_tensor`, `triangulate_points`, `pairwise_distances`, and
+`k_closest_vectors`. **It does not run EDGS's Gaussian trainer.**
+
+**The current pipelines do not use the EDGS geometry functions.** Since commit
+`4e80139e` (2026-09-12, "Replace EDGS runtime geometry with independent PyTorch
+triangulation"), the [SelfCap initializer](../../scripts/initialize-edgs-selfcap.py),
+the [Basketball cloud builder](../../scripts/basketball_temporal_cloud.py) and
+the ViPE diagnostics triangulate with this repository's
+[two-view solver](../../scripts/triangulation.py), derived in
+[triangulation.md](../triangulation.md). They take only the RoMa loader and pins
+from `edgs_source.py`. The extracted EDGS functions are called only by
+[test_edgs_geometry.py](../../tests/test_edgs_geometry.py), which is skipped
+unless an EDGS checkout exists at `.local/EDGS`.
+[test_triangulation_integration.py](../../tests/test_triangulation_integration.py)
+fails if a pipeline calls `load_geometry()`. Earlier runs, from 2026-09-06 until
+that commit, used the EDGS `triangulate_points` helper; their source, archives
+and reports retain that provenance.
 
 **The calibrated projection adapter is local integration code.** Git history
 shows that `calibrated_projection()` was introduced on **2026-09-06** in commit
 `21327005a4b699f53b72c1d91d9ed91c85dea52e` (`2132700`), titled
-"Validate pinned EDGS geometry and RoMa CUDA execution." The
-[SelfCap initializer](../../scripts/initialize-edgs-selfcap.py) and later
-[Basketball cloud builder](../../scripts/basketball_temporal_cloud.py) import the
-same function. The earlier wording that Basketball "adds its own" adapter did
-not make this reuse history clear.
+"Validate pinned EDGS geometry and RoMa CUDA execution." The SelfCap initializer
+and Basketball cloud builder imported it until commit `4e80139e`. It is now used
+only by `test_edgs_geometry.py`; the current solver takes standard `3×4`
+projection matrices directly.
 
 Its mathematics is the standard pinhole-camera projection, `P = K[R|t]`.
 `K` contains the focal lengths and principal point, while `R` and `t` describe
@@ -77,7 +90,7 @@ This established formulation is documented, for example, in
 [OpenCV's camera geometry reference](https://docs.opencv.org/4.13.0/d9/d0c/group__calib3d.html).
 The adapter itself is a small local PyTorch implementation.
 
-The custom part packages that projection matrix for the pinned EDGS helper's
+The custom part packages that projection matrix for the EDGS helper's
 four-column, row-vector interface:
 
 - Its triangulation equations use column index **2** for camera depth.
@@ -99,9 +112,9 @@ It uses processed-image pixel coordinates and camera depth; it is not a graphics
 near/far clip-space projection.
 
 **"Calibrated" means the adapter consumes existing camera calibration.** It does
-not estimate or improve calibration. The Basketball pipeline supplies camera
-matrices previously estimated and saved by this project, this adapter converts
-their representation, and the unchanged EDGS helper triangulates the matched
+not estimate or improve calibration. Both the adapter and the current solver use
+camera matrices previously estimated and saved by this project; the Basketball
+pipeline now passes them to the local solver, which triangulates the matched
 pixels. Those matrices were not supplied by the dataset.
 
 **The Basketball DG archive used here contains videos, without calibration.**

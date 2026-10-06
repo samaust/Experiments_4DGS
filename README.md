@@ -45,7 +45,7 @@ The reconstruction clip is **frames 0–49 at 25 fps**, with normalized time `t 
 Use the local Basketball dense preparation pipeline on training-camera images:
 
 1. Generate person/ball masks through the pinned ViPE segmentation component: Grounding DINO detection, SAM masks, and DeAOT tracking of the adjacent frame.
-2. Match neighboring camera views with pretrained RoMa. Triangulate correspondences with unchanged EDGS geometry helpers and this repository's calibrated projection adapter, which consumes the camera estimates prepared above.
+2. Match neighboring camera views with pretrained RoMa. Triangulate correspondences with this repository's [two-view solver](scripts/triangulation.py), which consumes the camera projection matrices prepared above. Runs before 2026-09-12 used the EDGS triangulation helper instead; see [code provenance](docs/experiments/basketball-code-provenance.md).
 3. Retain observations supported by multiple cameras and the depth, reprojection, and triangulation checks. Estimate foreground velocities from adjacent-frame tracks and triangulated endpoints; record unsupported velocities as zero with an invalidity flag.
 4. Fuse measured static observations, retain foreground observations at their measured times, and package positions, colors, velocities, temporal centers, and durations in FreeTimeGS coordinates. Preserve the shared camera/point normalization and provenance.
 
