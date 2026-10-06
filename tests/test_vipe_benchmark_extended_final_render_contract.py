@@ -266,6 +266,17 @@ class AdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'ready'):
             admit_review(self.request,self.ledger,self.storage)
 
+    def test_hot_path_parse_trusts_pinned_decision_but_admission_rederives_it(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review, parse_request
+        from vipe_benchmark.files import file_record, write_json
+        forged = dict(self.read(self.request['bindings']['depth_decision']), forged=True)
+        write_json(self.review.root/'forged-decision.json', forged)
+        self.request['bindings']['depth_decision'] = file_record(self.review.root/'forged-decision.json')
+        self.rebind_proposal()
+        self.assertEqual(parse_request(self.request)['id'], self.request['id'])
+        with self.assertRaisesRegex(ValueError, 'decision contents changed'):
+            admit_review(self.request,self.ledger,self.storage)
+
     def test_scene_camera_must_match_native_accepted_input_calibration(self):
         from vipe_benchmark.extended_final_render_contract import admit_review
         inputs=self.read(self.request['bindings']['inputs'])

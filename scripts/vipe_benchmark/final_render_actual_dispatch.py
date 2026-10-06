@@ -28,7 +28,7 @@ def native_command(interpreter, worker, invocation_path, release_path, *, interp
 class ActualDispatcher:
     def __init__(self, envelope_record, ledger):
         envelope = _bound(envelope_record)
-        if envelope.get('schema') != 'plan069-final-render-do/v1' or envelope.get('record_kind') != 'actual' or envelope.get('mode') != 'DO':
+        if envelope.get('schema') != 'plan069-final-render-do/v1' or envelope.get('record_kind') != 'actual' or envelope.get('mode') not in ('DO','QUALIFY'):
             raise ValueError('actual DO envelope required; fixtures cannot authorize native dispatch')
         from .extended_final_render_contract import parse_request, validate_budget_configuration
         request = parse_request(_bound(envelope['request']))

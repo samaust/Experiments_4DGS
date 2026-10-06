@@ -66,8 +66,7 @@ def parse_request(value):
     _require(set(bindings) == names, 'complete exact extended prerequisite bindings required')
     for record in bindings.values():
         _require(verify_record(record) == record, 'changed bound file record')
-    from .depth_review import validate_decision
-    decision = validate_decision(bindings['depth_decision'], actual=value['record_kind'] == 'actual')
+    decision = _decision(bindings['depth_decision'])
     _require(decision['status'] == 'ready' and decision['selected_candidate_ids'] == [candidate], 'ready exact extended human D* required')
     proposal = _bound(bindings['proposal'])
     _require(proposal.get('schema') == 'plan069-final-render-review-proposal/v1' and
@@ -147,10 +146,30 @@ def _scale(record):
     return value, record
 
 
-def _validate_depth(value):
-    from .depth_review import validate_decision
+def _decision(record, *, deep=False, actual=True):
+    """The hash-pinned D* decision; deep re-derives it from the whole depth review.
+
+    Deep validation rehashes every review package file (minutes), so it runs at
+    REVIEW/DO admission only. Worker, control and acceptance paths rely on the
+    immutable pinned record that admission already re-derived.
+    """
+    if deep:
+        from .depth_review import validate_decision
+        return validate_decision(record, actual=actual)
+    from .depth_review import DECISION_SCHEMA
+    decision = _bound(record)
+    _require(decision.get('schema') == DECISION_SCHEMA, 'extended depth decision schema')
+    return decision
+
+
+def validate_depth(value):
+    """Full D* re-derivation; it reads the shared ledger, so never call it under its lock."""
+    _validate_depth(parse_request(value), deep=True)
+
+
+def _validate_depth(value, *, deep=False):
     bindings = value['bindings']
-    decision = validate_decision(bindings['depth_decision'], actual=value['record_kind'] == 'actual')
+    decision = _decision(bindings['depth_decision'], deep=deep, actual=value['record_kind'] == 'actual')
     candidate = value['depth_candidate']
     eligibility = decision['engineering_eligibility'][candidate]
     _require(eligibility['eligible'] is True, 'engineering eligible metric depth required')
@@ -227,8 +246,13 @@ def _coverage(value, events):
     return 810
 
 
-def admit_review(value, ledger, storage):
-    """Read-only proposal admission; no reservation, dispatch or DO authority."""
+def admit_review(value, ledger, storage, *, deep=True):
+    """Read-only proposal admission; no reservation, dispatch or DO authority.
+
+    deep=False is only for callers that already re-derived the D* decision
+    outside the ledger lock (DO reservation), because that re-derivation reads
+    the shared ledger.
+    """
     request = parse_request(value)
     bindings = request['bindings']
     actual = request['record_kind'] == 'actual'
@@ -249,7 +273,7 @@ def admit_review(value, ledger, storage):
         validate_wrapper(qualification, qualification['semantic_amendment'], bindings['config'])
     else:
         _require(qualification.get('status') == 'passed' and qualification.get('record_kind') == 'fixture', 'passing fixture qualification required')
-    _validate_depth(request)
+    _validate_depth(request, deep=deep)
     validate_scene_bindings(request)
     events = ledger.events()
     validate_budget_configuration(request, ledger.config)

@@ -100,6 +100,15 @@ class WorkerTests(unittest.TestCase):
         self.assertTrue(runtime.closed)
         self.assertEqual(validate_worker_result(self.request,'QF-B','train',result),result)
 
+    def test_training_publishes_measured_checkpoint_save_time(self):
+        from vipe_benchmark.final_render_workers import train
+        result = train(self.request,'QF-B',self.parent,self.initializer,self.root/'timed',FakeFreeTimeRuntime())
+        timing = read_json(self.root/'timed/checkpoint-timing.json')
+        self.assertEqual(timing['schema'],'plan069-final-render-checkpoint-timing/v1')
+        self.assertEqual(timing['checkpoint'],result['checkpoint'])
+        self.assertGreaterEqual(timing['save_seconds'],0.)
+        self.assertIn(file_record(self.root/'timed/checkpoint-timing.json'),result['artifacts'])
+
     def test_deadline_reserve_stops_updates_and_preserves_partial_evidence(self):
         from vipe_benchmark.final_render_workers import train
         runtime = FakeFreeTimeRuntime()
