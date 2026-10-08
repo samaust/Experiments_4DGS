@@ -302,10 +302,39 @@ class ActualReceiptIntegrationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'bytes/path mismatch'):
                 depth_review._verify_file(record)
         source = inspect.getsource(depth_review._qualification_blockers)
-        self.assertIn("for record in dependencies.get('files', []):\n        verify_record(record)", source)
+        self.assertIn("for record in dependencies.get('files', []):\n        verify_installed(record)", source)
 
     def test_only_the_d2_control_may_omit_its_package_scale_record(self):
         import inspect
         from vipe_benchmark import depth_review
         source = inspect.getsource(depth_review._metric_evidence)
         self.assertIn("evidence.get('scale') == scales['check'] or (candidate == 'D2' and 'scale' not in evidence)", source)
+
+
+class HostLibraryDriftTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.path = Path(directory.name)/'libexample.so'
+        self.path.write_bytes(b'old')
+        self.old = file_record(self.path)
+        self.path.write_bytes(b'patched')
+        self.new = file_record(self.path)
+
+    def test_only_the_approved_old_to_new_identity_is_accepted(self):
+        drift = {(self.old['path'],self.old['sha256'],self.old['bytes']):(self.new['sha256'],self.new['bytes'])}
+        with patch.object(depth_review,'HOST_LIBRARY_DRIFT',drift):
+            self.assertEqual(depth_review.verify_installed(self.old),self.old)
+            self.path.write_bytes(b'old')
+            self.assertEqual(depth_review.verify_installed(self.old),self.old)
+            self.path.write_bytes(b'other')
+            with self.assertRaisesRegex(ValueError,'changed file'):
+                depth_review.verify_installed(self.old)
+
+    def test_unlisted_changed_file_still_fails(self):
+        with self.assertRaisesRegex(ValueError,'changed file'):
+            depth_review.verify_installed(self.old)
+
+    def test_actual_drift_entries_match_the_installed_libraries(self):
+        for (path,_,_),(sha256,size) in depth_review.HOST_LIBRARY_DRIFT.items():
+            self.assertEqual(file_record(path),dict(path=path,sha256=sha256,bytes=size))

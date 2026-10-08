@@ -11,6 +11,19 @@ from .depth_extension import CONFIG
 from .files import file_record, read_json, verify_record, write_json
 
 SCHEMA = 'plan069-depth-review/v1'
+# Unattended Ubuntu security updates (2026-10-07 06:27; libfreetype6
+# 2.13.2+dfsg-1ubuntu0.1 -> 0ubuntu0.2, librsvg2-2 2.58.0+dfsg-1build1 ->
+# 1ubuntu0.1) replaced two system libraries pinned by the D2/D7/D11 installed
+# closures. The user approved accepting exactly these old -> new byte identities
+# (plan031-execution/host-library-drift-001.json). Every other file must match.
+HOST_LIBRARY_DRIFT = {
+    ('/usr/lib/x86_64-linux-gnu/libfreetype.so.6.20.1',
+     'c14c53c5baff12afafb610c6312fb879e9bb77e80dd42e27504d52d6d8bcd059', 833608):
+        ('992dac80abe3a3854f3eb2668da4207c029664ceca5f122ddb46e2a8169e9499', 833608),
+    ('/usr/lib/x86_64-linux-gnu/librsvg-2.so.2.50.0',
+     '5d7825eb908cfb6aebf9a0c4962307865875bfb8ad3b5cda5e9503d328be4a1b', 6781312):
+        ('81b5db4db32c47697c7b6d7432e541544342c97bc88173df9f18bb0679279c51', 6703488),
+}
 RESULT_SCHEMA = 'plan069-depth-review-result/v1'
 DECISION_SCHEMA = 'plan069-depth-decision/v1'
 METRIC_CANDIDATES = ('D2', 'D5', 'D6', 'D7', 'D8', 'D10')
@@ -170,6 +183,19 @@ def _completed_qualification(candidate, slot, generation, actual):
         source_files=runtime['source_files'],local_sources=runtime['local_sources'])
 
 
+def verify_installed(record):
+    """Verify one installed-closure file, allowing only the approved host drift."""
+    try:
+        return verify_record(record)
+    except ValueError:
+        replacement = HOST_LIBRARY_DRIFT.get((record.get('path'), record.get('sha256'), record.get('bytes')))
+        if replacement is None:
+            raise
+        sha256, size = replacement
+        verify_record(dict(path=record['path'], sha256=sha256, bytes=size))
+        return record
+
+
 def _qualification_blockers(candidate, evidence, generation, actual, completed):
     """Missing/failed engineering gates block D*, not visual observations."""
     blockers = []
@@ -200,7 +226,7 @@ def _qualification_blockers(candidate, evidence, generation, actual, completed):
     # Installed-closure records keep the inventory's path spelling (console scripts may
     # be recorded as site-packages/../../../bin/...); admission verifies their bytes the same way.
     for record in dependencies.get('files', []):
-        verify_record(record)
+        verify_installed(record)
     if candidate == 'D10' and runtime.get('profile', {}).get('runtime_profile', {}).get('id') in ('D9-D10-torch-2.14.1-pypi-cuda13', 'D9-D10-torch-2.14.1-pypi-frame-input'):
         from .video_environment import PYPI_RECIPE, FRAME_RECIPE, validate_runtime_versions, validate_runtime_observation
         from .files import file_record

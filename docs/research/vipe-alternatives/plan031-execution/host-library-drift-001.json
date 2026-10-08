@@ -1,0 +1,54 @@
+{
+  "schema": "plan069-host-library-drift/v1",
+  "status": "approved",
+  "record_kind": "actual",
+  "observed_on": "2026-10-07",
+  "cause": "unattended-upgrades security updates, 2026-10-07 06:27 (host time)",
+  "drift": [
+    {
+      "path": "/usr/lib/x86_64-linux-gnu/libfreetype.so.6.20.1",
+      "package": "libfreetype6:amd64",
+      "from_version": "2.13.2+dfsg-1ubuntu0.1",
+      "to_version": "2.13.2+dfsg-1ubuntu0.2",
+      "old": {
+        "sha256": "c14c53c5baff12afafb610c6312fb879e9bb77e80dd42e27504d52d6d8bcd059",
+        "bytes": 833608
+      },
+      "new": {
+        "sha256": "992dac80abe3a3854f3eb2668da4207c029664ceca5f122ddb46e2a8169e9499",
+        "bytes": 833608
+      }
+    },
+    {
+      "path": "/usr/lib/x86_64-linux-gnu/librsvg-2.so.2.50.0",
+      "package": "librsvg2-2:amd64",
+      "from_version": "2.58.0+dfsg-1build1",
+      "to_version": "2.58.0+dfsg-1ubuntu0.1",
+      "old": {
+        "sha256": "5d7825eb908cfb6aebf9a0c4962307865875bfb8ad3b5cda5e9503d328be4a1b",
+        "bytes": 6781312
+      },
+      "new": {
+        "sha256": "81b5db4db32c47697c7b6d7432e541544342c97bc88173df9f18bb0679279c51",
+        "bytes": 6703488
+      }
+    }
+  ],
+  "affected_closures": [
+    "depth-D2-installed-dependencies-001.json",
+    "depth-D7-installed-dependencies-002.json",
+    "depth-D7-installed-dependencies-003.json",
+    "depth-D11-installed-dependencies-001.json"
+  ],
+  "unaffected": "D8 (the selected depth) closure; all other 3,463 pinned closure files still match.",
+  "apt_history": [
+    "Start-Date: 2026-10-07  06:27:09\nCommandline: /usr/bin/unattended-upgrade\nUpgrade: librsvg2-common:amd64 (2.58.0+dfsg-1build1, 2.58.0+dfsg-1ubuntu0.1), librsvg2-common:i386 (2.58.0+dfsg-1build1, 2.58.0+dfsg-1ubuntu0.1), librsvg2-2:amd64 (2.58.0+dfsg-1build1, 2.58.0+dfsg-1ubuntu0.1), librsvg2-2:i386 (2.58.0+dfsg-1build1, 2.58.0+dfsg-1ubuntu0.1), gir1.2-rsvg-2.0:amd64 (2.58.0+dfsg-1build1, 2.58.0+dfsg-1ubuntu0.1)\nEnd-Date: 2026-10-07  06:27:10",
+    "Start-Date: 2026-10-07  06:27:11\nCommandline: /usr/bin/unattended-upgrade\nUpgrade: libfreetype6:amd64 (2.13.2+dfsg-1ubuntu0.1, 2.13.2+dfsg-1ubuntu0.2), libfreetype6:i386 (2.13.2+dfsg-1ubuntu0.1, 2.13.2+dfsg-1ubuntu0.2), libfreetype-dev:amd64 (2.13.2+dfsg-1ubuntu0.1, 2.13.2+dfsg-1ubuntu0.2)\nEnd-Date: 2026-10-07  06:27:11"
+  ],
+  "approval": {
+    "approved_by": "operator, AskUserQuestion answer \"Record drift amendment (Recommended)\"",
+    "approved_on": "2026-10-07",
+    "scope": "Accept exactly these two old->new byte identities in installed-closure verification (depth_review.HOST_LIBRARY_DRIFT); no other gate relaxed."
+  },
+  "recorded_by": "Claude, transcribing the user decision"
+}
