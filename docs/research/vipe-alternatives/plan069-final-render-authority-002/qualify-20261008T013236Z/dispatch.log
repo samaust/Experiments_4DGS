@@ -1,0 +1,26 @@
+2026-10-08T01:32:36.976699+00:00 dispatch QF-B/geometry
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan069-final-render-authority-002/authority.py", line 188, in <module>
+    main()
+    ~~~~^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan069-final-render-authority-002/authority.py", line 182, in main
+    dispatch(args.envelope, args.arm, args.phases)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan069-final-render-authority-002/authority.py", line 147, in dispatch
+    outcome = dispatcher.dispatch(arm, phase, invocation, output, parent_result=parent,
+        initializer=initializer, voxel_width=width if phase == 'initializer' else None)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/final_render_actual_dispatch.py", line 105, in dispatch
+    reservation = reserve(self.envelope_record,self.ledger,arm,phase,command,
+                          probe=live_probe,parent_result=parent_result)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/final_render_admission.py", line 203, in reserve
+    return _reserve(envelope_record,ledger,arm,phase,command,probe,parent_result,actual=True)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/final_render_admission.py", line 247, in _reserve
+    storage = _live(live,request,ledger.config,qualification)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/final_render_admission.py", line 166, in _live
+    _require(live['device_bytes'] + request['device_bytes_limit'] <= config['gpu_peak_device_gib_limit']*2**30,
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        'live device capacity unavailable')
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/final_render_admission.py", line 19, in _require
+    raise ValueError(message)
+ValueError: live device capacity unavailable

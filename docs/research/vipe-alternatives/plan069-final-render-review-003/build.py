@@ -1,6 +1,7 @@
 """Build the 70k-step D8 production (003) and QUALIFY (002) REVIEW requests (#34).
 
-The settings equal review-002 except the 70,000-step endpoint, its allocations and
+The settings equal review-002 except the 70,000-step endpoint, its allocations, a
+20 GiB device limit (2 GiB headroom for desktop display memory) and
 the v2 cap extension (380 GiB artifacts, 172,800 GPU-s). The scene freeze and voxel
 basis are reused from review-002.
 
@@ -29,7 +30,7 @@ RUN = Path('/home/auss/git_repos/samaust/Experiments_4DGS/.local/vipe-alternativ
 REPO = Path('/home/auss/git_repos/samaust/Experiments_4DGS')
 HERE = Path(__file__).resolve().parent
 STATIC = REPO/'.local/sync-pivot/basketball-static-init'
-RUNTIME = ROOT/'docs/research/vipe-alternatives/plan069-final-render-runtime-001/gs-runtime.json'
+RUNTIME = ROOT/'docs/research/vipe-alternatives/plan069-final-render-runtime-002/gs-runtime.json'
 
 
 def build(qualification, identity):
@@ -100,7 +101,7 @@ def build(qualification, identity):
         preset='default_keyframe', preset_source_sha256=PRESET_SOURCE,
         geometry=dict(keyframes=[0, 5, 10, 15, 25, 30, 35, 40, 45], samples_per_edge=5000, neighbors_per_reference=3),
         render=dict(cameras=[0, 10, 20, 30], frames=list(range(50)), fps=25, resolution=[960, 540]),
-        artifact_bytes_limit=12 * 2**30, device_bytes_limit=21 * 2**30, cpu_workers_limit=8,
+        artifact_bytes_limit=12 * 2**30, device_bytes_limit=20 * 2**30, cpu_workers_limit=8,
         initializer_contract=dict(schema='plan069-final-render-initializer/v1', time_formula='frame/50',
             velocity_units='normalized-scene/normalized-time', normalization=normalization,
             voxel_basis=voxel_basis, voxel_basis_source=voxel_source),

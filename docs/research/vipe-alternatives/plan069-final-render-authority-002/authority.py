@@ -33,7 +33,7 @@ RUN = REPO/'.local/vipe-alternatives/plan031-20260913T032700Z'
 ENV = REPO/'.local/envs/plan069-joint-native-001'
 HERE = Path(__file__).resolve().parent
 REVIEW = ROOT/'docs/research/vipe-alternatives/plan069-final-render-review-003'
-RUNTIME = ROOT/'docs/research/vipe-alternatives/plan069-final-render-runtime-001'
+RUNTIME = ROOT/'docs/research/vipe-alternatives/plan069-final-render-runtime-002'
 REQUESTS = dict(DO=REVIEW/'production/request.json', QUALIFY=REVIEW/'qualify/request.json')
 QUALIFY_ARM = 'QF-B'
 BASIS = ('User instructions of 2026-10-05: "#34, then #35, then #23, then #18. I approve gpu work." '
