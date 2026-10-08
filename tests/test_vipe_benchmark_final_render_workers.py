@@ -128,10 +128,10 @@ class WorkerTests(unittest.TestCase):
         self.use_endpoint(70000)
         ticks = iter(range(0,10**9,1))
         clock = lambda: next(ticks)*.1
-        # 70k updates at 0.1 s per clock read far exceed 3,600 s but fit 14,400 s.
+        # 70k updates at 0.1 s per clock read far exceed 3,600 s but fit 25,200 s.
         result = train(self.request,'QF-B',self.parent,self.initializer,self.root/'long-clock',FakeFreeTimeRuntime(),clock=clock)
         self.assertGreater(result['elapsed_seconds'],3600)
-        self.assertLess(result['elapsed_seconds'],14400)
+        self.assertLess(result["elapsed_seconds"],25200)
 
     def test_training_publishes_measured_checkpoint_save_time(self):
         from vipe_benchmark.final_render_workers import train

@@ -373,9 +373,10 @@ def amended_configuration(value):
 
 # The user-approved final-render cap extensions, by amendment schema:
 # v1 210 -> 260 GiB artifacts (AskUserQuestion, 2026-10-05);
-# v2 260 -> 380 GiB artifacts and the GPU limit for 70k-step training (2026-10-07).
+# v2 260 -> 380 GiB artifacts and the GPU limit for 70k-step training (2026-10-07;
+# the GPU limit was raised again to 252,000 s on 2026-10-08, which supersedes it).
 ARTIFACT_EXTENSION_AUTHORIZATION = dict(sha256='5a6db07ea5918ecc1895e71adf59efb304093b8193f724b2e7251b16be2b7aa8', bytes=762)
-LONG_TRAINING_EXTENSION_AUTHORIZATION = dict(sha256='ea7c5649a21a7ac107394d3994c60c7cd341c4fe099dde51fe6295d9fb9a774a', bytes=1023)
+LONG_TRAINING_EXTENSION_AUTHORIZATION = dict(sha256='fb580a7bb04adac730fe431bfa795ddd231d243bca49f04cac7c920d92fe1efb', bytes=1102)
 LONG_TRAINING_ARTIFACT_GIB = 380
 
 
@@ -409,7 +410,7 @@ def _artifact_extension(value, bound):
                  'v2 artifact extension must chain the exact v1 extension')
         baseline = _bound(value['bindings']['config'])
         gpu = amendment.get('new_gpu_total_seconds_limit')
-        _require(type(gpu) is int and baseline['gpu_total_seconds_limit'] < gpu <= 2*baseline['gpu_total_seconds_limit'],
+        _require(type(gpu) is int and baseline['gpu_total_seconds_limit'] < gpu <= 3*baseline['gpu_total_seconds_limit'],
                  'v2 artifact extension requires a bounded GPU limit raise')
         caps['gpu_total_seconds_limit'] = gpu
     _require(authorization.get('schema') == 'plan069-final-render-cap-authorization/v1' and authorization.get('status') == 'DO' and

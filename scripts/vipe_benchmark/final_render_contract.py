@@ -22,9 +22,10 @@ COMPOSITIONS={
     'QF-N2':dict(segmentation='S2',depth='D4',motion='M0',neighbors='N2'),
 }
 PHASES={'geometry':('gpu',5400),'initializer':('cpu',900),'train':('gpu',3600),'render':('gpu',900)}
-# Training endpoint -> train-phase GPU ceiling. 70k is the preset's own max_steps;
-# 14,400 s leaves about 37% over the measured 0.125-0.15 s per update.
-ENDPOINTS={5000:3600,70000:14400}
+# Training endpoint -> train-phase GPU ceiling. 70k is the preset's own max_steps.
+# Updates slow down as training proceeds (0.14 s at 5k; 0.237 s average over the
+# first 60,074 of a 70k run), so 25,200 s is about 40% over a 17,700 s estimate.
+ENDPOINTS={5000:3600,70000:25200}
 PRESET_SOURCE='fc3e4320da73a470d0a16bcb5803f84d1bda5bdeafb000fcc39e022fbcfaaeb4'
 PROCESSED_MANIFEST=('.local/sync-pivot/basketball-zero/manifest.json',
     '02006f379925cbb599ed071df48b7985e40cd3995b2d24293d92ecb736c26f94',561748)

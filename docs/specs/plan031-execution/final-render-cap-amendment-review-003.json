@@ -1,0 +1,26 @@
+{
+  "schema": "plan069-final-render-cap-amendment/v2",
+  "status": "REVIEW",
+  "base_amendment": {
+    "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/depth-cap-amendment-review-001.json",
+    "sha256": "adfee32facd185360c1646d8783a9780507c6b898df6771e63338e1017de89ba",
+    "bytes": 279
+  },
+  "previous_extension": {
+    "amendment": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/specs/plan031-execution/final-render-cap-amendment-review-001.json",
+      "sha256": "15b82a33350e0a7cac8dfc89c9fde8c72023d54b58e09274499636a44e7294e0",
+      "bytes": 821
+    },
+    "authorization": {
+      "path": "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan031-execution/final-render-cap-approval-001.json",
+      "sha256": "5a6db07ea5918ecc1895e71adf59efb304093b8193f724b2e7251b16be2b7aa8",
+      "bytes": 762
+    }
+  },
+  "new_download_gib_limit": 110,
+  "new_artifact_disk_gib_limit": 380,
+  "new_gpu_total_seconds_limit": 252000,
+  "scope": "Five-arm D8 final renders retrained to the 70,000-step FreeTimeGS endpoint (#34), one arm at a time, plus their QUALIFY arm: raise the cumulative new-artifact cap from 260 to 380 GiB and the cumulative GPU limit from 93,600 to 252,000 s. Supersedes final-render-cap-amendment-review-002 (172,800 s) after its QUALIFY train phase timed out. Download cap, CPU/setup ceilings and every other limit unchanged. Grants no execution authority.",
+  "basis": "Ledger head 1115 on 2026-10-08: 53,470 GPU-s used after QUALIFY attempt 1 timed out at step 60,074 (0.237 s/step average). With a 25,200 s train ceiling each arm reserves 31,500 GPU-s; production DO admission counts at most about 85,000 elapsed + 5 x 31,500 = 242,500 GPU-s. Expected actual total about 177,000 GPU-s. Artifacts 251.5 of 380 GiB; 441 GiB free disk."
+}

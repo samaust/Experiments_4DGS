@@ -440,7 +440,7 @@ class AdmissionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'recorded user'):
             validate_budget_configuration(value,amended)
 
-    def extend_long_training(self, gpu=165600, **changes):
+    def extend_long_training(self, gpu=252000, **changes):
         from vipe_benchmark.files import object_hash
         self.extend_artifact_cap()
         bound=self.request['budget_amendment']
@@ -473,10 +473,10 @@ class AdmissionTests(unittest.TestCase):
     def test_long_training_extension_rejects_other_caps_unbounded_gpu_and_a_broken_chain(self):
         from vipe_benchmark.extended_final_render_contract import admit_review
         for gpu, changes, message in (
-                (165600,dict(new_artifact_disk_gib_limit=400),'artifact extension'),
+                (252000,dict(new_artifact_disk_gib_limit=400),'artifact extension'),
                 (93600,{},'GPU limit raise'),
                 (10**6,{},'GPU limit raise'),
-                (165600,dict(previous_extension=None),'chain the exact v1')):
+                (252000,dict(previous_extension=None),'chain the exact v1')):
             with self.subTest(changes=changes,gpu=gpu):
                 self.setUp()
                 self.extend_long_training(gpu,**changes);self.long_endpoint()
@@ -484,7 +484,7 @@ class AdmissionTests(unittest.TestCase):
                     admit_review(self.request,self.ledger,self.storage)
         self.setUp()
         self.extend_long_training();self.long_endpoint()
-        self.ledger.config=dict(self.ledger.config,gpu_total_seconds_limit=165601)
+        self.ledger.config=dict(self.ledger.config,gpu_total_seconds_limit=252001)
         with self.assertRaisesRegex(ValueError,'outside exact approved budget caps'):
             admit_review(self.request,self.ledger,self.storage)
 
@@ -506,9 +506,9 @@ class AdmissionTests(unittest.TestCase):
         from vipe_benchmark.final_render_contract import allocation_specs
         self.extend_long_training();self.long_endpoint()
         result=admit_review(self.request,self.ledger,self.storage)
-        self.assertEqual((result.gpu_seconds,result.cpu_seconds),(5*(5400+14400+900),5400))
+        self.assertEqual((result.gpu_seconds,result.cpu_seconds),(5*(5400+25200+900),5400))
         trains={a['seconds'] for a in self.request['allocations'] if a['phase']=='train'}
-        self.assertEqual(trains,{14400})
+        self.assertEqual(trains,{25200})
         for iterations, allocations in ((70000,allocation_specs('extended-001')),(20000,allocation_specs('extended-001'))):
             with self.subTest(iterations=iterations):
                 self.request.update(iterations=iterations,allocations=allocations)
@@ -525,7 +525,7 @@ class AdmissionTests(unittest.TestCase):
         value=dict(record_kind='actual',iterations=70000,bindings={'config':file_record(BENCHMARK)},budget_amendment=dict(
             amendment=base,authorization=file_record(root/'docs/research/vipe-alternatives/plan031-execution/depth-approval-001.json'),
             artifact_extension=dict(
-                amendment=file_record(root/'docs/specs/plan031-execution/final-render-cap-amendment-review-002.json'),
-                authorization=file_record(root/'docs/research/vipe-alternatives/plan031-execution/final-render-cap-approval-002.json'))))
+                amendment=file_record(root/'docs/specs/plan031-execution/final-render-cap-amendment-review-003.json'),
+                authorization=file_record(root/'docs/research/vipe-alternatives/plan031-execution/final-render-cap-approval-003.json'))))
         config=amended_configuration(value)
-        self.assertEqual((config['new_artifact_disk_gib_limit'],config['gpu_total_seconds_limit'],config['new_download_gib_limit']),(380,172800,110))
+        self.assertEqual((config['new_artifact_disk_gib_limit'],config['gpu_total_seconds_limit'],config['new_download_gib_limit']),(380,252000,110))
