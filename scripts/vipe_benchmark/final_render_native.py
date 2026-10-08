@@ -188,7 +188,7 @@ authority is supplied by this module. Never call GPU methods in CPU qualificatio
         self.iteration = 0
 
     def training_step(self, iteration):
-        if self.closed or self.model is None or type(iteration) is not int or iteration != self.iteration or iteration >= 5000:
+        if self.closed or self.model is None or type(iteration) is not int or iteration != self.iteration or iteration >= self.request['iterations']:
             raise ValueError('sequential native training update required')
         camera,frame = next(self.sampler)
         if (camera,frame) not in self.training_keys():
@@ -239,9 +239,9 @@ authority is supplied by this module. Never call GPU methods in CPU qualificatio
         return dict(iteration=iteration,provenance=self.provenance,restored_state_equal=not changed)
 
     def render_frame(self, camera, frame):
-        if self.closed or self.model is None or self.iteration != 5000 or camera not in (0,10,20,30):
+        if self.closed or self.model is None or self.iteration != self.request['iterations'] or camera not in (0,10,20,30):
             raise ValueError('reloaded exact endpoint and held-out camera required')
-        degree = min(4999//self.cfg.sh_degree_interval,self.cfg.sh_degree)
+        degree = min((self.iteration-1)//self.cfg.sh_degree_interval,self.cfg.sh_degree)
         with self.torch.no_grad():
             pixels = self.model.render(self.camera(camera,frame),sh_degree=degree)[0][0,...,:3]
             self.torch.cuda.synchronize()

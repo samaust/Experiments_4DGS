@@ -22,6 +22,9 @@ COMPOSITIONS={
     'QF-N2':dict(segmentation='S2',depth='D4',motion='M0',neighbors='N2'),
 }
 PHASES={'geometry':('gpu',5400),'initializer':('cpu',900),'train':('gpu',3600),'render':('gpu',900)}
+# Training endpoint -> train-phase GPU ceiling. 70k is the preset's own max_steps;
+# 14,400 s leaves about 37% over the measured 0.125-0.15 s per update.
+ENDPOINTS={5000:3600,70000:14400}
 PRESET_SOURCE='fc3e4320da73a470d0a16bcb5803f84d1bda5bdeafb000fcc39e022fbcfaaeb4'
 PROCESSED_MANIFEST=('.local/sync-pivot/basketball-zero/manifest.json',
     '02006f379925cbb599ed071df48b7985e40cd3995b2d24293d92ecb736c26f94',561748)
@@ -80,11 +83,22 @@ def _bound(record):
     return read_json(record['path'])
 
 
-def allocation_specs(identity):
+def phases(iterations=5000):
+    """Phase resources and ceilings for one supported training endpoint."""
+    _require(type(iterations) is int and iterations in ENDPOINTS,'unsupported training endpoint')
+    return dict(PHASES,train=('gpu',ENDPOINTS[iterations]))
+
+
+def phase_seconds(request,phase):
+    """The deadline of one phase of a request, from its training endpoint."""
+    return phases(request.get('iterations',5000))[phase][1]
+
+
+def allocation_specs(identity,iterations=5000):
     """Exactly 21 fresh prospective identities, with no attempt/retry pool."""
     _require(isinstance(identity,str) and identity and all(c.isalnum() or c in '-_' for c in identity),'invalid allocation prefix')
     values=[dict(id=identity+'/'+arm+'/'+phase,arm=arm,phase=phase,resource=resource,seconds=seconds)
-        for arm in COMPOSITIONS for phase,(resource,seconds) in PHASES.items()]
+        for arm in COMPOSITIONS for phase,(resource,seconds) in phases(iterations).items()]
     values.append(dict(id=identity+'/package',arm='all',phase='package',resource='cpu',seconds=900))
     return values
 

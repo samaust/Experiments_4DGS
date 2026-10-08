@@ -67,24 +67,32 @@ class WorkerTests(unittest.TestCase):
         self.request = self.pipeline.request
         self.root = self.pipeline.fixture.base.root
         self.record = self.pipeline.record
+        self.build()
+
+    def use_endpoint(self, iterations):
+        self.pipeline.use_endpoint(iterations)
+        self.build()
+
+    def build(self):
         arrays = dict(positions=np.array([[0,0,1],[1,0,1],[0,1,1],[1,1,1]],np.float32),
             colors=np.full((4,3),.5,np.float32), velocities=np.zeros((4,3),np.float32),
             times=np.zeros((4,1),np.float32), durations=np.full((4,1),.2,np.float32),
             region=np.zeros(4,np.int32), velocity_valid=np.zeros(4,bool))
-        archive = self.root/'initializer.npz'; np.savez(archive, **arrays)
+        suffix = '' if self.request['iterations'] == 5000 else '-'+str(self.request['iterations'])
+        archive = self.root/('initializer'+suffix+'.npz'); np.savez(archive, **arrays)
         names = ('S2','D_fit','D_check','depth_decision','M0','N0')
         receipt = dict(self.request['initializer_contract'], arm='QF-B',
             composition=self.request['compositions']['QF-B'], arrays_sha256=initializer_arrays_hash(arrays),
             scene_manifest=self.request['bindings']['scene_manifest'],
             prerequisites={name:self.request['bindings'][name] for name in names})
-        self.initializer = self.record('prepared-initializer',dict(
+        self.initializer = self.record('prepared-initializer'+suffix,dict(
             schema='plan069-final-render-prepared-initializer/v1',record_kind='fixture',arm='QF-B',
             request_sha256=object_hash(self.request),archive=file_record(archive),initializer_receipt=receipt,
             execution_authorized=False,native_adapter_qualified=False))
         parent = read_json(self.pipeline.records['initializer']['path'])
         parent['artifacts'] = [self.initializer,file_record(archive)]
         parent['artifact_bytes'] = sum(r['bytes'] for r in parent['artifacts'])
-        self.parent = self.record('published-initializer-result',parent)
+        self.parent = self.record('published-initializer-result'+suffix,parent)
 
     def test_training_returns_bound_exact_5000_endpoint_through_worker_result_seam(self):
         from vipe_benchmark.final_render_workers import train
@@ -99,6 +107,31 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(state['provenance']['initializer'],self.initializer)
         self.assertTrue(runtime.closed)
         self.assertEqual(validate_worker_result(self.request,'QF-B','train',result),result)
+
+    def test_seventy_thousand_step_endpoint_trains_reloads_and_renders_at_that_endpoint(self):
+        from vipe_benchmark.final_render_workers import train, render
+        from vipe_benchmark.final_render_pipeline import validate_worker_result
+        self.use_endpoint(70000)
+        trained = train(self.request,'QF-B',self.parent,self.initializer,self.root/'long-training',FakeFreeTimeRuntime())
+        self.assertEqual(trained['completed_iterations'],70000)
+        self.assertEqual(Path(trained['checkpoint']['path']).name,'checkpoint-070000.pt')
+        self.assertEqual(read_json(trained['checkpoint']['path'])['optimizer_steps'],70000)
+        self.assertEqual(validate_worker_result(self.request,'QF-B','train',trained),trained)
+        rendered = render(self.request,'QF-B',file_record(self.root/'long-training/result.json'),self.initializer,
+            self.root/'long-render',FakeFreeTimeRuntime())
+        self.assertEqual(rendered['iteration'],70000)
+        self.assertEqual(read_json(rendered['reload_validation']['path'])['iteration'],70000)
+        self.assertEqual(len(rendered['rendered_frames']),200)
+
+    def test_long_endpoint_deadline_is_its_train_ceiling_not_the_5000_step_one(self):
+        from vipe_benchmark.final_render_workers import train
+        self.use_endpoint(70000)
+        ticks = iter(range(0,10**9,1))
+        clock = lambda: next(ticks)*.1
+        # 70k updates at 0.1 s per clock read far exceed 3,600 s but fit 14,400 s.
+        result = train(self.request,'QF-B',self.parent,self.initializer,self.root/'long-clock',FakeFreeTimeRuntime(),clock=clock)
+        self.assertGreater(result['elapsed_seconds'],3600)
+        self.assertLess(result['elapsed_seconds'],14400)
 
     def test_training_publishes_measured_checkpoint_save_time(self):
         from vipe_benchmark.final_render_workers import train

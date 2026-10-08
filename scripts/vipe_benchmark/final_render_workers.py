@@ -15,7 +15,7 @@ from .extended_final_render_contract import parse_request, validate_scene_bindin
 from .files import file_record, object_hash, read_json, safe_path, verify_record, write_json
 from .final_render_adapter import prepare_model_input
 from .final_render_pipeline import validate_worker_result
-from .final_render_contract import PHASES
+from .final_render_contract import phase_seconds
 
 _RESULT_RESERVE = 2**20
 
@@ -88,6 +88,7 @@ class _Budget:
         self.actual = request['record_kind'] == 'actual'
         _require(type(start) in (float,int) and math.isfinite(start), 'finite monotonic clock required')
         self.start = self.last = start
+        self.deadline = phase_seconds(request,phase)
         self.usage = dict(peak_device_bytes=0,cpu_workers_used=0)
         self.completed_iterations = self.rendered_frames = 0
         self.cleanup_confirmed = False
@@ -97,7 +98,7 @@ class _Budget:
         _require(type(now) in (float,int) and math.isfinite(now) and now >= self.last,
             'finite nondecreasing monotonic clock required')
         self.last = now
-        if now-self.start+reserve >= PHASES[self.phase][1]:
+        if now-self.start+reserve >= self.deadline:
             raise RuntimeError('phase deadline reserve exhausted')
 
     def artifacts(self):
@@ -219,7 +220,8 @@ def train(request, arm, parent, initializer, output, runtime, *, clock=time.mono
         budget.check(150.)
         budget.resources(runtime)
         runtime.prepare_training(copy.deepcopy(request),arm,data,copy.deepcopy(receipt),copy.deepcopy(provenance))
-        for iteration in range(5000):
+        endpoint = request['iterations']
+        for iteration in range(endpoint):
             budget.check(150.)
             budget.resources(runtime)
             metrics = runtime.training_step(iteration)
@@ -228,21 +230,21 @@ def train(request, arm, parent, initializer, output, runtime, *, clock=time.mono
             budget.completed_iterations = iteration+1
             budget.resources(runtime)
         budget.check(150.)
-        checkpoint = output/'checkpoint-005000.pt'
+        checkpoint = output/f'checkpoint-{endpoint:06d}.pt'
         # Measured for native qualification: save, metadata reload and hashing all
         # run inside the 150 s publication reserve checked above.
         saving = time.monotonic()
-        runtime.save_checkpoint(checkpoint,5000)
+        runtime.save_checkpoint(checkpoint,endpoint)
         metadata = runtime.checkpoint_metadata(checkpoint)
         _require(type(metadata.get('iteration')) is int and
-            metadata == dict(iteration=5000,provenance=provenance),
+            metadata == dict(iteration=endpoint,provenance=provenance),
             'checkpoint endpoint/provenance differs')
         artifact = file_record(checkpoint)
         save_seconds = time.monotonic()-saving
         write_json(output/'checkpoint-timing.json',dict(schema='plan069-final-render-checkpoint-timing/v1',
             checkpoint=artifact,save_seconds=save_seconds))
         budget.resources(runtime)
-    return _publish(request,arm,parent,budget,dict(completed_iterations=5000,checkpoint=artifact))
+    return _publish(request,arm,parent,budget,dict(completed_iterations=endpoint,checkpoint=artifact))
 
 
 def render(request, arm, parent, initializer, output, runtime, *, clock=time.monotonic, invocation_record=None):
@@ -261,22 +263,23 @@ def render(request, arm, parent, initializer, output, runtime, *, clock=time.mon
     with _managed_runtime(runtime,budget,arm):
         budget.check(150.)
         budget.resources(runtime)
+        endpoint = request['iterations']
         restored = output/'restored-checkpoint.pt'
         reload = runtime.reload_checkpoint(copy.deepcopy(checkpoint),copy.deepcopy(request),arm,data,
             copy.deepcopy(receipt),copy.deepcopy(provenance),restored)
-        _require(type(reload.get('iteration')) is int and reload['iteration'] == 5000 and
+        _require(type(reload.get('iteration')) is int and reload['iteration'] == endpoint and
             reload.get('provenance') == provenance and reload.get('restored_state_equal') is True,
             'exact native checkpoint restoration differs')
         restored_record = file_record(restored)
         restored_metadata = runtime.checkpoint_metadata(restored_record['path'])
         _require(type(restored_metadata.get('iteration')) is int and
-            restored_metadata == dict(iteration=5000,provenance=provenance),
+            restored_metadata == dict(iteration=endpoint,provenance=provenance),
             'published restored snapshot differs from endpoint')
-        budget.completed_iterations = 5000
+        budget.completed_iterations = endpoint
         _require(verify_record(checkpoint) == checkpoint, 'consumed checkpoint changed during reload')
         reload_path = output/'reload-validation.json'
         reload_receipt = dict(schema='plan069-final-render-actual-reload/v1' if budget.actual else 'plan069-final-render-fixture-reload/v1',
-            record_kind=request['record_kind'],status='passed',checkpoint=checkpoint,iteration=5000,request_sha256=object_hash(request),arm=arm)
+            record_kind=request['record_kind'],status='passed',checkpoint=checkpoint,iteration=endpoint,request_sha256=object_hash(request),arm=arm)
         if budget.actual:
             reload_receipt.update(restored_state_equal=True,restored_checkpoint=restored_record)
         write_json(reload_path,reload_receipt)
@@ -297,4 +300,4 @@ def render(request, arm, parent, initializer, output, runtime, *, clock=time.mon
                 budget.rendered_frames = len(frames)
         budget.resources(runtime)
     return _publish(request,arm,parent,budget,dict(checkpoint=checkpoint,reload_validation=reload_record,
-        iteration=5000,render_settings=request['render'],rendered_frames=frames),proofs=(restored_record,reload_record))
+        iteration=endpoint,render_settings=request['render'],rendered_frames=frames),proofs=(restored_record,reload_record))

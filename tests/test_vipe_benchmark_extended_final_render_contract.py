@@ -439,3 +439,93 @@ class AdmissionTests(unittest.TestCase):
         value['budget_amendment']['authorization']=self.record('forged-user-authorization',document)
         with self.assertRaisesRegex(ValueError,'recorded user'):
             validate_budget_configuration(value,amended)
+
+    def extend_long_training(self, gpu=165600, **changes):
+        from vipe_benchmark.files import object_hash
+        self.extend_artifact_cap()
+        bound=self.request['budget_amendment']
+        previous=bound['artifact_extension']
+        amendment=dict(schema='plan069-final-render-cap-amendment/v2',status='REVIEW',base_amendment=bound['amendment'],
+            previous_extension=previous,new_download_gib_limit=110,new_artifact_disk_gib_limit=380,
+            new_gpu_total_seconds_limit=gpu)
+        amendment.update(changes)
+        record=self.record('long-extension-'+str(len(list(self.base.root.glob('long-extension-*')))),amendment)
+        authorization=self.record('long-authorization-'+str(len(list(self.base.root.glob('long-authorization-*')))),
+            dict(schema='plan069-final-render-cap-authorization/v1',status='DO',record_kind='fixture',amendment=record,
+                 approval=dict(status='approved',amendment_sha256=object_hash(amendment))))
+        bound['artifact_extension']=dict(amendment=record,authorization=authorization)
+        self.ledger.config=dict(self.ledger.config,new_artifact_disk_gib_limit=380,gpu_total_seconds_limit=gpu)
+        self.rebind_proposal()
+
+    def long_endpoint(self):
+        from vipe_benchmark.final_render_contract import allocation_specs
+        self.request.update(iterations=70000,allocations=allocation_specs(self.request['id'],70000))
+        self.rebind_proposal()
+
+    def test_long_training_extension_raises_artifact_and_gpu_caps_over_the_v1_chain(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review, amended_configuration
+        self.extend_long_training();self.long_endpoint()
+        self.assertEqual(amended_configuration(self.request),self.ledger.config)
+        self.assertFalse(admit_review(self.request,self.ledger,dict(self.storage,artifact_bytes=320*2**30)).execution_authorized)
+        with self.assertRaisesRegex(ValueError,'artifact cumulative ceiling exhausted'):
+            admit_review(self.request,self.ledger,dict(self.storage,artifact_bytes=340*2**30))
+
+    def test_long_training_extension_rejects_other_caps_unbounded_gpu_and_a_broken_chain(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        for gpu, changes, message in (
+                (165600,dict(new_artifact_disk_gib_limit=400),'artifact extension'),
+                (93600,{},'GPU limit raise'),
+                (10**6,{},'GPU limit raise'),
+                (165600,dict(previous_extension=None),'chain the exact v1')):
+            with self.subTest(changes=changes,gpu=gpu):
+                self.setUp()
+                self.extend_long_training(gpu,**changes);self.long_endpoint()
+                with self.assertRaisesRegex(ValueError,message):
+                    admit_review(self.request,self.ledger,self.storage)
+        self.setUp()
+        self.extend_long_training();self.long_endpoint()
+        self.ledger.config=dict(self.ledger.config,gpu_total_seconds_limit=165601)
+        with self.assertRaisesRegex(ValueError,'outside exact approved budget caps'):
+            admit_review(self.request,self.ledger,self.storage)
+
+    def test_long_training_extension_covers_only_the_70k_endpoint(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        self.extend_long_training()
+        with self.assertRaisesRegex(ValueError,'only the 70k'):
+            admit_review(self.request,self.ledger,self.storage)
+
+    def test_actual_long_training_extension_requires_its_pinned_user_authorization(self):
+        from vipe_benchmark import extended_final_render_contract as contract
+        self.extend_long_training();self.long_endpoint()
+        actual=dict(self.request,record_kind='actual')
+        with self.assertRaisesRegex(ValueError,'not the recorded user authorization'):
+            contract._artifact_extension(actual,actual['budget_amendment'])
+
+    def test_seventy_thousand_step_endpoint_scales_only_the_train_ceiling(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review
+        from vipe_benchmark.final_render_contract import allocation_specs
+        self.extend_long_training();self.long_endpoint()
+        result=admit_review(self.request,self.ledger,self.storage)
+        self.assertEqual((result.gpu_seconds,result.cpu_seconds),(5*(5400+14400+900),5400))
+        trains={a['seconds'] for a in self.request['allocations'] if a['phase']=='train'}
+        self.assertEqual(trains,{14400})
+        for iterations, allocations in ((70000,allocation_specs('extended-001')),(20000,allocation_specs('extended-001'))):
+            with self.subTest(iterations=iterations):
+                self.request.update(iterations=iterations,allocations=allocations)
+                self.rebind_proposal()
+                with self.assertRaises(ValueError):
+                    admit_review(self.request,self.ledger,self.storage)
+
+    def test_actual_recorded_long_training_authorization_yields_the_approved_caps(self):
+        from vipe_benchmark.extended_final_render_contract import amended_configuration
+        from vipe_benchmark.depth_admission import BENCHMARK
+        from vipe_benchmark.files import file_record
+        root=Path(__file__).resolve().parents[1]
+        base=self.read(file_record(root/'docs/research/vipe-alternatives/plan031-execution/depth-approval-001.json'))['cap_amendment']
+        value=dict(record_kind='actual',iterations=70000,bindings={'config':file_record(BENCHMARK)},budget_amendment=dict(
+            amendment=base,authorization=file_record(root/'docs/research/vipe-alternatives/plan031-execution/depth-approval-001.json'),
+            artifact_extension=dict(
+                amendment=file_record(root/'docs/specs/plan031-execution/final-render-cap-amendment-review-002.json'),
+                authorization=file_record(root/'docs/research/vipe-alternatives/plan031-execution/final-render-cap-approval-002.json'))))
+        config=amended_configuration(value)
+        self.assertEqual((config['new_artifact_disk_gib_limit'],config['gpu_total_seconds_limit'],config['new_download_gib_limit']),(380,172800,110))

@@ -8,7 +8,7 @@ import math
 
 from .extended_final_render_contract import parse_request
 from .files import object_hash, read_json, verify_record, safe_path
-from .final_render_contract import PHASES
+from .final_render_contract import PHASES, phase_seconds
 
 
 def _require(condition, message):
@@ -37,7 +37,7 @@ def _validate_publication(request, arm, phase, result):
         completion.get('cleanup_confirmed') is True and completion.get('execution_authorized') is False and
         completion.get('native_adapter_qualified') is False and
         type(elapsed) in (float,int) and math.isfinite(elapsed) and
-        result['elapsed_seconds'] <= elapsed < PHASES[phase][1] and
+        result['elapsed_seconds'] <= elapsed < phase_seconds(request,phase) and
         completion.get('artifact_bytes') == result['artifact_bytes'],
         'bound successful worker publication completion required')
     published = completion.get('result')
@@ -73,7 +73,7 @@ def validate_worker_result(request, arm, phase, result):
     _validate_publication(request,arm,phase,result)
     elapsed = result.get('elapsed_seconds')
     _require(type(elapsed) in (int, float) and math.isfinite(elapsed) and
-        0 <= elapsed <= PHASES[phase][1], 'worker exceeded finite phase deadline')
+        0 <= elapsed <= phase_seconds(request,phase), 'worker exceeded finite phase deadline')
     for field, limit in [('peak_device_bytes', request['device_bytes_limit']),
             ('artifact_bytes', request['artifact_bytes_limit']), ('cpu_workers_used', request['cpu_workers_limit'])]:
         _require(type(result.get(field)) is int and 0 <= result[field] <= limit, 'invalid/excessive '+field)
@@ -103,19 +103,19 @@ def validate_worker_result(request, arm, phase, result):
         return copy.deepcopy(result)
     _require(bool(artifacts), 'completed worker lacks immutable artifacts')
     if phase == 'train':
-        _require(type(result.get('completed_iterations')) is int and result['completed_iterations'] == 5000 and
+        _require(type(result.get('completed_iterations')) is int and result['completed_iterations'] == request['iterations'] and
             result.get('checkpoint') in artifacts, 'exact training endpoint and published checkpoint required')
     if phase == 'render':
         checkpoint = result.get('checkpoint')
-        _require(type(result.get('iteration')) is int and result['iteration'] == 5000 and
-            checkpoint == previous.get('checkpoint') and previous.get('completed_iterations') == 5000,
-            'render must reload exact 5000-iteration training checkpoint')
+        _require(type(result.get('iteration')) is int and result['iteration'] == request['iterations'] and
+            checkpoint == previous.get('checkpoint') and previous.get('completed_iterations') == request['iterations'],
+            'render must reload the exact endpoint training checkpoint')
         _require(type(checkpoint) is dict and set(checkpoint) == {'path', 'sha256', 'bytes'} and
             verify_record(checkpoint) == checkpoint, 'consumed training checkpoint bytes changed')
         reload = _bound(result.get('reload_validation'))
         _require(result['reload_validation'] in artifacts and reload == dict(
             schema='plan069-final-render-fixture-reload/v1', record_kind='fixture', status='passed',
-            checkpoint=checkpoint, iteration=5000, request_sha256=object_hash(request), arm=arm),
+            checkpoint=checkpoint, iteration=request['iterations'], request_sha256=object_hash(request), arm=arm),
             'exact fixture checkpoint reload validation required')
         _require(result.get('render_settings') == request['render'], 'render settings differ')
         frames = result.get('rendered_frames')

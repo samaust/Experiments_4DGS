@@ -11,7 +11,7 @@ import numpy as np
 from PIL import Image
 
 from .files import object_hash, read_json, safe_path, verify_record
-from .final_render_contract import PHASES
+from .final_render_contract import PHASES, phase_seconds
 from .extended_final_render_contract import parse_request, validate_scene_bindings
 from .final_render_adapter import prepare_model_input
 
@@ -59,7 +59,7 @@ def validate_actual_worker_result(request, arm, phase, result, *, published=True
         fields.add('terminal_publication')
     _require(set(result) == fields, 'exact actual result fields required')
     elapsed = result['elapsed_seconds']
-    _require(type(elapsed) in (float,int) and math.isfinite(elapsed) and 0 <= elapsed < PHASES[phase][1],
+    _require(type(elapsed) in (float,int) and math.isfinite(elapsed) and 0 <= elapsed < phase_seconds(request,phase),
         'actual worker exceeded phase deadline')
     for name,limit in [('peak_device_bytes',request['device_bytes_limit']),
             ('artifact_bytes',request['artifact_bytes_limit']),('cpu_workers_used',request['cpu_workers_limit'])]:
@@ -117,18 +117,18 @@ def validate_actual_worker_result(request, arm, phase, result, *, published=True
             all(np.array_equal(arrays[name],derived[name]) for name in arrays),
             'actual initializer differs from full geometry assembly')
     elif phase == 'train':
-        _require(type(result['completed_iterations']) is int and result['completed_iterations'] == 5000 and
+        _require(type(result['completed_iterations']) is int and result['completed_iterations'] == request['iterations'] and
             result['checkpoint'] in artifacts and invocation.get('initializer') == parent['initializer'],
-            'exact trained initializer and 5000-step endpoint required')
+            'exact trained initializer and request endpoint required')
     else:
-        _require(type(result['iteration']) is int and result['iteration'] == 5000 and
-            result['checkpoint'] == parent['checkpoint'] and parent['completed_iterations'] == 5000 and
+        _require(type(result['iteration']) is int and result['iteration'] == request['iterations'] and
+            result['checkpoint'] == parent['checkpoint'] and parent['completed_iterations'] == request['iterations'] and
             verify_record(result['checkpoint']) == result['checkpoint'] and
             result['render_settings'] == request['render'], 'exact reloaded checkpoint/settings required')
         reload = _bound(result['reload_validation'])
         _require(result['reload_validation'] in artifacts and reload.get('schema') == 'plan069-final-render-actual-reload/v1' and
             reload.get('record_kind') == 'actual' and reload.get('status') == 'passed' and
-            reload.get('checkpoint') == result['checkpoint'] and type(reload.get('iteration')) is int and reload.get('iteration') == 5000 and
+            reload.get('checkpoint') == result['checkpoint'] and type(reload.get('iteration')) is int and reload.get('iteration') == request['iterations'] and
             reload.get('request_sha256') == object_hash(request) and reload.get('arm') == arm and
             reload.get('restored_state_equal') is True and reload.get('restored_checkpoint') in artifacts,
             'full actual checkpoint restoration evidence required')
@@ -153,7 +153,7 @@ def validate_actual_worker_result(request, arm, phase, result, *, published=True
             completion.get('request_sha256') == object_hash(request) and completion.get('cleanup_confirmed') is True and
             completion.get('execution_authorized') is True and completion.get('native_adapter_qualified') is True and
             completion.get('artifact_bytes') == result['artifact_bytes'] and type(actual) in (float,int) and
-            math.isfinite(actual) and elapsed <= actual < PHASES[phase][1] and
+            math.isfinite(actual) and elapsed <= actual < phase_seconds(request,phase) and
             completion.get('result',{}).get('path') == str(output/'result.json') and
             _bound(completion['result']) == result, 'bound publication-inclusive actual completion required')
     return copy.deepcopy(result)
