@@ -1,0 +1,14 @@
+{
+  "schema": "plan069-host-library-drift-policy/v1",
+  "status": "approved",
+  "record_kind": "actual",
+  "decided_on": "2026-10-08",
+  "trigger": "unattended-upgrades 2026-10-08 06:23 changed /usr/lib/x86_64-linux-gnu/libpng16.so.16.43.0 (libpng16-16t64 1.6.43-5ubuntu0.6 -> 0ubuntu0.7), pinned by the D2/D7/D11 installed closures, after host-library-drift-001.",
+  "rule": "depth_review.verify_installed accepts a changed installed-closure file only if depth_review.packaged_upgrade holds: the file resolves under /usr/lib, dpkg-query names exactly one owning package, the current bytes match that package's installed md5sums, and an apt history Upgrade line names the package. Every other changed file still fails. The selected D8 has no installed-dependency closure; only non-selected D2/D7/D11 closures pin system libraries.",
+  "supersedes_scope_of": "host-library-drift-001.json (exact identities retained)",
+  "approval": {
+    "approved_by": "operator, AskUserQuestion answer \"Accept upgraded system libs\"",
+    "approved_on": "2026-10-08"
+  },
+  "recorded_by": "Claude, transcribing the user decision"
+}

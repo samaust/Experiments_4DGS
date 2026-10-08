@@ -338,3 +338,45 @@ class HostLibraryDriftTests(unittest.TestCase):
     def test_actual_drift_entries_match_the_installed_libraries(self):
         for (path,_,_),(sha256,size) in depth_review.HOST_LIBRARY_DRIFT.items():
             self.assertEqual(file_record(path),dict(path=path,sha256=sha256,bytes=size))
+
+
+@unittest.skipUnless(Path('/usr/lib/x86_64-linux-gnu/libc.so.6').is_file() and Path('/var/lib/dpkg/info').is_dir(),
+                     'Debian/Ubuntu host library required')
+class PackagedUpgradeTests(unittest.TestCase):
+    LIB = Path('/usr/lib/x86_64-linux-gnu/libc.so.6').resolve()
+
+    def setUp(self):
+        import hashlib
+        import subprocess
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        owner = subprocess.run(['dpkg-query', '-S', str(self.LIB)], capture_output=True, text=True, check=True)
+        self.package = owner.stdout.strip().rsplit(': ', 1)[0]
+        self.md5 = hashlib.md5(self.LIB.read_bytes()).hexdigest()
+        (self.root/'info').mkdir(); (self.root/'apt').mkdir()
+
+    def check(self, md5, history):
+        (self.root/'info'/(self.package+'.md5sums')).write_text(md5+'  '+str(self.LIB).lstrip('/')+'\n')
+        (self.root/'apt'/'history.log').write_text(history)
+        with patch.object(depth_review,'DPKG_INFO',self.root/'info'), patch.object(depth_review,'APT_HISTORY',self.root/'apt'):
+            return depth_review.packaged_upgrade(str(self.LIB))
+
+    def test_requires_shipped_bytes_and_a_recorded_upgrade(self):
+        upgrade = 'Start-Date: x\nUpgrade: '+self.package+' (1, 2)\n'
+        self.assertTrue(self.check(self.md5, upgrade))
+        self.assertFalse(self.check('0'*32, upgrade))
+        self.assertFalse(self.check(self.md5, 'Install: '+self.package+' (1)\n'))
+
+    def test_non_system_paths_are_never_accepted(self):
+        path = self.root/'lib.so'; path.write_bytes(b'x')
+        self.assertFalse(depth_review.packaged_upgrade(str(path)))
+        self.assertFalse(depth_review.packaged_upgrade('/etc/hostname'))
+
+    def test_changed_closure_file_passes_only_through_the_packaged_rule(self):
+        record = dict(path=str(self.LIB), sha256='0'*64, bytes=1)
+        with patch.object(depth_review,'packaged_upgrade',return_value=False):
+            with self.assertRaisesRegex(ValueError,'changed file'):
+                depth_review.verify_installed(record)
+        with patch.object(depth_review,'packaged_upgrade',return_value=True):
+            self.assertEqual(depth_review.verify_installed(record),record)
