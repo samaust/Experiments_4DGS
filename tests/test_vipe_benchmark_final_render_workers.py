@@ -401,3 +401,31 @@ class WorkerTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class CrossingRepairPolicyTests(unittest.TestCase):
+    MANIFEST = dict(training_keys=[[c,f] for c in range(34) if c not in (0,10,20,30) for f in range(50) if f not in range(20,25)],
+                    cameras=[dict(id=str(c)) for c in range(34)])
+
+    def test_holdout_keeps_manifest_keys_and_all_times_adds_the_crossing_window(self):
+        from vipe_benchmark.final_render_native import training_keys
+        holdout = training_keys({}, self.MANIFEST)
+        self.assertEqual(len(holdout),30*45)
+        self.assertNotIn(('1',22),holdout)
+        repaired = training_keys(dict(training_policy='all-times'), self.MANIFEST)
+        self.assertEqual(len(repaired),1500)
+        self.assertIn(('1',22),repaired)
+        self.assertFalse({('0',22),('10',3),('20',0),('30',49)} & set(repaired))
+
+    def test_repaired_lifetime_resolves_the_frozen_initializer_duration(self):
+        from vipe_benchmark.final_render_native import duration_target
+        data = dict(durations=np.full((5,1),.2,np.float32))
+        self.assertIsNone(duration_target({}, data))
+        self.assertEqual(duration_target(dict(lifetime_policy='repaired'), data),.2)
+        with self.assertRaisesRegex(ValueError,'duration'):
+            duration_target(dict(lifetime_policy='repaired'), dict(durations=np.array([[.2],[.3]],np.float32)))
+
+    def test_runtime_inventory_pins_the_duration_repair_source(self):
+        from vipe_benchmark.final_render_inventory import required_sources
+        names = {Path(r['path']).name for r in required_sources('/home/auss/git_repos/samaust/Experiments_4DGS/.local/FreeTimeGsVanilla')}
+        self.assertIn('basketball_crossing_repair.py', names)

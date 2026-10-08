@@ -51,6 +51,27 @@ def prepare_camera(request, camera, frame):
         source_frame=next(f for f in entry['frames'] if f['frame_id'] == frame))
 
 
+REPAIRED_DURATION = .2
+
+
+def training_keys(request, manifest):
+    """Holdout keys from the manifest, or every frame of the training rig (all-times)."""
+    if request.get('training_policy') == 'all-times':
+        from .final_render_contract import TRAINING_CAMERAS
+        return [(str(camera),frame) for camera in TRAINING_CAMERAS for frame in range(50)]
+    return [(str(c),f) for c,f in manifest['training_keys']]
+
+
+def duration_target(request, data):
+    """The repaired duration target: the frozen initializer's uniform 0.2 width."""
+    if request.get('lifetime_policy') != 'repaired':
+        return None
+    durations = np.asarray(data['durations'])
+    if durations.size == 0 or not np.allclose(durations,REPAIRED_DURATION,rtol=0,atol=1e-7):
+        raise ValueError('repaired lifetime requires the uniform 0.2 initializer duration')
+    return REPAIRED_DURATION
+
+
 class NativeFreeTimeRuntime:
     """Audited native model/update/save/restore/render binding; not qualified yet.
 
@@ -84,6 +105,8 @@ authority is supplied by this module. Never call GPU methods in CPU qualificatio
         self.manifest = read_json(self.request['bindings']['scene_manifest']['path'])
         self.cameras = {c:prepare_camera(self.request,c,0) for c in range(34)}
         self.frames = {(int(c['id']),f['frame_id']):f for c in self.manifest['cameras'] for f in c['frames']}
+        self.keys = training_keys(self.request,self.manifest)
+        self.key_set = set(self.keys)
         self.usage = dict(peak_device_bytes=0,cpu_workers_used=0)
 
     def _load(self, request, arm, data, receipt, provenance):
@@ -139,12 +162,21 @@ authority is supplied by this module. Never call GPU methods in CPU qualificatio
             scene_scale=self.scene_scale)
         if read_json(self.inventory['resolved_config']['path']) != configuration:
             raise ValueError('resolved native configuration differs from frozen recipe')
+        # Repair after the frozen-recipe check: the -1 sentinel must not reach the
+        # duration penalty (docs/multicamera-freetimegs-workflow.md, step 5.5).
+        self.duration_target = duration_target(request,data)
+        if self.duration_target is not None:
+            self.cfg.init_duration = self.duration_target
         self.provenance = copy.deepcopy(provenance)
         self.is_fresh = False
         return torch
 
     def training_keys(self):
-        return [(str(c),f) for c,f in self.manifest['training_keys']]
+        return list(self.keys)
+
+    def _project_durations(self):
+        from basketball_crossing_repair import project_duration_parameter_
+        return project_duration_parameter_(self.model.splats['durations'],self.model.optimizers['durations'])
 
     def camera(self, camera, frame, *, load_image=False):
         from types import SimpleNamespace
@@ -186,15 +218,19 @@ authority is supplied by this module. Never call GPU methods in CPU qualificatio
             frames={(str(c),f):row for (c,f),row in self.frames.items()})
         self.sampler = ManifestBalancedSampler(sampler_scene,1,seed=0)
         self.iteration = 0
+        if self.duration_target is not None:
+            print('initial duration projection', self._project_durations(), flush=True)
 
     def training_step(self, iteration):
         if self.closed or self.model is None or type(iteration) is not int or iteration != self.iteration or iteration >= self.request['iterations']:
             raise ValueError('sequential native training update required')
         camera,frame = next(self.sampler)
-        if (camera,frame) not in self.training_keys():
+        if (camera,frame) not in self.key_set:
             raise ValueError('native sampler selected excluded observation')
         metrics = self.model.training_step(iteration,self.camera(int(camera),frame,load_image=True),self.model.schedulers)
         self.torch.cuda.synchronize()
+        if self.duration_target is not None:
+            metrics['duration_projection_changed'] = self._project_durations()['changed_entries']
         self.iteration += 1
         return {key:float(value.detach()) if isinstance(value,self.torch.Tensor) else value for key,value in metrics.items()}
 

@@ -72,3 +72,45 @@ limit, which leaves 2 GiB for desktop display memory, and runtime inventory
   2,006 s and the initializer 176 s. Training stopped at its deadline reserve
   after 60,074 updates and 14,250 s (ledger 1115; cleanup confirmed; no
   checkpoint).
+
+## Crossing repair (2026-10-08)
+
+The 70k QUALIFY render (review-004) reproduced the known crossing artifact:
+ghosted, fragmented players at frames 20–24, worst at frame 22
+(`docs/experiments/basketball-dense-training/crossing-investigation-001`). The
+final-render runtime still used the two documented causes:
+
+- **Holdout training keys.** Frames 20–24 had no training observation in any
+  camera.
+- **The unrepaired `init_duration = -1` sentinel.** It reached the duration
+  penalty and pushed temporal widths toward zero.
+
+The user stopped production (QF-B train ended failed, cleanly, at ledger 1141)
+and chose to rerun with the documented repair
+(`docs/multicamera-freetimegs-workflow.md`, step 5.5):
+
+- Requests may carry `training_policy: all-times` and `lifetime_policy:
+  repaired`. The fields come as a pair; absent means the historical behavior.
+- `final_render_native.training_keys` then uses all 50 frames of the 30
+  training cameras (1,500 keys). Held-out cameras stay excluded.
+- `duration_target` resolves the frozen initializer's uniform 0.2 width.
+  `cfg.init_duration` is set to that width after the frozen-recipe check.
+  `basketball_crossing_repair.project_duration_parameter_` (0.02 floor) runs
+  once before training and after every update.
+- Runtime inventory `plan069-final-render-runtime-003` pins the repair source.
+
+Frames 20–24 are no longer an unseen time interval. Held-out cameras 0, 10, 20
+and 30 remain the evaluation views.
+
+The crossing study measured 0.128–0.129 s/update both with and without the
+repair, so the 25,200 s train ceiling stands. In a single process, updates slow
+from about 0.11 to 0.30 s between 5k and 50k. A fresh process resumed at 50k
+runs at 0.128 s, so the slowdown builds up within the process rather than
+coming from the model state. It is not yet diagnosed.
+
+Requests: `plan069-final-render-review-005`, with production
+`plan069-final-render-D8-005` and QUALIFY
+`plan069-final-render-D8-qualification-004`. Authority:
+`plan069-final-render-authority-004`. Caps: v2 amendment `-review-004` (GPU
+288,000 s, CPU preparation 66,000 s, artifacts 380 GiB) with pinned approval
+`final-render-cap-approval-004.json`.

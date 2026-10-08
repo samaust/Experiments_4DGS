@@ -23,7 +23,7 @@ def required_sources(checkout):
     scripts = Path(__file__).resolve().parents[1]
     names = ('freetimegs_training.py','freetimegs_model.py','freetimegs_source.py',
         'freetimegs_checkpoint.py','atgs_sampler.py','training_rng.py','stg_checkpoint.py',
-        'offline-python.py','basketball_study_resume_check.py')
+        'offline-python.py','basketball_study_resume_check.py','basketball_crossing_repair.py')
     paths = [scripts/name for name in names]
     paths += [Path(__file__).resolve(), scripts/'vipe_benchmark/final_render_native.py',
         scripts/'vipe_benchmark/final_render_adapter.py',

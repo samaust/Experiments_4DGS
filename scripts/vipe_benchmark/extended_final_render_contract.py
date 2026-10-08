@@ -14,6 +14,10 @@ from .final_render_contract import (
 )
 
 SCHEMA = 'plan069-final-render-request/v1'
+# The documented crossing repair (docs/multicamera-freetimegs-workflow.md):
+# train on all 50 frames and floor learned temporal widths. Absent = historical
+# holdout/original behavior of requests 001-004.
+POLICIES = dict(training_policy='all-times', lifetime_policy='repaired')
 
 
 def _require(condition, message):
@@ -41,6 +45,9 @@ def parse_request(value):
     _require(value.get('compositions') == compositions(candidate), 'same D* and fixed isolated compositions required')
     _require(type(value.get('seed')) is int and value['seed'] == 0 and type(value.get('iterations')) is int and
              value['iterations'] in ENDPOINTS, 'equal seed and a supported (5000/70000) training endpoint required')
+    present = [name for name in POLICIES if name in value]
+    _require(not present or {name: value.get(name) for name in POLICIES} == POLICIES,
+             'training/lifetime policy must be absent or exactly all-times/repaired')
     _require(value.get('preset') == 'default_keyframe' and value.get('preset_source_sha256') == PRESET_SOURCE,
              'frozen preset required')
     _require(value.get('geometry') == dict(keyframes=list(KEYFRAMES), samples_per_edge=5000, neighbors_per_reference=3),
@@ -374,9 +381,10 @@ def amended_configuration(value):
 # The user-approved final-render cap extensions, by amendment schema:
 # v1 210 -> 260 GiB artifacts (AskUserQuestion, 2026-10-05);
 # v2 260 -> 380 GiB artifacts and the GPU limit for 70k-step training (2026-10-07;
-# the GPU limit was raised again to 252,000 s on 2026-10-08, which supersedes it).
+# raised again on 2026-10-08 to 252,000 GPU-s, then for the crossing repair rerun to
+# 288,000 GPU-s and 66,000 CPU-s; each pin supersedes the previous one).
 ARTIFACT_EXTENSION_AUTHORIZATION = dict(sha256='5a6db07ea5918ecc1895e71adf59efb304093b8193f724b2e7251b16be2b7aa8', bytes=762)
-LONG_TRAINING_EXTENSION_AUTHORIZATION = dict(sha256='fb580a7bb04adac730fe431bfa795ddd231d243bca49f04cac7c920d92fe1efb', bytes=1102)
+LONG_TRAINING_EXTENSION_AUTHORIZATION = dict(sha256='e0c5ba3953fb68c2e317142fac948e48bcf82dcdcbf88cea61043c5614a76011', bytes=1212)
 LONG_TRAINING_ARTIFACT_GIB = 380
 
 
@@ -410,9 +418,14 @@ def _artifact_extension(value, bound):
                  'v2 artifact extension must chain the exact v1 extension')
         baseline = _bound(value['bindings']['config'])
         gpu = amendment.get('new_gpu_total_seconds_limit')
-        _require(type(gpu) is int and baseline['gpu_total_seconds_limit'] < gpu <= 3*baseline['gpu_total_seconds_limit'],
+        _require(type(gpu) is int and baseline['gpu_total_seconds_limit'] < gpu <= 4*baseline['gpu_total_seconds_limit'],
                  'v2 artifact extension requires a bounded GPU limit raise')
         caps['gpu_total_seconds_limit'] = gpu
+        if 'new_cpu_prepare_score_report_seconds_limit' in amendment:
+            cpu = amendment['new_cpu_prepare_score_report_seconds_limit']
+            limit = baseline['cpu_prepare_score_report_seconds_limit']
+            _require(type(cpu) is int and limit < cpu <= limit*3//2, 'v2 artifact extension requires a bounded CPU limit raise')
+            caps['cpu_prepare_score_report_seconds_limit'] = cpu
     _require(authorization.get('schema') == 'plan069-final-render-cap-authorization/v1' and authorization.get('status') == 'DO' and
              authorization.get('amendment') == extension['amendment'] and
              authorization.get('approval') == dict(status='approved', amendment_sha256=object_hash(amendment)),

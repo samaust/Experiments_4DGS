@@ -525,7 +525,37 @@ class AdmissionTests(unittest.TestCase):
         value=dict(record_kind='actual',iterations=70000,bindings={'config':file_record(BENCHMARK)},budget_amendment=dict(
             amendment=base,authorization=file_record(root/'docs/research/vipe-alternatives/plan031-execution/depth-approval-001.json'),
             artifact_extension=dict(
-                amendment=file_record(root/'docs/specs/plan031-execution/final-render-cap-amendment-review-003.json'),
-                authorization=file_record(root/'docs/research/vipe-alternatives/plan031-execution/final-render-cap-approval-003.json'))))
+                amendment=file_record(root/'docs/specs/plan031-execution/final-render-cap-amendment-review-004.json'),
+                authorization=file_record(root/'docs/research/vipe-alternatives/plan031-execution/final-render-cap-approval-004.json'))))
         config=amended_configuration(value)
-        self.assertEqual((config['new_artifact_disk_gib_limit'],config['gpu_total_seconds_limit'],config['new_download_gib_limit']),(380,252000,110))
+        self.assertEqual((config['new_artifact_disk_gib_limit'],config['gpu_total_seconds_limit'],config['new_download_gib_limit'],config['cpu_prepare_score_report_seconds_limit']),(380,288000,110,66000))
+
+    def test_training_and_lifetime_policies_are_explicit_pairs(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review, parse_request
+        self.assertNotIn('training_policy', parse_request(self.request))
+        self.request.update(training_policy='all-times', lifetime_policy='repaired')
+        self.rebind_proposal()
+        self.assertFalse(admit_review(self.request,self.ledger,self.storage).execution_authorized)
+        for change in (dict(training_policy='holdout',lifetime_policy='repaired'),
+                       dict(training_policy='all-times',lifetime_policy='original'),
+                       dict(training_policy='everything',lifetime_policy='repaired')):
+            with self.subTest(change=change):
+                request = dict(self.request,**change)
+                with self.assertRaisesRegex(ValueError,'policy'):
+                    parse_request(request)
+        partial = {k:v for k,v in self.request.items() if k != 'lifetime_policy'}
+        with self.assertRaisesRegex(ValueError,'policy'):
+            parse_request(partial)
+
+    def test_long_training_extension_may_raise_the_cpu_limit_within_bounds(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review, amended_configuration
+        self.extend_long_training(288000,new_cpu_prepare_score_report_seconds_limit=66000);self.long_endpoint()
+        self.ledger.config=dict(self.ledger.config,cpu_prepare_score_report_seconds_limit=66000)
+        self.assertEqual(amended_configuration(self.request)['cpu_prepare_score_report_seconds_limit'],66000)
+        self.assertFalse(admit_review(self.request,self.ledger,self.storage).execution_authorized)
+        for cpu in (57600,10**6):
+            with self.subTest(cpu=cpu):
+                self.setUp()
+                self.extend_long_training(288000,new_cpu_prepare_score_report_seconds_limit=cpu);self.long_endpoint()
+                with self.assertRaisesRegex(ValueError,'CPU limit raise'):
+                    admit_review(self.request,self.ledger,self.storage)
