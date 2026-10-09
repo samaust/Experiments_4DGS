@@ -162,3 +162,12 @@ class ViewerLabelTests(unittest.TestCase):
         self.assertIn('(baseline)', labels['QF-B'])
         self.assertIn('trained for 70,000 steps on all 50 frames', html)
         self.assertNotIn('5,000-step', html)
+
+    def test_viewer_offers_deep_zoom_and_one_shared_pan_for_all_videos(self):
+        self.base.build()
+        html = (self.base.root/'package'/'index.html').read_text()
+        for level in ('4', '8', '16'):
+            self.assertIn(f'<option>{level}</option>', html)
+        self.assertIn("grid.style.setProperty('--ox'", html)
+        self.assertNotIn("v.style.setProperty('--ox'", html)
+        self.assertIn('linkView(v)', html)

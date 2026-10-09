@@ -230,7 +230,9 @@ body{font-family:system-ui,sans-serif;margin:16px;background:#111;color:#eee}
 figure{margin:0;background:#000;overflow:hidden;position:relative}
 figcaption{font-size:14px;padding:6px 8px;background:#222;font-weight:600}
 .legend td{padding:2px 10px 2px 0;vertical-align:top}
-video{width:100%;display:block;transform-origin:var(--ox,50%) var(--oy,50%)}
+video{width:100%;display:block;transform-origin:var(--ox,50%) var(--oy,50%);cursor:grab}
+.grid.pixelated video{image-rendering:pixelated}
+.grid.dragging video{cursor:grabbing}
 .unavailable{padding:24px;color:#f99}
 textarea,input,select,button{font:inherit}
 textarea{width:100%;min-height:60px}
@@ -245,7 +247,11 @@ fieldset{margin:12px 0;border:1px solid #444}
  <button id="play">Play/Pause</button><button id="back">◀ frame</button><button id="next">frame ▶</button>
  <label>Frame <input id="frame" type="range" min="0" max="49" value="0"></label><span id="frameLabel">0</span>
  <label>Speed <select id="rate"><option>0.25</option><option>0.5</option><option selected>1</option></select></label>
- <label>Zoom <select id="zoom"><option>1</option><option>2</option><option>3</option></select></label>
+ <label>Zoom <select id="zoom"><option>1</option><option>1.5</option><option>2</option><option>3</option><option>4</option>
+ <option>6</option><option>8</option><option>12</option><option>16</option></select></label>
+ <label><input type="checkbox" id="pixelated"> Sharp pixels</label>
+ <button id="center">Recenter</button>
+ <span class="hint">Drag, click or scroll on any video: all videos pan and zoom together.</span>
 </div>
 <div class="grid" id="grid"></div>
 <h2>Review</h2><form id="form"></form>
@@ -274,9 +280,7 @@ function render() {
       const v = document.createElement('video');
       v.src = 'clips/' + c.clips[cameraSel.value].record.path.split('/').pop();
       v.muted = true; v.preload = 'auto'; v.playsInline = true; v.loop = true;
-      v.addEventListener('click', e => { const r = v.getBoundingClientRect();
-        v.style.setProperty('--ox', ((e.clientX - r.left) / r.width * 100) + '%');
-        v.style.setProperty('--oy', ((e.clientY - r.top) / r.height * 100) + '%'); });
+      linkView(v);
       fig.append(v); videos.push(v);
     }
     grid.append(fig);
@@ -287,6 +291,47 @@ function seek(f) {
   f = Math.max(0, Math.min(P.settings.frames.length - 1, f));
   document.getElementById('frame').value = f; document.getElementById('frameLabel').textContent = f;
   videos.forEach(v => { v.pause(); v.currentTime = (f + 0.5) / fps; });
+}
+// One shared view for every video: zoom factor and transform origin (percent).
+// With scale(z) about the origin, origin 0% shows the left/top edge and 100% the
+// right/bottom edge, so the same origin shows the same scene area in every clip.
+const view = {ox: 50, oy: 50};
+function setView(ox, oy) {
+  view.ox = Math.max(0, Math.min(100, ox)); view.oy = Math.max(0, Math.min(100, oy));
+  const grid = document.getElementById('grid');
+  grid.style.setProperty('--ox', view.ox + '%'); grid.style.setProperty('--oy', view.oy + '%');
+}
+// Scene point (0..1) under screen fraction f for origin o and zoom z: o + (f - o) / z.
+// Origin that puts scene point p at screen fraction f under zoom z: (p - f / z) / (1 - 1 / z).
+function originFor(p, f, z) { return z > 1 ? (p - f / z) / (1 - 1 / z) * 100 : 50; }
+function sceneAt(f, o, z) { return o / 100 + (f - o / 100) / z; }
+// Pointer position as a fraction of the visible (unscaled, clipped) video area.
+function frac(v, e) { const r = v.parentElement.getBoundingClientRect();
+  return [(e.clientX - r.left - v.offsetLeft) / v.offsetWidth, (e.clientY - r.top - v.offsetTop) / v.offsetHeight]; }
+function zoomSteps() { return [...document.getElementById('zoom').options].map(o => +o.value); }
+function linkView(v) {
+  let drag = null;
+  v.addEventListener('pointerdown', e => { drag = {x: e.clientX, y: e.clientY, ox: view.ox, oy: view.oy, moved: false};
+    v.setPointerCapture(e.pointerId); document.getElementById('grid').classList.add('dragging'); });
+  v.addEventListener('pointermove', e => { if (!drag) return;
+    const z = +document.getElementById('zoom').value, w = v.offsetWidth, h = v.offsetHeight;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+    if (z > 1) setView(drag.ox - dx / (w * (z - 1)) * 100, drag.oy - dy / (h * (z - 1)) * 100); });
+  v.addEventListener('pointerup', e => { const d = drag; drag = null;
+    document.getElementById('grid').classList.remove('dragging');
+    if (d && !d.moved) { const z = +document.getElementById('zoom').value;
+      // Click: center the shared view on the clicked scene point.
+      const [fx, fy] = frac(v, e);
+      setView(originFor(sceneAt(fx, view.ox, z), .5, z), originFor(sceneAt(fy, view.oy, z), .5, z)); } });
+  v.addEventListener('wheel', e => { e.preventDefault();
+    const steps = zoomSteps(), sel = document.getElementById('zoom');
+    const i = steps.indexOf(+sel.value), j = Math.max(0, Math.min(steps.length - 1, i + (e.deltaY < 0 ? 1 : -1)));
+    if (j !== i) { const z = steps[i], next = steps[j];
+      const [fx, fy] = frac(v, e);
+      // Keep the scene point under the cursor fixed while zooming.
+      setView(originFor(sceneAt(fx, view.ox, z), fx, next), originFor(sceneAt(fy, view.oy, z), fy, next));
+      sel.value = String(next); applyZoom(); } }, {passive: false});
 }
 function applyZoom() { const z = document.getElementById('zoom').value;
   videos.forEach(v => v.style.transform = 'scale(' + z + ')'); }
@@ -303,6 +348,8 @@ document.getElementById('back').onclick = () => seek(+document.getElementById('f
 document.getElementById('next').onclick = () => seek(+document.getElementById('frame').value + 1);
 document.getElementById('frame').oninput = e => seek(+e.target.value);
 document.getElementById('zoom').onchange = applyZoom;
+document.getElementById('center').onclick = () => setView(50, 50);
+document.getElementById('pixelated').onchange = e => document.getElementById('grid').classList.toggle('pixelated', e.target.checked);
 cameraSel.onchange = render; document.getElementById('set').onchange = render;
 const form = document.getElementById('form');
 function field(parent, label, el) { const l = document.createElement('label'); l.textContent = label + ' ';
