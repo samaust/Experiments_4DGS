@@ -171,3 +171,9 @@ class ViewerLabelTests(unittest.TestCase):
         self.assertIn("grid.style.setProperty('--ox'", html)
         self.assertNotIn("v.style.setProperty('--ox'", html)
         self.assertIn('linkView(v)', html)
+
+    def test_zoomed_videos_are_clipped_below_their_captions(self):
+        self.base.build()
+        html = (self.base.root/'package'/'index.html').read_text()
+        self.assertIn('.viewport{overflow:hidden', html)
+        self.assertIn('port.append(v); fig.append(port)', html)

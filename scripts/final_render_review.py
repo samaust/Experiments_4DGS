@@ -228,7 +228,8 @@ body{font-family:system-ui,sans-serif;margin:16px;background:#111;color:#eee}
 .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;position:sticky;top:0;background:#111;padding:6px 0;z-index:2}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:10px}
 figure{margin:0;background:#000;overflow:hidden;position:relative}
-figcaption{font-size:14px;padding:6px 8px;background:#222;font-weight:600}
+figcaption{font-size:14px;padding:6px 8px;background:#222;font-weight:600;position:relative;z-index:1}
+.viewport{overflow:hidden;position:relative}
 .legend td{padding:2px 10px 2px 0;vertical-align:top}
 video{width:100%;display:block;transform-origin:var(--ox,50%) var(--oy,50%);cursor:grab}
 .grid.pixelated video{image-rendering:pixelated}
@@ -281,7 +282,9 @@ function render() {
       v.src = 'clips/' + c.clips[cameraSel.value].record.path.split('/').pop();
       v.muted = true; v.preload = 'auto'; v.playsInline = true; v.loop = true;
       linkView(v);
-      fig.append(v); videos.push(v);
+      // The zoomed video is clipped to its own viewport so it never covers the caption.
+      const port = document.createElement('div'); port.className = 'viewport';
+      port.append(v); fig.append(port); videos.push(v);
     }
     grid.append(fig);
   }
