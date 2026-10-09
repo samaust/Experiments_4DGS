@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 import numpy as np
 
-from .extended_final_render_contract import parse_request, validate_scene_bindings
+from .extended_final_render_contract import parse_request, policies, validate_scene_bindings
 from .files import file_record, object_hash, read_json, safe_path, verify_record
 from .final_render_adapter import prepare_model_input, validate_model_input
 from .final_render_inventory import validate_inventory
@@ -55,8 +55,8 @@ REPAIRED_DURATION = .2
 
 
 def training_keys(request, manifest):
-    """Holdout keys from the manifest, or every frame of the training rig (all-times)."""
-    if request.get('training_policy') == 'all-times':
+    """Every frame of the training rig (all-times, the default), else the manifest's holdout keys."""
+    if policies(request)['training_policy'] == 'all-times':
         from .final_render_contract import TRAINING_CAMERAS
         return [(str(camera),frame) for camera in TRAINING_CAMERAS for frame in range(50)]
     return [(str(c),f) for c,f in manifest['training_keys']]
@@ -64,7 +64,7 @@ def training_keys(request, manifest):
 
 def duration_target(request, data):
     """The repaired duration target: the frozen initializer's uniform 0.2 width."""
-    if request.get('lifetime_policy') != 'repaired':
+    if policies(request)['lifetime_policy'] != 'repaired':
         return None
     durations = np.asarray(data['durations'])
     if durations.size == 0 or not np.allclose(durations,REPAIRED_DURATION,rtol=0,atol=1e-7):

@@ -90,7 +90,11 @@ and chose to rerun with the documented repair
 (`docs/multicamera-freetimegs-workflow.md`, step 5.5):
 
 - Requests may carry `training_policy: all-times` and `lifetime_policy:
-  repaired`. The fields come as a pair; absent means the historical behavior.
+  repaired`. Since 2026-10-09 these are the defaults
+  (`extended_final_render_contract.policies`): an omitted field means the
+  repaired value, and no other value is accepted. Requests 001–004 ran before
+  the repair, with the holdout keys and the unrepaired sentinel. Requests 005
+  and 006 set both fields explicitly.
 - `final_render_native.training_keys` then uses all 50 frames of the 30
   training cameras (1,500 keys). Held-out cameras stay excluded.
 - `duration_target` resolves the frozen initializer's uniform 0.2 width.

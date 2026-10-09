@@ -530,22 +530,25 @@ class AdmissionTests(unittest.TestCase):
         config=amended_configuration(value)
         self.assertEqual((config['new_artifact_disk_gib_limit'],config['gpu_total_seconds_limit'],config['new_download_gib_limit'],config['cpu_prepare_score_report_seconds_limit']),(380,288000,110,66000))
 
-    def test_training_and_lifetime_policies_are_explicit_pairs(self):
-        from vipe_benchmark.extended_final_render_contract import admit_review, parse_request
-        self.assertNotIn('training_policy', parse_request(self.request))
+    def test_training_and_lifetime_policies_default_to_the_crossing_repair(self):
+        from vipe_benchmark.extended_final_render_contract import admit_review, parse_request, policies
+        self.assertEqual(policies(parse_request(self.request)),dict(training_policy='all-times',lifetime_policy='repaired'))
+        for given in (dict(training_policy='all-times'), dict(lifetime_policy='repaired'),
+                      dict(training_policy='all-times',lifetime_policy='repaired')):
+            with self.subTest(given=given):
+                original = self.request
+                self.request = dict(original,**given)
+                self.rebind_proposal()
+                self.assertEqual(policies(parse_request(self.request)),dict(training_policy='all-times',lifetime_policy='repaired'))
+                self.request = original
         self.request.update(training_policy='all-times', lifetime_policy='repaired')
         self.rebind_proposal()
         self.assertFalse(admit_review(self.request,self.ledger,self.storage).execution_authorized)
-        for change in (dict(training_policy='holdout',lifetime_policy='repaired'),
-                       dict(training_policy='all-times',lifetime_policy='original'),
-                       dict(training_policy='everything',lifetime_policy='repaired')):
+        for change in (dict(training_policy='holdout'), dict(lifetime_policy='original'),
+                       dict(training_policy='everything')):
             with self.subTest(change=change):
-                request = dict(self.request,**change)
                 with self.assertRaisesRegex(ValueError,'policy'):
-                    parse_request(request)
-        partial = {k:v for k,v in self.request.items() if k != 'lifetime_policy'}
-        with self.assertRaisesRegex(ValueError,'policy'):
-            parse_request(partial)
+                    parse_request(dict(self.request,**change))
 
     def test_long_training_extension_may_raise_the_cpu_limit_within_bounds(self):
         from vipe_benchmark.extended_final_render_contract import admit_review, amended_configuration

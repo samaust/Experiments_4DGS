@@ -407,23 +407,22 @@ class CrossingRepairPolicyTests(unittest.TestCase):
     MANIFEST = dict(training_keys=[[c,f] for c in range(34) if c not in (0,10,20,30) for f in range(50) if f not in range(20,25)],
                     cameras=[dict(id=str(c)) for c in range(34)])
 
-    def test_holdout_keeps_manifest_keys_and_all_times_adds_the_crossing_window(self):
+    def test_all_times_training_is_the_default_and_covers_the_crossing_window(self):
         from vipe_benchmark.final_render_native import training_keys
-        holdout = training_keys({}, self.MANIFEST)
-        self.assertEqual(len(holdout),30*45)
-        self.assertNotIn(('1',22),holdout)
-        repaired = training_keys(dict(training_policy='all-times'), self.MANIFEST)
-        self.assertEqual(len(repaired),1500)
-        self.assertIn(('1',22),repaired)
-        self.assertFalse({('0',22),('10',3),('20',0),('30',49)} & set(repaired))
+        for request in ({}, dict(training_policy='all-times')):
+            with self.subTest(request=request):
+                keys = training_keys(request, self.MANIFEST)
+                self.assertEqual(len(keys),1500)
+                self.assertIn(('1',22),keys)
+                self.assertFalse({('0',22),('10',3),('20',0),('30',49)} & set(keys))
 
-    def test_repaired_lifetime_resolves_the_frozen_initializer_duration(self):
+    def test_repaired_lifetime_is_the_default_and_resolves_the_initializer_duration(self):
         from vipe_benchmark.final_render_native import duration_target
         data = dict(durations=np.full((5,1),.2,np.float32))
-        self.assertIsNone(duration_target({}, data))
+        self.assertEqual(duration_target({}, data),.2)
         self.assertEqual(duration_target(dict(lifetime_policy='repaired'), data),.2)
         with self.assertRaisesRegex(ValueError,'duration'):
-            duration_target(dict(lifetime_policy='repaired'), dict(durations=np.array([[.2],[.3]],np.float32)))
+            duration_target({}, dict(durations=np.array([[.2],[.3]],np.float32)))
 
     def test_runtime_inventory_pins_the_duration_repair_source(self):
         from vipe_benchmark.final_render_inventory import required_sources

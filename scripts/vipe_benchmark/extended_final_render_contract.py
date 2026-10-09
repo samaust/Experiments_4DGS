@@ -15,9 +15,15 @@ from .final_render_contract import (
 
 SCHEMA = 'plan069-final-render-request/v1'
 # The documented crossing repair (docs/multicamera-freetimegs-workflow.md):
-# train on all 50 frames and floor learned temporal widths. Absent = historical
-# holdout/original behavior of requests 001-004.
+# train on all 50 frames and floor learned temporal widths. These are the
+# defaults: an omitted field means the repaired value, and no other value is
+# accepted. Requests 001-004 ran before the repair, with holdout/original.
 POLICIES = dict(training_policy='all-times', lifetime_policy='repaired')
+
+
+def policies(value):
+    """The effective training and lifetime policies of a request."""
+    return {name: value.get(name, default) for name, default in POLICIES.items()}
 
 
 def _require(condition, message):
@@ -45,9 +51,7 @@ def parse_request(value):
     _require(value.get('compositions') == compositions(candidate), 'same D* and fixed isolated compositions required')
     _require(type(value.get('seed')) is int and value['seed'] == 0 and type(value.get('iterations')) is int and
              value['iterations'] in ENDPOINTS, 'equal seed and a supported (5000/70000) training endpoint required')
-    present = [name for name in POLICIES if name in value]
-    _require(not present or {name: value.get(name) for name in POLICIES} == POLICIES,
-             'training/lifetime policy must be absent or exactly all-times/repaired')
+    _require(policies(value) == POLICIES, 'training/lifetime policy must be all-times/repaired (the default)')
     _require(value.get('preset') == 'default_keyframe' and value.get('preset_source_sha256') == PRESET_SOURCE,
              'frozen preset required')
     _require(value.get('geometry') == dict(keyframes=list(KEYFRAMES), samples_per_edge=5000, neighbors_per_reference=3),
