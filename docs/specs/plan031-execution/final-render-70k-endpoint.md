@@ -114,3 +114,26 @@ Requests: `plan069-final-render-review-005`, with production
 `plan069-final-render-authority-004`. Caps: v2 amendment `-review-004` (GPU
 288,000 s, CPU preparation 66,000 s, artifacts 380 GiB) with pinned approval
 `final-render-cap-approval-004.json`.
+
+## Crossing repair result and LPIPS history fix (2026-10-09)
+
+The repaired QUALIFY arm (`qualification-004`, authority-004) completed:
+geometry 1,991 s, initializer 177 s, train 19,005 s, render 306 s. At frame 22
+its players are sharp and intact. Frame 20–24 temporal roughness (mean
+absolute deviation from the neighbor average) matches the rest of the clip on
+all four held-out cameras: 1.07–1.23 vs 1.09–1.24 elsewhere. The unrepaired
+arm had dropped to 0.97–1.08 inside the gap.
+
+The slowdown has a single cause. torchmetrics 1.9.0's LPIPS metric object
+appends every score to its `all_scores` list state. Each forward call clones
+the whole list (`_copy_state_dict`). That adds about 4.6 µs per past update to
+every update, a perfectly linear 0.09 → 0.29 s/update ramp in all six 0→50k
+dense runs. A CPU micro-benchmark gave 6.1 / 15.7 / 47.5 / 113.6 ms per call at
+0 / 5k / 20k / 50k stored scores, and 9.6 ms with a reset after each call.
+`NativeFreeTimeRuntime.training_step` now resets the metric after every update.
+Losses use only the current batch, so they are unchanged. The 70k train
+ceiling returns to 14,400 s; the expected train time is about 9,300 s.
+Runtime inventory `plan069-final-render-runtime-004`. Requests
+`plan069-final-render-review-006` (production `plan069-final-render-D8-006`,
+QUALIFY `plan069-final-render-D8-qualification-005`), authority
+`plan069-final-render-authority-005`.
