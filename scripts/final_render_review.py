@@ -85,16 +85,34 @@ def _rendered(result_record, cameras, frames, render):
     return {camera: [_bound(rows[camera, frame]) for frame in frames] for camera in cameras}
 
 
+# Plain-language meaning of each method code (benchmark-protocol.md, table of
+# M and N methods), shown in every caption so reviewers need no lookup.
+MOTION = {'M0': 'frame-difference mask (frame t vs t+1)',
+          'M1': '9-frame median-background mask',
+          'M2': 'MOG2 background-subtraction mask'}
+NEIGHBORS = {'N0': 'most shared feature tracks',
+             'N1': 'highest Jaccard co-visibility',
+             'N2': 'greedy coverage/parallax selection'}
+
+
+def arm_label(arm, composition):
+    """Caption: arm id, then its motion-mask and neighbor-camera methods in words."""
+    motion, neighbors = composition['motion'], composition['neighbors']
+    role = ' (baseline)' if (motion, neighbors) == ('M0', 'N0') else ''
+    return (f"{arm}{role} \u2014 motion {motion}: {MOTION.get(motion, motion)}; "
+            f"neighbors {neighbors}: {NEIGHBORS.get(neighbors, neighbors)}")
+
+
 def build_package(request_record, results, output):
     """Publish package.json, clips and index.html; return the package file record."""
     request = read_json(_bound(request_record)['path'])
     render = request['render']
     cameras, frames, fps, resolution = render['cameras'], render['frames'], render['fps'], render['resolution']
-    plans = [dict(id='reference', label='Held-out camera (real video)', composition=None, output_type='reference',
+    plans = [dict(id='reference', label='Real video from the held-out camera (ground truth)', composition=None, output_type='reference',
                   result=None, sources=_reference(request, cameras, frames))]
     for arm, composition in request['compositions'].items():
         outcome = results.get(arm, dict(status='failed', reason='no render result supplied'))
-        plan = dict(id=arm, label=f"{arm}: {composition['motion']}/{composition['neighbors']}", composition=composition,
+        plan = dict(id=arm, label=arm_label(arm, composition), composition=composition,
                     output_type='final-render')
         if set(outcome) == {'path', 'sha256', 'bytes'}:
             plan.update(result=outcome, sources=_rendered(outcome, cameras, frames, render))
@@ -181,16 +199,37 @@ def import_review(package_record, review_record, output):
     return file_record(output)
 
 
+def _intro(package):
+    """Explain what every clip shows, from the bound request's real settings."""
+    request = read_json(package['request']['path'])
+    from vipe_benchmark.extended_final_render_contract import policies
+    effective = policies(request)
+    training = ('all 50 frames of the 30 training cameras' if effective['training_policy'] == 'all-times'
+                else 'the training cameras, without frames 20\u201324')
+    depth = request.get('depth_candidate', 'D*')
+    rows = ''.join(f'<tr><td>{code}</td><td>{text}</td></tr>' for code, text in [*MOTION.items(), *NEIGHBORS.items()])
+    return (f"<p>Every video shows the <b>same held-out camera</b> (chosen with the Camera menu; cameras 0/10/20/30 "
+            f"were never used for training) over the same 50 frames at 25 fps. The first video is the <b>real "
+            f"footage</b>; each other video is one <b>arm</b>: a FreeTimeGS model trained for {request['iterations']:,} "
+            f"steps on {training}, then rendered from that camera. All arms share S2 segmentation and {depth} depth. "
+            f"They differ in one method each: the <b>motion mask</b> (M) that marks moving pixels for the initializer, "
+            f"or the <b>neighbor cameras</b> (N) each camera is matched against for geometry. QF-B (M0/N0) is the "
+            f"baseline; QF-M1/M2 change only M, QF-N1/N2 change only N. Research outputs only.</p>"
+            f"<table class=legend>{rows}</table>")
+
+
 def _viewer(package, record):
     payload = json.dumps(dict(package=package, record=record)).replace('<', '\\u003c')
-    return """<!doctype html><html><head><meta charset="utf-8"><title>Final render review</title>
+    intro = _intro(package)
+    return ("""<!doctype html><html><head><meta charset="utf-8"><title>Final render review</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body{font-family:system-ui,sans-serif;margin:16px;background:#111;color:#eee}
 .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;position:sticky;top:0;background:#111;padding:6px 0;z-index:2}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:10px}
 figure{margin:0;background:#000;overflow:hidden;position:relative}
-figcaption{font-size:13px;padding:4px 6px;background:#222}
+figcaption{font-size:14px;padding:6px 8px;background:#222;font-weight:600}
+.legend td{padding:2px 10px 2px 0;vertical-align:top}
 video{width:100%;display:block;transform-origin:var(--ox,50%) var(--oy,50%)}
 .unavailable{padding:24px;color:#f99}
 textarea,input,select,button{font:inherit}
@@ -198,9 +237,7 @@ textarea{width:100%;min-height:60px}
 fieldset{margin:12px 0;border:1px solid #444}
 </style></head><body>
 <h1>Final render review: motion and neighbor effects</h1>
-<p>Each clip is a held-out camera (0/10/20/30, never trained on), 50 frames at 25 fps, rendered from the
-5,000-step checkpoint of each arm. All arms share S2 segmentation and D8 depth; only motion (M) or neighbors (N)
-differ. Research outputs only.</p>
+@@INTRO@@
 <div class="controls">
  <label>Camera <select id="camera"></select></label>
  <label>Compare <select id="set"><option value="motion">Motion: M0 / M1 / M2</option>
@@ -310,7 +347,7 @@ document.getElementById('export').onclick = () => {
 };
 render();
 </script></body></html>
-"""
+""").replace('@@INTRO@@', intro, 1)
 
 
 def main():
