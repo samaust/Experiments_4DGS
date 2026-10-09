@@ -506,9 +506,9 @@ class AdmissionTests(unittest.TestCase):
         from vipe_benchmark.final_render_contract import allocation_specs
         self.extend_long_training();self.long_endpoint()
         result=admit_review(self.request,self.ledger,self.storage)
-        self.assertEqual((result.gpu_seconds,result.cpu_seconds),(5*(5400+25200+900),5400))
+        self.assertEqual((result.gpu_seconds,result.cpu_seconds),(5*(5400+14400+900),5400))
         trains={a['seconds'] for a in self.request['allocations'] if a['phase']=='train'}
-        self.assertEqual(trains,{25200})
+        self.assertEqual(trains,{14400})
         for iterations, allocations in ((70000,allocation_specs('extended-001')),(20000,allocation_specs('extended-001'))):
             with self.subTest(iterations=iterations):
                 self.request.update(iterations=iterations,allocations=allocations)

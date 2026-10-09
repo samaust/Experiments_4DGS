@@ -229,6 +229,10 @@ authority is supplied by this module. Never call GPU methods in CPU qualificatio
             raise ValueError('native sampler selected excluded observation')
         metrics = self.model.training_step(iteration,self.camera(int(camera),frame,load_image=True),self.model.schedulers)
         self.torch.cuda.synchronize()
+        # torchmetrics' LPIPS keeps every past score and clones that whole list on
+        # each call, a per-update cost linear in the update count. Each loss uses
+        # only the current batch, so releasing the history leaves losses unchanged.
+        self.model.lpips.reset()
         if self.duration_target is not None:
             metrics['duration_projection_changed'] = self._project_durations()['changed_entries']
         self.iteration += 1

@@ -128,10 +128,10 @@ class WorkerTests(unittest.TestCase):
         self.use_endpoint(70000)
         ticks = iter(range(0,10**9,1))
         clock = lambda: next(ticks)*.1
-        # 70k updates at 0.1 s per clock read far exceed 3,600 s but fit 25,200 s.
+        # 70k updates at 0.1 s per clock read far exceed 3,600 s but fit 14,400 s.
         result = train(self.request,'QF-B',self.parent,self.initializer,self.root/'long-clock',FakeFreeTimeRuntime(),clock=clock)
         self.assertGreater(result['elapsed_seconds'],3600)
-        self.assertLess(result["elapsed_seconds"],25200)
+        self.assertLess(result["elapsed_seconds"],14400)
 
     def test_training_publishes_measured_checkpoint_save_time(self):
         from vipe_benchmark.final_render_workers import train
@@ -429,3 +429,31 @@ class CrossingRepairPolicyTests(unittest.TestCase):
         from vipe_benchmark.final_render_inventory import required_sources
         names = {Path(r['path']).name for r in required_sources('/home/auss/git_repos/samaust/Experiments_4DGS/.local/FreeTimeGsVanilla')}
         self.assertIn('basketball_crossing_repair.py', names)
+
+
+class LpipsHistoryTests(unittest.TestCase):
+    def test_native_update_releases_the_lpips_score_history(self):
+        from types import SimpleNamespace
+        from vipe_benchmark.final_render_native import NativeFreeTimeRuntime
+
+        class Metric:
+            resets = 0
+            def reset(self):
+                Metric.resets += 1
+
+        class Torch:
+            class Tensor:
+                pass
+            class cuda:
+                @staticmethod
+                def synchronize():
+                    pass
+
+        model = SimpleNamespace(lpips=Metric(), schedulers=[],
+                                training_step=lambda step, camera, schedulers: {'loss': 1.})
+        runtime = SimpleNamespace(closed=False, model=model, iteration=0, request=dict(iterations=2),
+            sampler=iter([('1',0),('1',1)]), key_set={('1',0),('1',1)}, torch=Torch, duration_target=None,
+            camera=lambda camera, frame, load_image: None)
+        for step in range(2):
+            NativeFreeTimeRuntime.training_step(runtime, step)
+        self.assertEqual(Metric.resets, 2)
