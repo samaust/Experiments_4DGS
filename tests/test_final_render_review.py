@@ -120,6 +120,14 @@ class ReviewImportTests(unittest.TestCase):
         self.assertEqual(value['status'], 'imported')
         self.assertEqual(value['review']['comparisons']['motion']['preference'], 'QF-M1')
 
+    def test_free_text_notes_may_omit_arm_camera_and_frame(self):
+        review = copy.deepcopy(self.review)
+        review['comparisons']['motion']['observations'] += [
+            dict(candidate=None, camera=None, frame=None, text='General: all arms look similar.'),
+            dict(candidate='QF-M1', camera=None, frame=3, text='M1 blurrier at frame 3.')]
+        value = read_json(self.imported(review)['path'])
+        self.assertEqual(len(value['review']['comparisons']['motion']['observations']), 3)
+
     def test_review_must_reference_package_candidates_cameras_and_frames(self):
         for path, value, message in [
                 (('comparisons', 'motion', 'preference'), 'QF-M2', 'preference'),

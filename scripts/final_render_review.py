@@ -188,9 +188,11 @@ def import_review(package_record, review_record, output):
         _require(sorted(comparison.get('candidates', [])) == sorted(expected), 'comparison candidates differ: '+name)
         _require(comparison.get('preference') in (*expected, *OUTCOMES), 'unknown preference: '+name)
         for row in comparison.get('observations', []):
-            _require(row.get('candidate') in available | {'reference'}, 'observation candidate unknown')
-            _require(row.get('camera') in cameras, 'observation camera must be a held-out camera')
-            _require(row.get('frame') in frames, 'observation frame outside the rendered frames')
+            # Free-text notes: arm, camera and frame are recorded when the note names them.
+            _require(row.get('candidate') is None or row['candidate'] in available | {'reference'},
+                     'observation candidate unknown')
+            _require(row.get('camera') is None or row['camera'] in cameras, 'observation camera must be a held-out camera')
+            _require(row.get('frame') is None or row['frame'] in frames, 'observation frame outside the rendered frames')
             _require(type(row.get('text')) is str and bool(row['text'].strip()), 'observation text required')
     overall = review.get('overall', {})
     _require(overall.get('preference') in (*sorted(available - {'reference'}), *OUTCOMES), 'unknown overall preference')
@@ -355,11 +357,17 @@ document.getElementById('center').onclick = () => setView(50, 50);
 document.getElementById('pixelated').onchange = e => document.getElementById('grid').classList.toggle('pixelated', e.target.checked);
 cameraSel.onchange = render; document.getElementById('set').onchange = render;
 const form = document.getElementById('form');
+function noteBox() { const wrap = document.createElement('span'), box = document.createElement('textarea'),
+    add = Object.assign(document.createElement('button'), {type: 'button', textContent: 'Note at current view'});
+  add.onclick = () => { const tag = 'camera ' + cameraSel.value + ', frame ' + document.getElementById('frame').value + ': ';
+    box.value += (box.value && !box.value.endsWith('\\n') ? '\\n' : '') + tag; box.focus(); };
+  wrap.append(box, add); wrap.value = undefined; Object.defineProperty(wrap, 'value', {get: () => box.value}); return wrap; }
 function field(parent, label, el) { const l = document.createElement('label'); l.textContent = label + ' ';
   l.append(el); parent.append(l, document.createElement('br')); return el; }
 const inputs = {};
 form.append(Object.assign(document.createElement('p'), {textContent:
-  'Observations: one per line as "candidate camera frame: text", e.g. "QF-M1 10 23: less ghosting on the moving player".'}));
+  'Observations: one note per line, in your own words. Mention an arm (QF-M1, or just M1), "camera 10" and "frame 23" ' +
+  'when they apply; they are recorded with the note. "Note at current view" inserts the camera and frame you are looking at.'}));
 inputs.reviewer = field(form, 'Reviewer', Object.assign(document.createElement('input'), {value: 'samaust'}));
 for (const [name, arms] of Object.entries(P.comparisons)) {
   const fs = document.createElement('fieldset'); fs.append(Object.assign(document.createElement('legend'),
@@ -368,7 +376,7 @@ for (const [name, arms] of Object.entries(P.comparisons)) {
   const sel = document.createElement('select');
   [...available, 'tie', 'unclear'].forEach(o => sel.add(new Option(o === 'tie' || o === 'unclear' ? o : byId[o].label, o)));
   inputs[name] = {candidates: available, preference: field(fs, 'Preference', sel),
-    observations: field(fs, 'Observations', document.createElement('textarea')),
+    observations: field(fs, 'Observations', noteBox()),
     tradeoffs: field(fs, 'Tradeoffs', document.createElement('textarea'))};
   form.append(fs);
 }
@@ -377,10 +385,25 @@ const overall = document.createElement('select');
   .forEach(o => overall.add(new Option(o, o)));
 inputs.overall = field(form, 'Overall preference', overall);
 inputs.overallTradeoffs = field(form, 'Overall tradeoffs', document.createElement('textarea'));
+// Accepts free text. Extracts an arm id (QF-M1, or a bare method code like M1/N2), "camera N"/"cam N"
+// and "frame N"/"f N" wherever they appear; the legacy "QF-M1 10 23: text" form also works.
 function parse(text) { return text.split('\\n').map(s => s.trim()).filter(Boolean).map(line => {
-  const m = line.match(/^(\\S+)\\s+(\\d+)\\s+(\\d+)\\s*:\\s*(.+)$/);
-  if (!m) throw new Error('Cannot parse observation: ' + line);
-  return {candidate: m[1], camera: +m[2], frame: +m[3], text: m[4]}; }); }
+  const legacy = line.match(/^(\\S+)\\s+(\\d+)\\s+(\\d+)\\s*:\\s*(.+)$/);
+  if (legacy && byId[legacy[1]]) return check({candidate: legacy[1], camera: +legacy[2], frame: +legacy[3], text: legacy[4]}, line);
+  const ids = P.candidates.map(c => c.id).filter(id => id !== 'reference');
+  let candidate = ids.find(id => new RegExp('(^|[^\\\\w-])' + id + '(?![\\\\w-])', 'i').test(line)) || null;
+  if (!candidate) { const code = line.match(/\\b([MN][0-2])\\b/);
+    if (code) candidate = ids.find(id => { const c = byId[id].composition;
+      return code[1] === (code[1][0] === 'M' ? c.motion : c.neighbors) && (code[1][0] === 'M' ? c.neighbors === 'N0' : c.motion === 'M0'); }) || null; }
+  if (!candidate && /\\b(real|reference|ground truth)\\b/i.test(line)) candidate = 'reference';
+  const cam = line.match(/\\bcam(?:era)?\\s*#?\\s*(\\d+)/i), fr = line.match(/\\bf(?:rame)?\\s*#?\\s*(\\d+)/i);
+  return check({candidate, camera: cam ? +cam[1] : null, frame: fr ? +fr[1] : null, text: line}, line); }); }
+function check(row, line) {
+  if (row.camera !== null && !P.settings.cameras.includes(row.camera))
+    throw new Error('Camera ' + row.camera + ' is not a held-out camera (' + P.settings.cameras.join('/') + ') in: ' + line);
+  if (row.frame !== null && !P.settings.frames.includes(row.frame))
+    throw new Error('Frame ' + row.frame + ' is outside 0-' + (P.settings.frames.length - 1) + ' in: ' + line);
+  return row; }
 document.getElementById('export').onclick = () => {
   try {
     const comparisons = {};
