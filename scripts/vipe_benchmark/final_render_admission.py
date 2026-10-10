@@ -9,7 +9,7 @@ import time
 
 from .extended_final_render_contract import admit_review, parse_request
 from .files import file_record, object_hash, read_json, verify_record
-from .final_render_contract import PHASES
+from .final_render_contract import PHASES, phase_seconds
 
 SCHEMA = 'plan069-final-render-do/v1'
 
@@ -175,7 +175,7 @@ def _live(live, request, config, qualification=None):
         _require(qualification['checkpoint_seconds'] + qualification['cleanup_seconds'] < 150.,
             'measured checkpoint publication and cleanup exceed the 150 s reserve')
         _require(qualification['initializer_bytes'] + qualification['checkpoint_bytes'] < request['artifact_bytes_limit'] and
-            qualification['cleanup_seconds'] + qualification['checkpoint_seconds'] < PHASES['train'][1],
+            qualification['cleanup_seconds'] + qualification['checkpoint_seconds'] < phase_seconds(request,'train'),
             'measured publication/cleanup reserves exceed allocation')
     return {key:live[key] for key in ('artifact_bytes','download_bytes','free_disk_bytes')}
 

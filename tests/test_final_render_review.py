@@ -33,7 +33,7 @@ class ReviewPackageTests(unittest.TestCase):
         manifest = dict(cameras=[dict(id=str(c), frames=[dict(frame_id=f, path=f'rgb/{c}/{f:06d}.png',
             sha256=png(self.root/f'scene/rgb/{c}/{f:06d}.png', 10*f)['sha256']) for f in FRAMES]) for c in CAMERAS])
         write_json(self.root/'scene/manifest.json', manifest)
-        self.request = dict(id='request-001', render=dict(cameras=list(CAMERAS), frames=list(FRAMES), fps=25,
+        self.request = dict(id='request-001', iterations=70000, render=dict(cameras=list(CAMERAS), frames=list(FRAMES), fps=25,
                             resolution=[960, 540]), compositions={a: dict(segmentation='S2', depth='D8', **c)
                                                                   for a, c in ARMS.items()},
                             bindings=dict(scene_manifest=file_record(self.root/'scene/manifest.json')))
@@ -120,6 +120,14 @@ class ReviewImportTests(unittest.TestCase):
         self.assertEqual(value['status'], 'imported')
         self.assertEqual(value['review']['comparisons']['motion']['preference'], 'QF-M1')
 
+    def test_free_text_notes_may_omit_arm_camera_and_frame(self):
+        review = copy.deepcopy(self.review)
+        review['comparisons']['motion']['observations'] += [
+            dict(candidate=None, camera=None, frame=None, text='General: all arms look similar.'),
+            dict(candidate='QF-M1', camera=None, frame=3, text='M1 blurrier at frame 3.')]
+        value = read_json(self.imported(review)['path'])
+        self.assertEqual(len(value['review']['comparisons']['motion']['observations']), 3)
+
     def test_review_must_reference_package_candidates_cameras_and_frames(self):
         for path, value, message in [
                 (('comparisons', 'motion', 'preference'), 'QF-M2', 'preference'),
@@ -142,3 +150,38 @@ class ReviewImportTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ViewerLabelTests(unittest.TestCase):
+    def setUp(self):
+        self.base = ReviewPackageTests()
+        self.base.setUp()
+        self.addCleanup(self.base.doCleanups)
+
+    def test_captions_and_intro_explain_every_arm_in_words(self):
+        from vipe_benchmark.files import read_json
+        record = self.base.build()
+        html = (self.base.root/'package'/'index.html').read_text()
+        package = read_json(record['path'])
+        labels = {c['id']: c['label'] for c in package['candidates']}
+        self.assertIn('ground truth', labels['reference'])
+        self.assertIn('9-frame median-background mask', labels['QF-M1'])
+        self.assertIn('highest Jaccard co-visibility', labels['QF-N1'])
+        self.assertIn('(baseline)', labels['QF-B'])
+        self.assertIn('trained for 70,000 steps on all 50 frames', html)
+        self.assertNotIn('5,000-step', html)
+
+    def test_viewer_offers_deep_zoom_and_one_shared_pan_for_all_videos(self):
+        self.base.build()
+        html = (self.base.root/'package'/'index.html').read_text()
+        for level in ('4', '8', '16'):
+            self.assertIn(f'<option>{level}</option>', html)
+        self.assertIn("grid.style.setProperty('--ox'", html)
+        self.assertNotIn("v.style.setProperty('--ox'", html)
+        self.assertIn('linkView(v)', html)
+
+    def test_zoomed_videos_are_clipped_below_their_captions(self):
+        self.base.build()
+        html = (self.base.root/'package'/'index.html').read_text()
+        self.assertIn('.viewport{overflow:hidden', html)
+        self.assertIn('port.append(v); fig.append(port)', html)

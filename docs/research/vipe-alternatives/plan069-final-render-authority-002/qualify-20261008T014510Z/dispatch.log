@@ -1,0 +1,31 @@
+2026-10-08T01:45:11.263611+00:00 dispatch QF-B/geometry
+QF-B/geometry complete: 2005.8s
+2026-10-08T02:22:45.030564+00:00 dispatch QF-B/initializer
+QF-B/initializer complete: 175.7s
+2026-10-08T02:29:53.146428+00:00 dispatch QF-B/train
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/final_render_actual_supervisor.py", line 107, in _supervise_reserved
+    raise RuntimeError('actual worker failed; inspect preserved worker.log')
+RuntimeError: actual worker failed; inspect preserved worker.log
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan069-final-render-authority-002/authority.py", line 188, in <module>
+    main()
+    ~~~~^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan069-final-render-authority-002/authority.py", line 182, in main
+    dispatch(args.envelope, args.arm, args.phases)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/docs/research/vipe-alternatives/plan069-final-render-authority-002/authority.py", line 147, in dispatch
+    outcome = dispatcher.dispatch(arm, phase, invocation, output, parent_result=parent,
+        initializer=initializer, voxel_width=width if phase == 'initializer' else None)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/final_render_actual_dispatch.py", line 118, in dispatch
+    return supervise_reserved(self.ledger,reservation,command,output,invocation_record,
+                              release_path=release_path)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/final_render_actual_supervisor.py", line 200, in supervise_reserved
+    return _supervise_reserved(ledger,reservation,command,output,invocation_record,
+                              release_path=release_path,lifecycle=lifecycle)
+  File "/home/auss/git_repos/samaust/Experiments_4DGS/.local/plan069-worktrees/depth-extension/scripts/vipe_benchmark/final_render_actual_supervisor.py", line 185, in _supervise_reserved
+    raise ActualSupervisionFailure(str(primary), dict(receipt=receipt,finish=finish)) from primary
+vipe_benchmark.final_render_actual_supervisor.ActualSupervisionFailure: actual worker failed; inspect preserved worker.log

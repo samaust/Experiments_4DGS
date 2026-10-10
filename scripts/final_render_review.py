@@ -85,16 +85,34 @@ def _rendered(result_record, cameras, frames, render):
     return {camera: [_bound(rows[camera, frame]) for frame in frames] for camera in cameras}
 
 
+# Plain-language meaning of each method code (benchmark-protocol.md, table of
+# M and N methods), shown in every caption so reviewers need no lookup.
+MOTION = {'M0': 'frame-difference mask (frame t vs t+1)',
+          'M1': '9-frame median-background mask',
+          'M2': 'MOG2 background-subtraction mask'}
+NEIGHBORS = {'N0': 'most shared feature tracks',
+             'N1': 'highest Jaccard co-visibility',
+             'N2': 'greedy coverage/parallax selection'}
+
+
+def arm_label(arm, composition):
+    """Caption: arm id, then its motion-mask and neighbor-camera methods in words."""
+    motion, neighbors = composition['motion'], composition['neighbors']
+    role = ' (baseline)' if (motion, neighbors) == ('M0', 'N0') else ''
+    return (f"{arm}{role} \u2014 motion {motion}: {MOTION.get(motion, motion)}; "
+            f"neighbors {neighbors}: {NEIGHBORS.get(neighbors, neighbors)}")
+
+
 def build_package(request_record, results, output):
     """Publish package.json, clips and index.html; return the package file record."""
     request = read_json(_bound(request_record)['path'])
     render = request['render']
     cameras, frames, fps, resolution = render['cameras'], render['frames'], render['fps'], render['resolution']
-    plans = [dict(id='reference', label='Held-out camera (real video)', composition=None, output_type='reference',
+    plans = [dict(id='reference', label='Real video from the held-out camera (ground truth)', composition=None, output_type='reference',
                   result=None, sources=_reference(request, cameras, frames))]
     for arm, composition in request['compositions'].items():
         outcome = results.get(arm, dict(status='failed', reason='no render result supplied'))
-        plan = dict(id=arm, label=f"{arm}: {composition['motion']}/{composition['neighbors']}", composition=composition,
+        plan = dict(id=arm, label=arm_label(arm, composition), composition=composition,
                     output_type='final-render')
         if set(outcome) == {'path', 'sha256', 'bytes'}:
             plan.update(result=outcome, sources=_rendered(outcome, cameras, frames, render))
@@ -170,9 +188,11 @@ def import_review(package_record, review_record, output):
         _require(sorted(comparison.get('candidates', [])) == sorted(expected), 'comparison candidates differ: '+name)
         _require(comparison.get('preference') in (*expected, *OUTCOMES), 'unknown preference: '+name)
         for row in comparison.get('observations', []):
-            _require(row.get('candidate') in available | {'reference'}, 'observation candidate unknown')
-            _require(row.get('camera') in cameras, 'observation camera must be a held-out camera')
-            _require(row.get('frame') in frames, 'observation frame outside the rendered frames')
+            # Free-text notes: arm, camera and frame are recorded when the note names them.
+            _require(row.get('candidate') is None or row['candidate'] in available | {'reference'},
+                     'observation candidate unknown')
+            _require(row.get('camera') is None or row['camera'] in cameras, 'observation camera must be a held-out camera')
+            _require(row.get('frame') is None or row['frame'] in frames, 'observation frame outside the rendered frames')
             _require(type(row.get('text')) is str and bool(row['text'].strip()), 'observation text required')
     overall = review.get('overall', {})
     _require(overall.get('preference') in (*sorted(available - {'reference'}), *OUTCOMES), 'unknown overall preference')
@@ -181,26 +201,48 @@ def import_review(package_record, review_record, output):
     return file_record(output)
 
 
+def _intro(package):
+    """Explain what every clip shows, from the bound request's real settings."""
+    request = read_json(package['request']['path'])
+    from vipe_benchmark.extended_final_render_contract import policies
+    effective = policies(request)
+    training = ('all 50 frames of the 30 training cameras' if effective['training_policy'] == 'all-times'
+                else 'the training cameras, without frames 20\u201324')
+    depth = request.get('depth_candidate', 'D*')
+    rows = ''.join(f'<tr><td>{code}</td><td>{text}</td></tr>' for code, text in [*MOTION.items(), *NEIGHBORS.items()])
+    return (f"<p>Every video shows the <b>same held-out camera</b> (chosen with the Camera menu; cameras 0/10/20/30 "
+            f"were never used for training) over the same 50 frames at 25 fps. The first video is the <b>real "
+            f"footage</b>; each other video is one <b>arm</b>: a FreeTimeGS model trained for {request['iterations']:,} "
+            f"steps on {training}, then rendered from that camera. All arms share S2 segmentation and {depth} depth. "
+            f"They differ in one method each: the <b>motion mask</b> (M) that marks moving pixels for the initializer, "
+            f"or the <b>neighbor cameras</b> (N) each camera is matched against for geometry. QF-B (M0/N0) is the "
+            f"baseline; QF-M1/M2 change only M, QF-N1/N2 change only N. Research outputs only.</p>"
+            f"<table class=legend>{rows}</table>")
+
+
 def _viewer(package, record):
     payload = json.dumps(dict(package=package, record=record)).replace('<', '\\u003c')
-    return """<!doctype html><html><head><meta charset="utf-8"><title>Final render review</title>
+    intro = _intro(package)
+    return ("""<!doctype html><html><head><meta charset="utf-8"><title>Final render review</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body{font-family:system-ui,sans-serif;margin:16px;background:#111;color:#eee}
 .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;position:sticky;top:0;background:#111;padding:6px 0;z-index:2}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:10px}
 figure{margin:0;background:#000;overflow:hidden;position:relative}
-figcaption{font-size:13px;padding:4px 6px;background:#222}
-video{width:100%;display:block;transform-origin:var(--ox,50%) var(--oy,50%)}
+figcaption{font-size:14px;padding:6px 8px;background:#222;font-weight:600;position:relative;z-index:1}
+.viewport{overflow:hidden;position:relative}
+.legend td{padding:2px 10px 2px 0;vertical-align:top}
+video{width:100%;display:block;transform-origin:var(--ox,50%) var(--oy,50%);cursor:grab}
+.grid.pixelated video{image-rendering:pixelated}
+.grid.dragging video{cursor:grabbing}
 .unavailable{padding:24px;color:#f99}
 textarea,input,select,button{font:inherit}
 textarea{width:100%;min-height:60px}
 fieldset{margin:12px 0;border:1px solid #444}
 </style></head><body>
 <h1>Final render review: motion and neighbor effects</h1>
-<p>Each clip is a held-out camera (0/10/20/30, never trained on), 50 frames at 25 fps, rendered from the
-5,000-step checkpoint of each arm. All arms share S2 segmentation and D8 depth; only motion (M) or neighbors (N)
-differ. Research outputs only.</p>
+@@INTRO@@
 <div class="controls">
  <label>Camera <select id="camera"></select></label>
  <label>Compare <select id="set"><option value="motion">Motion: M0 / M1 / M2</option>
@@ -208,7 +250,11 @@ differ. Research outputs only.</p>
  <button id="play">Play/Pause</button><button id="back">◀ frame</button><button id="next">frame ▶</button>
  <label>Frame <input id="frame" type="range" min="0" max="49" value="0"></label><span id="frameLabel">0</span>
  <label>Speed <select id="rate"><option>0.25</option><option>0.5</option><option selected>1</option></select></label>
- <label>Zoom <select id="zoom"><option>1</option><option>2</option><option>3</option></select></label>
+ <label>Zoom <select id="zoom"><option>1</option><option>1.5</option><option>2</option><option>3</option><option>4</option>
+ <option>6</option><option>8</option><option>12</option><option>16</option></select></label>
+ <label><input type="checkbox" id="pixelated"> Sharp pixels</label>
+ <button id="center">Recenter</button>
+ <span class="hint">Drag, click or scroll on any video: all videos pan and zoom together.</span>
 </div>
 <div class="grid" id="grid"></div>
 <h2>Review</h2><form id="form"></form>
@@ -237,10 +283,10 @@ function render() {
       const v = document.createElement('video');
       v.src = 'clips/' + c.clips[cameraSel.value].record.path.split('/').pop();
       v.muted = true; v.preload = 'auto'; v.playsInline = true; v.loop = true;
-      v.addEventListener('click', e => { const r = v.getBoundingClientRect();
-        v.style.setProperty('--ox', ((e.clientX - r.left) / r.width * 100) + '%');
-        v.style.setProperty('--oy', ((e.clientY - r.top) / r.height * 100) + '%'); });
-      fig.append(v); videos.push(v);
+      linkView(v);
+      // The zoomed video is clipped to its own viewport so it never covers the caption.
+      const port = document.createElement('div'); port.className = 'viewport';
+      port.append(v); fig.append(port); videos.push(v);
     }
     grid.append(fig);
   }
@@ -250,6 +296,47 @@ function seek(f) {
   f = Math.max(0, Math.min(P.settings.frames.length - 1, f));
   document.getElementById('frame').value = f; document.getElementById('frameLabel').textContent = f;
   videos.forEach(v => { v.pause(); v.currentTime = (f + 0.5) / fps; });
+}
+// One shared view for every video: zoom factor and transform origin (percent).
+// With scale(z) about the origin, origin 0% shows the left/top edge and 100% the
+// right/bottom edge, so the same origin shows the same scene area in every clip.
+const view = {ox: 50, oy: 50};
+function setView(ox, oy) {
+  view.ox = Math.max(0, Math.min(100, ox)); view.oy = Math.max(0, Math.min(100, oy));
+  const grid = document.getElementById('grid');
+  grid.style.setProperty('--ox', view.ox + '%'); grid.style.setProperty('--oy', view.oy + '%');
+}
+// Scene point (0..1) under screen fraction f for origin o and zoom z: o + (f - o) / z.
+// Origin that puts scene point p at screen fraction f under zoom z: (p - f / z) / (1 - 1 / z).
+function originFor(p, f, z) { return z > 1 ? (p - f / z) / (1 - 1 / z) * 100 : 50; }
+function sceneAt(f, o, z) { return o / 100 + (f - o / 100) / z; }
+// Pointer position as a fraction of the visible (unscaled, clipped) video area.
+function frac(v, e) { const r = v.parentElement.getBoundingClientRect();
+  return [(e.clientX - r.left - v.offsetLeft) / v.offsetWidth, (e.clientY - r.top - v.offsetTop) / v.offsetHeight]; }
+function zoomSteps() { return [...document.getElementById('zoom').options].map(o => +o.value); }
+function linkView(v) {
+  let drag = null;
+  v.addEventListener('pointerdown', e => { drag = {x: e.clientX, y: e.clientY, ox: view.ox, oy: view.oy, moved: false};
+    v.setPointerCapture(e.pointerId); document.getElementById('grid').classList.add('dragging'); });
+  v.addEventListener('pointermove', e => { if (!drag) return;
+    const z = +document.getElementById('zoom').value, w = v.offsetWidth, h = v.offsetHeight;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+    if (z > 1) setView(drag.ox - dx / (w * (z - 1)) * 100, drag.oy - dy / (h * (z - 1)) * 100); });
+  v.addEventListener('pointerup', e => { const d = drag; drag = null;
+    document.getElementById('grid').classList.remove('dragging');
+    if (d && !d.moved) { const z = +document.getElementById('zoom').value;
+      // Click: center the shared view on the clicked scene point.
+      const [fx, fy] = frac(v, e);
+      setView(originFor(sceneAt(fx, view.ox, z), .5, z), originFor(sceneAt(fy, view.oy, z), .5, z)); } });
+  v.addEventListener('wheel', e => { e.preventDefault();
+    const steps = zoomSteps(), sel = document.getElementById('zoom');
+    const i = steps.indexOf(+sel.value), j = Math.max(0, Math.min(steps.length - 1, i + (e.deltaY < 0 ? 1 : -1)));
+    if (j !== i) { const z = steps[i], next = steps[j];
+      const [fx, fy] = frac(v, e);
+      // Keep the scene point under the cursor fixed while zooming.
+      setView(originFor(sceneAt(fx, view.ox, z), fx, next), originFor(sceneAt(fy, view.oy, z), fy, next));
+      sel.value = String(next); applyZoom(); } }, {passive: false});
 }
 function applyZoom() { const z = document.getElementById('zoom').value;
   videos.forEach(v => v.style.transform = 'scale(' + z + ')'); }
@@ -266,13 +353,21 @@ document.getElementById('back').onclick = () => seek(+document.getElementById('f
 document.getElementById('next').onclick = () => seek(+document.getElementById('frame').value + 1);
 document.getElementById('frame').oninput = e => seek(+e.target.value);
 document.getElementById('zoom').onchange = applyZoom;
+document.getElementById('center').onclick = () => setView(50, 50);
+document.getElementById('pixelated').onchange = e => document.getElementById('grid').classList.toggle('pixelated', e.target.checked);
 cameraSel.onchange = render; document.getElementById('set').onchange = render;
 const form = document.getElementById('form');
+function noteBox() { const wrap = document.createElement('span'), box = document.createElement('textarea'),
+    add = Object.assign(document.createElement('button'), {type: 'button', textContent: 'Note at current view'});
+  add.onclick = () => { const tag = 'camera ' + cameraSel.value + ', frame ' + document.getElementById('frame').value + ': ';
+    box.value += (box.value && !box.value.endsWith('\\n') ? '\\n' : '') + tag; box.focus(); };
+  wrap.append(box, add); wrap.value = undefined; Object.defineProperty(wrap, 'value', {get: () => box.value}); return wrap; }
 function field(parent, label, el) { const l = document.createElement('label'); l.textContent = label + ' ';
   l.append(el); parent.append(l, document.createElement('br')); return el; }
 const inputs = {};
 form.append(Object.assign(document.createElement('p'), {textContent:
-  'Observations: one per line as "candidate camera frame: text", e.g. "QF-M1 10 23: less ghosting on the moving player".'}));
+  'Observations: one note per line, in your own words. Mention an arm (QF-M1, or just M1), "camera 10" and "frame 23" ' +
+  'when they apply; they are recorded with the note. "Note at current view" inserts the camera and frame you are looking at.'}));
 inputs.reviewer = field(form, 'Reviewer', Object.assign(document.createElement('input'), {value: 'samaust'}));
 for (const [name, arms] of Object.entries(P.comparisons)) {
   const fs = document.createElement('fieldset'); fs.append(Object.assign(document.createElement('legend'),
@@ -281,7 +376,7 @@ for (const [name, arms] of Object.entries(P.comparisons)) {
   const sel = document.createElement('select');
   [...available, 'tie', 'unclear'].forEach(o => sel.add(new Option(o === 'tie' || o === 'unclear' ? o : byId[o].label, o)));
   inputs[name] = {candidates: available, preference: field(fs, 'Preference', sel),
-    observations: field(fs, 'Observations', document.createElement('textarea')),
+    observations: field(fs, 'Observations', noteBox()),
     tradeoffs: field(fs, 'Tradeoffs', document.createElement('textarea'))};
   form.append(fs);
 }
@@ -290,10 +385,25 @@ const overall = document.createElement('select');
   .forEach(o => overall.add(new Option(o, o)));
 inputs.overall = field(form, 'Overall preference', overall);
 inputs.overallTradeoffs = field(form, 'Overall tradeoffs', document.createElement('textarea'));
+// Accepts free text. Extracts an arm id (QF-M1, or a bare method code like M1/N2), "camera N"/"cam N"
+// and "frame N"/"f N" wherever they appear; the legacy "QF-M1 10 23: text" form also works.
 function parse(text) { return text.split('\\n').map(s => s.trim()).filter(Boolean).map(line => {
-  const m = line.match(/^(\\S+)\\s+(\\d+)\\s+(\\d+)\\s*:\\s*(.+)$/);
-  if (!m) throw new Error('Cannot parse observation: ' + line);
-  return {candidate: m[1], camera: +m[2], frame: +m[3], text: m[4]}; }); }
+  const legacy = line.match(/^(\\S+)\\s+(\\d+)\\s+(\\d+)\\s*:\\s*(.+)$/);
+  if (legacy && byId[legacy[1]]) return check({candidate: legacy[1], camera: +legacy[2], frame: +legacy[3], text: legacy[4]}, line);
+  const ids = P.candidates.map(c => c.id).filter(id => id !== 'reference');
+  let candidate = ids.find(id => new RegExp('(^|[^\\\\w-])' + id + '(?![\\\\w-])', 'i').test(line)) || null;
+  if (!candidate) { const code = line.match(/\\b([MN][0-2])\\b/);
+    if (code) candidate = ids.find(id => { const c = byId[id].composition;
+      return code[1] === (code[1][0] === 'M' ? c.motion : c.neighbors) && (code[1][0] === 'M' ? c.neighbors === 'N0' : c.motion === 'M0'); }) || null; }
+  if (!candidate && /\\b(real|reference|ground truth)\\b/i.test(line)) candidate = 'reference';
+  const cam = line.match(/\\bcam(?:era)?\\s*#?\\s*(\\d+)/i), fr = line.match(/\\bf(?:rame)?\\s*#?\\s*(\\d+)/i);
+  return check({candidate, camera: cam ? +cam[1] : null, frame: fr ? +fr[1] : null, text: line}, line); }); }
+function check(row, line) {
+  if (row.camera !== null && !P.settings.cameras.includes(row.camera))
+    throw new Error('Camera ' + row.camera + ' is not a held-out camera (' + P.settings.cameras.join('/') + ') in: ' + line);
+  if (row.frame !== null && !P.settings.frames.includes(row.frame))
+    throw new Error('Frame ' + row.frame + ' is outside 0-' + (P.settings.frames.length - 1) + ' in: ' + line);
+  return row; }
 document.getElementById('export').onclick = () => {
   try {
     const comparisons = {};
@@ -310,7 +420,7 @@ document.getElementById('export').onclick = () => {
 };
 render();
 </script></body></html>
-"""
+""").replace('@@INTRO@@', intro, 1)
 
 
 def main():

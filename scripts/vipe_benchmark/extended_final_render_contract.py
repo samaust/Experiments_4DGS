@@ -9,11 +9,21 @@ import math
 from .files import file_record, object_hash, read_json, verify_record
 from .depth_review import METRIC_CANDIDATES
 from .final_render_contract import (
-    BLOCKERS, COMPOSITIONS, KEYFRAMES, PHASES, PRESET_SOURCE, TRAINING_CAMERAS,
+    BLOCKERS, COMPOSITIONS, ENDPOINTS, KEYFRAMES, PHASES, PRESET_SOURCE, TRAINING_CAMERAS,
     ReviewAdmission, allocation_specs, initializer_arrays_hash, normalization_matrix,
 )
 
 SCHEMA = 'plan069-final-render-request/v1'
+# The documented crossing repair (docs/multicamera-freetimegs-workflow.md):
+# train on all 50 frames and floor learned temporal widths. These are the
+# defaults: an omitted field means the repaired value, and no other value is
+# accepted. Requests 001-004 ran before the repair, with holdout/original.
+POLICIES = dict(training_policy='all-times', lifetime_policy='repaired')
+
+
+def policies(value):
+    """The effective training and lifetime policies of a request."""
+    return {name: value.get(name, default) for name, default in POLICIES.items()}
 
 
 def _require(condition, message):
@@ -40,14 +50,16 @@ def parse_request(value):
     candidate = value.get('depth_candidate')
     _require(value.get('compositions') == compositions(candidate), 'same D* and fixed isolated compositions required')
     _require(type(value.get('seed')) is int and value['seed'] == 0 and type(value.get('iterations')) is int and
-             value['iterations'] == 5000, 'equal seed/5000 training endpoint required')
+             value['iterations'] in ENDPOINTS, 'equal seed and a supported (5000/70000) training endpoint required')
+    _require(policies(value) == POLICIES, 'training/lifetime policy must be all-times/repaired (the default)')
     _require(value.get('preset') == 'default_keyframe' and value.get('preset_source_sha256') == PRESET_SOURCE,
              'frozen preset required')
     _require(value.get('geometry') == dict(keyframes=list(KEYFRAMES), samples_per_edge=5000, neighbors_per_reference=3),
              'frozen full-rig geometry settings required')
     _require(value.get('render') == dict(cameras=[0, 10, 20, 30], frames=list(range(50)), fps=25, resolution=[960, 540]),
              'complete equal held-out render settings required')
-    _require(value.get('allocations') == allocation_specs(value['id']), 'fresh exact prospective allocations required')
+    _require(value.get('allocations') == allocation_specs(value['id'], value['iterations']),
+             'fresh exact prospective allocations required')
     for name, limit in [('artifact_bytes_limit', 50*2**30), ('device_bytes_limit', 22*2**30), ('cpu_workers_limit', 8)]:
         _require(type(value.get(name)) is int and 0 < value[name] <= limit, 'invalid/excessive ' + name)
     initializer = value['initializer_contract']
@@ -77,9 +89,7 @@ def parse_request(value):
     _require(proposal.get('settings_sha256') == object_hash({key: item for key, item in value.items() if key != 'bindings'}),
              'proposal fixed settings differ')
     if 'budget_amendment' in value:
-        baseline = _bound(bindings['config'])
-        artifact_gib = 260 if 'artifact_extension' in value['budget_amendment'] else 210
-        validate_budget_configuration(value, dict(baseline, new_download_gib_limit=110, new_artifact_disk_gib_limit=artifact_gib))
+        validate_budget_configuration(value, None)
     if value['record_kind'] == 'actual':
         _require(bindings['source'] == file_record(__file__) and bindings['preset']['sha256'] == PRESET_SOURCE,
                  'current extended contract/preset source pins required')
@@ -324,17 +334,18 @@ def validate_initializer(value, arm, receipt, arrays):
 
 
 def validate_budget_configuration(value, config):
-    """Accept only the separately approved 110/210 caps over original science.
+    """Accept only the separately approved caps over original science.
 
     The configuration bound to historical worker requests and qualification is
     unchanged. This approval supplies resource caps only, never native authority.
+    Returns the amended configuration; config=None only derives it.
     """
     baseline_record = value['bindings']['config']
     baseline = _bound(baseline_record)
     bound = value.get('budget_amendment')
     if bound is None:
-        _require(config == baseline, 'ledger allocation configuration differs; approved budget amendment required')
-        return
+        _require(config is None or config == baseline, 'ledger allocation configuration differs; approved budget amendment required')
+        return baseline
     _require(type(bound) is dict and set(bound) in ({'amendment', 'authorization'}, {'amendment', 'authorization', 'artifact_extension'}),
              'exact budget amendment and authorization records required')
     amendment = _bound(bound['amendment'])
@@ -358,34 +369,75 @@ def validate_budget_configuration(value, config):
                  'actual budget approval is not the recorded user authorization')
     else:
         _require(authorization.get('record_kind') == 'fixture', 'budget authorization fixture label required')
-    artifact_gib = 210
+    caps = dict(new_download_gib_limit=110, new_artifact_disk_gib_limit=210)
     if 'artifact_extension' in bound:
-        artifact_gib = _artifact_extension(value, bound)
-    amended = dict(baseline, new_download_gib_limit=110, new_artifact_disk_gib_limit=artifact_gib)
-    _require(config == amended, 'ledger configuration differs outside exact approved budget caps')
+        caps = _artifact_extension(value, bound)
+    if config is not None:
+        _require(config == dict(baseline, **caps), 'ledger configuration differs outside exact approved budget caps')
+    return dict(baseline, **caps)
 
 
-# The user-approved final-render artifact extension (AskUserQuestion, 2026-10-05).
+def amended_configuration(value):
+    """The ledger configuration a request's approved budget records establish."""
+    return validate_budget_configuration(value, None)
+
+
+# The user-approved final-render cap extensions, by amendment schema:
+# v1 210 -> 260 GiB artifacts (AskUserQuestion, 2026-10-05);
+# v2 260 -> 380 GiB artifacts and the GPU limit for 70k-step training (2026-10-07;
+# raised again on 2026-10-08 to 252,000 GPU-s, then for the crossing repair rerun to
+# 288,000 GPU-s and 66,000 CPU-s; each pin supersedes the previous one).
 ARTIFACT_EXTENSION_AUTHORIZATION = dict(sha256='5a6db07ea5918ecc1895e71adf59efb304093b8193f724b2e7251b16be2b7aa8', bytes=762)
+LONG_TRAINING_EXTENSION_AUTHORIZATION = dict(sha256='e0c5ba3953fb68c2e317142fac948e48bcf82dcdcbf88cea61043c5614a76011', bytes=1212)
+LONG_TRAINING_ARTIFACT_GIB = 380
 
 
 def _artifact_extension(value, bound):
-    """Chain one approved 210 -> 260 GiB artifact extension onto the 110/210 amendment."""
+    """Chain one approved final-render cap extension onto the 110/210 amendment.
+
+    v1 raises artifacts to 260 GiB. v2 chains on the exact v1 extension and raises
+    artifacts to 380 GiB and the cumulative GPU limit to its approved value.
+    Returns the amended ledger caps.
+    """
     extension = bound['artifact_extension']
     _require(type(extension) is dict and set(extension) == {'amendment', 'authorization'},
              'exact artifact extension amendment and authorization records required')
     amendment = _bound(extension['amendment'])
     authorization = _bound(extension['authorization'])
-    _require(amendment.get('schema') == 'plan069-final-render-cap-amendment/v1' and amendment.get('status') == 'REVIEW' and
+    v2 = amendment.get('schema') == 'plan069-final-render-cap-amendment/v2'
+    _require(amendment.get('schema') in ('plan069-final-render-cap-amendment/v1', 'plan069-final-render-cap-amendment/v2') and
+             amendment.get('status') == 'REVIEW' and
              amendment.get('base_amendment') == bound['amendment'] and amendment.get('new_download_gib_limit') == 110 and
-             amendment.get('new_artifact_disk_gib_limit') == 260, 'exact 110/260 final-render artifact extension differs')
+             amendment.get('new_artifact_disk_gib_limit') == (LONG_TRAINING_ARTIFACT_GIB if v2 else 260),
+             'exact final-render artifact extension differs')
+    caps = dict(new_download_gib_limit=110, new_artifact_disk_gib_limit=amendment['new_artifact_disk_gib_limit'])
+    if v2:
+        _require(value.get('iterations') == 70000, 'v2 artifact extension covers only the 70k training endpoint')
+        previous = amendment.get('previous_extension')
+        _require(type(previous) is dict and set(previous) == {'amendment', 'authorization'},
+                 'v2 artifact extension must chain the exact v1 extension')
+        _require(_artifact_extension(value, dict(bound, artifact_extension=previous)) ==
+                 dict(new_download_gib_limit=110, new_artifact_disk_gib_limit=260) and
+                 _bound(previous['amendment']).get('schema') == 'plan069-final-render-cap-amendment/v1',
+                 'v2 artifact extension must chain the exact v1 extension')
+        baseline = _bound(value['bindings']['config'])
+        gpu = amendment.get('new_gpu_total_seconds_limit')
+        _require(type(gpu) is int and baseline['gpu_total_seconds_limit'] < gpu <= 4*baseline['gpu_total_seconds_limit'],
+                 'v2 artifact extension requires a bounded GPU limit raise')
+        caps['gpu_total_seconds_limit'] = gpu
+        if 'new_cpu_prepare_score_report_seconds_limit' in amendment:
+            cpu = amendment['new_cpu_prepare_score_report_seconds_limit']
+            limit = baseline['cpu_prepare_score_report_seconds_limit']
+            _require(type(cpu) is int and limit < cpu <= limit*3//2, 'v2 artifact extension requires a bounded CPU limit raise')
+            caps['cpu_prepare_score_report_seconds_limit'] = cpu
     _require(authorization.get('schema') == 'plan069-final-render-cap-authorization/v1' and authorization.get('status') == 'DO' and
              authorization.get('amendment') == extension['amendment'] and
              authorization.get('approval') == dict(status='approved', amendment_sha256=object_hash(amendment)),
              'exact approved artifact extension authorization required')
     if value['record_kind'] == 'actual':
-        _require({key: extension['authorization'][key] for key in ('sha256', 'bytes')} == ARTIFACT_EXTENSION_AUTHORIZATION,
+        pinned = LONG_TRAINING_EXTENSION_AUTHORIZATION if v2 else ARTIFACT_EXTENSION_AUTHORIZATION
+        _require(pinned is not None and {key: extension['authorization'][key] for key in ('sha256', 'bytes')} == pinned,
                  'actual artifact extension is not the recorded user authorization')
     else:
         _require(authorization.get('record_kind') == 'fixture', 'artifact extension authorization fixture label required')
-    return 260
+    return caps

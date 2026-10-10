@@ -13,8 +13,12 @@ class PipelineTests(unittest.TestCase):
         self.fixture=importlib.import_module('test_vipe_benchmark_extended_final_render_contract').AdmissionTests()
         self.fixture.setUp();self.addCleanup(self.fixture.doCleanups)
         self.request=self.fixture.request;self.record=self.fixture.record
-        self.checkpoint=self.record('fixture-checkpoint',{'fixture':'not a native checkpoint'})
-        self.image=self.record('fixture-image',{'fixture':'not actual rendered media'})
+        self.build_records()
+
+    def build_records(self):
+        endpoint=self.request['iterations']
+        self.checkpoint=self.record('fixture-checkpoint-'+str(endpoint),{'fixture':'not a native checkpoint'})
+        self.image=self.record('fixture-image-'+str(endpoint),{'fixture':'not actual rendered media'})
         self.records={};parent=None
         for phase in ('geometry','initializer','train','render'):
             result=dict(schema='plan069-final-render-worker-result/v1',record_kind='fixture',status='complete',
@@ -24,16 +28,22 @@ class PipelineTests(unittest.TestCase):
                 cpu_workers_used=1,
                 execution_authorized=False,native_adapter_qualified=False,artifacts=[self.image])
             if phase=='train':
-                result.update(completed_iterations=5000,checkpoint=self.checkpoint,artifacts=[self.checkpoint])
+                result.update(completed_iterations=endpoint,checkpoint=self.checkpoint,artifacts=[self.checkpoint])
             if phase=='render':
-                reload=self.record('fixture-reload',dict(schema='plan069-final-render-fixture-reload/v1',
-                    record_kind='fixture',status='passed',checkpoint=self.checkpoint,iteration=5000,
+                reload=self.record('fixture-reload-'+str(endpoint),dict(schema='plan069-final-render-fixture-reload/v1',
+                    record_kind='fixture',status='passed',checkpoint=self.checkpoint,iteration=endpoint,
                     request_sha256=object_hash(self.request),arm='QF-B'))
-                result.update(checkpoint=self.checkpoint,reload_validation=reload,iteration=5000,
+                result.update(checkpoint=self.checkpoint,reload_validation=reload,iteration=endpoint,
                     render_settings=self.request['render'],artifacts=[self.image,reload],
                     rendered_frames=[dict(camera=c,frame=f,rgb=self.image) for c in (0,10,20,30) for f in range(50)])
             result['artifact_bytes']=sum(record['bytes'] for record in result['artifacts'])
-            parent=self.record('fixture-'+phase,result);self.records[phase]=parent
+            parent=self.record('fixture-'+phase+'-'+str(endpoint),result);self.records[phase]=parent
+
+    def use_endpoint(self,iterations):
+        from vipe_benchmark.final_render_contract import allocation_specs
+        self.request.update(iterations=iterations,allocations=allocation_specs(self.request['id'],iterations))
+        self.fixture.rebind_proposal()
+        self.build_records()
 
     def test_fixture_pipeline_binds_checkpoint_reload_and_all_heldout_frames(self):
         from vipe_benchmark.final_render_pipeline import validate_pipeline
